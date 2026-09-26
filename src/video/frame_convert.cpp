@@ -1,5 +1,7 @@
 #include "frame_convert.h"
 
+#include <cstring>
+
 namespace pcm::video {
 
 livekit::VideoFrame videoFrameToLiveKitRGBA(const QImage &image) {
