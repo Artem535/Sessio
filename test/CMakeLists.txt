@@ -87,6 +87,33 @@ target_link_libraries(Sessio_provider_kind_tests PRIVATE
 )
 gtest_discover_tests(Sessio_provider_kind_tests)
 
+# Audio chunker tests (framework-free, no Qt/LiveKit needed)
+add_executable(Sessio_audio_chunker_tests
+    ${CMAKE_SOURCE_DIR}/src/video/audio_chunker.cpp
+    audio_chunker_tests.cpp
+)
+target_include_directories(Sessio_audio_chunker_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_audio_chunker_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+)
+gtest_discover_tests(Sessio_audio_chunker_tests)
+
+# Frame conversion tests (needs Qt::Gui for QImage, and LiveKit for VideoFrame)
+add_executable(Sessio_frame_convert_tests
+    ${CMAKE_SOURCE_DIR}/src/video/frame_convert.cpp
+    frame_convert_tests.cpp
+)
+target_include_directories(Sessio_frame_convert_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_frame_convert_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Core
+    Qt6::Gui
+    LiveKit::livekit
+)
+gtest_discover_tests(Sessio_frame_convert_tests)
+
 # External URL meeting provider tests
 add_executable(Sessio_external_url_meeting_provider_tests
     external_url_meeting_provider_tests.cpp

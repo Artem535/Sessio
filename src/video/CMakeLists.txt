@@ -9,6 +9,10 @@ find_package(Qt6 REQUIRED COMPONENTS Core Multimedia MultimediaWidgets OpenGLWid
 
 qt_add_library(${TARGET_NAME} STATIC
         video_provider_kind.h
+        audio_chunker.h
+        audio_chunker.cpp
+        frame_convert.h
+        frame_convert.cpp
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC
