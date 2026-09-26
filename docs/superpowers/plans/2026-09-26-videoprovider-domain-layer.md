@@ -646,9 +646,9 @@ TEST(DeviceManagerTest, ListsCamerasMicrophonesAndSpeakersWithoutCrashing) {
   // No real devices are guaranteed in a CI/sandboxed environment — this test
   // proves DeviceManager doesn't crash and returns well-formed (possibly
   // empty) lists, not that specific hardware is present.
-  EXPECT_NO_THROW(manager.cameras());
-  EXPECT_NO_THROW(manager.microphones());
-  EXPECT_NO_THROW(manager.speakers());
+  EXPECT_NO_THROW(static_cast<void>(manager.cameras()));
+  EXPECT_NO_THROW(static_cast<void>(manager.microphones()));
+  EXPECT_NO_THROW(static_cast<void>(manager.speakers()));
 }
 
 TEST(DeviceManagerTest, DefaultCameraIsNulloptWhenNoCamerasPresent) {
