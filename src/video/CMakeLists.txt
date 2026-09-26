@@ -15,6 +15,10 @@ qt_add_library(${TARGET_NAME} STATIC
         frame_convert.cpp
         device_manager.h
         device_manager.cpp
+        video_capture_worker.h
+        video_capture_worker.cpp
+        video_capture_adapter.h
+        video_capture_adapter.cpp
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC
