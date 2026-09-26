@@ -114,6 +114,20 @@ target_link_libraries(Sessio_frame_convert_tests PRIVATE
 )
 gtest_discover_tests(Sessio_frame_convert_tests)
 
+# Device manager tests
+add_executable(Sessio_device_manager_tests
+    ${CMAKE_SOURCE_DIR}/src/video/device_manager.cpp
+    device_manager_tests.cpp
+)
+target_include_directories(Sessio_device_manager_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_device_manager_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Core
+    Qt6::Multimedia
+)
+gtest_discover_tests(Sessio_device_manager_tests)
+
 # External URL meeting provider tests
 add_executable(Sessio_external_url_meeting_provider_tests
     external_url_meeting_provider_tests.cpp

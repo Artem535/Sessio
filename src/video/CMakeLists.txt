@@ -13,6 +13,8 @@ qt_add_library(${TARGET_NAME} STATIC
         audio_chunker.cpp
         frame_convert.h
         frame_convert.cpp
+        device_manager.h
+        device_manager.cpp
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC
