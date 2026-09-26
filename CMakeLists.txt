@@ -8,10 +8,18 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Define the project
-project(Sessio VERSION 0.1.33 LANGUAGES CXX)
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Svg PrintSupport LinguistTools)
+project(Sessio VERSION 0.1.34 LANGUAGES CXX)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Svg PrintSupport LinguistTools Multimedia MultimediaWidgets OpenGLWidgets)
 include(GNUInstallDirs)
 include(FetchContent)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+set(LIVEKIT_SDK_VERSION "1.12.0" CACHE STRING "LiveKit C++ SDK version")
+include(LiveKitSDK)
+livekit_sdk_setup(
+  VERSION "${LIVEKIT_SDK_VERSION}"
+  SDK_DIR "${CMAKE_BINARY_DIR}/_deps/livekit-sdk"
+)
+find_package(LiveKit CONFIG REQUIRED)
 option(PCM_BUILD_TESTS "Build project tests" OFF)
 
 if(Qt6_VERSION VERSION_LESS 6.8.0)
@@ -112,6 +120,7 @@ add_subdirectory(src/widgets)
 add_subdirectory(src/config)
 add_subdirectory(src/database)
 add_subdirectory(src/meeting)
+add_subdirectory(src/video)
 add_subdirectory(src/backup)
 add_subdirectory(src/client_model)
 add_subdirectory(src/pages/client_info_page)
