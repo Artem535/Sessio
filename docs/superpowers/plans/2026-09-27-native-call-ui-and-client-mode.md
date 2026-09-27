@@ -18,6 +18,7 @@
 - Raise the application version in `CMakeLists.txt` and `src/app/application.cpp` and update `CHANGELOG.md` for this MR (AGENTS.md).
 - Before committing new/changed `tr()` strings, run `cmake --build build-release --target update_translations` and translate every resulting `type="unfinished"` entry in both `translation/app_ru.ts` and `translation/app_en.ts` (AGENTS.md) — done once, in the final task, after all UI strings exist.
 - New Q_OBJECT classes declared in a header with no matching `.cpp` (interfaces) must be listed explicitly as a source in any test executable that links them, exactly like `video_provider.h` already is in `test/CMakeLists.txt`, or AUTOMOC will not generate their moc and the link will fail.
+- `test/CMakeLists.txt` has its own `project(PCM_Tests ...)` call, so `${PROJECT_NAME}` resolves to `PCM_Tests` there, not `Sessio` — every library a test target links must be named literally (`Sessio_config`, `Sessio_video`, `Sessio_app`, `Sessio_token_client`, `Sessio_calls_page`, ...), never `${PROJECT_NAME}_...`, inside any `test/CMakeLists.txt` snippet in this plan. `${PROJECT_NAME}_...` stays correct inside `src/*/CMakeLists.txt` and the top-level `CMakeLists.txt`, since those share the top-level `project(Sessio ...)` scope.
 
 ---
 
@@ -74,7 +75,7 @@ add_executable(Sessio_app_role_tests app_role_tests.cpp)
 target_link_libraries(Sessio_app_role_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
-    ${PROJECT_NAME}_config
+    Sessio_config
 )
 gtest_discover_tests(Sessio_app_role_tests)
 ```
@@ -232,7 +233,7 @@ target_link_libraries(Sessio_role_selection_dialog_tests PRIVATE
     GTest::gtest_main
     Qt6::Widgets
     Qt6::Test
-    ${PROJECT_NAME}_app
+    Sessio_app
 )
 set_target_properties(Sessio_role_selection_dialog_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_role_selection_dialog_tests)
@@ -424,7 +425,7 @@ add_executable(Sessio_token_response_parser_tests token_response_parser_tests.cp
 target_link_libraries(Sessio_token_response_parser_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
-    ${PROJECT_NAME}_token_client
+    Sessio_token_client
 )
 gtest_discover_tests(Sessio_token_response_parser_tests)
 ```
@@ -723,7 +724,7 @@ target_link_libraries(Sessio_token_backend_client_tests PRIVATE
     GTest::gtest_main
     Qt6::Network
     Qt6::Test
-    ${PROJECT_NAME}_token_client
+    Sessio_token_client
 )
 set_target_properties(Sessio_token_backend_client_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_token_backend_client_tests)
@@ -1086,7 +1087,7 @@ target_link_libraries(Sessio_settings_dialog_livekit_section_tests PRIVATE
     GTest::gtest_main
     Qt6::Widgets
     Qt6::Test
-    ${PROJECT_NAME}_app
+    Sessio_app
 )
 set_target_properties(Sessio_settings_dialog_livekit_section_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_settings_dialog_livekit_section_tests)
@@ -1770,7 +1771,7 @@ target_link_libraries(Sessio_call_entry_widget_tests PRIVATE
     GTest::gtest_main
     Qt6::Widgets
     Qt6::Test
-    ${PROJECT_NAME}_calls_page
+    Sessio_calls_page
 )
 set_target_properties(Sessio_call_entry_widget_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_call_entry_widget_tests)
@@ -1993,8 +1994,8 @@ target_link_libraries(Sessio_device_check_widget_tests PRIVATE
     GTest::gtest_main
     Qt6::Widgets
     Qt6::Test
-    ${PROJECT_NAME}_calls_page
-    ${PROJECT_NAME}_video
+    Sessio_calls_page
+    Sessio_video
 )
 set_target_properties(Sessio_device_check_widget_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_device_check_widget_tests)
@@ -2271,8 +2272,8 @@ target_link_libraries(Sessio_call_page_tests PRIVATE
     Qt6::Widgets
     Qt6::Test
     Qt6::StateMachine
-    ${PROJECT_NAME}_calls_page
-    ${PROJECT_NAME}_video
+    Sessio_calls_page
+    Sessio_video
 )
 set_target_properties(Sessio_call_page_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_call_page_tests)
@@ -2576,9 +2577,9 @@ target_link_libraries(Sessio_calls_page_tests PRIVATE
     Qt6::StateMachine
     Qt6::Network
     Qt6::Test
-    ${PROJECT_NAME}_calls_page
-    ${PROJECT_NAME}_token_client
-    ${PROJECT_NAME}_video
+    Sessio_calls_page
+    Sessio_token_client
+    Sessio_video
 )
 set_target_properties(Sessio_calls_page_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_calls_page_tests)
@@ -2801,8 +2802,8 @@ target_link_libraries(Sessio_main_window_calls_tab_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
     Qt6::Widgets
-    ${PROJECT_NAME}_app
-    ${PROJECT_NAME}_token_client
+    Sessio_app
+    Sessio_token_client
 )
 gtest_discover_tests(Sessio_main_window_calls_tab_tests)
 ```
@@ -2914,8 +2915,8 @@ target_link_libraries(Sessio_client_mode_window_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
     Qt6::Widgets
-    ${PROJECT_NAME}_app
-    ${PROJECT_NAME}_token_client
+    Sessio_app
+    Sessio_token_client
 )
 gtest_discover_tests(Sessio_client_mode_window_tests)
 ```
@@ -3309,7 +3310,7 @@ add_executable(Sessio_sessio_url_tests sessio_url_tests.cpp)
 target_link_libraries(Sessio_sessio_url_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
-    ${PROJECT_NAME}_app
+    Sessio_app
 )
 gtest_discover_tests(Sessio_sessio_url_tests)
 ```
@@ -3405,7 +3406,7 @@ target_link_libraries(Sessio_single_instance_guard_tests PRIVATE
     GTest::gtest_main
     Qt6::Network
     Qt6::Test
-    ${PROJECT_NAME}_app
+    Sessio_app
 )
 set_target_properties(Sessio_single_instance_guard_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_single_instance_guard_tests)
