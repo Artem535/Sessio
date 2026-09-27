@@ -97,7 +97,15 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/Qt/${{ matrix.qt_version }}/gcc_64
-          key: ${{ runner.os }}-qt-${{ matrix.qt_version }}-gcc_64
+          # Includes qt_component so a cache saved before this branch added
+          # the qtmultimedia/qtscxml addons can't be restored here: the old
+          # key alone (runner.os-qt-version-gcc_64) matched regardless of
+          # which components were actually installed, so changing the addon
+          # list never invalidated a stale cache — exactly what happened on
+          # this PR's first CI run (Qt6Multimedia not found despite the
+          # matrix listing it, because the install step was skipped on a
+          # cache hit from before it was added).
+          key: ${{ runner.os }}-qt-${{ matrix.qt_version }}-gcc_64-${{ matrix.qt_component }}
 
       - name: Install Qt (Windows)
         if: runner.os == 'Windows' || runner.os == 'macOS'
