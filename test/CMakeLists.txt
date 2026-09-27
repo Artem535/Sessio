@@ -292,3 +292,27 @@ target_include_directories(Sessio_backup_tests PRIVATE
     ${qtkeychain_BINARY_DIR}
 )
 gtest_discover_tests(Sessio_backup_tests)
+
+# Video session state machine tests
+#
+# video_provider.h defines the Q_OBJECT VideoProvider base class but has no
+# paired .cpp of its own (CMake's AUTOMOC only auto-scans a header that
+# shares a .cpp's basename); listing it explicitly as a source here — same
+# pattern as the LiveKit video provider smoke test above — is what makes
+# AUTOMOC generate its moc so VideoProvider's signals link.
+find_package(Qt6 REQUIRED COMPONENTS Test StateMachine)
+add_executable(Sessio_video_session_tests
+    ${CMAKE_SOURCE_DIR}/src/video/video_provider.h
+    ${CMAKE_SOURCE_DIR}/src/video/video_session.cpp
+    video_session_tests.cpp
+)
+target_include_directories(Sessio_video_session_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_video_session_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Core
+    Qt6::Test
+    Qt6::StateMachine
+)
+set_target_properties(Sessio_video_session_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_video_session_tests)

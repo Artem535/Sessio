@@ -5,10 +5,13 @@ set(CMAKE_CXX_STANDARD 20)
 
 set(TARGET_NAME ${PROJECT_NAME}_video)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Multimedia MultimediaWidgets OpenGLWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Multimedia MultimediaWidgets OpenGLWidgets StateMachine)
 
 qt_add_library(${TARGET_NAME} STATIC
         video_provider.h
+        video_session_state.h
+        video_session.h
+        video_session.cpp
         audio_chunker.h
         audio_chunker.cpp
         frame_convert.h
@@ -34,6 +37,7 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         Qt6::Multimedia
         Qt6::MultimediaWidgets
         Qt6::OpenGLWidgets
+        Qt6::StateMachine
         LiveKit::livekit
 )
 
