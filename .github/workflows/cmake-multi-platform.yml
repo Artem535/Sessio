@@ -28,7 +28,7 @@ jobs:
           - os: ubuntu-latest
             qt_version: 6.10.2
             artifact_name: Sessio-linux-appimage
-            qt_component: qt.qt6.6102.linux_gcc_64
+            qt_component: "qt.qt6.6102.linux_gcc_64 qt.qt6.6102.addons.qtmultimedia qt.qt6.6102.addons.qtscxml"
           - os: macos-latest
             qt_version: 6.10.2
             qt_arch: clang_64
@@ -97,7 +97,15 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ github.workspace }}/Qt/${{ matrix.qt_version }}/gcc_64
-          key: ${{ runner.os }}-qt-${{ matrix.qt_version }}-gcc_64
+          # Includes qt_component so a cache saved before this branch added
+          # the qtmultimedia/qtscxml addons can't be restored here: the old
+          # key alone (runner.os-qt-version-gcc_64) matched regardless of
+          # which components were actually installed, so changing the addon
+          # list never invalidated a stale cache — exactly what happened on
+          # this PR's first CI run (Qt6Multimedia not found despite the
+          # matrix listing it, because the install step was skipped on a
+          # cache hit from before it was added).
+          key: ${{ runner.os }}-qt-${{ matrix.qt_version }}-gcc_64-${{ matrix.qt_component }}
 
       - name: Install Qt (Windows)
         if: runner.os == 'Windows' || runner.os == 'macOS'
@@ -108,6 +116,7 @@ jobs:
           host: ${{ matrix.qt_host }}
           target: ${{ matrix.qt_target }}
           arch: ${{ matrix.qt_arch }}
+          modules: 'qtmultimedia qtscxml'
           cache: true
 
       - name: Setup MSVC environment
@@ -141,7 +150,7 @@ jobs:
             --email "$QT_EMAIL" \
             --pw "$QT_PW" \
             --auto-answer "OperationDoesNotExistError=Ignore,OverwriteTargetDirectory=No,stopProcessesForUpdates=Ignore,installationErrorWithCancel=Ignore,installationErrorWithIgnore=Ignore,AssociateCommonFiletypes=No,telemetry-question=No" \
-            install "${{ matrix.qt_component }}"
+            install ${{ matrix.qt_component }}
 
       - name: Export Qt environment (Linux)
         if: runner.os == 'Linux'

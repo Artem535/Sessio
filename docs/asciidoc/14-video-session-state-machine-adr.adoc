@@ -1,0 +1,69 @@
+== ADR: VideoSession — Qt State Machine Framework for Call Lifecycle
+
+*Status:* Accepted
+
+*Date:* 2026-09-26
+
+*Decision:* `VideoSession` drives the call lifecycle with Qt's built-in
+`QStateMachine`/`QState` framework, encapsulated entirely as a private
+implementation detail — no caller ever sees a `QStateMachine` or `QState`
+directly.
+
+=== Context
+
+Issue #92 introduces `VideoSession`, the object owning one `Meeting`'s live
+call lifecycle. `docs/video-roadmap.md` §5.5 specifies nine states with a
+non-trivial transition graph:
+
+[source]
+----
+NoMeeting → Provisioned → PrejoinCheck → Joining → WaitingForClient
+        → Connected ↔ Reconnecting → Leaving → Ended
+                                   ↘ Failed
+----
+
+`Failed` is reachable from every in-progress state, `Reconnecting` has a
+time-limited auto-retry back to `Connected` or forward to `Failed`, and the
+native call UI (#80) needs to react to every transition to decide what to
+render.
+
+This codebase's existing precedent for "one of several states/kinds" is a
+plain enum with explicit transition logic (e.g. `ProviderKind` in #79's
+`MeetingProvider` work) — no part of the codebase uses `QStateMachine`
+today. `VideoSession`'s transition graph is meaningfully more complex than
+that precedent: it has time-based transitions (the `Reconnecting` timeout),
+a state reachable from multiple sources (`Failed`), and a bidirectional edge
+(`Connected ↔ Reconnecting`) that a hand-rolled `switch`-based transition
+function would need to re-validate on every call.
+
+=== Decision
+
+Use `QStateMachine`/`QState` internally, encapsulated:
+
+* `VideoSession` owns a `QStateMachine` and one `QState` per
+  `VideoSessionState` value, wiring the transition graph above once in its
+  constructor.
+* The `QStateMachine`/`QState` objects are never exposed on `VideoSession`'s
+  public interface. Callers see only: `join()`/`leave()` methods, a single
+  `stateChanged(VideoSessionState)` signal for UI rendering, and detail
+  signals (`joinFailed(QString)`, `reconnectFailed(QString)`) for
+  information a bare enum value cannot carry.
+* The `Reconnecting → Failed` timeout is a plain `QTimer` driven by a
+  `std::chrono::milliseconds` constructor parameter (default 30 seconds),
+  not a `QState` transition with a `QSignalTransition` on a timer — this
+  keeps the timeout trivially overridable to a short value in tests without
+  fighting the state machine's own transition wiring.
+
+=== Consequences
+
+This is the codebase's first use of `QStateMachine`. Future maintainers
+should not assume familiarity — the encapsulation above is deliberate so
+that unfamiliarity with `QStateMachine` specifically only matters when
+reading `VideoSession`'s own implementation, never when reading its callers
+(the native call UI, or any test using `FakeVideoProvider`).
+
+Because `QStateMachine` runs on the Qt event loop, unit tests for
+`VideoSession` need a `QCoreApplication` instance and to pump the event loop
+(`QSignalSpy`/`QTest::qWait` or equivalent) to observe transitions — plain
+synchronous assertions immediately after calling `join()` will not see
+`QStateMachine`-driven state changes take effect.

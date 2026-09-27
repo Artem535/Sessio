@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.34] - 2026-09-26
+
+### Added
+
+- Internal groundwork for native LiveKit video calls: a new `src/video`
+  module (`VideoProvider`/`LiveKitVideoProvider`, `VideoSession`,
+  `DeviceManager`) for the in-call media session, ported from the proven
+  `spike/77-livekit-cpp-spike` branch. Not yet wired into the application —
+  no visible behavior changes.
+
 ## [0.1.33] - 2026-09-26
 
 ### Added
