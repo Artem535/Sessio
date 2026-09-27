@@ -1346,7 +1346,10 @@ void AudioCaptureAdapter::onReadyRead() {
     try {
       auto liveKitFrame = livekit::AudioFrame::create(
           kSampleRate, kChannels, pcmFrame.size() / static_cast<std::size_t>(kChannels));
-      std::memcpy(liveKitFrame.data(), pcmFrame.data(), pcmFrame.size() * sizeof(int16_t));
+      // livekit::AudioFrame::data() returns std::vector<int16_t>&, not a raw
+      // pointer (unlike VideoFrame::data() elsewhere in this module) — the
+      // extra .data() reaches the vector's underlying buffer for memcpy.
+      std::memcpy(liveKitFrame.data().data(), pcmFrame.data(), pcmFrame.size() * sizeof(int16_t));
       mAudioSource->captureFrame(liveKitFrame);
       mFramesCaptured.fetch_add(1);
       emit frameCaptured();
