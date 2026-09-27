@@ -2011,10 +2011,10 @@ private:
                               const livekit::ParticipantConnectedEvent &event) override;
   // Wired so VideoSession's Connected<->Reconnecting state graph (Task 8)
   // actually has something driving it from real network events, not just
-  // local device-capture failures. onDisconnected fires both for genuine
-  // drops and for our own leave()'s disconnect; the `if (!mRoom) return;`
-  // guard suppresses the latter, since leave() resets mRoom before this
-  // queued callback can run.
+  // local device-capture failures. leave() clears the delegate before
+  // resetting mRoom, so its own disconnect should not reach onDisconnected
+  // at all; the `if (!mRoom) return;` guard in the .cpp instead protects
+  // against a concurrent LiveKit-internal-thread dispatch racing leave().
   void onDisconnected(livekit::Room &room, const livekit::DisconnectedEvent &event) override;
   void onReconnecting(livekit::Room &room, const livekit::ReconnectingEvent &event) override;
   void onReconnected(livekit::Room &room, const livekit::ReconnectedEvent &event) override;
@@ -2178,14 +2178,37 @@ void LiveKitVideoProvider::join(const QString &url, const QString &token) {
     // Deferring the emission guarantees delivery only once the calling
     // thread's event loop is actually pumping.
     QMetaObject::invokeMethod(
-        this, [this]() { emit joinFailed(QStringLiteral("Failed to connect to the video server.")); },
+        this,
+        [this]() {
+          // mRoom is already null at this point (reset just above), so this
+          // guard only trips if a NEW join() attempt started before this
+          // queued signal was delivered (giving mRoom a fresh, non-null
+          // value) — in that case, this stale joinFailed() belongs to an
+          // attempt the caller has already moved on from, and firing it
+          // would misattribute it to whatever join is now in progress.
+          if (mRoom) {
+            return;
+          }
+          emit joinFailed(QStringLiteral("Failed to connect to the video server."));
+        },
         Qt::QueuedConnection);
     return;
   }
 
   publishTracks();
-  // Deferred for the same reason as the joinFailed() emission above.
-  QMetaObject::invokeMethod(this, [this]() { emit joined(); }, Qt::QueuedConnection);
+  // Deferred for the same reason as the joinFailed() emission above. Guarded
+  // the opposite way: this join succeeded (mRoom is non-null right now), so
+  // if mRoom is null by the time this runs, leave() (or a subsequent failed
+  // join()) has already ended the session this joined() would refer to.
+  QMetaObject::invokeMethod(
+      this,
+      [this]() {
+        if (!mRoom) {
+          return;
+        }
+        emit joined();
+      },
+      Qt::QueuedConnection);
 }
 
 void LiveKitVideoProvider::leave() {
@@ -2292,10 +2315,13 @@ void LiveKitVideoProvider::onDisconnected(livekit::Room &, const livekit::Discon
   QMetaObject::invokeMethod(
       this,
       [this, reasonCode]() {
-        // Also fires for our own leave()'s disconnect; by the time this
-        // queued callback runs, leave() has already reset mRoom, so this
-        // guard suppresses self-initiated disconnects and only reports
-        // genuine unexpected drops.
+        // leave() clears the delegate before resetting mRoom, so a
+        // self-initiated disconnect from leave() itself should not reach
+        // this callback at all. This guard exists for the remaining race:
+        // the LiveKit-internal thread can read a still-non-null delegate_
+        // and start dispatching this event concurrently with leave()
+        // running on the GUI thread; by the time this queued lambda
+        // actually runs, mRoom may already be null.
         if (!mRoom) {
           return;
         }
