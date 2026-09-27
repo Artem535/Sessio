@@ -29,9 +29,11 @@ public:
   void simulateJoinFailed(const QString &reason) { emit joinFailed(reason); }
   void simulateLeft() { emit left(); }
   void simulateRemoteParticipantConnected() { emit remoteParticipantConnected(); }
+  void simulateRemoteParticipantDisconnected() { emit remoteParticipantDisconnected(); }
   void simulateReconnecting() { emit reconnecting(); }
   void simulateReconnected() { emit reconnected(); }
   void simulateConnectionLost(const QString &reason) { emit connectionLost(reason); }
+  void simulateMediaError(const QString &reason) { emit mediaError(reason); }
 
   QString mLastJoinUrl;
   QString mLastJoinToken;

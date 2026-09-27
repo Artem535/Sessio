@@ -44,6 +44,8 @@ private:
   void onTrackSubscribed(livekit::Room &room, const livekit::TrackSubscribedEvent &event) override;
   void onParticipantConnected(livekit::Room &room,
                               const livekit::ParticipantConnectedEvent &event) override;
+  void onParticipantDisconnected(livekit::Room &room,
+                                 const livekit::ParticipantDisconnectedEvent &event) override;
   // Wired so VideoSession's Connected<->Reconnecting state graph (Task 8)
   // actually has something driving it from real network events, not just
   // local device-capture failures. leave() clears the delegate before

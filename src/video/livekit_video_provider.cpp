@@ -59,23 +59,24 @@ LiveKitVideoProvider::LiveKitVideoProvider(QObject *parent)
   // here — doing so would not change construction order and only invites a
   // future edit that reorders the list and silently breaks the guarantee.
 
+  // Local device failures are never network loss — routed to mediaError(),
+  // not connectionLost(), so they cannot drive VideoSession's
+  // Connected/Reconnecting/Failed graph (see video_provider.h).
   connect(mVideoCapture.get(), &VideoCaptureAdapter::captureFailed, this,
-          &VideoProvider::connectionLost);
+          &VideoProvider::mediaError);
   connect(mAudioCapture.get(), &AudioCaptureAdapter::captureFailed, this,
-          &VideoProvider::connectionLost);
+          &VideoProvider::mediaError);
 
-  if (const auto camera = mDeviceManager->defaultCamera()) {
-    mVideoCapture->start(*camera);
-  }
-  if (const auto microphone = mDeviceManager->defaultMicrophone()) {
-    mAudioCapture->start(*microphone);
-  }
+  // Camera/microphone capture starts in join(), not here: starting it at
+  // construction time — before any call is joined or even requested — is
+  // a privacy problem (the device's capture indicator lights up with no
+  // call in progress). See join()/leave() for the actual start/stop.
 }
 
 LiveKitVideoProvider::~LiveKitVideoProvider() {
+  // leave() already stops both capture adapters — no need to repeat it
+  // here (join() is the only place that starts them).
   leave();
-  mVideoCapture->stop();
-  mAudioCapture->stop();
   delete mRemoteVideo.data();
   // No explicit releaseLiveKitRuntime() call here: mRuntimeGuard's own
   // destructor handles it automatically, and — because it is declared
@@ -86,6 +87,13 @@ LiveKitVideoProvider::~LiveKitVideoProvider() {
 }
 
 void LiveKitVideoProvider::join(const QString &url, const QString &token) {
+  if (const auto camera = mDeviceManager->defaultCamera()) {
+    mVideoCapture->start(*camera);
+  }
+  if (const auto microphone = mDeviceManager->defaultMicrophone()) {
+    mAudioCapture->start(*microphone);
+  }
+
   mRoom = std::make_unique<livekit::Room>();
   mRoom->setDelegate(this);
 
@@ -108,6 +116,8 @@ void LiveKitVideoProvider::join(const QString &url, const QString &token) {
   if (!connected) {
     mRoom->setDelegate(nullptr);
     mRoom.reset();
+    mVideoCapture->stop();
+    mAudioCapture->stop();
     // Room::connect() above is itself a blocking, synchronous SDK call (see
     // the vendored room.h: "Blocks until the FFI connect response arrives").
     // Against a promptly-refused connection it can return in well under a
@@ -144,6 +154,14 @@ void LiveKitVideoProvider::join(const QString &url, const QString &token) {
   }
 
   publishTracks();
+
+  // onParticipantConnected() only fires for participants who join AFTER
+  // this connect() call — if the other party was already in the room (the
+  // common case for a scheduled call both sides join around the same
+  // time), that event never arrives and WaitingForClient would wait
+  // forever. Check for an already-present participant here instead.
+  const bool participantAlreadyPresent = !mRoom->remoteParticipants().empty();
+
   // Deferred for the same reason as the joinFailed() emission above. Guarded
   // the opposite way: this join succeeded (mRoom is non-null right now), so
   // if mRoom is null by the time this runs, leave() (or a subsequent failed
@@ -157,6 +175,22 @@ void LiveKitVideoProvider::join(const QString &url, const QString &token) {
         emit joined();
       },
       Qt::QueuedConnection);
+
+  if (participantAlreadyPresent) {
+    // Queued after (not together with) joined() above so it is delivered
+    // strictly later: both are posted to the same object's event queue in
+    // FIFO order, so VideoSession is guaranteed to process
+    // Joining->WaitingForClient before WaitingForClient->Connected.
+    QMetaObject::invokeMethod(
+        this,
+        [this]() {
+          if (!mRoom) {
+            return;
+          }
+          emit remoteParticipantConnected();
+        },
+        Qt::QueuedConnection);
+  }
 }
 
 void LiveKitVideoProvider::leave() {
@@ -166,12 +200,20 @@ void LiveKitVideoProvider::leave() {
   mRemoteAudio->detach();
   mRemoteAudioTrack.reset();
 
+  mVideoCapture->stop();
+  mAudioCapture->stop();
+
   if (mRoom) {
     unpublishTracks();
     mRoom->setDelegate(nullptr);
     mRoom.reset();
-    emit left();
   }
+  // Always emitted, even if mRoom was already null (e.g. leave() called
+  // while a join() attempt was still in flight, or called a second time):
+  // VideoSession's Leaving state has exactly one way out, on this signal —
+  // emitting it only when mRoom was non-null left Leaving stranded forever
+  // whenever the room hadn't (or no longer) existed.
+  emit left();
 }
 
 void LiveKitVideoProvider::publishTracks() {
@@ -188,7 +230,7 @@ void LiveKitVideoProvider::publishTracks() {
     audioOptions.simulcast = false;
     localParticipant->publishTrack(mAudioTrack, audioOptions);
   } catch (const std::exception &e) {
-    emit connectionLost(QStringLiteral("Failed to publish audio: %1").arg(e.what()));
+    emit mediaError(QStringLiteral("Failed to publish audio: %1").arg(e.what()));
   }
 
   try {
@@ -199,7 +241,7 @@ void LiveKitVideoProvider::publishTracks() {
     videoOptions.simulcast = true;
     localParticipant->publishTrack(mVideoTrack, videoOptions);
   } catch (const std::exception &e) {
-    emit connectionLost(QStringLiteral("Failed to publish video: %1").arg(e.what()));
+    emit mediaError(QStringLiteral("Failed to publish video: %1").arg(e.what()));
   }
 }
 
@@ -254,6 +296,23 @@ void LiveKitVideoProvider::onParticipantConnected(livekit::Room &,
           return;
         }
         emit remoteParticipantConnected();
+      },
+      Qt::QueuedConnection);
+}
+
+void LiveKitVideoProvider::onParticipantDisconnected(livekit::Room &,
+                                                     const livekit::ParticipantDisconnectedEvent &) {
+  // Fires on ANY remote participant leaving, not "the last one" — correct
+  // for this module's actual scope (one practitioner, one client, one
+  // remote participant ever expected), same 1:1 assumption already made by
+  // onTrackSubscribed()/RemoteVideoRenderer's single-track rendering.
+  QMetaObject::invokeMethod(
+      this,
+      [this]() {
+        if (!mRoom) {
+          return;
+        }
+        emit remoteParticipantDisconnected();
       },
       Qt::QueuedConnection);
 }

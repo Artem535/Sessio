@@ -14,10 +14,37 @@ include(GNUInstallDirs)
 include(FetchContent)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 set(LIVEKIT_SDK_VERSION "1.12.0" CACHE STRING "LiveKit C++ SDK version")
+
+# Pinned per-platform archive hashes for LIVEKIT_SDK_VERSION, verified by
+# actually downloading and hashing that platform's release archive — see
+# livekit_sdk_setup()'s EXPECTED_HASH plumbing in cmake/LiveKitSDK.cmake.
+# Only linux-x64 is verified so far (this repo's dev/CI Linux runners); add
+# the Windows/macOS entries here once a CI run downloads and its log's
+# archive hash can be confirmed against the corresponding GitHub release
+# asset. An unset entry below is not silently insecure: livekit_sdk_setup()
+# emits a build-time WARNING for any triple with no hash.
+set(_lk_sha256_linux-x64 "d7aec81b1c16df494f36bfc612dc2d52fd9c22f03340b8db90e9ad942a207730")
+
+if(WIN32)
+  set(_lk_os "windows")
+elseif(APPLE)
+  set(_lk_os "macos")
+else()
+  set(_lk_os "linux")
+endif()
+set(_lk_arch "${CMAKE_HOST_SYSTEM_PROCESSOR}")
+if(_lk_arch MATCHES "^(x86_64|amd64|AMD64)$")
+  set(_lk_arch "x64")
+elseif(_lk_arch MATCHES "^(arm64|aarch64|ARM64)$")
+  set(_lk_arch "arm64")
+endif()
+set(_lk_sha256 "${_lk_sha256_${_lk_os}-${_lk_arch}}")
+
 include(LiveKitSDK)
 livekit_sdk_setup(
   VERSION "${LIVEKIT_SDK_VERSION}"
   SDK_DIR "${CMAKE_BINARY_DIR}/_deps/livekit-sdk"
+  SHA256 "${_lk_sha256}"
 )
 find_package(LiveKit CONFIG REQUIRED)
 option(PCM_BUILD_TESTS "Build project tests" OFF)

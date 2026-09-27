@@ -36,9 +36,21 @@ signals:
   void joinFailed(QString reason);
   void left();
   void remoteParticipantConnected();
+  void remoteParticipantDisconnected();
   void reconnecting();
   void reconnected();
+  // Terminal: the SDK has given up on the connection (whether or not it
+  // ever emitted reconnecting() first). Distinct from reconnecting(), which
+  // is the SDK's own signal that it is actively retrying — VideoSession
+  // treats connectionLost() as a reason to give up, not a reason to enter
+  // its Reconnecting state.
   void connectionLost(QString reason);
+  // A local capture problem (camera/microphone/publish failure) — never
+  // network loss. Kept separate from connectionLost() so a device error
+  // does not drive VideoSession's Connected/Reconnecting/Failed graph,
+  // which models the state of the connection to the server, not of local
+  // devices.
+  void mediaError(QString reason);
 };
 
 } // namespace pcm::video

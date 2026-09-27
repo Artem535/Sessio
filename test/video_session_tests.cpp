@@ -53,12 +53,20 @@ TEST_F(VideoSessionTest, JoinReachesJoiningStateThroughProvisionedAndPrejoinChec
   // actually passed through Provisioned and PrejoinCheck, so a future
   // change that wires NoMeeting directly to Joining (skipping the two
   // pass-through states) would fail this test instead of passing it.
-  ASSERT_GE(stateSpy.count(), 3);
+  //
+  // The machine's entry into its own initial state (NoMeeting) is only
+  // guaranteed to have happened by the time the FIRST event loop turn
+  // runs after construction — join()'s queued dispatch (see join()'s own
+  // comment) is what causes that first turn here, so stateSpy (constructed
+  // before join() is called) also captures that leading NoMeeting entry.
+  ASSERT_GE(stateSpy.count(), 4);
   EXPECT_EQ(stateSpy.at(0).at(0).value<pcm::video::VideoSessionState>(),
-            pcm::video::VideoSessionState::Provisioned);
+            pcm::video::VideoSessionState::NoMeeting);
   EXPECT_EQ(stateSpy.at(1).at(0).value<pcm::video::VideoSessionState>(),
-            pcm::video::VideoSessionState::PrejoinCheck);
+            pcm::video::VideoSessionState::Provisioned);
   EXPECT_EQ(stateSpy.at(2).at(0).value<pcm::video::VideoSessionState>(),
+            pcm::video::VideoSessionState::PrejoinCheck);
+  EXPECT_EQ(stateSpy.at(3).at(0).value<pcm::video::VideoSessionState>(),
             pcm::video::VideoSessionState::Joining);
 }
 
@@ -93,7 +101,11 @@ TEST_F(VideoSessionTest, JoinFailureTransitionsToFailed) {
   EXPECT_EQ(failedSpy.first().at(0).toString(), QStringLiteral("no route to host"));
 }
 
-TEST_F(VideoSessionTest, ConnectionLostEntersReconnectingThenReconnectedReturnsToConnected) {
+TEST_F(VideoSessionTest, ReconnectingThenReconnectedReturnsToConnected) {
+  // reconnecting() is the SDK's own "actively retrying" signal — the only
+  // thing that should drive Connected -> Reconnecting. connectionLost() is
+  // terminal (see the ConnectionLostFromConnected* tests below) and must
+  // never enter Reconnecting.
   auto *fake = new pcm::video::test::FakeVideoProvider();
   pcm::video::VideoSession session(fake, std::chrono::milliseconds(200));
   QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
@@ -105,7 +117,7 @@ TEST_F(VideoSessionTest, ConnectionLostEntersReconnectingThenReconnectedReturnsT
   fake->simulateRemoteParticipantConnected();
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 
-  fake->simulateConnectionLost("network blip");
+  fake->simulateReconnecting();
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Reconnecting);
 
   fake->simulateReconnected();
@@ -125,12 +137,91 @@ TEST_F(VideoSessionTest, ReconnectTimeoutTransitionsToFailedWithoutReconnection)
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 
   QSignalSpy reconnectFailedSpy(&session, &pcm::video::VideoSession::reconnectFailed);
-  fake->simulateConnectionLost("network blip");
+  fake->simulateReconnecting();
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Reconnecting);
 
   // No simulateReconnected() call — the 50ms timer must fire on its own.
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Failed);
   ASSERT_EQ(reconnectFailedSpy.count(), 1);
+}
+
+TEST_F(VideoSessionTest, ConnectionLostWhileReconnectingGoesToFailedImmediately) {
+  // A terminal connectionLost() while already Reconnecting must pre-empt
+  // the reconnect timer, not wait for it to time out.
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake, std::chrono::milliseconds(5000));
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateJoined();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
+  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
+
+  fake->simulateReconnecting();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Reconnecting);
+
+  fake->simulateConnectionLost("gave up");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Failed);
+}
+
+TEST_F(VideoSessionTest, ConnectionLostFromConnectedGoesDirectlyToFailed) {
+  // A terminal disconnect that never went through a reconnecting() signal
+  // at all (e.g. the server explicitly ended the room) must still reach
+  // Failed — not get stuck in Connected waiting for a Reconnecting leg it
+  // never entered.
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake);
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateJoined();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
+  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
+
+  fake->simulateConnectionLost("room ended");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Failed);
+}
+
+TEST_F(VideoSessionTest, RemoteParticipantDisconnectedReturnsToWaitingForClient) {
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake);
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateJoined();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
+  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
+
+  fake->simulateRemoteParticipantDisconnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
+}
+
+TEST_F(VideoSessionTest, LeaveFromFailedIsSafelyIgnored) {
+  // Entering Failed already tears the provider down (see VideoSession's
+  // constructor). A caller's later leave() call has nothing left to do —
+  // it must not hang or crash, and Failed has no transition to consume it.
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake);
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateJoinFailed("no route to host");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Failed);
+
+  const int leaveCallsBeforeFailed = fake->mLeaveCallCount;
+  EXPECT_GE(leaveCallsBeforeFailed, 1) << "entering Failed must tear the provider down";
+
+  session.leave();
+  QCoreApplication::processEvents();
+  QCoreApplication::processEvents();
+  EXPECT_EQ(session.state(), pcm::video::VideoSessionState::Failed);
 }
 
 TEST_F(VideoSessionTest, LeaveFromConnectedTransitionsToEnded) {

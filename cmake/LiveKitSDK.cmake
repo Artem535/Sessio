@@ -54,7 +54,14 @@ function(livekit_sdk_setup)
 
     if(NOT EXISTS "${_extracted_root}/lib/cmake")
       message(STATUS "livekit_sdk_setup: downloading ${_url}")
-      file(DOWNLOAD "${_url}" "${_archive_path}" SHOW_PROGRESS TLS_VERIFY ON STATUS _st LOG _log)
+      if(LK_SHA256)
+        file(DOWNLOAD "${_url}" "${_archive_path}" SHOW_PROGRESS TLS_VERIFY ON
+             EXPECTED_HASH "SHA256=${LK_SHA256}" STATUS _st LOG _log)
+      else()
+        message(WARNING "livekit_sdk_setup: no SHA256 given for ${LK_TRIPLE} v${_resolved_version} — "
+                         "downloaded archive integrity will not be verified")
+        file(DOWNLOAD "${_url}" "${_archive_path}" SHOW_PROGRESS TLS_VERIFY ON STATUS _st LOG _log)
+      endif()
       list(GET _st 0 _st_code)
       if(NOT _st_code EQUAL 0)
         message(FATAL_ERROR "livekit_sdk_setup: download failed (${_st}): ${_log}")
