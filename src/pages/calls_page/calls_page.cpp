@@ -6,7 +6,10 @@
 
 CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *deviceManager,
                      pcm::tokenclient::TokenBackendClient *tokenClient, QWidget *parent)
-    : QWidget(parent), mDeviceManager(deviceManager), mTokenClient(tokenClient) {
+    : QWidget(parent), mDeviceManager(deviceManager), mTokenClient(tokenClient),
+      mVideoProviderFactory([]() -> pcm::video::VideoProvider * {
+        return new pcm::video::LiveKitVideoProvider();
+      }) {
   auto *layout = new QVBoxLayout(this);
   mStack = new QStackedWidget(this);
   layout->addWidget(mStack);
@@ -50,6 +53,20 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
           });
 
   connect(mCallPage, &CallPage::callEnded, this, [this]() { mStack->setCurrentWidget(mEntryWidget); });
+
+  // Fix round 1: the real join() call is gated behind the user's own
+  // confirmation on CallPage's device-check screen, not fired the instant a
+  // token arrives (see startJoin() below). mCallPage is a single instance
+  // constructed once above and living for CallsPage's whole lifetime, so a
+  // single constructor-time connection is sufficient here — unlike the
+  // tokenReceived connections above, which are re-established per join
+  // attempt against the shared mTokenClient and so need Qt::UniqueConnection
+  // to avoid stacking duplicate connections across repeated join attempts.
+  connect(mCallPage, &CallPage::joinConfirmed, this, [this]() {
+    if (mSession) {
+      mSession->join(mPendingUrl, mPendingToken);
+    }
+  });
 }
 
 void CallsPage::setBearerCredentialProvider(std::function<QString()> provider) {
@@ -73,12 +90,23 @@ void CallsPage::prefillJoinCode(const QString &code, const QString &passcode) {
 
 void CallsPage::setSidePanelWidget(QWidget *panel) { mCallPage->setSidePanelWidget(panel); }
 
+void CallsPage::setVideoProviderFactoryForTesting(std::function<pcm::video::VideoProvider *()> factory) {
+  mVideoProviderFactory = std::move(factory);
+}
+
 void CallsPage::startJoin(const QString &url, const QString &token) {
-  auto *provider = new pcm::video::LiveKitVideoProvider();
+  // Fix round 1: the url/token are stashed for later rather than joined
+  // immediately — the actual VideoSession::join() call now happens only once
+  // the user confirms on CallPage's device-check screen (see the
+  // CallPage::joinConfirmed connection in the constructor), matching the
+  // design spec's PrejoinCheck gate and Task 12's original note that this is
+  // where the real join flow was meant to be triggered from.
+  mPendingUrl = url;
+  mPendingToken = token;
+  auto *provider = mVideoProviderFactory();
   mSession = std::make_unique<pcm::video::VideoSession>(provider);
   mCallPage->attachSession(mSession.get());
   mStack->setCurrentWidget(mCallPage);
-  mSession->join(url, token);
   if (mCurrentEventId.has_value()) {
     emit eventKnownForCurrentCall(*mCurrentEventId);
   }

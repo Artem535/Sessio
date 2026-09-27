@@ -38,21 +38,21 @@ CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : 
 void CallPage::buildDeviceCheckScreen(pcm::video::DeviceManager *deviceManager) {
   mDeviceCheck = new DeviceCheckWidget(deviceManager, this);
   mDeviceCheck->setObjectName("deviceCheckWidget");
-  // DeviceCheckWidget::joinRequested is intentionally left unconnected here.
-  // Task 12 wired a placeholder mSession->join(QString(), QString()) call in
-  // its place, but that was always dead/wrong: it fired before a session
-  // even existed to attach (attachSession() only ever gets called by
-  // CallsPage, see below), and its empty url/token would never have worked
-  // anyway. As of Task 13, CallsPage owns the whole join trigger: the entry
-  // screen's own "Connect"/"Join" buttons fetch a token from
-  // TokenBackendClient, then CallsPage constructs the VideoSession, calls
-  // attachSession() on this CallPage, and immediately calls
-  // session->join(url, token) itself. DeviceCheckWidget's own signal has no
-  // remaining caller-visible purpose from CallPage's perspective — the
-  // device-check screen still lets the user preview/pick camera and mic, but
-  // the actual join is triggered one level up, before this screen is even
-  // shown. Leaving the signal connection out makes that a documented no-op
-  // rather than a silent dead branch.
+  // Fix round 1: DeviceCheckWidget::joinRequested is the real join gate, per
+  // the design spec (PrejoinCheck is a real device-review step with its own
+  // Join button, not a screen the flow blows through automatically). Task 12
+  // originally wired this to a placeholder mSession->join(QString(),
+  // QString()) call, which was always dead/wrong (fired before a session
+  // even existed to attach, with empty url/token). Task 13's first pass
+  // instead had CallsPage call session->join(url, token) immediately once a
+  // token arrived, bypassing this button entirely — which contradicted both
+  // the design spec and Task 12's own note that "Task 13 replaces this
+  // [placeholder] with the real flow" at the point where this button is
+  // clicked. This relay is the fix: CallPage has no token client and no
+  // url/token of its own, so it cannot call join() itself — it just forwards
+  // "the user confirmed" to whoever attached the session (CallsPage), which
+  // does hold the pending url/token and performs the actual join() call.
+  connect(mDeviceCheck, &DeviceCheckWidget::joinRequested, this, &CallPage::joinConfirmed);
   mStack->addWidget(mDeviceCheck);
 }
 

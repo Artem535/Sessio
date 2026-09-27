@@ -30,6 +30,16 @@ public:
 signals:
   void leaveRequested();
   void callEnded();
+  // Emitted when the user confirms their camera/mic/speaker choices on the
+  // device-check screen and clicks its own Join button. CallPage has no
+  // token client and no url/token of its own — it only relays "the user
+  // confirmed" upward; CallsPage (which does hold the pending url/token from
+  // its TokenBackendClient request) is the one that actually calls
+  // VideoSession::join() in response. attachSession() must already have been
+  // called by the time this fires, since the session driving this screen is
+  // owned and constructed by CallsPage before the device-check screen is
+  // ever shown.
+  void joinConfirmed();
 
 public slots:
   void onSessionStateChanged(pcm::video::VideoSessionState state);
