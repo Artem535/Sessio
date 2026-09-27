@@ -1721,8 +1721,12 @@ void RemoteAudioPlayer::readerLoop() {
     }
 
     const auto &frame = event.frame;
-    QByteArray bytes(reinterpret_cast<const char *>(frame.data()),
-                     static_cast<qsizetype>(frame.size() * sizeof(int16_t)));
+    // livekit::AudioFrame::data() returns std::vector<int16_t>&, not a raw
+    // pointer or a frame with its own size() (matching Task 5's identical
+    // finding for AudioCaptureAdapter) — reach the underlying buffer and
+    // its element count via the vector directly.
+    QByteArray bytes(reinterpret_cast<const char *>(frame.data().data()),
+                     static_cast<qsizetype>(frame.data().size() * sizeof(int16_t)));
     const int sampleRate = static_cast<int>(frame.sampleRate());
     const int numChannels = static_cast<int>(frame.numChannels());
 
