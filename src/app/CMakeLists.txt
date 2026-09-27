@@ -20,6 +20,7 @@ qt_add_library(${TARGET_NAME} STATIC
         app_lock_service.cpp
         app_lock_controller.cpp
         app_lock_dialog.cpp
+        role_selection_dialog.cpp
 )
 
 target_include_directories(${TARGET_NAME} PRIVATE

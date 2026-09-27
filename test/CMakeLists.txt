@@ -325,3 +325,17 @@ target_link_libraries(Sessio_video_session_tests PRIVATE
 )
 set_target_properties(Sessio_video_session_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_video_session_tests)
+
+# Role selection dialog tests
+find_package(Qt6 REQUIRED COMPONENTS Test)
+add_executable(Sessio_role_selection_dialog_tests role_selection_dialog_tests.cpp)
+target_include_directories(Sessio_role_selection_dialog_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app)
+target_link_libraries(Sessio_role_selection_dialog_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Widgets
+    Qt6::Test
+    Sessio_app
+)
+set_target_properties(Sessio_role_selection_dialog_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_role_selection_dialog_tests)
