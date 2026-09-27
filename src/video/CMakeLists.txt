@@ -19,6 +19,8 @@ qt_add_library(${TARGET_NAME} STATIC
         video_capture_worker.cpp
         video_capture_adapter.h
         video_capture_adapter.cpp
+        audio_capture_adapter.h
+        audio_capture_adapter.cpp
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC

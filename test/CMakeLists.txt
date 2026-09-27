@@ -147,6 +147,24 @@ target_link_libraries(Sessio_video_capture_adapter_smoke_test PRIVATE
 add_test(NAME VideoCaptureAdapterSmokeTest COMMAND Sessio_video_capture_adapter_smoke_test)
 set_tests_properties(VideoCaptureAdapterSmokeTest PROPERTIES TIMEOUT 30)
 
+# Audio capture adapter smoke test (own main(), not GoogleTest — mirrors the
+# video capture adapter smoke test above). Proves repeated start/destroy
+# cycles on the GUI thread never hang, per this plan's Task 9 lifecycle-stress
+# acceptance criterion.
+add_executable(Sessio_audio_capture_adapter_smoke_test
+    ${CMAKE_SOURCE_DIR}/src/video/audio_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/audio_chunker.cpp
+    audio_capture_adapter_smoke_test.cpp
+)
+target_include_directories(Sessio_audio_capture_adapter_smoke_test PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_audio_capture_adapter_smoke_test PRIVATE
+    Qt6::Core
+    Qt6::Multimedia
+    LiveKit::livekit
+)
+add_test(NAME AudioCaptureAdapterSmokeTest COMMAND Sessio_audio_capture_adapter_smoke_test)
+set_tests_properties(AudioCaptureAdapterSmokeTest PROPERTIES TIMEOUT 30)
+
 # External URL meeting provider tests
 add_executable(Sessio_external_url_meeting_provider_tests
     external_url_meeting_provider_tests.cpp
