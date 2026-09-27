@@ -348,3 +348,19 @@ target_link_libraries(Sessio_token_response_parser_tests PRIVATE
     Sessio_token_client
 )
 gtest_discover_tests(Sessio_token_response_parser_tests)
+
+# Token backend client tests
+find_package(Qt6 REQUIRED COMPONENTS Network Test)
+add_executable(Sessio_token_backend_client_tests
+    fake_token_backend_server.h
+    token_backend_client_tests.cpp
+)
+target_link_libraries(Sessio_token_backend_client_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Network
+    Qt6::Test
+    Sessio_token_client
+)
+set_target_properties(Sessio_token_backend_client_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_token_backend_client_tests)
