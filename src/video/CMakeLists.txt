@@ -21,6 +21,10 @@ qt_add_library(${TARGET_NAME} STATIC
         video_capture_adapter.cpp
         audio_capture_adapter.h
         audio_capture_adapter.cpp
+        remote_video_renderer.h
+        remote_video_renderer.cpp
+        remote_audio_player.h
+        remote_audio_player.cpp
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC

@@ -165,6 +165,27 @@ target_link_libraries(Sessio_audio_capture_adapter_smoke_test PRIVATE
 add_test(NAME AudioCaptureAdapterSmokeTest COMMAND Sessio_audio_capture_adapter_smoke_test)
 set_tests_properties(AudioCaptureAdapterSmokeTest PROPERTIES TIMEOUT 30)
 
+# Remote video renderer smoke test (own main(), not GoogleTest — mirrors the
+# local capture adapter smoke tests above). Proves repeated
+# attach(null)/detach/destroy cycles never hang, which is what a
+# Leave-before-any-remote-track-ever-subscribed race would exercise in
+# production; no real remote LiveKit track is reachable without a server and
+# a second participant.
+add_executable(Sessio_remote_video_renderer_smoke_test
+    ${CMAKE_SOURCE_DIR}/src/video/remote_video_renderer.cpp
+    remote_video_renderer_smoke_test.cpp
+)
+target_include_directories(Sessio_remote_video_renderer_smoke_test PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_remote_video_renderer_smoke_test PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::OpenGLWidgets
+    LiveKit::livekit
+)
+add_test(NAME RemoteVideoRendererSmokeTest COMMAND Sessio_remote_video_renderer_smoke_test)
+set_tests_properties(RemoteVideoRendererSmokeTest PROPERTIES TIMEOUT 30)
+
 # External URL meeting provider tests
 add_executable(Sessio_external_url_meeting_provider_tests
     external_url_meeting_provider_tests.cpp
