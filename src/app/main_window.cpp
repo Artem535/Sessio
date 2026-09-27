@@ -55,6 +55,8 @@ MainWindow::MainWindow(QWidget *parent)
       new TabButton(QIcon(":/icons/users-gear-solid-full.svg"), tr(": NAV_DETAILS"), this);
   mBtnNotes =
       new TabButton(QIcon(":/icons/notes.svg"), tr("Notes"), this);
+  mBtnCalls =
+      new TabButton(QIcon(":/icons/video-solid-full.svg"), tr("Calls"), this);
 
   // Add buttons to the vertical layout
   mUi->verticalLayout->addWidget(mBtnCalendar);
@@ -62,6 +64,7 @@ MainWindow::MainWindow(QWidget *parent)
   mUi->verticalLayout->addWidget(mBtnAnalytics);
   mUi->verticalLayout->addWidget(mBtnProfile);
   mUi->verticalLayout->addWidget(mBtnNotes);
+  mUi->verticalLayout->addWidget(mBtnCalls);
   mBtnProfile->hide();
   mBtnNotes->hide();
 
@@ -153,6 +156,17 @@ void MainWindow::addClientNotesPage(std::shared_ptr<pcm::database::Database> db)
   setPageCustomWidget(Pages::clientNotes, mBtnBackToClients);
 }
 
+void MainWindow::addCallsPage(pcm::video::DeviceManager *deviceManager,
+                              pcm::tokenclient::TokenBackendClient *tokenClient,
+                              std::function<QString()> bearerCredentialProvider) {
+  const auto page = new CallsPage(/*specialistMode=*/true, deviceManager, tokenClient, this);
+  page->setBearerCredentialProvider(std::move(bearerCredentialProvider));
+  mPages.insertOrAssign(Pages::calls, page);
+
+  const int index = mUi->stackedWidget->addWidget(page);
+  mPagesIndex.insertOrAssign(Pages::calls, index);
+}
+
 void MainWindow::setDatabase(std::shared_ptr<pcm::database::Database> db) {
   mDb = std::move(db);
 }
@@ -182,6 +196,8 @@ void MainWindow::connectSignals() {
           [this]() { showPage(Pages::clientCard, mBtnProfile); });
   connect(mBtnNotes, &QPushButton::clicked,
           [this]() { showPage(Pages::clientNotes, mBtnNotes); });
+  connect(mBtnCalls, &QPushButton::clicked,
+          [this]() { showPage(Pages::calls, mBtnCalls); });
 
   // When a client is selected in the list, show its info in the client card page
   connect(clientInfoPage, &ClientInfo::displayButtonClicked, clientCardPage,
@@ -268,6 +284,7 @@ void MainWindow::checkButton(QPushButton *btn) const {
   mBtnAnalytics->setChecked(false);
   mBtnProfile->setChecked(false);
   mBtnNotes->setChecked(false);
+  mBtnCalls->setChecked(false);
   btn->setChecked(true);
 }
 
@@ -394,6 +411,8 @@ QString MainWindow::pageTitle(const Pages page) const {
       return tr("Details");
     case Pages::clientNotes:
       return tr("Notes");
+    case Pages::calls:
+      return tr("Calls");
   }
 
   return tr("Page");

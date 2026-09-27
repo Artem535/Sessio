@@ -156,7 +156,13 @@ int Application::run(int argc, char *argv[]) {
       std::make_unique<pcm::backup::AutoBackupScheduler>(mDb);
   mAutoBackupScheduler->start();
 
-  mMeetingCoordinator = std::make_unique<pcm::meeting::MeetingCoordinator>(this);
+  // TODO(Task 17): real token-backend base URL/bearer credential wiring.
+  // MeetingCoordinator's constructor gained a token-backend base URL and
+  // bearer credential in Task 7; this call site is deliberately left as a
+  // minimal placeholder until Task 17's role-branch rewrite of
+  // Application::run() supplies the real config/keychain-driven values.
+  mMeetingCoordinator = std::make_unique<pcm::meeting::MeetingCoordinator>(
+      QString(), QString(), this);
 
   mMainWindow = std::make_unique<MainWindow>();
   mClientModel = std::make_shared<QClientModel>(mDb);

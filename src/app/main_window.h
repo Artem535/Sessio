@@ -1,6 +1,7 @@
 #pragma once
 
 #include "analytics_page.h"
+#include "calls_page.h"
 #include "client_info.h"
 #include "client_notes_page.h"
 #include "event_info.h"
@@ -9,6 +10,7 @@
 #include "meeting_coordinator.h"
 #include "settings_dialog.h"
 #include "tab_button.h"
+#include "token_backend_client.h"
 
 #include <QAction>
 #include <QLineEdit>
@@ -17,6 +19,7 @@
 #include <QLabel>
 #include <QHBoxLayout>
 
+#include <functional>
 #include <memory>
 #include <optional>
 
@@ -44,7 +47,7 @@ public:
   /**
    * @brief Enum to identify the available pages in the application.
    */
-  enum class Pages { clientInfo, eventInfo, analytics, clientCard, clientNotes };
+  enum class Pages { clientInfo, eventInfo, analytics, clientCard, clientNotes, calls };
 
   /**
    * @brief Constructor for the MainWindow class.
@@ -74,6 +77,16 @@ public:
    */
   void addClientCardPage(std::shared_ptr<pcm::database::Database> db);
   void addClientNotesPage(std::shared_ptr<pcm::database::Database> db);
+
+  /**
+   * @brief Adds the calls (video meetings) page to the application.
+   * @param deviceManager Camera/microphone/speaker enumeration, owned by the caller.
+   * @param tokenClient Token-backend HTTP client, owned by the caller.
+   * @param bearerCredentialProvider Supplies the specialist bearer credential on demand.
+   */
+  void addCallsPage(pcm::video::DeviceManager *deviceManager,
+                    pcm::tokenclient::TokenBackendClient *tokenClient,
+                    std::function<QString()> bearerCredentialProvider);
   void setDatabase(std::shared_ptr<pcm::database::Database> db);
 
   /**
@@ -127,6 +140,7 @@ private:
   TabButton *mBtnAnalytics{nullptr};
   TabButton *mBtnProfile{nullptr};
   TabButton *mBtnNotes{nullptr};
+  TabButton *mBtnCalls{nullptr};
   QWidget *mClientPageActions{nullptr};
   oclero::qlementine::LineEdit *mClientSearchInput{nullptr};
   oclero::qlementine::Switch *mShowInactiveClientsSwitch{nullptr};

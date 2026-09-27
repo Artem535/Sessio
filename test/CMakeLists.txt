@@ -472,6 +472,18 @@ target_link_libraries(Sessio_calls_page_tests PRIVATE
 set_target_properties(Sessio_calls_page_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_calls_page_tests)
 
+# MainWindow Calls tab tests
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
+add_executable(Sessio_main_window_calls_tab_tests main_window_calls_tab_tests.cpp)
+target_link_libraries(Sessio_main_window_calls_tab_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Widgets
+    Sessio_app
+    Sessio_token_client
+)
+gtest_discover_tests(Sessio_main_window_calls_tab_tests)
+
 # ClientModeWindow structural tests
 add_test(NAME ClientModeWindowHeaderHasNoDatabaseDependency
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/client_mode_window_structural_test.sh
