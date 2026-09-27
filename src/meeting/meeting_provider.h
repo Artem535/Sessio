@@ -9,6 +9,8 @@ namespace pcm::meeting {
 
 struct MeetingCreateRequest {
   QString rawMeetingUrl;
+  QString scheduledStartIso; // ISO-8601, only used by the LiveKit provider
+  QString scheduledEndIso;   // ISO-8601, only used by the LiveKit provider
 };
 
 class MeetingProvider : public QObject {

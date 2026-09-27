@@ -11,4 +11,10 @@ struct TokenResult {
   qint64 expiresAt = 0;
 };
 
+struct MeetingCreateResult {
+  QString meetingRef;
+  QString invitationUrl;
+  QString passcode;
+};
+
 } // namespace pcm::tokenclient

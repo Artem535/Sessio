@@ -249,17 +249,25 @@ target_link_libraries(Sessio_external_url_meeting_provider_tests PRIVATE
 set_target_properties(Sessio_external_url_meeting_provider_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_external_url_meeting_provider_tests)
 
-# LiveKit meeting provider stub tests
-add_executable(Sessio_livekit_meeting_provider_tests livekit_meeting_provider_tests.cpp)
+# LiveKit meeting provider tests (against a fake token-backend HTTP server,
+# same fake used by Sessio_token_backend_client_tests)
+find_package(Qt6 REQUIRED COMPONENTS Network Test)
+add_executable(Sessio_livekit_meeting_provider_tests
+    fake_token_backend_server.h
+    livekit_meeting_provider_tests.cpp
+)
 target_link_libraries(Sessio_livekit_meeting_provider_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
+    Qt6::Network
+    Qt6::Test
     Sessio_meeting
 )
 set_target_properties(Sessio_livekit_meeting_provider_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_livekit_meeting_provider_tests)
 
 # Meeting coordinator tests
+find_package(Qt6 REQUIRED COMPONENTS Test)
 add_executable(Sessio_meeting_coordinator_tests
     meeting_coordinator_tests.cpp
     meeting_provider_test_listener.h
@@ -267,6 +275,7 @@ add_executable(Sessio_meeting_coordinator_tests
 target_link_libraries(Sessio_meeting_coordinator_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
+    Qt6::Test
     Sessio_meeting
 )
 set_target_properties(Sessio_meeting_coordinator_tests PROPERTIES AUTOMOC ON)

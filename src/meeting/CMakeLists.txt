@@ -21,6 +21,7 @@ qt_add_library(${TARGET_NAME} STATIC
 
 target_link_libraries(${TARGET_NAME} PUBLIC
         Qt6::Core
+        ${PROJECT_NAME}_token_client
 )
 
 target_include_directories(${TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})

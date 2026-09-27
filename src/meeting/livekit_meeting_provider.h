@@ -1,20 +1,27 @@
 #pragma once
 
 #include "meeting_provider.h"
+#include "token_backend_client.h"
+
+#include <memory>
 
 namespace pcm::meeting {
 
-// Non-functional in this version: satisfies MeetingProvider but never makes a
-// network call. LiveKit is not yet selectable anywhere in the UI; the real
-// token-backend integration lands with the native call UI.
+// Backs a LiveKit meeting through the token-backend's HTTP endpoints:
+// POST /v1/meetings to create, POST /v1/meetings/{ref}/invalidate to cancel.
 class LiveKitMeetingProvider final : public MeetingProvider {
   Q_OBJECT
 
 public:
-  using MeetingProvider::MeetingProvider;
+  LiveKitMeetingProvider(QString tokenBackendBaseUrl, QString bearerCredential,
+                         QObject *parent = nullptr);
 
   void create(const MeetingCreateRequest &request) override;
   void cancel(const QString &meetingRef) override;
+
+private:
+  std::unique_ptr<pcm::tokenclient::TokenBackendClient> mClient;
+  QString mBearerCredential;
 };
 
 } // namespace pcm::meeting

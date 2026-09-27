@@ -16,7 +16,8 @@ class MeetingCoordinator final : public QObject {
   Q_OBJECT
 
 public:
-  explicit MeetingCoordinator(QObject *parent = nullptr);
+  MeetingCoordinator(QString tokenBackendBaseUrl, QString bearerCredential,
+                     QObject *parent = nullptr);
 
   void createMeeting(ProviderKind kind, const MeetingCreateRequest &request);
   void cancelMeeting(ProviderKind kind, const QString &meetingRef);

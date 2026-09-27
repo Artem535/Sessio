@@ -1,54 +1,78 @@
 #include "livekit_meeting_provider.h"
+#include "fake_token_backend_server.h"
 
+#include <QCoreApplication>
+#include <QSignalSpy>
 #include <gtest/gtest.h>
 
-namespace {
+TEST(LiveKitMeetingProviderTest, CreateCallsTokenBackendAndEmitsCreatedDescriptor) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, R"({
+    "meetingRef": "ref-9", "invitationUrl": "https://x/code-9", "passcode": "222222",
+    "scheduledStart": "2026-10-01T10:00:00Z", "scheduledEnd": "2026-10-01T10:50:00Z"
+  })");
 
-class Listener : public QObject {
-  Q_OBJECT
-public:
-  bool createSucceeded = false;
-  std::optional<QString> lastCreateError;
-  bool cancelSucceeded = false;
-  std::optional<QString> lastCancelError;
+  pcm::meeting::LiveKitMeetingProvider provider(server.baseUrl().toString(), "bearer-secret");
+  QSignalSpy createdSpy(&provider, &pcm::meeting::MeetingProvider::created);
 
-public slots:
-  void onCreated(pcm::meeting::MeetingDescriptor) { createSucceeded = true; }
-  void onCreateFailed(QString error) { lastCreateError = error; }
-  void onCanceled() { cancelSucceeded = true; }
-  void onCancelFailed(QString error) { lastCancelError = error; }
-};
+  provider.create({.scheduledStartIso = "2026-10-01T10:00:00Z",
+                   .scheduledEndIso = "2026-10-01T10:50:00Z"});
 
-} // namespace
+  ASSERT_TRUE(createdSpy.wait(2000));
+  const auto descriptor = createdSpy.at(0).at(0).value<pcm::meeting::MeetingDescriptor>();
+  EXPECT_EQ(descriptor.kind, pcm::meeting::ProviderKind::LiveKit);
+  EXPECT_EQ(descriptor.meetingRef, QStringLiteral("ref-9"));
+  ASSERT_TRUE(descriptor.invitationState.has_value());
+  EXPECT_EQ(*descriptor.invitationState, QStringLiteral("https://x/code-9|222222"));
 
-TEST(LiveKitMeetingProviderTest, CreateAlwaysFailsWithoutClaimingSuccess) {
-  pcm::meeting::LiveKitMeetingProvider provider;
-  Listener listener;
-  QObject::connect(&provider, &pcm::meeting::MeetingProvider::created, &listener,
-                    &Listener::onCreated);
-  QObject::connect(&provider, &pcm::meeting::MeetingProvider::createFailed, &listener,
-                    &Listener::onCreateFailed);
-
-  provider.create({.rawMeetingUrl = ""});
-
-  EXPECT_FALSE(listener.createSucceeded);
-  ASSERT_TRUE(listener.lastCreateError.has_value());
-  EXPECT_FALSE(listener.lastCreateError->isEmpty());
+  EXPECT_EQ(server.lastPath, QStringLiteral("/v1/meetings"));
+  EXPECT_EQ(server.lastAuthorizationHeader, QStringLiteral("Bearer bearer-secret"));
+  EXPECT_TRUE(server.lastBody.contains("2026-10-01T10:00:00Z"));
 }
 
-TEST(LiveKitMeetingProviderTest, CancelAlwaysFailsWithoutClaimingSuccess) {
-  pcm::meeting::LiveKitMeetingProvider provider;
-  Listener listener;
-  QObject::connect(&provider, &pcm::meeting::MeetingProvider::canceled, &listener,
-                    &Listener::onCanceled);
-  QObject::connect(&provider, &pcm::meeting::MeetingProvider::cancelFailed, &listener,
-                    &Listener::onCancelFailed);
+TEST(LiveKitMeetingProviderTest, CreateFailureEmitsCreateFailedWithServerMessage) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(401, R"({"error": "unauthorized"})");
 
-  provider.cancel("some-meeting-ref");
+  pcm::meeting::LiveKitMeetingProvider provider(server.baseUrl().toString(), "wrong-secret");
+  QSignalSpy failedSpy(&provider, &pcm::meeting::MeetingProvider::createFailed);
 
-  EXPECT_FALSE(listener.cancelSucceeded);
-  ASSERT_TRUE(listener.lastCancelError.has_value());
-  EXPECT_FALSE(listener.lastCancelError->isEmpty());
+  provider.create({.scheduledStartIso = "2026-10-01T10:00:00Z",
+                   .scheduledEndIso = "2026-10-01T10:50:00Z"});
+
+  ASSERT_TRUE(failedSpy.wait(2000));
+  EXPECT_EQ(failedSpy.at(0).at(0).toString(), QStringLiteral("unauthorized"));
 }
 
-#include "livekit_meeting_provider_tests.moc"
+TEST(LiveKitMeetingProviderTest, CancelCallsTokenBackendInvalidateAndEmitsCanceled) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(204, QByteArray());
+
+  pcm::meeting::LiveKitMeetingProvider provider(server.baseUrl().toString(), "bearer-secret");
+  QSignalSpy canceledSpy(&provider, &pcm::meeting::MeetingProvider::canceled);
+
+  provider.cancel("ref-9");
+
+  ASSERT_TRUE(canceledSpy.wait(2000));
+  EXPECT_EQ(server.lastPath, QStringLiteral("/v1/meetings/ref-9/invalidate"));
+  EXPECT_EQ(server.lastAuthorizationHeader, QStringLiteral("Bearer bearer-secret"));
+}
+
+TEST(LiveKitMeetingProviderTest, CancelFailureEmitsCancelFailedWithServerMessage) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(404, R"({"error": "request_failed"})");
+
+  pcm::meeting::LiveKitMeetingProvider provider(server.baseUrl().toString(), "bearer-secret");
+  QSignalSpy failedSpy(&provider, &pcm::meeting::MeetingProvider::cancelFailed);
+
+  provider.cancel("unknown-ref");
+
+  ASSERT_TRUE(failedSpy.wait(2000));
+  EXPECT_EQ(failedSpy.at(0).at(0).toString(), QStringLiteral("request_failed"));
+}
+
+int main(int argc, char **argv) {
+  QCoreApplication app(argc, argv);
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

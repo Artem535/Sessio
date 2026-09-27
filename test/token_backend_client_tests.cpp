@@ -89,6 +89,70 @@ TEST(TokenBackendClientTest, ClientTokenEscapesPasscodeWithQuoteCharacter) {
   EXPECT_TRUE(server.lastBody.contains("code"));
 }
 
+TEST(TokenBackendClientTest, CreateMeetingSendsScheduleAndBearerHeader) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, R"({
+    "meetingRef": "ref-1", "invitationUrl": "https://x/code-1", "passcode": "111111",
+    "scheduledStart": "2026-10-01T10:00:00Z", "scheduledEnd": "2026-10-01T10:50:00Z"
+  })");
+
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  QSignalSpy createdSpy(&client, &pcm::tokenclient::TokenBackendClient::meetingCreated);
+
+  client.requestCreateMeeting("secret", "2026-10-01T10:00:00Z", "2026-10-01T10:50:00Z");
+
+  ASSERT_TRUE(createdSpy.wait(2000));
+  EXPECT_EQ(server.lastPath, QStringLiteral("/v1/meetings"));
+  EXPECT_EQ(server.lastAuthorizationHeader, QStringLiteral("Bearer secret"));
+  EXPECT_TRUE(server.lastBody.contains("2026-10-01T10:00:00Z"));
+
+  const auto result =
+      createdSpy.at(0).at(0).value<pcm::tokenclient::MeetingCreateResult>();
+  EXPECT_EQ(result.meetingRef, QStringLiteral("ref-1"));
+  EXPECT_EQ(result.invitationUrl, QStringLiteral("https://x/code-1"));
+  EXPECT_EQ(result.passcode, QStringLiteral("111111"));
+}
+
+TEST(TokenBackendClientTest, CreateMeetingErrorStatusEmitsMeetingCreateFailed) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(401, R"({"error": "unauthorized"})");
+
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  QSignalSpy failedSpy(&client, &pcm::tokenclient::TokenBackendClient::meetingCreateFailed);
+
+  client.requestCreateMeeting("bad-secret", "2026-10-01T10:00:00Z", "2026-10-01T10:50:00Z");
+
+  ASSERT_TRUE(failedSpy.wait(2000));
+  EXPECT_EQ(failedSpy.at(0).at(0).toString(), QStringLiteral("unauthorized"));
+}
+
+TEST(TokenBackendClientTest, InvalidateMeetingSendsBearerHeaderToInvalidateRoute) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(204, QByteArray());
+
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  QSignalSpy invalidatedSpy(&client, &pcm::tokenclient::TokenBackendClient::meetingInvalidated);
+
+  client.requestInvalidateMeeting("secret", "ref-1");
+
+  ASSERT_TRUE(invalidatedSpy.wait(2000));
+  EXPECT_EQ(server.lastPath, QStringLiteral("/v1/meetings/ref-1/invalidate"));
+  EXPECT_EQ(server.lastAuthorizationHeader, QStringLiteral("Bearer secret"));
+}
+
+TEST(TokenBackendClientTest, InvalidateMeetingErrorStatusEmitsMeetingInvalidateFailed) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(404, R"({"error": "request_failed"})");
+
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  QSignalSpy failedSpy(&client, &pcm::tokenclient::TokenBackendClient::meetingInvalidateFailed);
+
+  client.requestInvalidateMeeting("secret", "unknown-ref");
+
+  ASSERT_TRUE(failedSpy.wait(2000));
+  EXPECT_EQ(failedSpy.at(0).at(0).toString(), QStringLiteral("request_failed"));
+}
+
 int main(int argc, char **argv) {
   QCoreApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
