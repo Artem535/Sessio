@@ -28,7 +28,7 @@ jobs:
           - os: ubuntu-latest
             qt_version: 6.10.2
             artifact_name: Sessio-linux-appimage
-            qt_component: "qt.qt6.6102.linux_gcc_64 qt.qt6.6102.addons.qtmultimedia"
+            qt_component: "qt.qt6.6102.linux_gcc_64 qt.qt6.6102.addons.qtmultimedia qt.qt6.6102.addons.qtscxml"
           - os: macos-latest
             qt_version: 6.10.2
             qt_arch: clang_64
@@ -108,7 +108,7 @@ jobs:
           host: ${{ matrix.qt_host }}
           target: ${{ matrix.qt_target }}
           arch: ${{ matrix.qt_arch }}
-          modules: 'qtmultimedia'
+          modules: 'qtmultimedia qtscxml'
           cache: true
 
       - name: Setup MSVC environment

@@ -2679,7 +2679,10 @@ TEST_F(VideoSessionTest, RepeatedJoinLeaveDestroyCyclesDoNotHang) {
 - [ ] **Step 3: Add the test target and run to verify it fails**
 
 ```cmake
+find_package(Qt6 REQUIRED COMPONENTS Test StateMachine)
+
 add_executable(Sessio_video_session_tests
+    ${CMAKE_SOURCE_DIR}/src/video/video_provider.h
     ${CMAKE_SOURCE_DIR}/src/video/video_session.cpp
     video_session_tests.cpp
 )
@@ -2689,10 +2692,13 @@ target_link_libraries(Sessio_video_session_tests PRIVATE
     GTest::gtest_main
     Qt6::Core
     Qt6::Test
+    Qt6::StateMachine
 )
 set_target_properties(Sessio_video_session_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_video_session_tests)
 ```
+
+`video_provider.h` is listed explicitly as a source (not just `#include`d) for the same reason as Task 7's smoke test: `VideoProvider` is a `Q_OBJECT` class with no paired `.cpp`, so without this AUTOMOC never scans it and the link fails with undefined `VideoProvider` signal/vtable symbols. `Qt6::StateMachine` is needed for the same reason as in `src/video/CMakeLists.txt` (see Step 6 below) — `QState`/`QStateMachine` live in a separate Qt module from Core.
 
 `Qt6::Test` is needed because `QSignalSpy` (`<QSignalSpy>`) is part of the Qt Test module, not Qt Core — this test file uses it to pump the event loop while waiting for `QStateMachine`-driven transitions (see the async-testing note above). The top-level `CMakeLists.txt`'s `find_package(Qt6 ...)` (Task 1) does not request `Test`; add a scoped `find_package(Qt6 REQUIRED COMPONENTS Test)` call at the top of this `test/CMakeLists.txt` block, following `src/meeting/CMakeLists.txt`'s pattern of scoped `find_package` calls for test-only Qt components.
 
@@ -2764,6 +2770,8 @@ Create `src/video/video_session.cpp`:
 
 ```cpp
 #include "video_session.h"
+
+#include <QCoreApplication>
 
 namespace pcm::video {
 
@@ -2842,6 +2850,19 @@ VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseco
 
   mMachine.setInitialState(noMeeting);
   mMachine.start();
+  // QStateMachine::start() only *schedules* entry into the initial state and
+  // registration of its signal transitions (it posts an internal event
+  // rather than doing this synchronously). Without pumping the event loop
+  // here, a caller that calls join()/leave() immediately after constructing
+  // a VideoSession — which is a perfectly reasonable thing to do, and what
+  // this class's own tests do — would emit requestJoin()/requestLeave()
+  // before the machine is listening for it, silently dropping the
+  // transition and leaving the session stuck in NoMeeting forever. Block
+  // here until the machine actually reports itself running so join()/
+  // leave() are safe to call the instant this constructor returns.
+  while (!mMachine.isRunning()) {
+    QCoreApplication::processEvents();
+  }
 }
 
 void VideoSession::join(const QString &url, const QString &token) {
@@ -2865,6 +2886,25 @@ ctest --test-dir build -R VideoSessionTest --output-on-failure
 Expected: PASS, all 8 cases.
 
 - [ ] **Step 6: Add the new files to `src/video/CMakeLists.txt`**
+
+`QState`/`QStateMachine` live in a separate Qt module (`Qt6StateMachine`, upstream source repo `qtscxml` — a historical Qt6 restructuring quirk: the plain C++ state-machine classes moved out of `qtbase` into the `qtscxml` repo even though they have nothing to do with SCXML themselves), not `Qt6Core`. Add it to this file's existing `find_package` call and `target_link_libraries` block:
+
+```cmake
+find_package(Qt6 REQUIRED COMPONENTS Core Multimedia MultimediaWidgets OpenGLWidgets StateMachine)
+```
+
+```cmake
+target_link_libraries(${TARGET_NAME} PUBLIC
+        Qt6::Core
+        Qt6::Multimedia
+        Qt6::MultimediaWidgets
+        Qt6::OpenGLWidgets
+        Qt6::StateMachine
+        LiveKit::livekit
+)
+```
+
+Then update the sources list:
 
 ```cmake
 qt_add_library(${TARGET_NAME} STATIC
@@ -2892,6 +2932,8 @@ qt_add_library(${TARGET_NAME} STATIC
         livekit_video_provider.cpp
 )
 ```
+
+**Verification note:** on a local Linux dev machine, the `Qt6StateMachine` CMake config/headers may need a separate distro package installed (e.g. Debian/Ubuntu's `qt6-scxml-dev`) before `find_package` succeeds — install it if `find_package(Qt6 ... StateMachine)` fails to find the component locally. CI's Qt-install steps (Task 1's `.github/workflows/cmake-multi-platform.yml` changes) have been extended to request a `qtscxml` module/addon alongside `qtmultimedia` for exactly this reason, but — like Task 1's own Qt Multimedia module names — this is unverified pending an actual CI run; watch the first CI run once this branch is pushed and adjust the module/addon name per-OS if it doesn't resolve.
 
 - [ ] **Step 7: Commit**
 
