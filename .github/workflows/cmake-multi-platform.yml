@@ -244,6 +244,14 @@ jobs:
       - name: Build
         run: cmake --build build-release --parallel
 
+      - name: Configure LiveKit spike
+        continue-on-error: true
+        run: cmake -S spikes/livekit-cpp-spike -B spike-build
+
+      - name: Build LiveKit spike
+        continue-on-error: true
+        run: cmake --build spike-build --parallel
+
       - name: Install bundle
         if: runner.os != 'Windows'
         run: cmake --install build-release --config MinSizeRel --prefix "${{ github.workspace }}/build-release/install"

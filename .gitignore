@@ -6,6 +6,7 @@
 build
 build-release/
 cmake-build-debug
+spike-build/
 
 # Compiled Qt Linguist translations (build output of lrelease)
 translation/*.qm
