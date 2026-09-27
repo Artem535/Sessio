@@ -390,3 +390,11 @@ target_link_libraries(Sessio_settings_dialog_livekit_section_tests PRIVATE
 )
 set_target_properties(Sessio_settings_dialog_livekit_section_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_settings_dialog_livekit_section_tests)
+
+# ClientModeWindow structural tests
+add_test(NAME ClientModeWindowHeaderHasNoDatabaseDependency
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/client_mode_window_structural_test.sh
+                 ${CMAKE_SOURCE_DIR}/src/app/client_mode_window.h)
+add_test(NAME ClientModeWindowSourceHasNoDatabaseDependency
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/client_mode_window_structural_test.sh
+                 ${CMAKE_SOURCE_DIR}/src/app/client_mode_window.cpp)
