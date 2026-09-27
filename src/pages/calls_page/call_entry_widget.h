@@ -1,0 +1,38 @@
+#pragma once
+
+#include <QDateTime>
+#include <QList>
+#include <QWidget>
+
+class QLineEdit;
+class QVBoxLayout;
+
+struct UpcomingMeeting {
+  QString meetingRef;
+  QString title;
+  QDateTime startTime;
+  bool joinEnabled = false;
+  int64_t eventId = 0;
+};
+
+class CallEntryWidget final : public QWidget {
+  Q_OBJECT
+
+public:
+  explicit CallEntryWidget(bool showOwnMeetings, QWidget *parent = nullptr);
+
+  void setUpcomingMeetings(const QList<UpcomingMeeting> &meetings);
+  void preselectOwnMeeting(const QString &meetingRef);
+  void prefillJoinCode(const QString &code, const QString &passcode);
+
+signals:
+  void ownMeetingJoinRequested(QString meetingRef);
+  void joinByCodeRequested(QString code, QString passcode);
+
+private:
+  bool mShowOwnMeetings;
+  QWidget *mOwnMeetingsList{nullptr};
+  QVBoxLayout *mOwnMeetingsLayout{nullptr};
+  QLineEdit *mCodeEdit{nullptr};
+  QLineEdit *mPasscodeEdit{nullptr};
+};
