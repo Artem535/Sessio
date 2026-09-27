@@ -87,6 +87,15 @@ target_link_libraries(Sessio_provider_kind_tests PRIVATE
 )
 gtest_discover_tests(Sessio_provider_kind_tests)
 
+# AppRole tests
+add_executable(Sessio_app_role_tests app_role_tests.cpp)
+target_link_libraries(Sessio_app_role_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_config
+)
+gtest_discover_tests(Sessio_app_role_tests)
+
 # Audio chunker tests (framework-free, no Qt/LiveKit needed)
 add_executable(Sessio_audio_chunker_tests
     ${CMAKE_SOURCE_DIR}/src/video/audio_chunker.cpp
