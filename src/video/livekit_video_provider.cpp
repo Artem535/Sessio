@@ -155,17 +155,20 @@ void LiveKitVideoProvider::join(const QString &url, const QString &token) {
 
   publishTracks();
 
-  // onParticipantConnected() only fires for participants who join AFTER
-  // this connect() call — if the other party was already in the room (the
-  // common case for a scheduled call both sides join around the same
-  // time), that event never arrives and WaitingForClient would wait
-  // forever. Check for an already-present participant here instead.
-  const bool participantAlreadyPresent = !mRoom->remoteParticipants().empty();
-
   // Deferred for the same reason as the joinFailed() emission above. Guarded
   // the opposite way: this join succeeded (mRoom is non-null right now), so
   // if mRoom is null by the time this runs, leave() (or a subsequent failed
   // join()) has already ended the session this joined() would refer to.
+  //
+  // Posted before the already-present-participant check below (not after):
+  // onParticipantConnected() runs on a LiveKit-internal thread and queues
+  // its own event the instant a participant joins, which can race with
+  // this GUI-thread code at any point after connect() returns. Posting
+  // joined() first keeps its queue position as early as possible, so a
+  // real onParticipantConnected() event that got queued during
+  // publishTracks() (and would otherwise be silently dropped, since
+  // Joining has no transition for it) is much less likely to be ordered
+  // ahead of joined() — narrowing, though not eliminating, that window.
   QMetaObject::invokeMethod(
       this,
       [this]() {
@@ -176,7 +179,12 @@ void LiveKitVideoProvider::join(const QString &url, const QString &token) {
       },
       Qt::QueuedConnection);
 
-  if (participantAlreadyPresent) {
+  // onParticipantConnected() only fires for participants who join AFTER
+  // this connect() call — if the other party was already in the room (the
+  // common case for a scheduled call both sides join around the same
+  // time), that event never arrives and WaitingForClient would wait
+  // forever. Check for an already-present participant here instead.
+  if (!mRoom->remoteParticipants().empty()) {
     // Queued after (not together with) joined() above so it is delivered
     // strictly later: both are posted to the same object's event queue in
     // FIFO order, so VideoSession is guaranteed to process

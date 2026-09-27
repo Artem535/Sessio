@@ -215,13 +215,35 @@ TEST_F(VideoSessionTest, LeaveFromFailedIsSafelyIgnored) {
   fake->simulateJoinFailed("no route to host");
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Failed);
 
-  const int leaveCallsBeforeFailed = fake->mLeaveCallCount;
-  EXPECT_GE(leaveCallsBeforeFailed, 1) << "entering Failed must tear the provider down";
+  const int leaveCallCountOnEnteringFailed = fake->mLeaveCallCount;
+  EXPECT_GE(leaveCallCountOnEnteringFailed, 1) << "entering Failed must tear the provider down";
 
   session.leave();
   QCoreApplication::processEvents();
   QCoreApplication::processEvents();
   EXPECT_EQ(session.state(), pcm::video::VideoSessionState::Failed);
+}
+
+TEST_F(VideoSessionTest, MediaErrorDoesNotAffectStateMachine) {
+  // mediaError() reports a local capture/publish problem, never network
+  // loss (see video_provider.h) — VideoSession has no transition on it
+  // today (a future UI task, #80, is expected to surface it to the user),
+  // so it must never move the state machine on its own.
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake);
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateJoined();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
+  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
+
+  fake->simulateMediaError("camera unplugged");
+  QCoreApplication::processEvents();
+  QCoreApplication::processEvents();
+  EXPECT_EQ(session.state(), pcm::video::VideoSessionState::Connected);
 }
 
 TEST_F(VideoSessionTest, LeaveFromConnectedTransitionsToEnded) {

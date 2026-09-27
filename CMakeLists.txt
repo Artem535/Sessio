@@ -23,6 +23,12 @@ set(LIVEKIT_SDK_VERSION "1.12.0" CACHE STRING "LiveKit C++ SDK version")
 # archive hash can be confirmed against the corresponding GitHub release
 # asset. An unset entry below is not silently insecure: livekit_sdk_setup()
 # emits a build-time WARNING for any triple with no hash.
+#
+# This hash is tied to LIVEKIT_SDK_VERSION above (currently 1.12.0):
+# bumping that version invalidates it, and a fresh download at the new
+# version will FATAL_ERROR on the mismatch (file(DOWNLOAD)'s EXPECTED_HASH
+# behavior) rather than silently accepting an unverified archive. Update
+# this value alongside any version bump.
 set(_lk_sha256_linux-x64 "d7aec81b1c16df494f36bfc612dc2d52fd9c22f03340b8db90e9ad942a207730")
 
 if(WIN32)
