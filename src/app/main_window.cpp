@@ -274,6 +274,13 @@ void MainWindow::setPageCustomWidget(const Pages page, QWidget *widget) {
   }
 }
 
+void MainWindow::preselectLiveKitMeeting(const QString &meetingRef) {
+  showPage(Pages::calls, mBtnCalls);
+  if (auto *callsPage = dynamic_cast<CallsPage *>(mPages.value(Pages::calls, nullptr))) {
+    callsPage->preselectOwnMeeting(meetingRef);
+  }
+}
+
 void MainWindow::initDefaultStyle() const {
   checkButton(mBtnCalendar);
 }

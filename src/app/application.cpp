@@ -577,7 +577,8 @@ void Application::connectSignals() {
       const auto client = mDb->get_client_by_event(eventId);
       emit page->clientResolved(client.id);
     });
-
+    connect(page, &QEventInfoPage::openLiveKitMeetingRequested, mMainWindow.get(),
+            &MainWindow::preselectLiveKitMeeting);
   }
 }
 

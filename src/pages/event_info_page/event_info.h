@@ -35,6 +35,13 @@ signals:
   void provideClientByEventId(int64_t eventId);
   void clientResolved(int64_t clientId);
 
+  /**
+   * @brief Forwarded from the active QEventDetailsWidget when the user
+   * requests to open a LiveKit meeting; the owner (Application) routes this
+   * to MainWindow's Calls tab instead of opening a URL.
+   */
+  void openLiveKitMeetingRequested(QString meetingRef);
+
 public slots:
   void onClientResolved(int64_t clientId);
   void refreshAppearance();

@@ -108,6 +108,14 @@ public:
    */
   void setPageCustomWidget(Pages page, QWidget *widget);
 
+  /**
+   * @brief Switches to the Calls tab and preselects the given LiveKit
+   * meeting, in response to "Open Meeting" being clicked on a LiveKit-
+   * provider event.
+   * @param meetingRef The meeting reference to preselect on the Calls page.
+   */
+  void preselectLiveKitMeeting(const QString &meetingRef);
+
 signals:
   /**
    * @brief Emitted when a client should be saved.

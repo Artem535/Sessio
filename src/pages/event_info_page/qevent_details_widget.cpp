@@ -883,6 +883,11 @@ void QEventDetailsWidget::onMeetingUrlChanged(const QString &url) {
 }
 
 void QEventDetailsWidget::onOpenMeetingClicked() {
+  if (mCurrentEvent &&
+      mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit) {
+    emit openLiveKitMeetingRequested(mCurrentEvent->meetingRef());
+    return;
+  }
   pcm::meeting::openMeetingUrl(mMeetingUrlEdit->text(), this);
 }
 

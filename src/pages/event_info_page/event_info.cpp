@@ -195,6 +195,11 @@ void QEventInfoPage::openQuickEventDialog(const QTime &startTime,
 
   auto *detailsWidget = new QEventDetailsWidget(&dialog);
   detailsWidget->setMeetingCoordinator(mMeetingCoordinator);
+  connect(detailsWidget, &QEventDetailsWidget::openLiveKitMeetingRequested, this,
+          [this, &dialog](const QString &meetingRef) {
+            dialog.reject();
+            emit openLiveKitMeetingRequested(meetingRef);
+          });
   detailsWidget->setDialogMode(true);
   detailsWidget->setConflictChecker(
       [this](const DuckEvent &event) { return checkEventConflict(event); });
@@ -235,6 +240,11 @@ void QEventInfoPage::openEventDialog(const std::optional<DuckEvent> &event,
 
   auto *detailsWidget = new QEventDetailsWidget(&dialog);
   detailsWidget->setMeetingCoordinator(mMeetingCoordinator);
+  connect(detailsWidget, &QEventDetailsWidget::openLiveKitMeetingRequested, this,
+          [this, &dialog](const QString &meetingRef) {
+            dialog.reject();
+            emit openLiveKitMeetingRequested(meetingRef);
+          });
   detailsWidget->setDialogMode(true);
   detailsWidget->setConflictChecker(
       [this](const DuckEvent &event) { return checkEventConflict(event); });

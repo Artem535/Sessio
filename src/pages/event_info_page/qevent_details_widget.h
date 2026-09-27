@@ -122,6 +122,12 @@ signals:
 
   void provideFillClientComboBox(QComboBox *combobox);
 
+  /**
+   * @brief Emitted when the user clicks "Open Meeting" on a LiveKit-provider
+   * event, instead of trying to open a URL.
+   */
+  void openLiveKitMeetingRequested(QString meetingRef);
+
 private slots:
   // --- Button Slots ---
   void onApplyClicked();
