@@ -8,7 +8,7 @@ set(TARGET_NAME ${PROJECT_NAME}_video)
 find_package(Qt6 REQUIRED COMPONENTS Core Multimedia MultimediaWidgets OpenGLWidgets)
 
 qt_add_library(${TARGET_NAME} STATIC
-        video_provider_kind.h
+        video_provider.h
         audio_chunker.h
         audio_chunker.cpp
         frame_convert.h
@@ -25,6 +25,8 @@ qt_add_library(${TARGET_NAME} STATIC
         remote_video_renderer.cpp
         remote_audio_player.h
         remote_audio_player.cpp
+        livekit_video_provider.h
+        livekit_video_provider.cpp
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC

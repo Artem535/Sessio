@@ -186,6 +186,43 @@ target_link_libraries(Sessio_remote_video_renderer_smoke_test PRIVATE
 add_test(NAME RemoteVideoRendererSmokeTest COMMAND Sessio_remote_video_renderer_smoke_test)
 set_tests_properties(RemoteVideoRendererSmokeTest PROPERTIES TIMEOUT 30)
 
+# LiveKit video provider smoke test (own main(), not GoogleTest — mirrors the
+# other video smoke tests above). Proves repeated construct/join-against-an-
+# unreachable-url/destroy cycles never hang, and that join() against a real
+# SDK call that will fail reports joinFailed() rather than hanging or
+# crashing, per this plan's Task 9 lifecycle-stress acceptance criterion.
+#
+# video_provider.h defines the Q_OBJECT VideoProvider base class but has no
+# paired .cpp of its own (CMake's AUTOMOC only auto-scans a header that
+# shares a .cpp's basename); listing it explicitly as a source here — same
+# pattern as meeting_provider_test_listener.h below — is what makes AUTOMOC
+# generate its moc so VideoProvider's signals link.
+add_executable(Sessio_livekit_video_provider_smoke_test
+    ${CMAKE_SOURCE_DIR}/src/video/video_provider.h
+    ${CMAKE_SOURCE_DIR}/src/video/livekit_video_provider.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/video_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/video_capture_worker.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/audio_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/audio_chunker.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/frame_convert.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/remote_video_renderer.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/remote_audio_player.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/device_manager.cpp
+    livekit_video_provider_smoke_test.cpp
+)
+target_include_directories(Sessio_livekit_video_provider_smoke_test PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_livekit_video_provider_smoke_test PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Multimedia
+    Qt6::OpenGLWidgets
+    LiveKit::livekit
+)
+set_target_properties(Sessio_livekit_video_provider_smoke_test PROPERTIES AUTOMOC ON)
+add_test(NAME LiveKitVideoProviderSmokeTest COMMAND Sessio_livekit_video_provider_smoke_test)
+set_tests_properties(LiveKitVideoProviderSmokeTest PROPERTIES TIMEOUT 40)
+
 # External URL meeting provider tests
 add_executable(Sessio_external_url_meeting_provider_tests
     external_url_meeting_provider_tests.cpp
