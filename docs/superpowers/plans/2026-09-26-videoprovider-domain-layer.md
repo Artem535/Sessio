@@ -2983,17 +2983,40 @@ qt_add_library(${TARGET_NAME} STATIC
 
 In `docs/asciidoc/05-modules.adoc`, following the exact format of the `src/meeting` entry added by issue #79 (heading + bullet list, each bullet a backtick'd name followed by a `:`-prefixed one-line description), add a new `=== \`src/video\`` section (placed after `src/meeting`, since `src/video` depends conceptually on nothing from `src/meeting` but is the next domain-layer module chronologically):
 
+This file's existing sections use a two-line term/description form (a
+backtick'd name on its own line, then a `:`-prefixed description starting
+the next line) — see `src/meeting`'s entry earlier in the same file for the
+exact precedent. Match that form, not a single-line `` - `Name`: text ``
+shorthand:
+
 ```adoc
 === `src/video`
 
-- `VideoProvider`: abstract interface over the in-call media session (join/leave, local capture, remote render) — one production implementation, `LiveKitVideoProvider`.
-- `LiveKitVideoProvider`: connects to a LiveKit server, publishes local camera/microphone tracks, and renders/plays the first subscribed remote video/audio track.
-- `VideoSession`: owns the call lifecycle for one Meeting, translating `VideoProvider` signals into `VideoSessionState` transitions. Knows nothing about `Event`/persistence.
-- `VideoSessionState`: the enum driving `VideoSession` (`NoMeeting` through `Ended`/`Failed`).
-- `DeviceManager`: enumerates and selects the camera/microphone/speaker via Qt Multimedia, independent of `VideoProvider`.
-- `VideoCaptureAdapter`/`VideoCaptureWorker`: camera capture, with frame conversion and the LiveKit FFI call offloaded to a dedicated worker thread.
-- `AudioCaptureAdapter`: microphone capture, running on the GUI thread in LiveKit's real-time (non-buffered) capture mode.
-- `RemoteVideoRenderer`/`RemoteAudioPlayer`: render/play a subscribed remote track, pulling frames on a dedicated `std::thread`.
+- `VideoProvider`
+: abstract interface over the in-call media session (join/leave, local
+  capture, remote render) — one production implementation,
+  `LiveKitVideoProvider`.
+- `LiveKitVideoProvider`
+: connects to a LiveKit server, publishes local camera/microphone tracks,
+  and renders/plays the first subscribed remote video/audio track.
+- `VideoSession`
+: owns the call lifecycle for one Meeting, translating `VideoProvider`
+  signals into `VideoSessionState` transitions via a `QStateMachine`. Knows
+  nothing about `Event`/persistence.
+- `VideoSessionState`
+: the enum driving `VideoSession` (`NoMeeting` through `Ended`/`Failed`).
+- `DeviceManager`
+: enumerates and selects the camera/microphone/speaker via Qt Multimedia,
+  independent of `VideoProvider`.
+- `VideoCaptureAdapter`/`VideoCaptureWorker`
+: camera capture, with frame conversion and the LiveKit FFI call offloaded
+  to a dedicated worker thread.
+- `AudioCaptureAdapter`
+: microphone capture, running on the GUI thread in LiveKit's real-time
+  (non-buffered) capture mode.
+- `RemoteVideoRenderer`/`RemoteAudioPlayer`
+: render/play a subscribed remote track, pulling frames on a dedicated
+  `std::thread`.
 ```
 
 - [ ] **Step 2: Reconcile ADR-14 with the actual implementation**
