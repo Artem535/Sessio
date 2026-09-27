@@ -1881,13 +1881,16 @@ Create `test/livekit_video_provider_smoke_test.cpp`:
 ```cpp
 #include "livekit_video_provider.h"
 
-#include <QCoreApplication>
+#include <QApplication>
 #include <QEventLoop>
 #include <QTimer>
 #include <iostream>
 
 int main(int argc, char *argv[]) {
-  QCoreApplication app(argc, argv);
+  // QApplication, not QCoreApplication: LiveKitVideoProvider's constructor
+  // creates a RemoteVideoRenderer (a QOpenGLWidget, per Task 6), and QWidget
+  // construction aborts without a QApplication instance.
+  QApplication app(argc, argv);
 
   QTimer watchdog;
   watchdog.setSingleShot(true);
@@ -1922,6 +1925,7 @@ int main(int argc, char *argv[]) {
 
 ```cmake
 add_executable(Sessio_livekit_video_provider_smoke_test
+    ${CMAKE_SOURCE_DIR}/src/video/video_provider.h
     ${CMAKE_SOURCE_DIR}/src/video/livekit_video_provider.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_worker.cpp
@@ -1942,9 +1946,12 @@ target_link_libraries(Sessio_livekit_video_provider_smoke_test PRIVATE
     Qt6::OpenGLWidgets
     LiveKit::livekit
 )
+set_target_properties(Sessio_livekit_video_provider_smoke_test PROPERTIES AUTOMOC ON)
 add_test(NAME LiveKitVideoProviderSmokeTest COMMAND Sessio_livekit_video_provider_smoke_test)
 set_tests_properties(LiveKitVideoProviderSmokeTest PROPERTIES TIMEOUT 40)
 ```
+
+`video_provider.h` is listed explicitly as a source here (not just `#include`d), and `AUTOMOC ON` is set explicitly, because `VideoProvider` is a `Q_OBJECT` class with no paired `.cpp` — CMake's AUTOMOC only auto-pairs a header with a same-basename `.cpp` in the target, so without both of these the link fails with undefined `staticMetaObject`/`qt_metacast` symbols. `test/CMakeLists.txt` already has exactly this precedent for `meeting_provider_test_listener.h`.
 
 ```bash
 cmake -S . -B build -DPCM_BUILD_TESTS=ON
@@ -1963,7 +1970,13 @@ Create `src/video/livekit_video_provider.h`:
 #include "video_provider.h"
 
 #include <QPointer>
-#include <livekit/room.h>
+// <livekit/room.h> alone only forward-declares LocalParticipant and doesn't
+// declare LocalAudioTrack/LocalVideoTrack, or livekit::initialize()/
+// shutdown() at all — those live only in the umbrella header. <livekit/
+// livekit.h> is the vendored SDK's public umbrella header and pulls in
+// room.h plus local_audio_track.h/local_video_track.h/local_participant.h
+// and the initialize()/shutdown() declarations this class needs.
+#include <livekit/livekit.h>
 #include <memory>
 
 namespace pcm::video {
@@ -1996,6 +2009,15 @@ private:
   void onTrackSubscribed(livekit::Room &room, const livekit::TrackSubscribedEvent &event) override;
   void onParticipantConnected(livekit::Room &room,
                               const livekit::ParticipantConnectedEvent &event) override;
+  // Wired so VideoSession's Connected<->Reconnecting state graph (Task 8)
+  // actually has something driving it from real network events, not just
+  // local device-capture failures. onDisconnected fires both for genuine
+  // drops and for our own leave()'s disconnect; the `if (!mRoom) return;`
+  // guard suppresses the latter, since leave() resets mRoom before this
+  // queued callback can run.
+  void onDisconnected(livekit::Room &room, const livekit::DisconnectedEvent &event) override;
+  void onReconnecting(livekit::Room &room, const livekit::ReconnectingEvent &event) override;
+  void onReconnected(livekit::Room &room, const livekit::ReconnectedEvent &event) override;
 
   void publishTracks();
   void unpublishTracks();
@@ -2046,6 +2068,7 @@ Create `src/video/livekit_video_provider.cpp`:
 
 #include <QMetaObject>
 #include <atomic>
+#include <chrono>
 
 namespace pcm::video {
 
@@ -2129,17 +2152,40 @@ void LiveKitVideoProvider::join(const QString &url, const QString &token) {
   livekit::RoomOptions options;
   options.auto_subscribe = true;
   options.dynacast = false;
+  // Left unset, join_retries/connect_timeout fall back to the Rust SDK's
+  // default retry/backoff policy, which can keep retrying a promptly-refused
+  // initial connection for 20+ seconds — contradicting this class's contract
+  // that join() reports joinFailed() promptly rather than hanging. Bounded
+  // explicitly: no retry of the initial attempt, 5s cap per attempt.
+  options.join_retries = 0;
+  options.connect_timeout = std::chrono::seconds(5);
 
   const bool connected = mRoom->connect(url.toStdString(), token.toStdString(), options);
   if (!connected) {
     mRoom->setDelegate(nullptr);
     mRoom.reset();
-    emit joinFailed(QStringLiteral("Failed to connect to the video server."));
+    // Room::connect() is a blocking SDK call that can return in well under a
+    // millisecond against a promptly-refused connection — before the caller
+    // has entered its event loop. join() is documented as asynchronous
+    // (callers observe the outcome via signals) using the idiomatic
+    //   connect(provider, &VideoProvider::joinFailed, &loop, &QEventLoop::quit);
+    //   provider->join(...); loop.exec();
+    // pattern (see this class's own smoke test). A direct `emit joinFailed`
+    // here would fire that already-connected slot synchronously, inside
+    // join()'s own call frame — before loop.exec() is ever entered.
+    // QEventLoop::quit() delivered to a not-yet-running loop has no effect
+    // on that loop's future exec() call, so exec() would then block forever.
+    // Deferring the emission guarantees delivery only once the calling
+    // thread's event loop is actually pumping.
+    QMetaObject::invokeMethod(
+        this, [this]() { emit joinFailed(QStringLiteral("Failed to connect to the video server.")); },
+        Qt::QueuedConnection);
     return;
   }
 
   publishTracks();
-  emit joined();
+  // Deferred for the same reason as the joinFailed() emission above.
+  QMetaObject::invokeMethod(this, [this]() { emit joined(); }, Qt::QueuedConnection);
 }
 
 void LiveKitVideoProvider::leave() {
@@ -2237,6 +2283,48 @@ void LiveKitVideoProvider::onParticipantConnected(livekit::Room &,
           return;
         }
         emit remoteParticipantConnected();
+      },
+      Qt::QueuedConnection);
+}
+
+void LiveKitVideoProvider::onDisconnected(livekit::Room &, const livekit::DisconnectedEvent &event) {
+  const auto reasonCode = static_cast<int>(event.reason);
+  QMetaObject::invokeMethod(
+      this,
+      [this, reasonCode]() {
+        // Also fires for our own leave()'s disconnect; by the time this
+        // queued callback runs, leave() has already reset mRoom, so this
+        // guard suppresses self-initiated disconnects and only reports
+        // genuine unexpected drops.
+        if (!mRoom) {
+          return;
+        }
+        emit connectionLost(
+            QStringLiteral("Room disconnected (reason code %1).").arg(reasonCode));
+      },
+      Qt::QueuedConnection);
+}
+
+void LiveKitVideoProvider::onReconnecting(livekit::Room &, const livekit::ReconnectingEvent &) {
+  QMetaObject::invokeMethod(
+      this,
+      [this]() {
+        if (!mRoom) {
+          return;
+        }
+        emit reconnecting();
+      },
+      Qt::QueuedConnection);
+}
+
+void LiveKitVideoProvider::onReconnected(livekit::Room &, const livekit::ReconnectedEvent &) {
+  QMetaObject::invokeMethod(
+      this,
+      [this]() {
+        if (!mRoom) {
+          return;
+        }
+        emit reconnected();
       },
       Qt::QueuedConnection);
 }

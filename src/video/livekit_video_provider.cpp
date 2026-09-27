@@ -235,4 +235,46 @@ void LiveKitVideoProvider::onParticipantConnected(livekit::Room &,
       Qt::QueuedConnection);
 }
 
+void LiveKitVideoProvider::onDisconnected(livekit::Room &, const livekit::DisconnectedEvent &event) {
+  const auto reasonCode = static_cast<int>(event.reason);
+  QMetaObject::invokeMethod(
+      this,
+      [this, reasonCode]() {
+        // Also fires for our own leave()'s disconnect; by the time this
+        // queued callback runs, leave() has already reset mRoom, so this
+        // guard suppresses self-initiated disconnects and only reports
+        // genuine unexpected drops.
+        if (!mRoom) {
+          return;
+        }
+        emit connectionLost(
+            QStringLiteral("Room disconnected (reason code %1).").arg(reasonCode));
+      },
+      Qt::QueuedConnection);
+}
+
+void LiveKitVideoProvider::onReconnecting(livekit::Room &, const livekit::ReconnectingEvent &) {
+  QMetaObject::invokeMethod(
+      this,
+      [this]() {
+        if (!mRoom) {
+          return;
+        }
+        emit reconnecting();
+      },
+      Qt::QueuedConnection);
+}
+
+void LiveKitVideoProvider::onReconnected(livekit::Room &, const livekit::ReconnectedEvent &) {
+  QMetaObject::invokeMethod(
+      this,
+      [this]() {
+        if (!mRoom) {
+          return;
+        }
+        emit reconnected();
+      },
+      Qt::QueuedConnection);
+}
+
 } // namespace pcm::video

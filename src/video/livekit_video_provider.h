@@ -44,6 +44,15 @@ private:
   void onTrackSubscribed(livekit::Room &room, const livekit::TrackSubscribedEvent &event) override;
   void onParticipantConnected(livekit::Room &room,
                               const livekit::ParticipantConnectedEvent &event) override;
+  // Wired so VideoSession's Connected<->Reconnecting state graph (Task 8)
+  // actually has something driving it from real network events, not just
+  // local device-capture failures. onDisconnected fires both for genuine
+  // drops and for our own leave()'s disconnect; the `if (!mRoom) return;`
+  // guard suppresses the latter, since leave() resets mRoom before this
+  // queued callback can run.
+  void onDisconnected(livekit::Room &room, const livekit::DisconnectedEvent &event) override;
+  void onReconnecting(livekit::Room &room, const livekit::ReconnectingEvent &event) override;
+  void onReconnected(livekit::Room &room, const livekit::ReconnectedEvent &event) override;
 
   void publishTracks();
   void unpublishTracks();
