@@ -2557,6 +2557,19 @@ TEST_F(VideoSessionTest, JoinReachesJoiningStateThroughProvisionedAndPrejoinChec
   EXPECT_EQ(fake->mJoinCallCount, 1);
   EXPECT_EQ(fake->mLastJoinUrl, QStringLiteral("wss://example.invalid"));
   EXPECT_EQ(fake->mLastJoinToken, QStringLiteral("token"));
+
+  // waitForState() only proves the session reached Joining eventually — it
+  // says nothing about the path taken. Assert the recorded sequence
+  // actually passed through Provisioned and PrejoinCheck, so a future
+  // change that wires NoMeeting directly to Joining (skipping the two
+  // pass-through states) would fail this test instead of passing it.
+  ASSERT_GE(stateSpy.count(), 3);
+  EXPECT_EQ(stateSpy.at(0).at(0).value<pcm::video::VideoSessionState>(),
+            pcm::video::VideoSessionState::Provisioned);
+  EXPECT_EQ(stateSpy.at(1).at(0).value<pcm::video::VideoSessionState>(),
+            pcm::video::VideoSessionState::PrejoinCheck);
+  EXPECT_EQ(stateSpy.at(2).at(0).value<pcm::video::VideoSessionState>(),
+            pcm::video::VideoSessionState::Joining);
 }
 
 TEST_F(VideoSessionTest, JoinedThenRemoteParticipantConnectedReachesConnected) {
@@ -2772,6 +2785,7 @@ Create `src/video/video_session.cpp`:
 #include "video_session.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 
 namespace pcm::video {
 
@@ -2860,8 +2874,21 @@ VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseco
   // transition and leaving the session stuck in NoMeeting forever. Block
   // here until the machine actually reports itself running so join()/
   // leave() are safe to call the instant this constructor returns.
-  while (!mMachine.isRunning()) {
+  //
+  // Bounded rather than an unconditional while loop: this requires a
+  // running Qt event dispatcher on the constructing thread (true for the
+  // GUI thread after QApplication exists, which is this class's only
+  // supported usage). Without one, processEvents() is a no-op and
+  // isRunning() would never become true — capping the attempts turns that
+  // misuse into a diagnosable warning instead of a silent, permanent
+  // 100%-CPU spin.
+  for (int attempt = 0; attempt < 1000 && !mMachine.isRunning(); ++attempt) {
     QCoreApplication::processEvents();
+  }
+  if (!mMachine.isRunning()) {
+    qWarning("VideoSession: state machine did not report running after "
+             "1000 processEvents() iterations — was this constructed on a "
+             "thread with no running Qt event loop?");
   }
 }
 

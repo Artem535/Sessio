@@ -1,6 +1,7 @@
 #include "video_session.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 
 namespace pcm::video {
 
@@ -89,8 +90,21 @@ VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseco
   // transition and leaving the session stuck in NoMeeting forever. Block
   // here until the machine actually reports itself running so join()/
   // leave() are safe to call the instant this constructor returns.
-  while (!mMachine.isRunning()) {
+  //
+  // Bounded rather than an unconditional while loop: this requires a
+  // running Qt event dispatcher on the constructing thread (true for the
+  // GUI thread after QApplication exists, which is this class's only
+  // supported usage). Without one, processEvents() is a no-op and
+  // isRunning() would never become true — capping the attempts turns that
+  // misuse into a diagnosable warning instead of a silent, permanent
+  // 100%-CPU spin.
+  for (int attempt = 0; attempt < 1000 && !mMachine.isRunning(); ++attempt) {
     QCoreApplication::processEvents();
+  }
+  if (!mMachine.isRunning()) {
+    qWarning("VideoSession: state machine did not report running after "
+             "1000 processEvents() iterations — was this constructed on a "
+             "thread with no running Qt event loop?");
   }
 }
 

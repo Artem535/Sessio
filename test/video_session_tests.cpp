@@ -47,6 +47,19 @@ TEST_F(VideoSessionTest, JoinReachesJoiningStateThroughProvisionedAndPrejoinChec
   EXPECT_EQ(fake->mJoinCallCount, 1);
   EXPECT_EQ(fake->mLastJoinUrl, QStringLiteral("wss://example.invalid"));
   EXPECT_EQ(fake->mLastJoinToken, QStringLiteral("token"));
+
+  // waitForState() only proves the session reached Joining eventually — it
+  // says nothing about the path taken. Assert the recorded sequence
+  // actually passed through Provisioned and PrejoinCheck, so a future
+  // change that wires NoMeeting directly to Joining (skipping the two
+  // pass-through states) would fail this test instead of passing it.
+  ASSERT_GE(stateSpy.count(), 3);
+  EXPECT_EQ(stateSpy.at(0).at(0).value<pcm::video::VideoSessionState>(),
+            pcm::video::VideoSessionState::Provisioned);
+  EXPECT_EQ(stateSpy.at(1).at(0).value<pcm::video::VideoSessionState>(),
+            pcm::video::VideoSessionState::PrejoinCheck);
+  EXPECT_EQ(stateSpy.at(2).at(0).value<pcm::video::VideoSessionState>(),
+            pcm::video::VideoSessionState::Joining);
 }
 
 TEST_F(VideoSessionTest, JoinedThenRemoteParticipantConnectedReachesConnected) {
