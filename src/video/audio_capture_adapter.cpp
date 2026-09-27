@@ -24,6 +24,8 @@ void AudioCaptureAdapter::start(const QAudioDevice &device) {
   mIoDevice = mSource->start();
   if (mIoDevice) {
     connect(mIoDevice, &QIODevice::readyRead, this, &AudioCaptureAdapter::onReadyRead);
+  } else {
+    emit captureFailed(QStringLiteral("Failed to open audio device."));
   }
 }
 
