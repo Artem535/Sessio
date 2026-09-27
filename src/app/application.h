@@ -3,21 +3,30 @@
 #include <QApplication>
 #include <QEvent>
 #include <QObject>
+#include <QList>
 #include <QLoggingCategory>
+#include <QPointer>
 #include <QSystemTrayIcon>
 #include <QTimer>
 
 #include <memory>
 
+#include "app_role.h"
 #include "auto_backup_scheduler.h"
 #include "app_lock_controller.h"
 #include "app_lock_service.h"
+#include "call_entry_widget.h"
+#include "client_mode_window.h"
+#include "client_notes_page.h"
 #include "config.h"
 #include "database.h"
+#include "device_manager.h"
 #include "main_window.h"
 #include "qclient_model.h"
 #include "event_info.h"
 #include "meeting_coordinator.h"
+#include "token_backend_client.h"
+#include "token_backend_credential_store.h"
 
 class QAction;
 class QWidget;
@@ -51,6 +60,29 @@ private:
   void lockApplication();
   void notifyUpcomingSeriesOccurrences(int64_t nowMs, int64_t windowEndMs);
   void restorePendingBackup();
+  int runSpecialistFlow(QApplication &app);
+  int runClientFlow(QApplication &app);
+  void loadBearerCredential();
+  void refreshUpcomingMeetings();
+
+  // Shared by both role flows. Declared before the windows so they outlive
+  // the CallsPage instances that hold raw pointers to them (members are
+  // destroyed in reverse declaration order).
+  QString mTokenBackendBaseUrl; // from Config, resolved once in run()
+  std::unique_ptr<pcm::video::DeviceManager> mDeviceManager;
+  std::unique_ptr<pcm::tokenclient::TokenBackendClient> mTokenClient;
+  // Specialist flow only: Client mode never reads the specialist bearer
+  // credential, so it never touches the keychain.
+  std::unique_ptr<TokenBackendCredentialStore> mTokenCredentialStore;
+  QString mBearerCredential; // cached in memory after the async keychain read
+  bool mBearerCredentialReadDone = false;
+
+  // Client flow only.
+  std::unique_ptr<ClientModeWindow> mClientModeWindow;
+
+  // Specialist flow only.
+  QList<UpcomingMeeting> mUpcomingMeetings;
+  QPointer<ClientNotesPage> mCallNotesPanel;
 
   std::unique_ptr<MainWindow> mMainWindow;
   std::shared_ptr<database::Database> mDb;

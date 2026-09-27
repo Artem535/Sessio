@@ -1,12 +1,16 @@
 #include "application.h"
 #include "app_lock_dialog.h"
+#include "role_selection_dialog.h"
+#include "provider_kind.h"
 #include "../backup/encrypted_container.h"
 #include "../backup/restore_service.h"
 #include "../event_view/recurrence_utils.h"
 #include "../widgets/app_settings.h"
 
 #include <Poco/Path.h>
+#include <QDate>
 #include <QDir>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QLocale>
 #include <QStandardPaths>
@@ -35,6 +39,19 @@ namespace pcm {
 
 namespace {
 constexpr int kNotificationPollIntervalMs = 30 * 1000;
+// Upper bound on how long specialist startup waits for the keychain to hand
+// back the token-backend bearer credential (see loadBearerCredential()).
+constexpr int kBearerCredentialReadTimeoutMs = 3 * 1000;
+
+bool sameUpcomingMeetings(const QList<UpcomingMeeting> &lhs,
+                          const QList<UpcomingMeeting> &rhs) {
+  return std::equal(lhs.cbegin(), lhs.cend(), rhs.cbegin(), rhs.cend(),
+                    [](const UpcomingMeeting &a, const UpcomingMeeting &b) {
+                      return a.meetingRef == b.meetingRef && a.title == b.title &&
+                             a.startTime == b.startTime &&
+                             a.joinEnabled == b.joinEnabled && a.eventId == b.eventId;
+                    });
+}
 
 // Renamed from PsyClientManager to Sessio. Installs that still have their
 // Qt-managed settings/backups directory under the old org/app name get it
@@ -148,6 +165,59 @@ int Application::run(int argc, char *argv[]) {
                               << localeName;
   }
 
+  config::Config conf;
+  try {
+    conf = config::Config::read_config();
+  } catch (const std::exception &error) {
+    qCWarning(logApplication) << "Failed to read config, falling back to defaults:"
+                              << error.what();
+  }
+
+  auto role = config::appRoleFromString(QString::fromStdString(conf.app_role));
+  if (!role.has_value() || *role == config::AppRole::Unset) {
+    RoleSelectionDialog roleDialog;
+    if (roleDialog.exec() != QDialog::Accepted || !roleDialog.selectedRole().has_value()) {
+      return 0; // user closed the first-launch prompt without choosing
+    }
+    role = roleDialog.selectedRole();
+    conf.app_role = config::appRoleToString(*role).toStdString();
+    try {
+      config::Config::save_config(conf);
+    } catch (const std::exception &error) {
+      // The chosen role still applies to this session; the prompt just
+      // reappears on the next launch.
+      qCWarning(logApplication) << "Failed to save the selected role:" << error.what();
+    }
+  }
+  qCInfo(logApplication) << "Starting with role:" << config::appRoleToString(*role);
+
+  mDeviceManager = std::make_unique<pcm::video::DeviceManager>();
+  mTokenBackendBaseUrl = QString::fromStdString(conf.token_backend_base_url);
+  mTokenClient = std::make_unique<pcm::tokenclient::TokenBackendClient>(mTokenBackendBaseUrl);
+
+  if (*role == config::AppRole::Client) {
+    return runClientFlow(app);
+  }
+  return runSpecialistFlow(app);
+}
+
+// Client mode: a join-by-code window and nothing else. Deliberately never
+// constructs Database, QClientModel, MeetingCoordinator, AutoBackupScheduler,
+// the tray/notifications or app-lock, and never runs a pending backup restore
+// or reads the specialist bearer credential from the keychain.
+int Application::runClientFlow(QApplication &app) {
+  // run() turns this off because the specialist flow keeps running in the
+  // system tray; Client mode has no tray icon, so closing its only window
+  // must end the process.
+  app.setQuitOnLastWindowClosed(true);
+  mClientModeWindow =
+      std::make_unique<ClientModeWindow>(mDeviceManager.get(), mTokenClient.get());
+  mClientModeWindow->show();
+  return app.exec();
+}
+
+// Specialist mode: the full application.
+int Application::runSpecialistFlow(QApplication &app) {
   restorePendingBackup();
 
   mDb = std::make_shared<database::Database>(mConf);
@@ -156,13 +226,9 @@ int Application::run(int argc, char *argv[]) {
       std::make_unique<pcm::backup::AutoBackupScheduler>(mDb);
   mAutoBackupScheduler->start();
 
-  // TODO(Task 17): real token-backend base URL/bearer credential wiring.
-  // MeetingCoordinator's constructor gained a token-backend base URL and
-  // bearer credential in Task 7; this call site is deliberately left as a
-  // minimal placeholder until Task 17's role-branch rewrite of
-  // Application::run() supplies the real config/keychain-driven values.
+  loadBearerCredential();
   mMeetingCoordinator = std::make_unique<pcm::meeting::MeetingCoordinator>(
-      QString(), QString(), this);
+      mTokenBackendBaseUrl, mBearerCredential, this);
 
   mMainWindow = std::make_unique<MainWindow>();
   mClientModel = std::make_shared<QClientModel>(mDb);
@@ -173,6 +239,9 @@ int Application::run(int argc, char *argv[]) {
   mMainWindow->addAnalyticsPage(mDb);
   mMainWindow->addClientCardPage(mDb);
   mMainWindow->addClientNotesPage(mDb);
+  mMainWindow->addCallsPage(mDeviceManager.get(), mTokenClient.get(),
+                            [this]() { return mBearerCredential; });
+  refreshUpcomingMeetings();
   mMainWindow->setDatabase(mDb);
   mMainWindow->connectSignals();
   mMainWindow->installEventFilter(this);
@@ -180,10 +249,110 @@ int Application::run(int argc, char *argv[]) {
   connectSignals();
   initializeAppLock();
   initializeNotifications();
+  // Keep the Calls tab's "today's meetings" list current (meetings created or
+  // canceled while the app sits in the tray) on the notification poll cadence.
+  connect(&mNotificationTimer, &QTimer::timeout, this, &Application::refreshUpcomingMeetings);
 
   mMainWindow->show();
 
   return app.exec();
+}
+
+// Reads the token-backend bearer credential from the keychain. The read is
+// asynchronous (QtKeychain completes it from the event loop), and
+// MeetingCoordinator takes the credential by value at construction, before
+// app.exec() is running, so without a wait it would always be constructed
+// with an empty credential. Wait for the result for at most
+// kBearerCredentialReadTimeoutMs; a slower keychain (e.g. a locked keyring
+// prompting for its password) still updates mBearerCredential when it
+// finishes, which the Calls tab picks up through its provider lambda.
+void Application::loadBearerCredential() {
+  mTokenCredentialStore = std::make_unique<QtKeychainTokenBackendCredentialStore>();
+  connect(mTokenCredentialStore.get(), &TokenBackendCredentialStore::readFinished, this,
+          [this](const bool ok, const QString &credential, const QString &error) {
+            mBearerCredentialReadDone = true;
+            if (ok) {
+              mBearerCredential = credential;
+            } else {
+              qCWarning(logApplication)
+                  << "Token-backend bearer credential unavailable:" << error;
+            }
+          });
+
+  QEventLoop waitLoop;
+  // Context object &waitLoop: both connections die with the loop, so a read
+  // finishing after the timeout never touches the destroyed local.
+  connect(mTokenCredentialStore.get(), &TokenBackendCredentialStore::readFinished, &waitLoop,
+          &QEventLoop::quit);
+  QTimer::singleShot(kBearerCredentialReadTimeoutMs, &waitLoop, &QEventLoop::quit);
+  mTokenCredentialStore->readBearerCredential();
+  if (!mBearerCredentialReadDone) {
+    waitLoop.exec();
+  }
+  if (!mBearerCredentialReadDone) {
+    qCWarning(logApplication) << "Timed out waiting for the keychain; LiveKit meeting "
+                                 "creation will run without a bearer credential";
+  }
+}
+
+// Builds the Calls tab's "today's meetings" list: today's LiveKit events that
+// have a meeting reference, are scheduled/completed/confirmed (the same status
+// set the reminder notifications use) and have not ended yet. Only pushes the
+// list to the page when it actually changed, so the periodic refresh does not
+// rebuild the rows (and drop keyboard focus) every tick.
+void Application::refreshUpcomingMeetings() {
+  if (!mMainWindow || !mDb) {
+    return;
+  }
+  auto *callsPage = dynamic_cast<CallsPage *>(mMainWindow->getPage(MainWindow::Pages::calls));
+  if (callsPage == nullptr) {
+    return;
+  }
+
+  const auto today = QDate::currentDate();
+  const auto localTz = QTimeZone::systemTimeZone();
+  const auto dayStartMs = QDateTime(today, QTime(0, 0), localTz).toMSecsSinceEpoch();
+  const auto dayEndMs =
+      QDateTime(today.addDays(1), QTime(0, 0), localTz).toMSecsSinceEpoch() - 1;
+  const auto nowMs = QDateTime::currentMSecsSinceEpoch();
+
+  const auto isEligibleStatus = [](const int64_t statusId) {
+    return statusId == 1 || statusId == 2 || statusId == 4;
+  };
+
+  auto events = mDb->get_day_events(dayStartMs, dayEndMs);
+  std::sort(events.begin(), events.end(), [](const DuckEvent &a, const DuckEvent &b) {
+    return a.start_date.value_or(0) < b.start_date.value_or(0);
+  });
+
+  QList<UpcomingMeeting> meetings;
+  for (const auto &event : events) {
+    const auto kind = pcm::meeting::providerKindFromString(event.provider_kind.value_or(""));
+    if (kind != pcm::meeting::ProviderKind::LiveKit) {
+      continue;
+    }
+    if (!event.meeting_ref.has_value() || event.meeting_ref->empty() ||
+        !isEligibleStatus(event.event_stat_id)) {
+      continue;
+    }
+    if (event.end_date.has_value() && *event.end_date < nowMs) {
+      continue;
+    }
+
+    UpcomingMeeting meeting;
+    meeting.meetingRef = QString::fromStdString(*event.meeting_ref);
+    meeting.title = QString::fromStdString(event.name.value_or(""));
+    meeting.startTime = QDateTime::fromMSecsSinceEpoch(event.start_date.value_or(0));
+    meeting.joinEnabled = true;
+    meeting.eventId = event.id;
+    meetings.append(meeting);
+  }
+
+  if (sameUpcomingMeetings(meetings, mUpcomingMeetings)) {
+    return;
+  }
+  mUpcomingMeetings = meetings;
+  callsPage->setUpcomingMeetings(mUpcomingMeetings);
 }
 
 void Application::restorePendingBackup() {
@@ -577,8 +746,35 @@ void Application::connectSignals() {
       const auto client = mDb->get_client_by_event(eventId);
       emit page->clientResolved(client.id);
     });
+    // Connected before preselectLiveKitMeeting so a meeting created earlier in
+    // this session is already in the Calls tab's list when it gets preselected
+    // (slots run in connection order).
+    connect(page, &QEventInfoPage::openLiveKitMeetingRequested, this,
+            &Application::refreshUpcomingMeetings);
     connect(page, &QEventInfoPage::openLiveKitMeetingRequested, mMainWindow.get(),
             &MainWindow::preselectLiveKitMeeting);
+  }
+
+  // Specialist Calls tab: when a call for one of the specialist's own events
+  // starts, show that event's client notes in the call's side panel. One
+  // panel is created lazily and reused for later calls (CallPage detaches a
+  // replaced panel without deleting it).
+  {
+    auto *callsPage = dynamic_cast<CallsPage *>(mMainWindow->getPage(MainWindow::Pages::calls));
+    connect(callsPage, &CallsPage::eventKnownForCurrentCall, this,
+            [this, callsPage](const int64_t eventId) {
+              std::optional<DuckClient> client;
+              try {
+                client = mDb->get_client_by_event(eventId);
+              } catch (const std::exception &) {
+                // Event without a linked client: show an empty notes panel.
+              }
+              if (mCallNotesPanel.isNull()) {
+                mCallNotesPanel = new ClientNotesPage(mDb, callsPage);
+                callsPage->setSidePanelWidget(mCallNotesPanel);
+              }
+              mCallNotesPanel->setClientInfo(client);
+            });
   }
 }
 
