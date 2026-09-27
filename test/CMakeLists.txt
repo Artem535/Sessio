@@ -443,6 +443,35 @@ target_link_libraries(Sessio_call_page_tests PRIVATE
 set_target_properties(Sessio_call_page_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_call_page_tests)
 
+# CallsPage tests
+#
+# Like Sessio_call_page_tests above, this links Sessio_calls_page (which
+# already links Sessio_video, which already contains VideoProvider's compiled
+# moc). The brief's illustrative CMake also listed video_provider.h as an
+# extra AUTOMOC source, but doing that here would generate a second
+# definition of VideoProvider's moc symbols and fail to link with "multiple
+# definition of `pcm::video::VideoProvider::staticMetaObject'" — the exact
+# failure mode Task 12 already hit and documented above. So that line is
+# deliberately omitted; Sessio_video supplies the moc instead.
+find_package(Qt6 REQUIRED COMPONENTS StateMachine Network Test)
+add_executable(Sessio_calls_page_tests
+    fake_token_backend_server.h
+    calls_page_tests.cpp
+)
+target_link_libraries(Sessio_calls_page_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Widgets
+    Qt6::StateMachine
+    Qt6::Network
+    Qt6::Test
+    Sessio_calls_page
+    Sessio_token_client
+    Sessio_video
+)
+set_target_properties(Sessio_calls_page_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_calls_page_tests)
+
 # ClientModeWindow structural tests
 add_test(NAME ClientModeWindowHeaderHasNoDatabaseDependency
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/client_mode_window_structural_test.sh

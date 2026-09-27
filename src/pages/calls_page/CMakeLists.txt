@@ -12,6 +12,8 @@ qt_add_library(${TARGET_NAME} STATIC
         device_check_widget.cpp
         call_page.h
         call_page.cpp
+        calls_page.h
+        calls_page.cpp
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC
@@ -20,5 +22,6 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         Qt6::Multimedia
         Qt6::MultimediaWidgets
         ${PROJECT_NAME}_video
+        ${PROJECT_NAME}_token_client
 )
 target_include_directories(${TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
