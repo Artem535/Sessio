@@ -150,7 +150,7 @@ jobs:
             --email "$QT_EMAIL" \
             --pw "$QT_PW" \
             --auto-answer "OperationDoesNotExistError=Ignore,OverwriteTargetDirectory=No,stopProcessesForUpdates=Ignore,installationErrorWithCancel=Ignore,installationErrorWithIgnore=Ignore,AssociateCommonFiletypes=No,telemetry-question=No" \
-            install "${{ matrix.qt_component }}"
+            install ${{ matrix.qt_component }}
 
       - name: Export Qt environment (Linux)
         if: runner.os == 'Linux'
