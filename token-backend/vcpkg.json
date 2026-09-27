@@ -1,0 +1,10 @@
+{
+  "name": "pcm-token-backend",
+  "version": "0.1.0",
+  "dependencies": [
+    "oatpp",
+    "libsodium",
+    "sqlite3",
+    "gtest"
+  ]
+}

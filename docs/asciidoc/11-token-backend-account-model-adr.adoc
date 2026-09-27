@@ -1,0 +1,73 @@
+== ADR: Token Backend Account Model
+
+*Status:* Accepted
+
+*Date:* 2026-09-25
+
+*Decision:* the LiveKit token backend (issue #78) persists meetings and
+invitations against an `account_id` from the first migration, even though
+exactly one account exists for the MVP. Authorization is implemented behind a
+single interface rather than checked ad hoc in each endpoint, so the eventual
+billing/account model can replace one implementation without a schema
+migration or endpoint rewrite.
+
+=== Context
+
+`docs/video-roadmap.md` §8 explicitly excludes multi-practitioner workspaces
+and a "mandatory account for the base local-first product" from P1-B scope.
+The token backend was accordingly planned as a single-tenant service: one
+practitioner, one static credential.
+
+During implementation planning the product direction was clarified further:
+the app is expected to grow, server costs need to be recovered, and a paid
+subscription is likely — possibly gated through Boosty or a small personal
+cabinet, neither decided yet. Separately, the client-facing side may move
+from the minimal participant web page (§5.1) to a Telegram bot; this needs no
+architecture change, since §5.1/§5.4 already specify that any client channel
+must use the same invitation-code-redemption contract
+(`POST /v1/invitations/{code}/client-token`) as the participant page — the
+endpoint is channel-agnostic by design.
+
+The account/billing model is not decided (mechanism, whether it is ever
+truly multi-tenant, or one account per deployed backend instance). Building
+real account registration, subscription verification, or a specific billing
+integration now would be speculative. But *not* giving meetings and
+invitations an owning account from the start is the one part of this that is
+expensive to retrofit: it would require a schema migration plus an audit of
+every endpoint that implicitly assumed "the caller is the one practitioner"
+once a second paying account exists.
+
+=== Decision
+
+An `accounts` table exists from the first migration. For the MVP it is seeded
+with exactly one row at deploy time (no self-service signup, no UI). Every
+row in `meetings` and `invitations` carries a non-null `account_id` foreign
+key.
+
+Request authorization is implemented behind one seam, e.g. an
+`Authorizer::authorize(bearer_credential) -> AccountId | Unauthorized`
+interface. The MVP implementation compares the bearer credential against the
+single seeded account's stored credential (same static-token flow as before
+this ADR: generated once at deploy, pasted into desktop Settings, stored via
+the existing `QtKeychainCredentialStore` pattern). No endpoint, JWT-minting
+code, or storage schema references the credential check directly — they only
+depend on the `Authorizer` interface and the resulting `AccountId`.
+
+Nothing about billing, subscriptions, Boosty, a personal cabinet, or a
+Telegram bot is implemented as part of this ADR. Those remain open product
+decisions; this ADR only ensures the data model does not have to be
+migrated when one of them is chosen.
+
+=== Consequences
+
+Issue #78 must include an `accounts` table and seed migration, `account_id`
+foreign keys on `meetings`/`invitations`, and an `Authorizer` interface with
+a `StaticTokenAuthorizer` implementation — not per-endpoint credential
+checks. No account-registration UI, billing integration, or multi-tenant
+quota logic is in scope yet.
+
+When a billing/account model is chosen, only the `Authorizer` implementation
+and account-provisioning path change. `docs/video-roadmap.md` §8 should be
+revisited at that point — it currently states multi-practitioner/accounts
+are out of scope, which will no longer be accurate once a second account is
+provisioned for real.
