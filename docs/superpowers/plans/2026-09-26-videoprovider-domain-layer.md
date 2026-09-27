@@ -830,9 +830,18 @@ Create `test/video_capture_adapter_smoke_test.cpp`:
 #include <QMediaDevices>
 #include <QTimer>
 #include <iostream>
+#include <livekit/livekit.h>
 
 int main(int argc, char *argv[]) {
   QCoreApplication app(argc, argv);
+
+  // VideoCaptureAdapter's constructor makes an FFI call (constructing a
+  // livekit::VideoSource) that requires the LiveKit runtime to already be
+  // initialized. In production, LiveKitVideoProvider's LiveKitRuntimeGuard
+  // member (Task 7) guarantees this ordering; here, since this test
+  // constructs a bare VideoCaptureAdapter directly with no provider around
+  // it, the test itself owns that responsibility instead.
+  livekit::initialize(livekit::LogLevel::Info);
 
   // 10-second watchdog: if repeated start/stop/destroy cycling hangs, this
   // fires and the process exits non-zero instead of hanging CI forever.
@@ -858,6 +867,7 @@ int main(int argc, char *argv[]) {
   }
 
   std::cout << "video_capture_adapter_smoke_test: 20 start/destroy cycles completed" << std::endl;
+  livekit::shutdown();
   return 0;
 }
 ```
@@ -1158,9 +1168,18 @@ Create `test/audio_capture_adapter_smoke_test.cpp`, mirroring Task 4's video smo
 #include <QMediaDevices>
 #include <QTimer>
 #include <iostream>
+#include <livekit/livekit.h>
 
 int main(int argc, char *argv[]) {
   QCoreApplication app(argc, argv);
+
+  // AudioCaptureAdapter's mAudioSource default member initializer makes an
+  // FFI call (constructing a livekit::AudioSource) at construction time,
+  // which requires the LiveKit runtime to already be initialized — see the
+  // identical note in Task 4's video_capture_adapter_smoke_test.cpp. In
+  // production this is LiveKitVideoProvider's LiveKitRuntimeGuard's job
+  // (Task 7); this standalone test owns it directly instead.
+  livekit::initialize(livekit::LogLevel::Info);
 
   QTimer watchdog;
   watchdog.setSingleShot(true);
@@ -1181,6 +1200,7 @@ int main(int argc, char *argv[]) {
   }
 
   std::cout << "audio_capture_adapter_smoke_test: 20 start/destroy cycles completed" << std::endl;
+  livekit::shutdown();
   return 0;
 }
 ```
@@ -1971,6 +1991,24 @@ private:
   void publishTracks();
   void unpublishTracks();
 
+  // Reference-counts livekit::initialize()/shutdown() (see the anonymous
+  // namespace in the .cpp). MUST be the first member declared in this
+  // class: C++ constructs members in declaration order and destroys them
+  // in reverse — declaring it first guarantees livekit::initialize() runs
+  // before mVideoCapture/mAudioCapture below (whose constructors make
+  // LiveKit FFI calls: VideoCaptureAdapter constructs a livekit::VideoSource,
+  // AudioCaptureAdapter a livekit::AudioSource) and that livekit::shutdown()
+  // runs only after every other member — including those two — has already
+  // been destroyed. Do not reorder this declaration relative to the members
+  // below it, and do not add it to this class's constructor's member-init
+  // list (its default constructor already runs at the right time by virtue
+  // of declaration order alone).
+  struct LiveKitRuntimeGuard {
+    LiveKitRuntimeGuard();
+    ~LiveKitRuntimeGuard();
+  };
+  LiveKitRuntimeGuard mRuntimeGuard;
+
   std::unique_ptr<DeviceManager> mDeviceManager;
   std::unique_ptr<VideoCaptureAdapter> mVideoCapture;
   std::unique_ptr<AudioCaptureAdapter> mAudioCapture;
@@ -2024,13 +2062,30 @@ void releaseLiveKitRuntime() {
 }
 } // namespace
 
+// Constructed before every other member (see the header's declaration-order
+// comment), so livekit::initialize() always runs before mVideoCapture/
+// mAudioCapture's constructors make their first LiveKit FFI call.
+LiveKitVideoProvider::LiveKitRuntimeGuard::LiveKitRuntimeGuard() {
+  acquireLiveKitRuntime();
+}
+
+// Destroyed after every other member, so livekit::shutdown() only runs once
+// mVideoCapture/mAudioCapture/mRoom/the tracks are already gone.
+LiveKitVideoProvider::LiveKitRuntimeGuard::~LiveKitRuntimeGuard() {
+  releaseLiveKitRuntime();
+}
+
 LiveKitVideoProvider::LiveKitVideoProvider(QObject *parent)
     : VideoProvider(parent), mDeviceManager(std::make_unique<DeviceManager>()),
       mVideoCapture(std::make_unique<VideoCaptureAdapter>()),
       mAudioCapture(std::make_unique<AudioCaptureAdapter>()),
       mRemoteVideo(new RemoteVideoRenderer()),
       mRemoteAudio(std::make_unique<RemoteAudioPlayer>()) {
-  acquireLiveKitRuntime();
+  // mRuntimeGuard is not listed above: it has no arguments to pass, and its
+  // default constructor already ran before this init list's members
+  // because of its declaration order in the header (first). Do not add it
+  // here — doing so would not change construction order and only invites a
+  // future edit that reorders the list and silently breaks the guarantee.
 
   connect(mVideoCapture.get(), &VideoCaptureAdapter::captureFailed, this,
           &VideoProvider::connectionLost);
@@ -2050,7 +2105,12 @@ LiveKitVideoProvider::~LiveKitVideoProvider() {
   mVideoCapture->stop();
   mAudioCapture->stop();
   delete mRemoteVideo.data();
-  releaseLiveKitRuntime();
+  // No explicit releaseLiveKitRuntime() call here: mRuntimeGuard's own
+  // destructor handles it automatically, and — because it is declared
+  // first in the header — runs last, after mVideoCapture/mAudioCapture/
+  // mRoom/every track member above has already been destroyed by the
+  // implicit member-destruction that follows this destructor body. Adding
+  // a call here would double-release against the guard's own release.
 }
 
 void LiveKitVideoProvider::join(const QString &url, const QString &token) {
