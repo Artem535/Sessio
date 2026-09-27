@@ -67,6 +67,28 @@ TEST(TokenBackendClientTest, ErrorStatusEmitsTokenRequestFailedWithServerMessage
   EXPECT_EQ(failedSpy.at(0).at(0).toString(), QStringLiteral("wrong_passcode"));
 }
 
+TEST(TokenBackendClientTest, ClientTokenEscapesPasscodeWithQuoteCharacter) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, R"({
+    "endpointUrl": "wss://livekit.example.test",
+    "roomName": "room-3",
+    "token": "jwt-3",
+    "expiresAt": 999
+  })");
+
+  TokenBackendClient client(server.baseUrl().toString());
+  QSignalSpy receivedSpy(&client, &TokenBackendClient::tokenReceived);
+
+  const QString passcodeWithQuote = R"(pass"code)";
+  client.requestClientToken("code-def", passcodeWithQuote);
+
+  ASSERT_TRUE(receivedSpy.wait(2000));
+  // Verify the body is valid JSON: should contain the escaped quote
+  EXPECT_TRUE(server.lastBody.contains(R"(\")"));
+  EXPECT_TRUE(server.lastBody.contains("pass"));
+  EXPECT_TRUE(server.lastBody.contains("code"));
+}
+
 int main(int argc, char **argv) {
   QCoreApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);

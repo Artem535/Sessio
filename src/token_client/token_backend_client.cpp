@@ -1,6 +1,8 @@
 #include "token_backend_client.h"
 #include "token_response_parser.h"
 
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 
@@ -19,8 +21,9 @@ void TokenBackendClient::requestSpecialistToken(const QString &bearerCredential,
 
 void TokenBackendClient::requestClientToken(const QString &invitationCode,
                                             const QString &passcode) {
-  const QByteArray body =
-      QByteArray("{\"passcode\":\"") + passcode.toUtf8() + "\"}";
+  QJsonObject bodyObject;
+  bodyObject["passcode"] = passcode;
+  const QByteArray body = QJsonDocument(bodyObject).toJson(QJsonDocument::Compact);
   post(QStringLiteral("/v1/invitations/%1/client-token").arg(invitationCode), body, QString());
 }
 
