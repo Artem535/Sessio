@@ -23,6 +23,7 @@ struct Config {
                                            .append("Config.yaml");
     rfl::Flatten<DatabaseConfig> db_conf;
     std::string app_role = "Unset";
+    std::string token_backend_base_url = "";
 
     static void save_config(const Config &conf);
     static Config read_config();

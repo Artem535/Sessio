@@ -4,6 +4,7 @@
 #include "credential_store.h"
 #include "config.h"
 #include "app_lock_service.h"
+#include "token_backend_credential_store.h"
 
 #include <QDialog>
 
@@ -39,10 +40,14 @@ class SettingsDialog final : public QDialog {
 public:
   explicit SettingsDialog(std::shared_ptr<pcm::database::Database> db,
                           QWidget *parent = nullptr);
+  explicit SettingsDialog(std::shared_ptr<pcm::database::Database> db,
+                          TokenBackendCredentialStore *tokenBackendCredentialStore,
+                          QWidget *parent = nullptr);
   ~SettingsDialog() override = default;
 
 private:
   void setupUi();
+  void setupLiveKitSection();
   void loadSettings() const;
   void connectSignals();
   void openDatabaseFolder() const;
@@ -59,6 +64,7 @@ private:
   void restoreBackup();
   void browseAutoBackupDestination();
   void configureAppLock();
+  void saveLiveKitSettings();
 
   oclero::qlementine::SegmentedControl *mSettingsSections{nullptr};
   QStackedWidget *mSettingsStack{nullptr};
@@ -100,10 +106,13 @@ private:
   QSpinBox *mDefaultBufferBeforeSpinBox{nullptr};
   QSpinBox *mDefaultBufferAfterSpinBox{nullptr};
   QTextEdit *mMeetingInviteTemplateEdit{nullptr};
+  QLineEdit *mLiveKitBaseUrlEdit{nullptr};
+  QLineEdit *mLiveKitBearerCredentialEdit{nullptr};
   QDialogButtonBox *mButtonBox{nullptr};
   pcm::config::Config mConfig;
   std::shared_ptr<pcm::database::Database> mDb;
   pcm::backup::CredentialStore *mCredentialStore{nullptr};
+  TokenBackendCredentialStore *mTokenBackendCredentialStore{nullptr};
   std::unique_ptr<pcm::AppLockService> mAppLockService;
   QString mPendingManualBackupDestinationPath;
   std::optional<pcm::backup::RecoveryEnvelope> mPendingManualBackupEnvelope;

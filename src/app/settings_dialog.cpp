@@ -171,10 +171,19 @@ private:
 
 SettingsDialog::SettingsDialog(std::shared_ptr<pcm::database::Database> db,
                                QWidget *parent)
-    : QDialog(parent), mDb(std::move(db)) {
+    : SettingsDialog(std::move(db), new QtKeychainTokenBackendCredentialStore(),
+                     parent) {}
+
+SettingsDialog::SettingsDialog(std::shared_ptr<pcm::database::Database> db,
+                               TokenBackendCredentialStore *tokenBackendCredentialStore,
+                               QWidget *parent)
+    : QDialog(parent), mDb(std::move(db)),
+      mTokenBackendCredentialStore(tokenBackendCredentialStore) {
+  mTokenBackendCredentialStore->setParent(this);
   mCredentialStore = new pcm::backup::QtKeychainCredentialStore(this);
   mAppLockService = std::make_unique<pcm::AppLockService>();
   setupUi();
+  setupLiveKitSection();
   loadSettings();
   connectSignals();
 
@@ -204,6 +213,7 @@ void SettingsDialog::setupUi() {
   mSettingsSections->addItem(tr("General"), {}, {}, QStringLiteral("general"));
   mSettingsSections->addItem(tr("Events"), {}, {}, QStringLiteral("events"));
   mSettingsSections->addItem(tr("Online"), {}, {}, QStringLiteral("online"));
+  mSettingsSections->addItem(tr("LiveKit"), {}, {}, QStringLiteral("livekit"));
   mSettingsSections->setItemsShouldExpand(true);
   rootLayout->addWidget(mSettingsSections);
 
@@ -529,6 +539,61 @@ void SettingsDialog::setupUi() {
   rootLayout->addWidget(mButtonBox);
 }
 
+void SettingsDialog::setupLiveKitSection() {
+  auto *liveKitPage = new QWidget(mSettingsStack);
+  auto *liveKitPageLayout = new QVBoxLayout(liveKitPage);
+  liveKitPageLayout->setContentsMargins(0, 0, 0, 0);
+  liveKitPageLayout->setSpacing(16);
+
+  auto *liveKitBox = new QGroupBox(tr("Token backend"), liveKitPage);
+  auto *liveKitLayout = new QVBoxLayout(liveKitBox);
+  liveKitLayout->setContentsMargins(16, 16, 16, 16);
+  liveKitLayout->setSpacing(10);
+
+  auto *baseUrlTitle = new QLabel(tr("Token backend URL"), liveKitBox);
+  QFont baseUrlTitleFont = baseUrlTitle->font();
+  baseUrlTitleFont.setBold(true);
+  baseUrlTitle->setFont(baseUrlTitleFont);
+  auto *baseUrlDescription = new QLabel(
+      tr("Base URL of the LiveKit token-issuing backend."), liveKitBox);
+  baseUrlDescription->setWordWrap(true);
+  baseUrlDescription->setStyleSheet("color: rgba(255, 255, 255, 0.68);");
+  mLiveKitBaseUrlEdit = new QLineEdit(liveKitBox);
+  mLiveKitBaseUrlEdit->setObjectName(QStringLiteral("liveKitBaseUrlEdit"));
+  mLiveKitBaseUrlEdit->setPlaceholderText(tr("https://token-backend.example.com"));
+
+  auto *credentialTitle = new QLabel(tr("Bearer credential"), liveKitBox);
+  QFont credentialTitleFont = credentialTitle->font();
+  credentialTitleFont.setBold(true);
+  credentialTitle->setFont(credentialTitleFont);
+  auto *credentialDescription = new QLabel(
+      tr("Stored in the system keychain. Leave blank to keep the current credential."),
+      liveKitBox);
+  credentialDescription->setWordWrap(true);
+  credentialDescription->setStyleSheet("color: rgba(255, 255, 255, 0.68);");
+  mLiveKitBearerCredentialEdit = new QLineEdit(liveKitBox);
+  mLiveKitBearerCredentialEdit->setObjectName(QStringLiteral("liveKitBearerCredentialEdit"));
+  mLiveKitBearerCredentialEdit->setEchoMode(QLineEdit::Password);
+
+  auto *liveKitSaveButton = new QPushButton(tr("Save"), liveKitBox);
+  liveKitSaveButton->setObjectName(QStringLiteral("liveKitSaveButton"));
+  connect(liveKitSaveButton, &QPushButton::clicked, this,
+          &SettingsDialog::saveLiveKitSettings);
+
+  liveKitLayout->addWidget(baseUrlTitle);
+  liveKitLayout->addWidget(baseUrlDescription);
+  liveKitLayout->addWidget(mLiveKitBaseUrlEdit);
+  liveKitLayout->addWidget(credentialTitle);
+  liveKitLayout->addWidget(credentialDescription);
+  liveKitLayout->addWidget(mLiveKitBearerCredentialEdit);
+  liveKitLayout->addWidget(liveKitSaveButton, 0, Qt::AlignRight);
+
+  liveKitPageLayout->addWidget(liveKitBox);
+  liveKitPageLayout->addStretch();
+
+  mSettingsStack->addWidget(liveKitPage);
+}
+
 void SettingsDialog::loadSettings() const {
   const auto languageCode = pcm::app_settings::languageCode();
   const auto languageIndex = mLanguageCombo->findData(languageCode);
@@ -583,6 +648,8 @@ void SettingsDialog::loadSettings() const {
   mPersonalEventColorEditor->setColor(pcm::app_settings::personalEventColor());
   mMeetingInviteTemplateEdit->setPlainText(
       pcm::app_settings::meetingInviteTemplate());
+  mLiveKitBaseUrlEdit->setText(QString::fromStdString(
+      pcm::config::Config::read_config().token_backend_base_url));
 }
 
 void SettingsDialog::connectSignals() {
@@ -1000,6 +1067,17 @@ void SettingsDialog::browseAutoBackupDestination() {
   }
   mAutoBackupDestinationEdit->setText(selected);
   pcm::app_settings::setAutoBackupDestination(selected);
+}
+
+void SettingsDialog::saveLiveKitSettings() {
+  auto conf = pcm::config::Config::read_config();
+  conf.token_backend_base_url = mLiveKitBaseUrlEdit->text().toStdString();
+  pcm::config::Config::save_config(conf);
+
+  const auto credential = mLiveKitBearerCredentialEdit->text();
+  if (!credential.isEmpty()) {
+    mTokenBackendCredentialStore->writeBearerCredential(credential);
+  }
 }
 
 void SettingsDialog::validateBackup() {

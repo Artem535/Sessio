@@ -364,3 +364,20 @@ target_link_libraries(Sessio_token_backend_client_tests PRIVATE
 )
 set_target_properties(Sessio_token_backend_client_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_token_backend_client_tests)
+
+# Settings dialog LiveKit section tests
+find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
+add_executable(Sessio_settings_dialog_livekit_section_tests
+    fake_token_backend_credential_store.h
+    settings_dialog_livekit_section_tests.cpp
+)
+target_include_directories(Sessio_settings_dialog_livekit_section_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app)
+target_link_libraries(Sessio_settings_dialog_livekit_section_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Widgets
+    Qt6::Test
+    Sessio_app
+)
+set_target_properties(Sessio_settings_dialog_livekit_section_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_settings_dialog_livekit_section_tests)
