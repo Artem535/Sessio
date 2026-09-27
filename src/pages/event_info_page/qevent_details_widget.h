@@ -174,6 +174,7 @@ private:
   std::unique_ptr<Ui::EventDetails> mUI;
   oclero::qlementine::Switch *mEventTypeSwitch = nullptr;
   oclero::qlementine::Switch *mOnlineSessionSwitch = nullptr;
+  oclero::qlementine::SegmentedControl *mProviderKindControl = nullptr;
   oclero::qlementine::SegmentedControl *mRepeatTypeControl = nullptr;
   QWidget *mRecurringOptionsWidget = nullptr;
   QSpinBox *mRepeatIntervalSpinBox = nullptr;

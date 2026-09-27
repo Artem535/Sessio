@@ -189,6 +189,12 @@ void QEventDetailsWidget::initUi() {
 
   mOnlineSessionSwitch = new oclero::qlementine::Switch(this);
   mOnlineSessionSwitch->setText(tr("Online session"));
+  mProviderKindControl = new oclero::qlementine::SegmentedControl(this);
+  mProviderKindControl->addItem(tr("External link"), {}, {},
+                                QStringLiteral("external_url"));
+  mProviderKindControl->addItem(tr("LiveKit"), {}, {}, QStringLiteral("livekit"));
+  mProviderKindControl->setItemsShouldExpand(true);
+  mProviderKindControl->setCurrentIndex(0);
   mRepeatTypeControl = new oclero::qlementine::SegmentedControl(this);
   mRepeatTypeControl->addItem(tr("None"), {}, {}, QStringLiteral("none"));
   mRepeatTypeControl->addItem(tr("Day"), {}, {}, QStringLiteral("daily"));
@@ -276,12 +282,14 @@ void QEventDetailsWidget::initUi() {
                              mWeekdayOptionsWidget);
   mUI->formLayout->insertRow(onlineSectionRow + 3, tr("Session format"),
                              mOnlineSessionSwitch);
+  mUI->formLayout->insertRow(onlineSectionRow + 4, tr("Provider"),
+                             mProviderKindControl);
 
   mMeetingUrlLabel = new QLabel(tr("Meeting link"), this);
   mMeetingUrlEdit = new oclero::qlementine::LineEdit(this);
   mMeetingUrlEdit->setPlaceholderText(tr("https://..."));
   mMeetingUrlEdit->setIcon(QIcon(":/icons/calendar-solid-full.svg"));
-  mUI->formLayout->insertRow(onlineSectionRow + 4, mMeetingUrlLabel,
+  mUI->formLayout->insertRow(onlineSectionRow + 5, mMeetingUrlLabel,
                              mMeetingUrlEdit);
 
   mMeetingActionsWidget = new QWidget(this);
@@ -295,7 +303,7 @@ void QEventDetailsWidget::initUi() {
   meetingActionsLayout->addWidget(mCopyMeetingUrlButton);
   meetingActionsLayout->addWidget(mCopyMeetingInviteButton);
   meetingActionsLayout->addStretch();
-  mUI->formLayout->insertRow(onlineSectionRow + 5, QString(),
+  mUI->formLayout->insertRow(onlineSectionRow + 6, QString(),
                              mMeetingActionsWidget);
 
   mBuffersWidget = new QWidget(this);
@@ -315,7 +323,7 @@ void QEventDetailsWidget::initUi() {
   mBufferAfterSpinBox->setMinimumWidth(92);
   buffersLayout->addWidget(mBufferAfterSpinBox);
   buffersLayout->addStretch();
-  mUI->formLayout->insertRow(onlineSectionRow + 6, tr("Buffers"),
+  mUI->formLayout->insertRow(onlineSectionRow + 7, tr("Buffers"),
                              mBuffersWidget);
 
   auto *conflictWidget = new QWidget(this);
@@ -330,7 +338,7 @@ void QEventDetailsWidget::initUi() {
   mSuggestFreeSlotButton->setVisible(false);
   conflictLayout->addWidget(mConflictWarningLabel);
   conflictLayout->addWidget(mSuggestFreeSlotButton, 0, Qt::AlignLeft);
-  mUI->formLayout->insertRow(onlineSectionRow + 7, QString(), conflictWidget);
+  mUI->formLayout->insertRow(onlineSectionRow + 8, QString(), conflictWidget);
 
   mUI->mAddButton->setIcon(QIcon(":/icons/calendar-plus-solid-full.svg"));
   mUI->mAddButton->setIconSize(QSize(16, 16));
@@ -465,6 +473,8 @@ void QEventDetailsWidget::loadEvent(QEventItem *event,
   const bool isWorkItem = event->isWorkItem();
   mEventTypeSwitch->setChecked(isWorkItem);
   mOnlineSessionSwitch->setChecked(event->isOnline());
+  mProviderKindControl->setCurrentIndex(
+      event->providerKind() == pcm::meeting::ProviderKind::LiveKit ? 1 : 0);
   mMeetingUrlEdit->setText(event->meetingUrl());
   mUI->mCostSpinBox->setValue(
       event->cost().value_or(pcm::app_settings::defaultWorkEventCost()));
@@ -846,6 +856,10 @@ void QEventDetailsWidget::onEventTypeToggled(bool checked) {
 }
 
 void QEventDetailsWidget::onOnlineSessionToggled(const bool checked) {
+  mProviderKindControl->setVisible(checked);
+  if (auto *label = mUI->formLayout->labelForField(mProviderKindControl)) {
+    label->setVisible(checked);
+  }
   mMeetingUrlLabel->setVisible(checked);
   mMeetingUrlEdit->setVisible(checked);
   mMeetingActionsWidget->setVisible(checked);
@@ -1034,6 +1048,26 @@ void QEventDetailsWidget::updateMeetingViaCoordinator() {
     const auto trimmedUrl = mMeetingUrlEdit->text().trimmed();
     applyProviderFields(pcm::meeting::ProviderKind::ExternalUrl, trimmedUrl,
                        mCurrentEvent->invitationState(), trimmedUrl);
+    return;
+  }
+
+  const bool wantsLiveKit = mProviderKindControl->currentIndex() == 1;
+  if (wantsLiveKit) {
+    // LiveKitMeetingProvider::create makes a real, asynchronous POST
+    // /v1/meetings call (unlike ExternalUrlMeetingProvider::create below):
+    // onMeetingCreated applies the descriptor once that call completes, not
+    // before this function returns.
+    const auto startIso = QDateTime(mUI->mEventDate->date(), mUI->mTimeFrom->time(),
+                                    QTimeZone::systemTimeZone())
+                              .toUTC()
+                              .toString(Qt::ISODate);
+    const auto endIso = QDateTime(mUI->mEventDate->date(), mUI->mTimeTo->time(),
+                                  QTimeZone::systemTimeZone())
+                            .toUTC()
+                            .toString(Qt::ISODate);
+    mMeetingCoordinator->createMeeting(
+        pcm::meeting::ProviderKind::LiveKit,
+        {.scheduledStartIso = startIso, .scheduledEndIso = endIso});
     return;
   }
 
