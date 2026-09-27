@@ -26,9 +26,13 @@ Config Config::fromEnv() {
   config.liveKitApiKey = requireEnv("LIVEKIT_API_KEY");
   config.liveKitApiSecret = requireEnv("LIVEKIT_API_SECRET");
 
-  const char *wsEndpointEnv = std::getenv("LIVEKIT_WS_ENDPOINT");
-  config.liveKitWsEndpoint =
-      (wsEndpointEnv && wsEndpointEnv[0] != '\0') ? wsEndpointEnv : "ws://46.173.25.218:7880";
+  // Required rather than defaulted, for the same reason as
+  // INVITATION_BASE_URL below: the previous fallback of
+  // "ws://46.173.25.218:7880" was a real production LiveKit server address,
+  // hardcoded in source and reached over unencrypted ws://. A deploy that
+  // forgot to set this came up healthy and silently pointed every call at
+  // that server in plaintext, with no error in any log.
+  config.liveKitWsEndpoint = requireEnv("LIVEKIT_WS_ENDPOINT");
 
   // Required rather than defaulted: the previous fallback of
   // "https://example.invalid/join/" meant a deploy that forgot to set this

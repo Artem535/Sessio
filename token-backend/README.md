@@ -23,7 +23,7 @@ ctest --test-dir build --output-on-failure
 | `DB_PATH` | no | `token-backend.sqlite3` | SQLite database file |
 | `LIVEKIT_API_KEY` | yes | — | Must match the self-hosted LiveKit server's key |
 | `LIVEKIT_API_SECRET` | yes | — | Must match the self-hosted LiveKit server's secret |
-| `LIVEKIT_WS_ENDPOINT` | no | `ws://46.173.25.218:7880` | Returned to clients as the connection URL |
+| `LIVEKIT_WS_ENDPOINT` | **yes** | — | Returned to clients as the connection URL |
 | `INVITATION_BASE_URL` | **yes** | — | Prefix the invitation code is appended to |
 | `TOKEN_TTL_SECONDS` | no | `600` | LiveKit JWT lifetime |
 
@@ -31,7 +31,10 @@ All of these are read once at startup by `Config::fromEnv()`. A missing or
 empty **required** variable aborts the process with an error naming it —
 `INVITATION_BASE_URL` is required precisely because its old placeholder
 default (`https://example.invalid/join/`) let a misconfigured deploy come up
-healthy while handing out invitation links that go nowhere.
+healthy while handing out invitation links that go nowhere. `LIVEKIT_WS_ENDPOINT`
+is required for the same reason: its old default was a real production
+server address, reached over unencrypted `ws://`, so a deploy that forgot to
+set it would silently point every call at that server in plaintext.
 
 `--seed-account` is the exception: it touches only the database, so it needs
 `DB_PATH` alone and none of the required variables.
