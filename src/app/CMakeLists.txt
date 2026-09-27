@@ -17,6 +17,7 @@ qt_add_library(${TARGET_NAME} STATIC
         auto_backup_scheduler.cpp
         backup_encryption_policy.cpp
         credential_store.cpp
+        token_backend_credential_store.cpp
         app_lock_service.cpp
         app_lock_controller.cpp
         app_lock_dialog.cpp
