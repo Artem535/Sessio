@@ -1,0 +1,46 @@
+#include "token_response_parser.h"
+
+#include <gtest/gtest.h>
+
+using pcm::tokenclient::parseErrorMessage;
+using pcm::tokenclient::parseTokenResponse;
+
+TEST(TokenResponseParserTest, ParsesWellFormedTokenResponse) {
+  const QByteArray json = R"({
+    "endpointUrl": "wss://livekit.example.test",
+    "roomName": "room-42",
+    "token": "eyJhbGciOi...",
+    "expiresAt": 1234567890
+  })";
+
+  const auto result = parseTokenResponse(json);
+
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(result->endpointUrl, QStringLiteral("wss://livekit.example.test"));
+  EXPECT_EQ(result->roomName, QStringLiteral("room-42"));
+  EXPECT_EQ(result->token, QStringLiteral("eyJhbGciOi..."));
+  EXPECT_EQ(result->expiresAt, 1234567890);
+}
+
+TEST(TokenResponseParserTest, MissingFieldFailsToParse) {
+  const QByteArray json = R"({"endpointUrl": "wss://x", "roomName": "r"})";
+  EXPECT_FALSE(parseTokenResponse(json).has_value());
+}
+
+TEST(TokenResponseParserTest, MalformedJsonFailsToParse) {
+  EXPECT_FALSE(parseTokenResponse("not json").has_value());
+}
+
+TEST(TokenResponseParserTest, ParsesErrorMessage) {
+  const QByteArray json = R"({"error": "wrong_passcode"})";
+  EXPECT_EQ(parseErrorMessage(json), QStringLiteral("wrong_passcode"));
+}
+
+TEST(TokenResponseParserTest, UnparsableErrorBodyFallsBackToGenericMessage) {
+  EXPECT_EQ(parseErrorMessage("not json"), QStringLiteral("request_failed"));
+}
+
+int main(int argc, char **argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

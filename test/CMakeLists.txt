@@ -339,3 +339,12 @@ target_link_libraries(Sessio_role_selection_dialog_tests PRIVATE
 )
 set_target_properties(Sessio_role_selection_dialog_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_role_selection_dialog_tests)
+
+# Token response parser tests
+add_executable(Sessio_token_response_parser_tests token_response_parser_tests.cpp)
+target_link_libraries(Sessio_token_response_parser_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_token_client
+)
+gtest_discover_tests(Sessio_token_response_parser_tests)
