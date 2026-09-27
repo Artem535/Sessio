@@ -50,8 +50,12 @@ A thin wrapper over Qt Multimedia (`QMediaDevices`) that enumerates and selects 
 _Avoid_: Device selector (`DeviceManager` is the project's chosen term, matching `MeetingProvider`/`MeetingCoordinator`'s naming style).
 
 **Participant Page**:
-The client-facing surface for joining a `Meeting`: device check followed by room join via a one-time `Invitation`. Deliberately not part of the Sessio desktop app or its codebase — a distinct, not-yet-built deliverable whose channel (a minimal web page, a Telegram bot, or otherwise) is intentionally undecided (see `docs/asciidoc/11-token-backend-account-model-adr.adoc`), since any channel need only implement the same invitation-redemption contract.
-_Avoid_: Client app, web client (implies more than the minimal, no-PII-access surface this actually is).
+A client-facing surface for joining a `Meeting` outside the Sessio desktop app: device check followed by room join via a one-time `Invitation`. A distinct, not-yet-built deliverable whose channel (a minimal web page, a Telegram bot, or otherwise) is intentionally undecided (see `docs/asciidoc/11-token-backend-account-model-adr.adoc`), since any channel need only implement the same invitation-redemption contract. `ClientModeWindow` (#80) is a second, non-exclusive channel implementing that same contract from inside the Sessio desktop app itself — building it does not retire the Participant Page as a future option for clients unwilling to install Sessio.
+_Avoid_: Client app, web client (implies more than the minimal, no-PII-access surface this actually is); the only Sessio-desktop-app surface is `ClientModeWindow`, not this term.
+
+**ClientModeWindow**:
+The Sessio desktop app's top-level window for a pure client (no therapist account): hosts only the shared call-entry widget (join by `Invitation` code + `Room Passcode`) and the call screens, with no `Database`, `QClientModel`, or notes dependency anywhere in its construction — a structural, not merely visual, privacy boundary. Chosen over `MainWindow` by a one-time role selection at first launch, persisted in `Config`. See `docs/superpowers/specs/2026-09-27-native-call-ui-and-client-mode-design.md`.
+_Avoid_: Client app (see Participant Page — this is one specific window class, not a separate distributable).
 
 **Invitation**:
 The client's one-time-issued, repeatedly-redeemable link into a `Meeting`. "One-time" means one invitation is created per meeting, not that redeeming it twice fails — it stays valid for repeated token exchange until the meeting's scheduled window closes or it is invalidated, so a client can reconnect after a dropped connection or a closed tab. See `docs/asciidoc/12-invitation-security-model-adr.adoc`.
