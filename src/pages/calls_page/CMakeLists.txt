@@ -10,6 +10,8 @@ qt_add_library(${TARGET_NAME} STATIC
         call_entry_widget.cpp
         device_check_widget.h
         device_check_widget.cpp
+        call_page.h
+        call_page.cpp
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC
