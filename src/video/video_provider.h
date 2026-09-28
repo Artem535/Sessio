@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QString>
 
+class QWidget;
+
 namespace pcm::video {
 
 // Abstraction over the actual in-call media session: connecting to the
@@ -30,6 +32,14 @@ public:
   // Disconnects and releases all local devices/tracks. Safe to call even if
   // never successfully joined.
   virtual void leave() = 0;
+
+  // The widget this provider renders the remote participant's video into,
+  // or nullptr if it has none (e.g. a test double). The provider owns the
+  // widget's lifetime; a UI embedding it may reparent it into its own
+  // layout, but must hand it back (setParent(nullptr)) rather than delete
+  // it when swapping it out, and must tolerate it being destroyed along
+  // with the provider (hold it through a QPointer).
+  virtual QWidget *remoteVideoWidget() { return nullptr; }
 
 signals:
   void joined();

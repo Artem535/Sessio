@@ -77,6 +77,20 @@ LiveKitVideoProvider::~LiveKitVideoProvider() {
   // leave() already stops both capture adapters — no need to repeat it
   // here (join() is the only place that starts them).
   leave();
+  // This provider owns mRemoteVideo for its whole life, even while a UI
+  // (CallPage) has reparented it into its own layout via
+  // remoteVideoWidget(). Deleting it here unconditionally is safe in every
+  // ordering, and is NOT a double delete:
+  //  - UI destroyed first: Qt's parent-child cleanup deleted the widget,
+  //    which nulled this QPointer, so this is `delete nullptr` (a no-op).
+  //  - Provider destroyed first while the widget is still embedded: deleting
+  //    a child QWidget is well-defined in Qt — ~QObject detaches it from its
+  //    parent's children list (so the parent never deletes it again) and the
+  //    parent's layout drops its item on the resulting ChildRemoved event.
+  //    The UI holds it only through a QPointer, which nulls too.
+  // Deleting only when parent() == nullptr would instead leak it in the
+  // second case: the UI never deletes a borrowed widget, it only hands it
+  // back with setParent(nullptr) when swapping it out.
   delete mRemoteVideo.data();
   // No explicit releaseLiveKitRuntime() call here: mRuntimeGuard's own
   // destructor handles it automatically, and — because it is declared
@@ -200,6 +214,8 @@ void LiveKitVideoProvider::join(const QString &url, const QString &token) {
         Qt::QueuedConnection);
   }
 }
+
+QWidget *LiveKitVideoProvider::remoteVideoWidget() { return mRemoteVideo.data(); }
 
 void LiveKitVideoProvider::leave() {
   if (mRemoteVideo) {

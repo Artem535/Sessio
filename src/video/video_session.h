@@ -18,6 +18,8 @@ public:
                         QObject *parent = nullptr);
 
   [[nodiscard]] VideoSessionState state() const { return mState; }
+  // The provider this session drives (Qt-owned by this session).
+  [[nodiscard]] VideoProvider *provider() const { return mProvider; }
 
   void join(const QString &url, const QString &token);
   void leave();

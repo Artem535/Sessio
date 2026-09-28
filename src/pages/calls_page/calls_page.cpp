@@ -21,14 +21,25 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
   mStack->addWidget(mCallPage);
   mStack->setCurrentWidget(mEntryWidget);
 
+  // Connected exactly once, here, for CallsPage's whole lifetime — both join
+  // paths below share it. It used to be (re-)made inside each per-click
+  // handler with Qt::UniqueConnection, which Qt cannot honour for a lambda
+  // (uniqueness is only detectable for pointer-to-member-function slots): a
+  // Debug build asserts on the first click, and a release build rejects the
+  // connection outright on Qt 6.10 (so no token was ever acted on) or, on
+  // older Qt, silently stacks one more duplicate per click (so the Nth token
+  // started N joins).
+  connect(mTokenClient, &pcm::tokenclient::TokenBackendClient::tokenReceived, this,
+          [this](const pcm::tokenclient::TokenResult &result) {
+            startJoin(result.endpointUrl, result.token);
+          });
+  connect(mTokenClient, &pcm::tokenclient::TokenBackendClient::tokenRequestFailed, mEntryWidget,
+          &CallEntryWidget::showError);
+
   connect(mEntryWidget, &CallEntryWidget::joinByCodeRequested, this,
           [this](const QString &code, const QString &passcode) {
             mCurrentEventId.reset(); // a code/passcode join never has a known Event
-            connect(mTokenClient, &pcm::tokenclient::TokenBackendClient::tokenReceived, this,
-                    [this](const pcm::tokenclient::TokenResult &result) {
-                      startJoin(result.endpointUrl, result.token);
-                    },
-                    Qt::UniqueConnection);
+            mEntryWidget->clearError();
             mTokenClient->requestClientToken(code, passcode);
           });
 
@@ -44,11 +55,7 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
                 break;
               }
             }
-            connect(mTokenClient, &pcm::tokenclient::TokenBackendClient::tokenReceived, this,
-                    [this](const pcm::tokenclient::TokenResult &result) {
-                      startJoin(result.endpointUrl, result.token);
-                    },
-                    Qt::UniqueConnection);
+            mEntryWidget->clearError();
             mTokenClient->requestSpecialistToken(mBearerCredentialProvider(), meetingRef);
           });
 
@@ -58,15 +65,30 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
   // confirmation on CallPage's device-check screen, not fired the instant a
   // token arrives (see startJoin() below). mCallPage is a single instance
   // constructed once above and living for CallsPage's whole lifetime, so a
-  // single constructor-time connection is sufficient here — unlike the
-  // tokenReceived connections above, which are re-established per join
-  // attempt against the shared mTokenClient and so need Qt::UniqueConnection
-  // to avoid stacking duplicate connections across repeated join attempts.
+  // single constructor-time connection is sufficient here (the same holds
+  // for the tokenReceived connection above).
   connect(mCallPage, &CallPage::joinConfirmed, this, [this]() {
     if (mSession) {
       mSession->join(mPendingUrl, mPendingToken);
     }
   });
+
+  // The Leave button on CallPage's connected screen.
+  connect(mCallPage, &CallPage::leaveRequested, this, [this]() {
+    if (mSession) {
+      mSession->leave();
+    }
+  });
+}
+
+bool CallsPage::hasActiveCall() const {
+  if (!mSession) {
+    return false;
+  }
+  using pcm::video::VideoSessionState;
+  const auto state = mSession->state();
+  return state != VideoSessionState::NoMeeting && state != VideoSessionState::Ended &&
+         state != VideoSessionState::Failed;
 }
 
 void CallsPage::setBearerCredentialProvider(std::function<QString()> provider) {
@@ -79,11 +101,20 @@ void CallsPage::setUpcomingMeetings(const QList<UpcomingMeeting> &meetings) {
 }
 
 void CallsPage::preselectOwnMeeting(const QString &meetingRef) {
+  // An "Open Meeting" click arriving mid-call must not switch away from
+  // (and so hide) the live call.
+  if (hasActiveCall()) {
+    return;
+  }
   mStack->setCurrentWidget(mEntryWidget);
   mEntryWidget->preselectOwnMeeting(meetingRef);
 }
 
 void CallsPage::prefillJoinCode(const QString &code, const QString &passcode) {
+  // Same for a forwarded sessio:// link arriving mid-call.
+  if (hasActiveCall()) {
+    return;
+  }
   mStack->setCurrentWidget(mEntryWidget);
   mEntryWidget->prefillJoinCode(code, passcode);
 }
@@ -105,6 +136,14 @@ void CallsPage::startJoin(const QString &url, const QString &token) {
   mPendingToken = token;
   auto *provider = mVideoProviderFactory();
   mSession = std::make_unique<pcm::video::VideoSession>(provider);
+  // CallPage shows the failure reason on its ended screen, but callEnded
+  // switches this page straight back to the entry form (see the
+  // constructor), so surface it there too. Both connections die with the
+  // session.
+  connect(mSession.get(), &pcm::video::VideoSession::joinFailed, mEntryWidget,
+          &CallEntryWidget::showError);
+  connect(mSession.get(), &pcm::video::VideoSession::reconnectFailed, mEntryWidget,
+          &CallEntryWidget::showError);
   mCallPage->attachSession(mSession.get());
   mStack->setCurrentWidget(mCallPage);
   if (mCurrentEventId.has_value()) {

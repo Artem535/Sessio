@@ -27,9 +27,15 @@ CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : 
   outer->addWidget(mReconnectingBanner);
 
   mEndedScreen = new QWidget(this);
-  new QVBoxLayout(mEndedScreen);
-  static_cast<QVBoxLayout *>(mEndedScreen->layout())
-      ->addWidget(new QLabel(tr("Call ended."), mEndedScreen));
+  auto *endedLayout = new QVBoxLayout(mEndedScreen);
+  endedLayout->addWidget(new QLabel(tr("Call ended."), mEndedScreen));
+  // Shown only when the session failed with a reason (joinFailed()/
+  // reconnectFailed()); a normal user-initiated leave shows nothing here.
+  mEndedReasonLabel = new QLabel(mEndedScreen);
+  mEndedReasonLabel->setObjectName("endedReasonLabel");
+  mEndedReasonLabel->setWordWrap(true);
+  mEndedReasonLabel->setVisible(false);
+  endedLayout->addWidget(mEndedReasonLabel);
   mStack->addWidget(mEndedScreen);
 
   mStack->setCurrentWidget(mDeviceCheck);
@@ -69,13 +75,20 @@ void CallPage::buildConnectedScreen() {
   mConnectedView = new QWidget(this);
   auto *layout = new QVBoxLayout(mConnectedView);
 
-  auto *videoRow = new QHBoxLayout();
-  videoRow->addWidget(new pcm::video::RemoteVideoRenderer(mConnectedView), 1);
+  // Slot 0 of mVideoRow holds the remote video. It starts out as a blank
+  // CallPage-owned placeholder; updateRemoteVideoWidget() swaps in the
+  // attached provider's real remoteVideoWidget() (the one the provider
+  // actually attaches the subscribed remote track to) when it has one.
+  mVideoRow = new QHBoxLayout();
+  mRemoteVideoPlaceholder = new pcm::video::RemoteVideoRenderer(mConnectedView);
+  mRemoteVideoPlaceholder->setObjectName("remoteVideoPlaceholder");
+  mVideoRow->addWidget(mRemoteVideoPlaceholder, 1);
+  mActiveRemoteVideoWidget = mRemoteVideoPlaceholder;
   mSidePanelHost = new QWidget(mConnectedView);
   mSidePanelHost->setVisible(false);
   new QVBoxLayout(mSidePanelHost);
-  videoRow->addWidget(mSidePanelHost);
-  layout->addLayout(videoRow);
+  mVideoRow->addWidget(mSidePanelHost);
+  layout->addLayout(mVideoRow);
 
   auto *controls = new QHBoxLayout();
   auto *leaveButton = new QPushButton(tr("Leave"), mConnectedView);
@@ -88,8 +101,69 @@ void CallPage::buildConnectedScreen() {
 }
 
 void CallPage::attachSession(pcm::video::VideoSession *session) {
+  // A previously attached session that is still alive must stop driving
+  // this page (CallsPage normally destroys it first, which disconnects it
+  // anyway — this covers any caller that doesn't).
+  if (mSession) {
+    disconnect(mSession.data(), nullptr, this, nullptr);
+  }
   mSession = session;
+  mLastFailureReason.clear();
+  refreshEndedReason();
   connect(session, &pcm::video::VideoSession::stateChanged, this, &CallPage::onSessionStateChanged);
+  connect(session, &pcm::video::VideoSession::joinFailed, this, &CallPage::onSessionFailureReason);
+  connect(session, &pcm::video::VideoSession::reconnectFailed, this,
+          &CallPage::onSessionFailureReason);
+  updateRemoteVideoWidget();
+}
+
+void CallPage::updateRemoteVideoWidget() {
+  QWidget *provided = nullptr;
+  if (mSession && mSession->provider()) {
+    provided = mSession->provider()->remoteVideoWidget();
+  }
+  QWidget *target = provided ? provided : mRemoteVideoPlaceholder;
+  if (target == mActiveRemoteVideoWidget) {
+    return;
+  }
+
+  // mActiveRemoteVideoWidget may already be null here: a borrowed provider
+  // widget is destroyed together with its provider (e.g. CallsPage::
+  // startJoin() replacing its session before attaching the new one), and
+  // Qt has then already removed it from mVideoRow.
+  if (QWidget *previous = mActiveRemoteVideoWidget.data()) {
+    mVideoRow->removeWidget(previous);
+    previous->hide();
+    if (previous != mRemoteVideoPlaceholder) {
+      // Borrowed from a provider: hand it back instead of deleting it —
+      // the provider still owns its lifetime.
+      previous->setParent(nullptr);
+    }
+  }
+
+  if (target->parentWidget() != mConnectedView) {
+    target->setParent(mConnectedView);
+  }
+  mVideoRow->insertWidget(0, target, /*stretch=*/1);
+  // setParent() hides a widget, and a swapped-out placeholder was hidden
+  // explicitly above; either way it has to be shown again.
+  target->show();
+  mActiveRemoteVideoWidget = target;
+}
+
+void CallPage::onSessionFailureReason(const QString &reason) {
+  mLastFailureReason = reason;
+  // VideoSession emits joinFailed()/reconnectFailed() before entering
+  // Failed today, but don't depend on that ordering: if the reason arrives
+  // after the ended screen is already up, show it there immediately.
+  if (mStack->currentWidget() == mEndedScreen) {
+    refreshEndedReason();
+  }
+}
+
+void CallPage::refreshEndedReason() {
+  mEndedReasonLabel->setText(mLastFailureReason);
+  mEndedReasonLabel->setVisible(!mLastFailureReason.isEmpty());
 }
 
 void CallPage::setSidePanelWidget(QWidget *panel) {
@@ -141,6 +215,7 @@ void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) 
     break;
   case VideoSessionState::Ended:
   case VideoSessionState::Failed:
+    refreshEndedReason();
     mStack->setCurrentWidget(mEndedScreen);
     emit callEnded();
     break;

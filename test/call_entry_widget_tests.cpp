@@ -1,6 +1,7 @@
 #include "call_entry_widget.h"
 
 #include <QApplication>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -52,6 +53,21 @@ TEST(CallEntryWidgetTest, PrefillJoinCodePopulatesForm) {
 
   EXPECT_EQ(widget.findChild<QLineEdit *>("joinCodeEdit")->text(), QStringLiteral("code-2"));
   EXPECT_EQ(widget.findChild<QLineEdit *>("joinPasscodeEdit")->text(), QStringLiteral("654321"));
+}
+
+TEST(CallEntryWidgetTest, ShowErrorDisplaysMessageAndClearErrorHidesIt) {
+  CallEntryWidget widget(/*showOwnMeetings=*/false);
+  auto *errorLabel = widget.findChild<QLabel *>("joinErrorLabel");
+  ASSERT_NE(errorLabel, nullptr);
+  EXPECT_TRUE(errorLabel->isHidden());
+
+  widget.showError("invalid_passcode");
+  EXPECT_FALSE(errorLabel->isHidden());
+  EXPECT_EQ(errorLabel->text(), QStringLiteral("invalid_passcode"));
+
+  widget.clearError();
+  EXPECT_TRUE(errorLabel->isHidden());
+  EXPECT_TRUE(errorLabel->text().isEmpty());
 }
 
 int main(int argc, char **argv) {

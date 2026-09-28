@@ -35,6 +35,10 @@ public:
 
   void join(const QString &url, const QString &token) override;
   void leave() override;
+  // The renderer the first subscribed remote video track is attached to.
+  // Owned by this provider (see the destructor for the ownership rules once
+  // a UI has reparented it into its own layout).
+  QWidget *remoteVideoWidget() override;
 
 private:
   // livekit::RoomDelegate overrides — invoked on a LiveKit-internal thread;

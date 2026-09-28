@@ -4,6 +4,7 @@
 #include <QList>
 #include <QWidget>
 
+class QLabel;
 class QLineEdit;
 class QVBoxLayout;
 
@@ -24,6 +25,10 @@ public:
   void setUpcomingMeetings(const QList<UpcomingMeeting> &meetings);
   void preselectOwnMeeting(const QString &meetingRef);
   void prefillJoinCode(const QString &code, const QString &passcode);
+  // Shows a join failure (token request or call failure) below the form;
+  // clearError() hides it again, e.g. before each new join attempt.
+  void showError(const QString &message);
+  void clearError();
 
 signals:
   void ownMeetingJoinRequested(QString meetingRef);
@@ -35,4 +40,5 @@ private:
   QVBoxLayout *mOwnMeetingsLayout{nullptr};
   QLineEdit *mCodeEdit{nullptr};
   QLineEdit *mPasscodeEdit{nullptr};
+  QLabel *mErrorLabel{nullptr};
 };

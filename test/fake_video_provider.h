@@ -22,6 +22,10 @@ public:
     ++mLeaveCallCount;
   }
 
+  // nullptr unless a test sets mRemoteVideoWidget (the base default), so
+  // existing tests keep exercising CallPage's placeholder path.
+  QWidget *remoteVideoWidget() override { return mRemoteVideoWidget; }
+
   // Test-driving methods: call these to simulate the real provider emitting
   // its outcome signals asynchronously, exactly as LiveKitVideoProvider
   // would once its own SDK callbacks fire.
@@ -39,6 +43,8 @@ public:
   QString mLastJoinToken;
   int mJoinCallCount{0};
   int mLeaveCallCount{0};
+  // Not owned: the test decides the widget's lifetime.
+  QWidget *mRemoteVideoWidget{nullptr};
 };
 
 } // namespace pcm::video::test

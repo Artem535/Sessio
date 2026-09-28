@@ -9,6 +9,8 @@
 #include <QPointer>
 #include <QWidget>
 
+class QHBoxLayout;
+class QLabel;
 class QPushButton;
 class QStackedWidget;
 
@@ -47,15 +49,37 @@ public slots:
 private:
   void buildDeviceCheckScreen(pcm::video::DeviceManager *deviceManager);
   void buildConnectedScreen();
+  // Puts the attached session's provider's remoteVideoWidget() (or, if it
+  // has none, mRemoteVideoPlaceholder) into slot 0 of mVideoRow. The
+  // provider's widget is only borrowed: it is reparented into
+  // mConnectedView while shown, and handed back with setParent(nullptr)
+  // (never deleted) when swapped out — see LiveKitVideoProvider's
+  // destructor for the other half of this ownership contract.
+  void updateRemoteVideoWidget();
+  void onSessionFailureReason(const QString &reason);
+  void refreshEndedReason();
 
   QStackedWidget *mStack{nullptr};
   DeviceCheckWidget *mDeviceCheck{nullptr};
   QWidget *mConnectingScreen{nullptr};
   QWidget *mConnectedView{nullptr};
+  QHBoxLayout *mVideoRow{nullptr};
+  // CallPage-owned blank renderer, shown whenever the attached provider
+  // offers no remote-video widget of its own (or before any session is
+  // attached). Never reparented away from mConnectedView.
+  QWidget *mRemoteVideoPlaceholder{nullptr};
+  // Whichever widget currently occupies slot 0 of mVideoRow. A QPointer
+  // because a borrowed provider widget can be destroyed along with its
+  // provider (e.g. when CallsPage replaces its session) while still shown.
+  QPointer<QWidget> mActiveRemoteVideoWidget;
   QWidget *mReconnectingBanner{nullptr};
   QWidget *mEndedScreen{nullptr};
+  QLabel *mEndedReasonLabel{nullptr};
   QWidget *mSidePanelHost{nullptr};
   QPushButton *mNotesToggleButton{nullptr};
   QPointer<QWidget> mSidePanel;
   QPointer<pcm::video::VideoSession> mSession;
+  // The reason from the attached session's most recent joinFailed()/
+  // reconnectFailed(), shown on the ended screen. Reset per session.
+  QString mLastFailureReason;
 };

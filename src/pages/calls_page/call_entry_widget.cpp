@@ -30,6 +30,14 @@ CallEntryWidget::CallEntryWidget(const bool showOwnMeetings, QWidget *parent)
   layout->addWidget(mCodeEdit);
   layout->addWidget(mPasscodeEdit);
   layout->addWidget(connectButton);
+
+  // Same error-text colour as AppLockDialog's error label.
+  mErrorLabel = new QLabel(this);
+  mErrorLabel->setObjectName("joinErrorLabel");
+  mErrorLabel->setStyleSheet("color: #ef7777;");
+  mErrorLabel->setWordWrap(true);
+  mErrorLabel->setVisible(false);
+  layout->addWidget(mErrorLabel);
   layout->addStretch();
 
   connect(connectButton, &QPushButton::clicked, this, [this]() {
@@ -72,4 +80,14 @@ void CallEntryWidget::preselectOwnMeeting(const QString &meetingRef) {
 void CallEntryWidget::prefillJoinCode(const QString &code, const QString &passcode) {
   mCodeEdit->setText(code);
   mPasscodeEdit->setText(passcode);
+}
+
+void CallEntryWidget::showError(const QString &message) {
+  mErrorLabel->setText(message);
+  mErrorLabel->setVisible(true);
+}
+
+void CallEntryWidget::clearError() {
+  mErrorLabel->clear();
+  mErrorLabel->setVisible(false);
 }

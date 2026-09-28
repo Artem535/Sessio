@@ -59,6 +59,10 @@ private:
   // that only happens once the user confirms on the device-check screen
   // (CallPage::joinConfirmed), via the constructor-time connection below.
   void startJoin(const QString &url, const QString &token);
+  // True while a call is in progress: a session exists and is past
+  // NoMeeting but not yet Ended/Failed. preselectOwnMeeting()/
+  // prefillJoinCode() are ignored then, so they never hide a live call.
+  [[nodiscard]] bool hasActiveCall() const;
 
   pcm::video::DeviceManager *mDeviceManager;
   pcm::tokenclient::TokenBackendClient *mTokenClient;

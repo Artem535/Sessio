@@ -7,7 +7,10 @@
 // with "QWidget: Cannot create a QWidget without QApplication".
 #include <QApplication>
 #include <QEventLoop>
+#include <QPointer>
 #include <QTimer>
+#include <QVBoxLayout>
+#include <QWidget>
 #include <iostream>
 
 int main(int argc, char *argv[]) {
@@ -37,6 +40,49 @@ int main(int argc, char *argv[]) {
   }
 
   std::cout << "livekit_video_provider_smoke_test: 5 construct/join/destroy cycles completed"
+            << std::endl;
+
+  // remoteVideoWidget() ownership: CallPage borrows the provider's renderer
+  // by reparenting it into its own layout. Neither destruction order may
+  // double-delete it (see ~LiveKitVideoProvider).
+  {
+    // Provider destroyed first, while its widget is still embedded.
+    QWidget host;
+    auto *hostLayout = new QVBoxLayout(&host);
+    auto provider = std::make_unique<pcm::video::LiveKitVideoProvider>();
+    QPointer<QWidget> video = provider->remoteVideoWidget();
+    if (video.isNull()) {
+      std::cerr << "livekit_video_provider_smoke_test: no remote video widget" << std::endl;
+      return 1;
+    }
+    video->setParent(&host);
+    hostLayout->addWidget(video);
+    provider.reset();
+    if (!video.isNull() || hostLayout->count() != 0) {
+      std::cerr << "livekit_video_provider_smoke_test: embedded remote video widget not released "
+                   "cleanly with its provider"
+                << std::endl;
+      return 1;
+    }
+  } // host destroyed afterwards: must not touch the already-deleted widget
+  {
+    // Embedding UI destroyed first, then the provider.
+    auto provider = std::make_unique<pcm::video::LiveKitVideoProvider>();
+    QPointer<QWidget> video = provider->remoteVideoWidget();
+    {
+      QWidget host;
+      auto *hostLayout = new QVBoxLayout(&host);
+      video->setParent(&host);
+      hostLayout->addWidget(video);
+    }
+    if (!video.isNull()) {
+      std::cerr << "livekit_video_provider_smoke_test: host did not delete its embedded child"
+                << std::endl;
+      return 1;
+    }
+    provider.reset(); // must not delete the already-deleted widget again
+  }
+  std::cout << "livekit_video_provider_smoke_test: remote video widget ownership checks passed"
             << std::endl;
   return 0;
 }

@@ -4,8 +4,11 @@
 #include "fake_video_provider.h"
 
 #include <QApplication>
-#include <QPushButton>
+#include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
+#include <QSignalSpy>
+#include <QStackedWidget>
 #include <QTest>
 #include <gtest/gtest.h>
 
@@ -15,6 +18,13 @@ using pcm::video::test::FakeVideoProvider;
 // local HTTP server (same double as Task 4), rather than a hand-rolled fake
 // TokenBackendClient — TokenBackendClient is a concrete, final class with no
 // virtual seam, and the server-side double is already proven reliable.
+//
+// Asynchronous waits use ASSERT_TRUE(QTest::qWaitFor(...)), never QtTest's
+// QTRY_* macros: QTRY_* report failure through QtTest's own result logger
+// and then `return` from the test body — which GoogleTest does not see as a
+// failure, so a timed-out QTRY_* silently turned these tests into passes
+// (the release-build Qt::UniqueConnection-with-lambda bug meant no token was
+// ever acted on, yet both original tests below "passed").
 TEST(CallsPageTest, JoiningByCodeSwitchesToCallPageOnceTokenArrives) {
   FakeTokenBackendServer server;
   server.setNextResponse(200, R"({
@@ -55,7 +65,7 @@ TEST(CallsPageTest, JoiningByCodeSwitchesToCallPageOnceTokenArrives) {
   // startJoin() has actually run (proven by the fake provider having been
   // constructed), at which point CallPage is showing and its device-check
   // screen is present.
-  QTRY_VERIFY_WITH_TIMEOUT(fakeProvider != nullptr, 2000);
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider != nullptr; }, 2000));
   EXPECT_NE(page.findChild<QWidget *>("deviceCheckWidget"), nullptr);
   // Fix round 1: arriving at the device-check screen must not by itself
   // start the real call — see RealJoinIsGatedBehindDeviceCheckConfirmation
@@ -116,7 +126,7 @@ TEST(CallsPageTest, RealJoinIsGatedBehindDeviceCheckConfirmation) {
   // before any token ever arrives — so waiting on fakeProvider directly
   // (rather than on deviceCheckWidget's mere presence, as the sibling test
   // above does) is what actually proves the token round-trip completed.
-  QTRY_VERIFY_WITH_TIMEOUT(fakeProvider != nullptr, 2000);
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider != nullptr; }, 2000));
   ASSERT_NE(page.findChild<QWidget *>("deviceCheckWidget"), nullptr);
 
   // The gate: a token having arrived must NOT by itself have triggered a
@@ -135,9 +145,253 @@ TEST(CallsPageTest, RealJoinIsGatedBehindDeviceCheckConfirmation) {
 
   // Clicking DeviceCheckWidget's own Join button is what should finally
   // trigger the real join, with the url/token that arrived earlier.
-  QTRY_COMPARE_WITH_TIMEOUT(fakeProvider->mJoinCallCount, 1, 2000);
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider->mJoinCallCount == 1; }, 2000));
   EXPECT_EQ(fakeProvider->mLastJoinUrl, QStringLiteral("wss://livekit.example.test"));
   EXPECT_EQ(fakeProvider->mLastJoinToken, QStringLiteral("jwt-1"));
+}
+
+namespace {
+
+const char *const kTokenResponse = R"({
+    "endpointUrl": "wss://livekit.example.test", "roomName": "room-1",
+    "token": "jwt-1", "expiresAt": 999
+  })";
+
+// Pumps the event loop until `session` reaches `target` — same pattern as
+// VideoSessionTest::waitForState / call_page_tests.cpp's waitForState.
+void waitForState(pcm::video::VideoSession &session, QSignalSpy &stateSpy,
+                  pcm::video::VideoSessionState target) {
+  while (session.state() != target) {
+    ASSERT_TRUE(stateSpy.wait(1000)) << "timed out waiting for state " << static_cast<int>(target);
+  }
+}
+
+// CallsPage's own top-level stack (entry form vs. CallPage) — the only
+// QStackedWidget that is a direct child of CallsPage (CallPage has its own,
+// one level further down).
+QStackedWidget *topStack(CallsPage &page) {
+  return page.findChild<QStackedWidget *>(QString(), Qt::FindDirectChildrenOnly);
+}
+
+void submitJoinCode(CallsPage &page, const QString &code, const QString &passcode) {
+  page.findChild<QLineEdit *>("joinCodeEdit")->setText(code);
+  page.findChild<QLineEdit *>("joinPasscodeEdit")->setText(passcode);
+  page.findChild<QPushButton *>("joinByCodeButton")->click();
+}
+
+// Joins by code, confirms on the device-check screen, and drives the fake
+// provider all the way to Connected. Returns the (CallsPage-owned) session.
+pcm::video::VideoSession *joinAndConnect(CallsPage &page, FakeVideoProvider *&fakeProvider) {
+  submitJoinCode(page, "code-1", "123456");
+  if (!QTest::qWaitFor([&fakeProvider]() { return fakeProvider != nullptr; }, 2000)) {
+    ADD_FAILURE() << "token never arrived";
+    return nullptr;
+  }
+  // VideoSession takes Qt ownership of its provider (setParent(this)), so
+  // the provider's parent IS the session CallsPage just constructed.
+  auto *session = qobject_cast<pcm::video::VideoSession *>(fakeProvider->parent());
+  if (session == nullptr) {
+    ADD_FAILURE() << "provider is not owned by a VideoSession";
+    return nullptr;
+  }
+  QSignalSpy stateSpy(session, &pcm::video::VideoSession::stateChanged);
+  page.findChild<QPushButton *>("joinButton")->click();
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fakeProvider->simulateJoined();
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
+  fakeProvider->simulateRemoteParticipantConnected();
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Connected);
+  return ::testing::Test::HasFatalFailure() ? nullptr : session;
+}
+
+} // namespace
+
+// Fixwave group 1, bug 1: CallPage emitted leaveRequested when its Leave
+// button was clicked, but nothing connected to it, so VideoSession::leave()
+// was never reachable from the UI.
+TEST(CallsPageTest, LeaveButtonLeavesTheActiveSession) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+  FakeVideoProvider *fakeProvider = nullptr;
+  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+    fakeProvider = new FakeVideoProvider();
+    return fakeProvider;
+  });
+
+  auto *session = joinAndConnect(page, fakeProvider);
+  ASSERT_NE(session, nullptr);
+  ASSERT_EQ(fakeProvider->mLeaveCallCount, 0);
+  QSignalSpy stateSpy(session, &pcm::video::VideoSession::stateChanged);
+
+  auto *leaveButton = page.findChild<QPushButton *>("leaveButton");
+  ASSERT_NE(leaveButton, nullptr);
+  leaveButton->click();
+
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Leaving);
+  EXPECT_EQ(fakeProvider->mLeaveCallCount, 1);
+  fakeProvider->simulateLeft();
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Ended);
+  EXPECT_EQ(topStack(page)->currentWidget(), page.findChild<CallEntryWidget *>());
+}
+
+// Fixwave group 1, bug 4: the tokenReceived connection used to be
+// (re-)made inside the per-click handler with Qt::UniqueConnection, which
+// Qt cannot honour for a lambda — it asserts in Debug builds and, in
+// release builds, stacks one more duplicate connection per click, so the
+// Nth token started N joins at once.
+TEST(CallsPageTest, RepeatedJoinByCodeSubmissionsStartExactlyOneJoinPerToken) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+  int providersConstructed = 0;
+  page.setVideoProviderFactoryForTesting([&providersConstructed]() -> pcm::video::VideoProvider * {
+    ++providersConstructed;
+    return new FakeVideoProvider();
+  });
+
+  for (int attempt = 1; attempt <= 3; ++attempt) {
+    submitJoinCode(page, "code-1", "123456");
+    ASSERT_TRUE(QTest::qWaitFor([&]() { return providersConstructed == attempt; }, 2000));
+    // Give any duplicate (stacked) connection time to also fire.
+    QTest::qWait(100);
+    ASSERT_EQ(providersConstructed, attempt) << "after join attempt " << attempt;
+  }
+}
+
+TEST(CallsPageTest, RepeatedOwnMeetingJoinsStartExactlyOneJoinPerToken) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/true, &deviceManager, &client);
+  page.setBearerCredentialProvider([]() { return QStringLiteral("bearer-1"); });
+  page.setUpcomingMeetings({{"ref-1", "14:00", QDateTime::currentDateTime(), true, 7}});
+  int providersConstructed = 0;
+  page.setVideoProviderFactoryForTesting([&providersConstructed]() -> pcm::video::VideoProvider * {
+    ++providersConstructed;
+    return new FakeVideoProvider();
+  });
+  QSignalSpy eventSpy(&page, &CallsPage::eventKnownForCurrentCall);
+
+  for (int attempt = 1; attempt <= 3; ++attempt) {
+    page.findChild<QPushButton *>("joinOwnMeetingButton_ref-1")->click();
+    ASSERT_TRUE(QTest::qWaitFor([&]() { return providersConstructed == attempt; }, 2000));
+    QTest::qWait(100);
+    ASSERT_EQ(providersConstructed, attempt) << "after join attempt " << attempt;
+  }
+  EXPECT_EQ(eventSpy.count(), 3);
+}
+
+// Fixwave group 1, bug 3: a failed token request (wrong passcode, expired
+// invitation, network error) used to be completely silent.
+TEST(CallsPageTest, TokenRequestFailureIsShownOnEntryFormAndClearedOnRetry) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(403, R"({"error": "invalid_passcode"})");
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+  page.setVideoProviderFactoryForTesting([]() -> pcm::video::VideoProvider * { return new FakeVideoProvider(); });
+
+  submitJoinCode(page, "code-1", "000000");
+  auto *errorLabel = page.findChild<QLabel *>("joinErrorLabel");
+  ASSERT_NE(errorLabel, nullptr);
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return !errorLabel->isHidden(); }, 2000));
+  EXPECT_EQ(errorLabel->text(), QStringLiteral("invalid_passcode"));
+  EXPECT_EQ(topStack(page)->currentWidget(), page.findChild<CallEntryWidget *>());
+
+  // A retry must not leave the previous attempt's error lingering.
+  server.setNextResponse(200, kTokenResponse);
+  submitJoinCode(page, "code-1", "123456");
+  EXPECT_TRUE(errorLabel->isHidden());
+  EXPECT_TRUE(errorLabel->text().isEmpty());
+}
+
+// Fixwave group 1, bug 3: CallsPage switches straight back to the entry
+// form when a call ends (CallPage::callEnded), so the join-failure reason
+// must also be surfaced there, not only on CallPage's (immediately hidden)
+// ended screen.
+TEST(CallsPageTest, JoinFailureReasonIsShownOnEntryFormAfterCallEnds) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+  FakeVideoProvider *fakeProvider = nullptr;
+  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+    fakeProvider = new FakeVideoProvider();
+    return fakeProvider;
+  });
+
+  submitJoinCode(page, "code-1", "123456");
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider != nullptr; }, 2000));
+  auto *session = qobject_cast<pcm::video::VideoSession *>(fakeProvider->parent());
+  ASSERT_NE(session, nullptr);
+  QSignalSpy stateSpy(session, &pcm::video::VideoSession::stateChanged);
+  page.findChild<QPushButton *>("joinButton")->click();
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fakeProvider->simulateJoinFailed("Failed to connect to the video server.");
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Failed);
+
+  EXPECT_EQ(topStack(page)->currentWidget(), page.findChild<CallEntryWidget *>());
+  auto *errorLabel = page.findChild<QLabel *>("joinErrorLabel");
+  ASSERT_NE(errorLabel, nullptr);
+  EXPECT_FALSE(errorLabel->isHidden());
+  EXPECT_EQ(errorLabel->text(), QStringLiteral("Failed to connect to the video server."));
+}
+
+// Fixwave group 1, bug 5: an "Open Meeting" click or a forwarded sessio://
+// link arriving mid-call used to switch CallsPage back to the entry form,
+// hiding the live call.
+TEST(CallsPageTest, PrefillAndPreselectAreIgnoredWhileACallIsActive) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/true, &deviceManager, &client);
+  FakeVideoProvider *fakeProvider = nullptr;
+  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+    fakeProvider = new FakeVideoProvider();
+    return fakeProvider;
+  });
+
+  auto *session = joinAndConnect(page, fakeProvider);
+  ASSERT_NE(session, nullptr);
+  auto *callPage = page.findChild<CallPage *>();
+  ASSERT_EQ(topStack(page)->currentWidget(), callPage);
+
+  page.prefillJoinCode("code-2", "654321");
+  EXPECT_EQ(topStack(page)->currentWidget(), callPage);
+  EXPECT_EQ(page.findChild<QLineEdit *>("joinCodeEdit")->text(), QStringLiteral("code-1"));
+  EXPECT_EQ(page.findChild<QLineEdit *>("joinPasscodeEdit")->text(), QStringLiteral("123456"));
+
+  page.preselectOwnMeeting("ref-1");
+  EXPECT_EQ(topStack(page)->currentWidget(), callPage);
+
+  // Once the call has ended, both work again.
+  QSignalSpy stateSpy(session, &pcm::video::VideoSession::stateChanged);
+  page.findChild<QPushButton *>("leaveButton")->click();
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Leaving);
+  fakeProvider->simulateLeft();
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Ended);
+  page.prefillJoinCode("code-2", "654321");
+  EXPECT_EQ(topStack(page)->currentWidget(), page.findChild<CallEntryWidget *>());
+  EXPECT_EQ(page.findChild<QLineEdit *>("joinCodeEdit")->text(), QStringLiteral("code-2"));
+}
+
+TEST(CallsPageTest, PrefillSwitchesToEntryFormWhenNoCallIsActive) {
+  FakeTokenBackendServer server;
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+
+  page.prefillJoinCode("code-3", "111111");
+  EXPECT_EQ(topStack(page)->currentWidget(), page.findChild<CallEntryWidget *>());
+  EXPECT_EQ(page.findChild<QLineEdit *>("joinCodeEdit")->text(), QStringLiteral("code-3"));
 }
 
 int main(int argc, char **argv) {
