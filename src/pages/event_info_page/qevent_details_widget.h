@@ -6,6 +6,7 @@
 #include <QComboBox>
 #include <QDate>
 #include <QDateEdit>
+#include <QDateTime>
 #include <QHash>
 #include <QLabel>
 #include <QLineEdit>
@@ -141,6 +142,7 @@ private slots:
   void onRecurrenceTypeChanged();
   void onMeetingUrlChanged(const QString &url);
   void onMeetingCreated(pcm::meeting::MeetingDescriptor descriptor);
+  void onMeetingCreateFailed(const QString &error);
   void onOpenMeetingClicked();
   void onCopyMeetingUrlClicked();
   void onCopyMeetingInviteClicked();
@@ -165,7 +167,22 @@ private:
   // --- Validation & Data Collection ---
   bool validateInput();
   [[nodiscard]] DuckEvent collectEventData() const;
-  void updateMeetingViaCoordinator();
+  /**
+   * @brief Brings mCurrentEvent's meeting in line with the form's online/provider
+   * selection.
+   * @return true when the meeting fields are settled and the caller may save
+   * right away; false when an asynchronous LiveKit create is in flight and
+   * onMeetingCreated/onMeetingCreateFailed will finish (or abort) the apply.
+   */
+  [[nodiscard]] bool updateMeetingViaCoordinator();
+  /**
+   * @brief Second half of an apply: emits the save and leaves edit mode.
+   * Runs synchronously from onApplyClicked, or from onMeetingCreated once an
+   * asynchronous LiveKit create has completed.
+   */
+  void finishApply(bool isCreatingNewEvent);
+  void supersedeCurrentLiveKitMeeting();
+  void cancelSupersededLiveKitMeeting();
   void applyProviderFields(std::optional<pcm::meeting::ProviderKind> kind,
                            const QString &meetingRef,
                            const std::optional<QString> &invitationState,
@@ -207,6 +224,21 @@ private:
   bool mCreatingNewEvent = false;
   bool mDialogMode = false;
   bool mSaveAccepted = true;
+  // An apply is waiting for an asynchronous LiveKit meeting create; the save
+  // is deferred until onMeetingCreated (or dropped by onMeetingCreateFailed).
+  bool mPendingMeetingCreation = false;
+  // Set only around the synchronous ExternalUrl createMeeting call, so a
+  // meetingCreated this widget did not ask for is ignored.
+  bool mAwaitingSyncMeetingResult = false;
+  // LiveKit meeting replaced (or dropped) by the apply in progress. It is
+  // invalidated on the backend only after the replacement has been saved, so
+  // a failed create or a rejected save never leaves the stored event pointing
+  // at an already-invalidated meeting.
+  QString mSupersededLiveKitMeetingRef;
+  // Schedule the current LiveKit meeting was created for; re-applying with an
+  // unchanged schedule keeps the meeting (and the client's invitation) as is.
+  QDateTime mMeetingScheduledStart;
+  QDateTime mMeetingScheduledEnd;
   std::function<std::optional<DuckEvent>(const DuckEvent &)> mConflictChecker;
   QPointer<pcm::meeting::MeetingCoordinator> mMeetingCoordinator;
 };

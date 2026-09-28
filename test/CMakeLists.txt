@@ -281,6 +281,28 @@ target_link_libraries(Sessio_meeting_coordinator_tests PRIVATE
 set_target_properties(Sessio_meeting_coordinator_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_meeting_coordinator_tests)
 
+# QEventDetailsWidget meeting tests (real MeetingCoordinator against the fake
+# token-backend HTTP server, same double as Sessio_livekit_meeting_provider_tests)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network Test)
+add_executable(Sessio_qevent_details_widget_tests
+    fake_token_backend_server.h
+    qevent_details_widget_tests.cpp
+)
+target_include_directories(Sessio_qevent_details_widget_tests PRIVATE
+    ${qlementine_SOURCE_DIR}/lib/include
+)
+target_link_libraries(Sessio_qevent_details_widget_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Widgets
+    Qt6::Network
+    Qt6::Test
+    Sessio_event_page
+    Sessio_meeting
+)
+set_target_properties(Sessio_qevent_details_widget_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_qevent_details_widget_tests)
+
 # Backup tests
 find_package(reflectcpp CONFIG REQUIRED)
 find_package(unofficial-sodium CONFIG REQUIRED)

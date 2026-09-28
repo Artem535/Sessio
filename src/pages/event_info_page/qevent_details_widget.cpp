@@ -18,6 +18,7 @@
 #include <QTimeZone>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <utility>
 
 Q_LOGGING_CATEGORY(logEventDetails, "pcm.EventDetails")
 
@@ -189,7 +190,9 @@ void QEventDetailsWidget::initUi() {
 
   mOnlineSessionSwitch = new oclero::qlementine::Switch(this);
   mOnlineSessionSwitch->setText(tr("Online session"));
+  mOnlineSessionSwitch->setObjectName(QStringLiteral("onlineSessionSwitch"));
   mProviderKindControl = new oclero::qlementine::SegmentedControl(this);
+  mProviderKindControl->setObjectName(QStringLiteral("providerKindControl"));
   mProviderKindControl->addItem(tr("External link"), {}, {},
                                 QStringLiteral("external_url"));
   mProviderKindControl->addItem(tr("LiveKit"), {}, {}, QStringLiteral("livekit"));
@@ -287,6 +290,7 @@ void QEventDetailsWidget::initUi() {
 
   mMeetingUrlLabel = new QLabel(tr("Meeting link"), this);
   mMeetingUrlEdit = new oclero::qlementine::LineEdit(this);
+  mMeetingUrlEdit->setObjectName(QStringLiteral("meetingUrlEdit"));
   mMeetingUrlEdit->setPlaceholderText(tr("https://..."));
   mMeetingUrlEdit->setIcon(QIcon(":/icons/calendar-solid-full.svg"));
   mUI->formLayout->insertRow(onlineSectionRow + 5, mMeetingUrlLabel,
@@ -299,6 +303,9 @@ void QEventDetailsWidget::initUi() {
   mOpenMeetingButton = new QPushButton(tr("Open"), mMeetingActionsWidget);
   mCopyMeetingUrlButton = new QPushButton(tr("Copy link"), mMeetingActionsWidget);
   mCopyMeetingInviteButton = new QPushButton(tr("Copy invite"), mMeetingActionsWidget);
+  mOpenMeetingButton->setObjectName(QStringLiteral("openMeetingButton"));
+  mCopyMeetingUrlButton->setObjectName(QStringLiteral("copyMeetingUrlButton"));
+  mCopyMeetingInviteButton->setObjectName(QStringLiteral("copyMeetingInviteButton"));
   meetingActionsLayout->addWidget(mOpenMeetingButton);
   meetingActionsLayout->addWidget(mCopyMeetingUrlButton);
   meetingActionsLayout->addWidget(mCopyMeetingInviteButton);
@@ -466,6 +473,12 @@ void QEventDetailsWidget::loadEvent(QEventItem *event,
                            << "ID:" << event->getId();
 
   mCurrentEvent = event;
+  // A newly loaded event starts with no apply in flight; its stored schedule
+  // is what its LiveKit meeting (if any) was created for.
+  mPendingMeetingCreation = false;
+  mSupersededLiveKitMeetingRef.clear();
+  mMeetingScheduledStart = event->getStartTime();
+  mMeetingScheduledEnd = event->getEndTime();
   mUI->mTitle->setText(event->getTitle());
   mUI->mEventDate->setDate(event->getStartTime().date());
   mUI->mTimeFrom->setTime(event->getStartTime().time());
@@ -694,20 +707,64 @@ void QEventDetailsWidget::setMeetingCoordinator(pcm::meeting::MeetingCoordinator
   if (mMeetingCoordinator) {
     disconnect(mMeetingCoordinator, &pcm::meeting::MeetingCoordinator::meetingCreated, this,
               &QEventDetailsWidget::onMeetingCreated);
+    disconnect(mMeetingCoordinator, &pcm::meeting::MeetingCoordinator::meetingCreateFailed,
+               this, &QEventDetailsWidget::onMeetingCreateFailed);
   }
   mMeetingCoordinator = coordinator;
   if (mMeetingCoordinator) {
     connect(mMeetingCoordinator, &pcm::meeting::MeetingCoordinator::meetingCreated, this,
             &QEventDetailsWidget::onMeetingCreated);
+    connect(mMeetingCoordinator, &pcm::meeting::MeetingCoordinator::meetingCreateFailed, this,
+            &QEventDetailsWidget::onMeetingCreateFailed);
   }
 }
 
 void QEventDetailsWidget::onMeetingCreated(const pcm::meeting::MeetingDescriptor descriptor) {
+  if (!mPendingMeetingCreation && !mAwaitingSyncMeetingResult) {
+    // The coordinator is shared: this result belongs to a request this widget
+    // did not make (or to an apply that was canceled meanwhile).
+    qCDebug(logEventDetails) << "Ignoring a meeting-created result with no apply in flight";
+    return;
+  }
   if (!mCurrentEvent) {
+    mPendingMeetingCreation = false;
+    updateButtonState();
     return;
   }
   applyProviderFields(descriptor.kind, descriptor.meetingRef, descriptor.invitationState,
                      descriptor.meetingUrl.value_or(QString{}));
+
+  if (!mPendingMeetingCreation) {
+    // Synchronous ExternalUrl result: onApplyClicked continues the apply.
+    updateButtonState();
+    return;
+  }
+
+  // The deferred half of onApplyClicked: the LiveKit meeting now exists, so
+  // the event can be saved with its real meetingRef. mCreatingNewEvent is
+  // still the value it had when Apply was clicked — only finishApply resets
+  // it.
+  mPendingMeetingCreation = false;
+  mMeetingScheduledStart = mCurrentEvent->getStartTime();
+  mMeetingScheduledEnd = mCurrentEvent->getEndTime();
+  updateButtonState();
+  finishApply(mCreatingNewEvent);
+}
+
+void QEventDetailsWidget::onMeetingCreateFailed(const QString &error) {
+  if (!mPendingMeetingCreation) {
+    qCWarning(logEventDetails) << "Meeting create failed with no apply in flight:" << error;
+    return;
+  }
+
+  // The event is not saved: the user stays in the form and can retry Apply or
+  // switch the online session/provider off. Any LiveKit meeting this apply
+  // meant to replace is still the stored one, so it is left untouched.
+  mPendingMeetingCreation = false;
+  updateButtonState();
+  qCWarning(logEventDetails) << "LiveKit meeting create failed:" << error;
+  QMessageBox::warning(this, tr(": ERROR_TITLE"),
+                       tr("Failed to create the LiveKit meeting: %1").arg(error));
 }
 
 void QEventDetailsWidget::applyProviderFields(
@@ -724,6 +781,10 @@ QEventItem *QEventDetailsWidget::currentEvent() const {
 }
 
 void QEventDetailsWidget::onApplyClicked() {
+  if (mPendingMeetingCreation) {
+    // An earlier Apply is still waiting for its LiveKit meeting.
+    return;
+  }
   if (!validateInput()) {
     return;
   }
@@ -763,23 +824,34 @@ void QEventDetailsWidget::onApplyClicked() {
     mCurrentEvent->setCanceledBy(
         mUI->mCanceledByComboBox->currentData().toString());
     mCurrentEvent->setOnline(mOnlineSessionSwitch->isChecked());
-    updateMeetingViaCoordinator();
     mCurrentEvent->setBufferBeforeMinutes(mBufferBeforeSpinBox->value());
     mCurrentEvent->setBufferAfterMinutes(mBufferAfterSpinBox->value());
-  }
 
-  if (mCurrentEvent) {
-    const auto eventData = mCurrentEvent->toEvent();
+    // The conflict check only depends on the schedule and buffers set above,
+    // so it runs before any meeting side effect: a rejected apply must not
+    // create (or replace) a backend meeting.
     if (mConflictChecker) {
-      if (const auto conflict = mConflictChecker(eventData); conflict.has_value()) {
+      if (const auto conflict = mConflictChecker(mCurrentEvent->toEvent());
+          conflict.has_value()) {
         QMessageBox::warning(this, tr(": ERROR_TITLE"), conflictWarningText(*conflict));
         return;
       }
     }
+
+    if (!updateMeetingViaCoordinator()) {
+      // A LiveKit create is in flight: onMeetingCreated saves the event once
+      // the meeting exists, onMeetingCreateFailed keeps the form open instead.
+      // updateButtonState() disables Apply while mPendingMeetingCreation is
+      // set, so the apply cannot be submitted twice.
+      updateButtonState();
+      return;
+    }
   }
 
-  const bool isCreatingNewEvent = mCreatingNewEvent;
+  finishApply(mCreatingNewEvent);
+}
 
+void QEventDetailsWidget::finishApply(const bool isCreatingNewEvent) {
   // Emit signal to save the event
   mSaveAccepted = true;
   emit provideEventSave(mCurrentEvent.data());
@@ -792,6 +864,9 @@ void QEventDetailsWidget::onApplyClicked() {
                          tr("Failed to save event to database"));
     return;
   }
+
+  // The save went through, so the meeting it replaced can go now.
+  cancelSupersededLiveKitMeeting();
 
   if (isCreatingNewEvent && mCurrentEvent) {
     delete mCurrentEvent.data();
@@ -808,6 +883,10 @@ void QEventDetailsWidget::onApplyClicked() {
 
 void QEventDetailsWidget::onCancelClicked() {
   mInEditMode = false;
+  // Nothing is saved, so a late meeting result must not finish this apply,
+  // and the stored meeting stays the event's meeting.
+  mPendingMeetingCreation = false;
+  mSupersededLiveKitMeetingRef.clear();
   if (mCreatingNewEvent && mCurrentEvent) {
     delete mCurrentEvent.data();
     mCurrentEvent.clear();
@@ -934,8 +1013,19 @@ void QEventDetailsWidget::updateButtonState() const {
   const bool isValid = !mUI->mTitle->text().trimmed().isEmpty() &&
                        mUI->mTimeTo->time() > mUI->mTimeFrom->time();
   if (auto *applyButton = mUI->mButtonBox->button(QDialogButtonBox::Apply)) {
-    applyButton->setEnabled(isValid);
+    applyButton->setEnabled(isValid && !mPendingMeetingCreation);
   }
+
+  if (mCurrentEvent &&
+      mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit) {
+    // A LiveKit meeting has no browser URL: Open joins it natively by its
+    // meetingRef (onOpenMeetingClicked), and there is no external link to copy.
+    mOpenMeetingButton->setEnabled(!mCurrentEvent->meetingRef().isEmpty());
+    mCopyMeetingUrlButton->setEnabled(false);
+    mCopyMeetingInviteButton->setEnabled(false);
+    return;
+  }
+
   const bool hasValidMeetingUrl = pcm::meeting::isValidMeetingUrl(mMeetingUrlEdit->text());
   mOpenMeetingButton->setEnabled(hasValidMeetingUrl);
   mCopyMeetingUrlButton->setEnabled(hasValidMeetingUrl);
@@ -1002,7 +1092,10 @@ bool QEventDetailsWidget::validateInput() {
                          tr(": EVENT_DURATION_INVALID_ERROR"));
     return false;
   }
-  if (mOnlineSessionSwitch->isChecked()) {
+  // The meeting link only applies to the external-link provider; a LiveKit
+  // meeting is created by the backend and has no link to enter.
+  const bool wantsLiveKit = mProviderKindControl->currentIndex() == 1;
+  if (mOnlineSessionSwitch->isChecked() && !wantsLiveKit) {
     const auto meetingUrl = mMeetingUrlEdit->text().trimmed();
     if (meetingUrl.isEmpty()) {
       const auto answer = QMessageBox::question(
@@ -1027,23 +1120,19 @@ bool QEventDetailsWidget::validateInput() {
   return true;
 }
 
-void QEventDetailsWidget::updateMeetingViaCoordinator() {
+bool QEventDetailsWidget::updateMeetingViaCoordinator() {
   if (!mCurrentEvent) {
-    return;
+    return true;
   }
 
-  const bool wasOnline = mCurrentEvent->providerKind().has_value();
   const bool isOnline = mOnlineSessionSwitch->isChecked();
 
   if (!isOnline) {
-    if (wasOnline && mMeetingCoordinator) {
-      // Fire-and-forget: ExternalUrl/LiveKit cancel() are both no-ops/errors
-      // that carry no state the UI needs to react to synchronously.
-      mMeetingCoordinator->cancelMeeting(*mCurrentEvent->providerKind(),
-                                         mCurrentEvent->meetingRef());
-    }
+    // A LiveKit meeting is invalidated once the offline event is saved
+    // (finishApply); an external link has nothing to cancel.
+    supersedeCurrentLiveKitMeeting();
     applyProviderFields(std::nullopt, QString{}, std::nullopt, QString{});
-    return;
+    return true;
   }
 
   if (!mMeetingCoordinator) {
@@ -1053,34 +1142,83 @@ void QEventDetailsWidget::updateMeetingViaCoordinator() {
     const auto trimmedUrl = mMeetingUrlEdit->text().trimmed();
     applyProviderFields(pcm::meeting::ProviderKind::ExternalUrl, trimmedUrl,
                        mCurrentEvent->invitationState(), trimmedUrl);
-    return;
+    return true;
   }
 
+  const bool hasLiveKitMeeting =
+      mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit &&
+      !mCurrentEvent->meetingRef().isEmpty();
   const bool wantsLiveKit = mProviderKindControl->currentIndex() == 1;
   if (wantsLiveKit) {
+    // onApplyClicked has already written the form's schedule to mCurrentEvent.
+    const auto start = mCurrentEvent->getStartTime();
+    const auto end = mCurrentEvent->getEndTime();
+    if (hasLiveKitMeeting && start == mMeetingScheduledStart && end == mMeetingScheduledEnd) {
+      // Nothing meeting-relevant changed (e.g. only the title was edited):
+      // keep the existing meeting, so the invitation already sent to the
+      // client stays valid and no backend meeting is orphaned.
+      return true;
+    }
+
+    // The existing meeting's schedule no longer matches: replace it. The old
+    // one is invalidated only after the replacement has been saved.
+    supersedeCurrentLiveKitMeeting();
+
     // LiveKitMeetingProvider::create makes a real, asynchronous POST
-    // /v1/meetings call (unlike ExternalUrlMeetingProvider::create below):
-    // onMeetingCreated applies the descriptor once that call completes, not
-    // before this function returns.
-    const auto startIso = QDateTime(mUI->mEventDate->date(), mUI->mTimeFrom->time(),
-                                    QTimeZone::systemTimeZone())
-                              .toUTC()
-                              .toString(Qt::ISODate);
-    const auto endIso = QDateTime(mUI->mEventDate->date(), mUI->mTimeTo->time(),
-                                  QTimeZone::systemTimeZone())
-                            .toUTC()
-                            .toString(Qt::ISODate);
+    // /v1/meetings call (unlike ExternalUrlMeetingProvider::create below), so
+    // the save waits for onMeetingCreated / onMeetingCreateFailed.
+    // mPendingMeetingCreation is set before the call so the result is handled
+    // correctly even if a provider ever delivered it synchronously.
+    mPendingMeetingCreation = true;
     mMeetingCoordinator->createMeeting(
         pcm::meeting::ProviderKind::LiveKit,
-        {.scheduledStartIso = startIso, .scheduledEndIso = endIso});
-    return;
+        {.scheduledStartIso = start.toUTC().toString(Qt::ISODate),
+         .scheduledEndIso = end.toUTC().toString(Qt::ISODate)});
+    return false;
+  }
+
+  // Switching a LiveKit event to an external link drops its LiveKit meeting.
+  if (hasLiveKitMeeting) {
+    supersedeCurrentLiveKitMeeting();
   }
 
   // ExternalUrlMeetingProvider::create emits `created` synchronously (Task 2),
   // and onMeetingCreated (connected once, in setMeetingCoordinator) applies the
   // descriptor to mCurrentEvent before this call returns.
+  mAwaitingSyncMeetingResult = true;
   mMeetingCoordinator->createMeeting(pcm::meeting::ProviderKind::ExternalUrl,
                                      {.rawMeetingUrl = mMeetingUrlEdit->text()});
+  mAwaitingSyncMeetingResult = false;
+  return true;
+}
+
+void QEventDetailsWidget::supersedeCurrentLiveKitMeeting() {
+  if (!mCurrentEvent ||
+      mCurrentEvent->providerKind() != pcm::meeting::ProviderKind::LiveKit ||
+      mCurrentEvent->meetingRef().isEmpty()) {
+    return;
+  }
+  // Keep the first one since the last save: that is the meeting the stored
+  // event still references.
+  if (mSupersededLiveKitMeetingRef.isEmpty()) {
+    mSupersededLiveKitMeetingRef = mCurrentEvent->meetingRef();
+  }
+}
+
+void QEventDetailsWidget::cancelSupersededLiveKitMeeting() {
+  const auto supersededRef = std::exchange(mSupersededLiveKitMeetingRef, QString{});
+  if (supersededRef.isEmpty() || !mMeetingCoordinator) {
+    return;
+  }
+  // A failed replacement leaves the old meeting as the event's meeting.
+  if (mCurrentEvent &&
+      mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit &&
+      mCurrentEvent->meetingRef() == supersededRef) {
+    return;
+  }
+  // Fire-and-forget: the event no longer references this meeting, and a
+  // failed invalidate carries no state the UI needs to react to.
+  mMeetingCoordinator->cancelMeeting(pcm::meeting::ProviderKind::LiveKit, supersededRef);
 }
 
 DuckEvent QEventDetailsWidget::collectEventData() const {

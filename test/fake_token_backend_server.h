@@ -31,6 +31,9 @@ public:
   QString lastMethod;
   QString lastAuthorizationHeader;
   QByteArray lastBody;
+  // Every request path in arrival order, for tests that need the sequence
+  // (e.g. a create followed by an invalidate) rather than just the last one.
+  QStringList requestPaths;
 
 private slots:
   void onNewConnection() {
@@ -56,6 +59,7 @@ private slots:
         return;
       }
       lastBody = mBuffer.mid(bodyStart);
+      requestPaths.append(lastPath);
 
       const QByteArray statusLine =
           mStatusCode == 200 ? "HTTP/1.1 200 OK\r\n" : "HTTP/1.1 " + QByteArray::number(mStatusCode) + " Error\r\n";
