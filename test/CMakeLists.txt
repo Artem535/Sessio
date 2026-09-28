@@ -496,6 +496,28 @@ target_link_libraries(Sessio_client_mode_window_tests PRIVATE
 )
 gtest_discover_tests(Sessio_client_mode_window_tests)
 
+# Sessio URL parsing tests
+add_executable(Sessio_sessio_url_tests sessio_url_tests.cpp)
+target_link_libraries(Sessio_sessio_url_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_app
+)
+gtest_discover_tests(Sessio_sessio_url_tests)
+
+# Single-instance guard tests
+find_package(Qt6 REQUIRED COMPONENTS Network Test)
+add_executable(Sessio_single_instance_guard_tests single_instance_guard_tests.cpp)
+target_link_libraries(Sessio_single_instance_guard_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Network
+    Qt6::Test
+    Sessio_app
+)
+set_target_properties(Sessio_single_instance_guard_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_single_instance_guard_tests)
+
 # ClientModeWindow structural tests
 add_test(NAME ClientModeWindowHeaderHasNoDatabaseDependency
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/client_mode_window_structural_test.sh

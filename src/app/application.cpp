@@ -98,8 +98,26 @@ void clearSensitiveString(std::string *text) {
 
 Application::Application() = default;
 
-int Application::run(int argc, char *argv[]) {
+int Application::run(int argc, char *argv[], const QString &launchUrl) {
   QApplication app(argc, argv);
+
+  // Single-instance guard: must run before any other setup below (style,
+  // translations, config read, role dialog, window construction) so a second
+  // launch exits as fast as possible. It can't run before QApplication
+  // itself is constructed — QLocalServer/QLocalSocket need a
+  // QCoreApplication-derived event-loop instance to already exist (the
+  // guard's own tests construct QCoreApplication first for the same reason)
+  // — but everything else in this function is far heavier than constructing
+  // QApplication, so a secondary instance still exits well before any of it
+  // runs.
+  mSingleInstanceGuard = std::make_unique<SingleInstanceGuard>();
+  if (!mSingleInstanceGuard->isPrimaryInstance()) {
+    if (!launchUrl.isEmpty()) {
+      mSingleInstanceGuard->forwardToPrimaryInstance(launchUrl);
+    }
+    return 0;
+  }
+
   app.setQuitOnLastWindowClosed(false);
   migrateLegacyAppConfigDirectory(QStringLiteral("PsyClientManager"),
                                   QStringLiteral("Sessio"));
@@ -195,17 +213,24 @@ int Application::run(int argc, char *argv[]) {
   mTokenBackendBaseUrl = QString::fromStdString(conf.token_backend_base_url);
   mTokenClient = std::make_unique<pcm::tokenclient::TokenBackendClient>(mTokenBackendBaseUrl);
 
+  // A later launch forwards its sessio:// URL here once this instance's
+  // window exists; handleJoinLink() itself checks which of mMainWindow /
+  // mClientModeWindow got constructed, so this connection is safe to make
+  // before the role branch below actually builds either window.
+  connect(mSingleInstanceGuard.get(), &SingleInstanceGuard::urlReceivedFromSecondaryInstance,
+          this, &Application::handleJoinLink);
+
   if (*role == config::AppRole::Client) {
-    return runClientFlow(app);
+    return runClientFlow(app, launchUrl);
   }
-  return runSpecialistFlow(app);
+  return runSpecialistFlow(app, launchUrl);
 }
 
 // Client mode: a join-by-code window and nothing else. Deliberately never
 // constructs Database, QClientModel, MeetingCoordinator, AutoBackupScheduler,
 // the tray/notifications or app-lock, and never runs a pending backup restore
 // or reads the specialist bearer credential from the keychain.
-int Application::runClientFlow(QApplication &app) {
+int Application::runClientFlow(QApplication &app, const QString &launchUrl) {
   // run() turns this off because the specialist flow keeps running in the
   // system tray; Client mode has no tray icon, so closing its only window
   // must end the process.
@@ -213,11 +238,14 @@ int Application::runClientFlow(QApplication &app) {
   mClientModeWindow =
       std::make_unique<ClientModeWindow>(mDeviceManager.get(), mTokenClient.get());
   mClientModeWindow->show();
+  if (!launchUrl.isEmpty()) {
+    handleJoinLink(launchUrl);
+  }
   return app.exec();
 }
 
 // Specialist mode: the full application.
-int Application::runSpecialistFlow(QApplication &app) {
+int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) {
   restorePendingBackup();
 
   mDb = std::make_shared<database::Database>(mConf);
@@ -254,6 +282,9 @@ int Application::runSpecialistFlow(QApplication &app) {
   connect(&mNotificationTimer, &QTimer::timeout, this, &Application::refreshUpcomingMeetings);
 
   mMainWindow->show();
+  if (!launchUrl.isEmpty()) {
+    handleJoinLink(launchUrl);
+  }
 
   return app.exec();
 }
@@ -353,6 +384,34 @@ void Application::refreshUpcomingMeetings() {
   }
   mUpcomingMeetings = meetings;
   callsPage->setUpcomingMeetings(mUpcomingMeetings);
+}
+
+// Handles a sessio://join?code=...&passcode=... URL, whether it came from
+// this instance's own launch argument or was forwarded by a second instance
+// via mSingleInstanceGuard. Exactly one of mMainWindow / mClientModeWindow is
+// constructed by the time this can run (after the role branch in run()), so
+// this only ever touches the window for the role this process is actually
+// running as.
+void Application::handleJoinLink(const QString &url) {
+  const auto link = parseSessioJoinUrl(url);
+  if (!link.has_value()) {
+    return;
+  }
+  if (mMainWindow) {
+    mMainWindow->show();
+    mMainWindow->raise();
+    if (auto *callsPage = dynamic_cast<CallsPage *>(mMainWindow->getPage(MainWindow::Pages::calls))) {
+      callsPage->prefillJoinCode(link->code, link->passcode);
+    }
+  } else if (mClientModeWindow) {
+    mClientModeWindow->show();
+    mClientModeWindow->raise();
+    // ClientModeWindow's CallsPage is its central widget — reuse the same
+    // dynamic_cast pattern via centralWidget() rather than a page lookup.
+    if (auto *callsPage = dynamic_cast<CallsPage *>(mClientModeWindow->centralWidget())) {
+      callsPage->prefillJoinCode(link->code, link->passcode);
+    }
+  }
 }
 
 void Application::restorePendingBackup() {

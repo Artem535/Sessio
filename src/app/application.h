@@ -25,6 +25,8 @@
 #include "qclient_model.h"
 #include "event_info.h"
 #include "meeting_coordinator.h"
+#include "sessio_url.h"
+#include "single_instance_guard.h"
 #include "token_backend_client.h"
 #include "token_backend_credential_store.h"
 
@@ -38,7 +40,7 @@ class Application final : public QObject {
 
 public:
   Application();
-  int run(int argc, char *argv[]);
+  int run(int argc, char *argv[], const QString &launchUrl = QString());
   bool eventFilter(QObject *watched, QEvent *event) override;
 
 private slots:
@@ -60,10 +62,15 @@ private:
   void lockApplication();
   void notifyUpcomingSeriesOccurrences(int64_t nowMs, int64_t windowEndMs);
   void restorePendingBackup();
-  int runSpecialistFlow(QApplication &app);
-  int runClientFlow(QApplication &app);
+  int runSpecialistFlow(QApplication &app, const QString &launchUrl);
+  int runClientFlow(QApplication &app, const QString &launchUrl);
   void loadBearerCredential();
   void refreshUpcomingMeetings();
+  void handleJoinLink(const QString &url);
+
+  // Constructed first, before any other setup, so a second launch can be
+  // detected and forwarded as cheaply as possible.
+  std::unique_ptr<SingleInstanceGuard> mSingleInstanceGuard;
 
   // Shared by both role flows. Declared before the windows so they outlive
   // the CallsPage instances that hold raw pointers to them (members are
