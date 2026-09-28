@@ -126,6 +126,13 @@ void CallsPage::setVideoProviderFactoryForTesting(std::function<pcm::video::Vide
 }
 
 void CallsPage::startJoin(const QString &url, const QString &token) {
+  // Bug 2 (fixwave group 5): a rapid double-click, or a stale/delayed token
+  // response arriving after a call is already under way, must not destroy
+  // the in-progress VideoSession/provider out from under it. preselectOwnMeeting()/
+  // prefillJoinCode() already guard the same way.
+  if (hasActiveCall()) {
+    return;
+  }
   // Fix round 1: the url/token are stashed for later rather than joined
   // immediately — the actual VideoSession::join() call now happens only once
   // the user confirms on CallPage's device-check screen (see the
@@ -143,6 +150,13 @@ void CallsPage::startJoin(const QString &url, const QString &token) {
   connect(mSession.get(), &pcm::video::VideoSession::joinFailed, mEntryWidget,
           &CallEntryWidget::showError);
   connect(mSession.get(), &pcm::video::VideoSession::reconnectFailed, mEntryWidget,
+          &CallEntryWidget::showError);
+  // Bug 1 (fixwave group 5): connectionLost() is the most common real-world
+  // failure (a live call dropping mid-call), and this is the connection
+  // that's actually visible — CallPage's own ended screen shows the same
+  // reason, but callEnded() immediately switches this page back to the entry
+  // form (see the constructor), hiding it.
+  connect(mSession.get(), &pcm::video::VideoSession::connectionLost, mEntryWidget,
           &CallEntryWidget::showError);
   mCallPage->attachSession(mSession.get());
   mStack->setCurrentWidget(mCallPage);

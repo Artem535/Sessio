@@ -4,7 +4,19 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QStackedWidget>
+#include <QTimer>
 #include <QVBoxLayout>
+
+namespace {
+// How long CallPage's transient media-error banner stays visible before
+// auto-hiding. A device error (camera/mic/publish failure) is a one-off
+// notice, not a persistent condition the UI needs to keep nagging about —
+// but long enough for a user who glances away for a moment to still catch
+// it. Chosen within the 5-8s range suggested for this kind of transient,
+// non-fatal notice; not user-configurable since there's no evidence a fixed
+// value here needs to be.
+constexpr int kMediaErrorBannerAutoHideMs = 6000;
+} // namespace
 
 CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : QWidget(parent) {
   auto *outer = new QVBoxLayout(this);
@@ -97,6 +109,18 @@ void CallPage::buildConnectedScreen() {
   controls->addWidget(leaveButton);
   layout->addLayout(controls);
 
+  // Non-fatal, transient local-device notice — see mMediaErrorBanner's doc
+  // comment in call_page.h. Hidden by default; onMediaError() shows it and
+  // sets its text, independent of mReconnectingBanner and the ended screen.
+  // Added last (after `controls`) so setSidePanelToggleVisible()'s hard-coded
+  // mConnectedView->layout()->itemAt(1) lookup — which means "the controls
+  // row" — keeps working unchanged.
+  mMediaErrorBanner = new QLabel(mConnectedView);
+  mMediaErrorBanner->setObjectName("mediaErrorBanner");
+  mMediaErrorBanner->setWordWrap(true);
+  mMediaErrorBanner->setVisible(false);
+  layout->addWidget(mMediaErrorBanner);
+
   mStack->addWidget(mConnectedView);
 }
 
@@ -114,6 +138,13 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
   connect(session, &pcm::video::VideoSession::joinFailed, this, &CallPage::onSessionFailureReason);
   connect(session, &pcm::video::VideoSession::reconnectFailed, this,
           &CallPage::onSessionFailureReason);
+  // connectionLost() is terminal too (the state machine has already moved to
+  // Failed by the time a UI observer sees this) — it reuses the exact same
+  // ended-screen mechanism as joinFailed()/reconnectFailed().
+  connect(session, &pcm::video::VideoSession::connectionLost, this,
+          &CallPage::onSessionFailureReason);
+  // mediaError() never ends the call — its own, separate, non-fatal banner.
+  connect(session, &pcm::video::VideoSession::mediaError, this, &CallPage::onMediaError);
   updateRemoteVideoWidget();
 }
 
@@ -159,6 +190,23 @@ void CallPage::onSessionFailureReason(const QString &reason) {
   if (mStack->currentWidget() == mEndedScreen) {
     refreshEndedReason();
   }
+}
+
+void CallPage::onMediaError(const QString &reason) {
+  // Testable synchronously: the banner's text/visibility are set here,
+  // immediately, before any auto-hide timer fires — a test can assert on
+  // them right after emitting mediaError() with no need to wait.
+  mMediaErrorBanner->setText(reason);
+  mMediaErrorBanner->setVisible(true);
+  QTimer::singleShot(kMediaErrorBannerAutoHideMs, this, [this, reason]() {
+    // Only auto-hide if this is still the most recent reason shown — a
+    // fresh mediaError() (or another call to this slot) in the meantime
+    // already reset the timer's effect by overwriting the text, so an
+    // earlier timer firing later must not blank a newer message.
+    if (mMediaErrorBanner->text() == reason) {
+      mMediaErrorBanner->setVisible(false);
+    }
+  });
 }
 
 void CallPage::refreshEndedReason() {

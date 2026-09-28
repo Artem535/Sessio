@@ -266,15 +266,20 @@ target_link_libraries(Sessio_livekit_meeting_provider_tests PRIVATE
 set_target_properties(Sessio_livekit_meeting_provider_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_livekit_meeting_provider_tests)
 
-# Meeting coordinator tests
-find_package(Qt6 REQUIRED COMPONENTS Test)
+# Meeting coordinator tests (also exercised against a fake token-backend
+# HTTP server, same double as Sessio_livekit_meeting_provider_tests, to prove
+# setTokenBackendBaseUrl()/setBearerCredential() retarget the LiveKit
+# provider it holds — fixwave group 5, bug 3)
+find_package(Qt6 REQUIRED COMPONENTS Network Test)
 add_executable(Sessio_meeting_coordinator_tests
+    fake_token_backend_server.h
     meeting_coordinator_tests.cpp
     meeting_provider_test_listener.h
 )
 target_link_libraries(Sessio_meeting_coordinator_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
+    Qt6::Network
     Qt6::Test
     Sessio_meeting
 )

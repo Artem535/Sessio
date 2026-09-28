@@ -23,6 +23,14 @@ public:
   virtual void create(const MeetingCreateRequest &request) = 0;
   virtual void cancel(const QString &meetingRef) = 0;
 
+  // Live settings propagation: called by MeetingCoordinator when the
+  // specialist changes the token-backend URL or the keychain bearer
+  // credential changes, without requiring an app restart. Default no-ops so
+  // a provider with nothing to propagate (ExternalUrlMeetingProvider) needs
+  // no changes at all; LiveKitMeetingProvider overrides both.
+  virtual void setTokenBackendBaseUrl(const QString &baseUrl) { Q_UNUSED(baseUrl); }
+  virtual void setBearerCredential(const QString &credential) { Q_UNUSED(credential); }
+
 signals:
   void created(pcm::meeting::MeetingDescriptor descriptor);
   void createFailed(QString error);

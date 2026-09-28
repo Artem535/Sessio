@@ -246,6 +246,58 @@ TEST_F(VideoSessionTest, MediaErrorDoesNotAffectStateMachine) {
   EXPECT_EQ(session.state(), pcm::video::VideoSessionState::Connected);
 }
 
+// Fixwave group 5, bug 1: VideoProvider::connectionLost()'s reason string
+// used to be dropped on the floor — the state machine already reached
+// Failed (see ConnectionLostFromConnectedGoesDirectlyToFailed above), but
+// nothing relayed WHY. This proves VideoSession now relays it with a
+// dedicated signal, the same pattern as joinFailed().
+TEST_F(VideoSessionTest, ConnectionLostRelaysReasonWithSameSignal) {
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake);
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+  QSignalSpy connectionLostSpy(&session, &pcm::video::VideoSession::connectionLost);
+
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateJoined();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
+  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
+
+  fake->simulateConnectionLost("room ended");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Failed);
+
+  ASSERT_EQ(connectionLostSpy.count(), 1);
+  EXPECT_EQ(connectionLostSpy.first().at(0).toString(), QStringLiteral("room ended"));
+}
+
+// Fixwave group 5, bug 1: mediaError() had no relay and no UI surface at
+// all — this proves VideoSession now relays it, and confirms (again, this
+// time via the relayed signal rather than state()) that it does not touch
+// the state machine.
+TEST_F(VideoSessionTest, MediaErrorRelaysReasonAndDoesNotChangeState) {
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake);
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+  QSignalSpy mediaErrorSpy(&session, &pcm::video::VideoSession::mediaError);
+
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateJoined();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
+  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
+
+  // The relay connection is direct (same thread), so it has already fired
+  // synchronously by the time simulateMediaError() returns — no event-loop
+  // wait needed, matching how JoinFailureTransitionsToFailed above asserts
+  // on joinFailedSpy immediately after waitForState() settles.
+  fake->simulateMediaError("camera unplugged");
+  ASSERT_EQ(mediaErrorSpy.count(), 1);
+  EXPECT_EQ(mediaErrorSpy.first().at(0).toString(), QStringLiteral("camera unplugged"));
+  EXPECT_EQ(session.state(), pcm::video::VideoSessionState::Connected);
+}
+
 TEST_F(VideoSessionTest, LeaveFromConnectedTransitionsToEnded) {
   auto *fake = new pcm::video::test::FakeVideoProvider();
   pcm::video::VideoSession session(fake);

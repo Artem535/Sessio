@@ -1,5 +1,6 @@
 #include "meeting_coordinator.h"
 #include "meeting_provider_test_listener.h"
+#include "fake_token_backend_server.h"
 
 #include <QCoreApplication>
 #include <QSignalSpy>
@@ -73,6 +74,67 @@ TEST(MeetingCoordinatorTest, DispatchesCancelToLiveKitProviderWhichFails) {
   ASSERT_TRUE(failedSpy.wait(2000));
   ASSERT_TRUE(listener.lastCancelError.has_value());
   EXPECT_FALSE(listener.lastCancelError->isEmpty());
+}
+
+// Fixwave group 5, bug 3: without a restart, the event editor's LiveKit
+// meeting create/cancel flow used to keep targeting whatever token-backend
+// base URL/bearer credential MeetingCoordinator was constructed with, even
+// after the specialist changed either in Settings. Proves the coordinator's
+// setters actually retarget the LiveKit provider it holds.
+TEST(MeetingCoordinatorTest, SetTokenBackendBaseUrlRetargetsLiveKitProvider) {
+  FakeTokenBackendServer firstServer;
+  firstServer.setNextResponse(200, R"({"error": "should not be hit"})");
+  FakeTokenBackendServer secondServer;
+  secondServer.setNextResponse(200, R"({
+    "meetingRef": "ref-3", "invitationUrl": "https://x/code-3", "passcode": "444444",
+    "scheduledStart": "2026-10-01T10:00:00Z", "scheduledEnd": "2026-10-01T10:50:00Z"
+  })");
+
+  pcm::meeting::MeetingCoordinator coordinator(firstServer.baseUrl().toString(), "bearer-secret");
+  coordinator.setTokenBackendBaseUrl(secondServer.baseUrl().toString());
+
+  QSignalSpy createdSpy(&coordinator, &pcm::meeting::MeetingCoordinator::meetingCreated);
+  coordinator.createMeeting(pcm::meeting::ProviderKind::LiveKit,
+                            {.scheduledStartIso = "2026-10-01T10:00:00Z",
+                             .scheduledEndIso = "2026-10-01T10:50:00Z"});
+
+  ASSERT_TRUE(createdSpy.wait(2000));
+  EXPECT_TRUE(firstServer.lastPath.isEmpty()) << "the old base URL must not have been contacted";
+  EXPECT_EQ(secondServer.lastPath, QStringLiteral("/v1/meetings"));
+}
+
+TEST(MeetingCoordinatorTest, SetBearerCredentialRetargetsLiveKitProviderAuthorizationHeader) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(204, QByteArray());
+
+  pcm::meeting::MeetingCoordinator coordinator(server.baseUrl().toString(), "old-secret");
+  coordinator.setBearerCredential("new-secret");
+
+  QSignalSpy canceledSpy(&coordinator, &pcm::meeting::MeetingCoordinator::meetingCanceled);
+  coordinator.cancelMeeting(pcm::meeting::ProviderKind::LiveKit, "ref-9");
+
+  ASSERT_TRUE(canceledSpy.wait(2000));
+  EXPECT_EQ(server.lastAuthorizationHeader, QStringLiteral("Bearer new-secret"));
+}
+
+// ExternalUrlMeetingProvider's override is the base class's no-op default —
+// calling the coordinator's setters must be harmless and leave its behavior
+// completely unchanged.
+TEST(MeetingCoordinatorTest, SettersDoNotAffectExternalUrlProviderBehavior) {
+  pcm::meeting::MeetingCoordinator coordinator("https://old.example.invalid", "old-secret");
+  coordinator.setTokenBackendBaseUrl("https://new.example.invalid");
+  coordinator.setBearerCredential("new-secret");
+
+  MeetingSignalListener listener;
+  QObject::connect(&coordinator, &pcm::meeting::MeetingCoordinator::meetingCreated, &listener,
+                    &MeetingSignalListener::onCreated);
+
+  coordinator.createMeeting(pcm::meeting::ProviderKind::ExternalUrl,
+                            {.rawMeetingUrl = "https://meet.example.invalid/room-9"});
+
+  ASSERT_TRUE(listener.lastDescriptor.has_value());
+  EXPECT_EQ(listener.lastDescriptor->kind, pcm::meeting::ProviderKind::ExternalUrl);
+  EXPECT_EQ(listener.lastDescriptor->meetingRef, QStringLiteral("https://meet.example.invalid/room-9"));
 }
 
 int main(int argc, char **argv) {

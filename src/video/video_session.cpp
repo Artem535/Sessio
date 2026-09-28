@@ -62,6 +62,15 @@ VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseco
   connect(mProvider, &VideoProvider::joinFailed, this,
           [this](const QString &reason) { emit joinFailed(reason); });
 
+  // Pure relays: the state machine's own connectionLost() transitions are
+  // wired separately below (unchanged from before this relay was added),
+  // and mediaError() never touches the state machine at all — see both
+  // signals' doc comments in video_session.h.
+  connect(mProvider, &VideoProvider::connectionLost, this,
+          [this](const QString &reason) { emit connectionLost(reason); });
+  connect(mProvider, &VideoProvider::mediaError, this,
+          [this](const QString &reason) { emit mediaError(reason); });
+
   // reconnecting() is the SDK's own "actively retrying" signal — the only
   // thing that should drive the Reconnecting state. connectionLost() is
   // terminal (the SDK has given up, whether or not it ever reconnected

@@ -58,6 +58,11 @@ private:
   void updateRemoteVideoWidget();
   void onSessionFailureReason(const QString &reason);
   void refreshEndedReason();
+  // Shows mMediaErrorBanner with `reason` and starts its auto-hide timer.
+  // Never touches mLastFailureReason/mEndedReasonLabel/mStack — a
+  // mediaError() is a non-fatal, transient local-device notice, not a call
+  // end (see VideoProvider::mediaError()'s doc comment).
+  void onMediaError(const QString &reason);
 
   QStackedWidget *mStack{nullptr};
   DeviceCheckWidget *mDeviceCheck{nullptr};
@@ -73,6 +78,12 @@ private:
   // provider (e.g. when CallsPage replaces its session) while still shown.
   QPointer<QWidget> mActiveRemoteVideoWidget;
   QWidget *mReconnectingBanner{nullptr};
+  // Non-fatal, transient local-device notice (VideoSession::mediaError()) —
+  // distinct from mReconnectingBanner (connection state) and mEndedReasonLabel
+  // (a terminal reason on the ended screen): the call keeps running while
+  // this is shown. Lives on the connected screen, hidden by default, shown
+  // by onMediaError() and auto-hidden a few seconds later by a QTimer.
+  QLabel *mMediaErrorBanner{nullptr};
   QWidget *mEndedScreen{nullptr};
   QLabel *mEndedReasonLabel{nullptr};
   QWidget *mSidePanelHost{nullptr};

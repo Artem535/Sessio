@@ -30,4 +30,16 @@ void MeetingCoordinator::cancelMeeting(const ProviderKind kind, const QString &m
   providerFor(kind)->cancel(meetingRef);
 }
 
+void MeetingCoordinator::setTokenBackendBaseUrl(const QString &baseUrl) {
+  for (auto *provider : mProviders) {
+    provider->setTokenBackendBaseUrl(baseUrl);
+  }
+}
+
+void MeetingCoordinator::setBearerCredential(const QString &credential) {
+  for (auto *provider : mProviders) {
+    provider->setBearerCredential(credential);
+  }
+}
+
 } // namespace pcm::meeting

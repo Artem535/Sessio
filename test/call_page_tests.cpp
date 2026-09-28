@@ -273,6 +273,71 @@ TEST(CallPageTest, ToleratesEmbeddedRemoteVideoWidgetDestroyedWithItsProvider) {
   delete newVideo.data();
 }
 
+// Fixwave group 5, bug 1: a live call dropping (VideoProvider::connectionLost())
+// used to bounce the user straight to the ended screen with zero explanation
+// — the reason string was dropped on the floor. Reuses the exact same
+// onSessionFailureReason()/mEndedReasonLabel mechanism as joinFailed()/
+// reconnectFailed(), proven by the two tests above.
+TEST(CallPageTest, ConnectionLostReasonIsShownOnEndedScreen) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  QSignalSpy stateSpy(&session, &VideoSession::stateChanged);
+
+  session.join("wss://x", "token");
+  waitForState(session, stateSpy, VideoSessionState::Joining);
+  provider->simulateJoined();
+  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
+  provider->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, VideoSessionState::Connected);
+
+  provider->simulateConnectionLost("room ended");
+  waitForState(session, stateSpy, VideoSessionState::Failed);
+
+  auto *reasonLabel = page.findChild<QLabel *>("endedReasonLabel");
+  ASSERT_NE(reasonLabel, nullptr);
+  EXPECT_FALSE(reasonLabel->isHidden());
+  EXPECT_EQ(reasonLabel->text(), QStringLiteral("room ended"));
+}
+
+// Fixwave group 5, bug 1: mediaError() (a local camera/mic/publish problem)
+// used to have no UI surface at all — a broken camera/mic failed silently.
+// This proves the new banner shows the reason WITHOUT switching away from
+// the connected screen and WITHOUT touching the ended-screen mechanism,
+// since the call itself keeps going.
+TEST(CallPageTest, MediaErrorShowsBannerWithoutEndingCallOrTouchingEndedReason) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  QSignalSpy stateSpy(&session, &VideoSession::stateChanged);
+
+  session.join("wss://x", "token");
+  waitForState(session, stateSpy, VideoSessionState::Joining);
+  provider->simulateJoined();
+  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
+  provider->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, VideoSessionState::Connected);
+
+  auto *banner = page.findChild<QLabel *>("mediaErrorBanner");
+  ASSERT_NE(banner, nullptr);
+  EXPECT_TRUE(banner->isHidden());
+
+  provider->simulateMediaError("camera unplugged");
+
+  // Observable immediately, before any auto-hide timer could possibly fire.
+  EXPECT_FALSE(banner->isHidden());
+  EXPECT_EQ(banner->text(), QStringLiteral("camera unplugged"));
+  EXPECT_EQ(session.state(), VideoSessionState::Connected);
+  auto *reasonLabel = page.findChild<QLabel *>("endedReasonLabel");
+  ASSERT_NE(reasonLabel, nullptr);
+  EXPECT_TRUE(reasonLabel->isHidden());
+  EXPECT_TRUE(reasonLabel->text().isEmpty());
+}
+
 TEST(CallPageTest, SidePanelToggleHiddenByDefaultUntilMadeVisible) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);

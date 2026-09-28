@@ -19,6 +19,12 @@ public:
   void create(const MeetingCreateRequest &request) override;
   void cancel(const QString &meetingRef) override;
 
+  // Live settings propagation (see MeetingProvider's doc comment). Both
+  // read fresh by create()/cancel() on every call — mClient/mBearerCredential
+  // are plain state, never cached elsewhere.
+  void setTokenBackendBaseUrl(const QString &baseUrl) override;
+  void setBearerCredential(const QString &credential) override;
+
 private:
   std::unique_ptr<pcm::tokenclient::TokenBackendClient> mClient;
   QString mBearerCredential;

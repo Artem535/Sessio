@@ -31,4 +31,12 @@ void LiveKitMeetingProvider::cancel(const QString &meetingRef) {
   mClient->requestInvalidateMeeting(mBearerCredential, meetingRef);
 }
 
+void LiveKitMeetingProvider::setTokenBackendBaseUrl(const QString &baseUrl) {
+  mClient->setBaseUrl(baseUrl);
+}
+
+void LiveKitMeetingProvider::setBearerCredential(const QString &credential) {
+  mBearerCredential = credential;
+}
+
 } // namespace pcm::meeting

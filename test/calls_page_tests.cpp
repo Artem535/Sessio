@@ -383,6 +383,72 @@ TEST(CallsPageTest, PrefillAndPreselectAreIgnoredWhileACallIsActive) {
   EXPECT_EQ(page.findChild<QLineEdit *>("joinCodeEdit")->text(), QStringLiteral("code-2"));
 }
 
+// Fixwave group 5, bug 1: connectionLost() (a live call dropping mid-call —
+// the most common real-world LiveKit failure mode) is the most visible
+// connection to surface it on, since CallPage's own ended screen is hidden
+// the instant callEnded() switches this page back to the entry form.
+TEST(CallsPageTest, ConnectionLostReasonIsShownOnEntryFormAfterCallEnds) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+  FakeVideoProvider *fakeProvider = nullptr;
+  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+    fakeProvider = new FakeVideoProvider();
+    return fakeProvider;
+  });
+
+  auto *session = joinAndConnect(page, fakeProvider);
+  ASSERT_NE(session, nullptr);
+  QSignalSpy stateSpy(session, &pcm::video::VideoSession::stateChanged);
+
+  fakeProvider->simulateConnectionLost("room ended");
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Failed);
+
+  EXPECT_EQ(topStack(page)->currentWidget(), page.findChild<CallEntryWidget *>());
+  auto *errorLabel = page.findChild<QLabel *>("joinErrorLabel");
+  ASSERT_NE(errorLabel, nullptr);
+  EXPECT_FALSE(errorLabel->isHidden());
+  EXPECT_EQ(errorLabel->text(), QStringLiteral("room ended"));
+}
+
+// Fixwave group 5, bug 2: startJoin() had no hasActiveCall() guard, unlike
+// preselectOwnMeeting()/prefillJoinCode() — a stale/delayed token response
+// (or a rapid double submission) arriving while a call is already under way
+// used to destroy the in-progress VideoSession/provider out from under it.
+TEST(CallsPageTest, SecondTokenArrivalWhileCallActiveIsANoOp) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+  FakeVideoProvider *fakeProvider = nullptr;
+  int providersConstructed = 0;
+  page.setVideoProviderFactoryForTesting([&]() -> pcm::video::VideoProvider * {
+    ++providersConstructed;
+    fakeProvider = new FakeVideoProvider();
+    return fakeProvider;
+  });
+
+  auto *session = joinAndConnect(page, fakeProvider);
+  ASSERT_NE(session, nullptr);
+  EXPECT_EQ(providersConstructed, 1);
+  auto *callPage = page.findChild<CallPage *>();
+  ASSERT_EQ(topStack(page)->currentWidget(), callPage);
+
+  // A second token arriving mid-call (stale response or rapid re-submit)
+  // must not tear down the active session/provider or switch the page away.
+  server.setNextResponse(200, kTokenResponse);
+  submitJoinCode(page, "code-2", "654321");
+  QTest::qWait(200);
+
+  EXPECT_EQ(providersConstructed, 1) << "startJoin() must have been a no-op while a call is active";
+  EXPECT_EQ(topStack(page)->currentWidget(), callPage);
+  EXPECT_EQ(session->state(), pcm::video::VideoSessionState::Connected);
+  EXPECT_EQ(qobject_cast<pcm::video::VideoSession *>(fakeProvider->parent()), session);
+}
+
 TEST(CallsPageTest, PrefillSwitchesToEntryFormWhenNoCallIsActive) {
   FakeTokenBackendServer server;
   pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());

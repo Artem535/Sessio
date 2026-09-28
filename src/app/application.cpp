@@ -329,6 +329,19 @@ void Application::loadBearerCredential() {
             mBearerCredentialReadDone = true;
             if (ok) {
               mBearerCredential = credential;
+              // Bug 3 (fixwave group 5): this lambda fires both for the very
+              // first startup read (here mMeetingCoordinator is still null —
+              // runSpecialistFlow() constructs it only after
+              // loadBearerCredential() returns, see that function's body)
+              // and for every later re-read triggered by onSettingsSaved()
+              // (where it already exists). The null check makes both cases
+              // correct: nothing to propagate to yet on the first read
+              // (MeetingCoordinator's constructor takes the current
+              // mBearerCredential by value instead), and live propagation on
+              // every later read.
+              if (mMeetingCoordinator) {
+                mMeetingCoordinator->setBearerCredential(mBearerCredential);
+              }
             } else {
               qCWarning(logApplication)
                   << "Token-backend bearer credential unavailable:" << error;
@@ -470,6 +483,16 @@ void Application::applyTokenBackendBaseUrl(const QString &baseUrl) {
   mTokenBackendBaseUrl = baseUrl;
   if (mTokenClient) {
     mTokenClient->setBaseUrl(mTokenBackendBaseUrl);
+  }
+  // Bug 3 (fixwave group 5): mMeetingCoordinator is null in Client mode
+  // (never constructed there) and also null here if this runs before
+  // runSpecialistFlow() constructs it — but applyTokenBackendBaseUrl() is
+  // only ever called from handleJoinLink() (Client mode only, guarded by
+  // mClientModeWindow && !mMainWindow there) and onSettingsSaved() (only
+  // reachable once mMainWindow/mMeetingCoordinator already exist), so this
+  // guard is a defensive no-op in both current call sites, not a real gap.
+  if (mMeetingCoordinator) {
+    mMeetingCoordinator->setTokenBackendBaseUrl(mTokenBackendBaseUrl);
   }
 }
 
