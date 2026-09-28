@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-09-28
+
+### Added
+
+- Native in-app LiveKit call UI: a new "Звонки" (Calls) tab in the
+  specialist `MainWindow`, listing the practitioner's own scheduled
+  meetings and offering a "join by code" form for someone else's meeting.
+  Clicking "Open Meeting" on a LiveKit event now routes to this tab
+  instead of opening an external URL.
+- A new, minimal `ClientModeWindow` shell that hosts the same call-entry
+  widget for a pure client with no therapist account — structurally free
+  of any `Database`/client-record/notes dependency.
+- A first-launch role-selection dialog ("Я специалист" / "Я клиент") that
+  persists the chosen `AppRole` in `Config` and determines which window
+  shell `Application` constructs on every subsequent launch; a
+  low-visibility "Я специалист" action lets a former client switch roles
+  and restart.
+- The full call experience driven by `VideoSession`: a device-check /
+  pre-join screen with camera preview and camera/microphone/speaker
+  selection, connected/reconnecting/ended/failed call screens with mute,
+  camera toggle, device switching, and a "Завершить" control, plus a
+  "Заметки" side panel (reusing the existing client notes editor) that is
+  only available to the specialist, never exposed to the remote party.
+- `sessio://` deep links for joining a call directly from a shared
+  invitation, registered as the default handler for the `sessio` URL
+  scheme on Windows (installer registry entry), macOS
+  (`CFBundleURLTypes`), and Linux (`.desktop` MIME association); links
+  received while Sessio is already running are forwarded to the single
+  running instance via a local single-instance guard.
+- LiveKit meetings can now be created and canceled from the event editor
+  when LiveKit is selected as the online-session provider (previously a
+  non-functional stub).
+- A keychain-backed credential store and settings section for configuring
+  the LiveKit token-backend URL and access credential.
+
 ## [0.1.34] - 2026-09-26
 
 ### Added

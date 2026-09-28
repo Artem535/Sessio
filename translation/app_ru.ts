@@ -96,6 +96,56 @@
     </message>
 </context>
 <context>
+    <name>CallEntryWidget</name>
+    <message>
+        <source>Your meetings today</source>
+        <translation>Ваши встречи сегодня</translation>
+    </message>
+    <message>
+        <source>Join another meeting</source>
+        <translation>Присоединиться к чужой встрече</translation>
+    </message>
+    <message>
+        <source>Invitation code or link</source>
+        <translation>Код приглашения или ссылка</translation>
+    </message>
+    <message>
+        <source>Passcode (6 digits)</source>
+        <translation>Код доступа (6 цифр)</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Подключиться</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Войти</translation>
+    </message>
+</context>
+<context>
+    <name>CallPage</name>
+    <message>
+        <source>Connecting...</source>
+        <translation>Подключение...</translation>
+    </message>
+    <message>
+        <source>Reconnecting...</source>
+        <translation>Переподключение...</translation>
+    </message>
+    <message>
+        <source>Call ended.</source>
+        <translation>Звонок завершён.</translation>
+    </message>
+    <message>
+        <source>Leave</source>
+        <translation>Завершить</translation>
+    </message>
+    <message>
+        <source>Notes</source>
+        <translation>Заметки</translation>
+    </message>
+</context>
+<context>
     <name>ClientChartsWidget</name>
     <message>
         <source>Months</source>
@@ -266,6 +316,13 @@
     <message>
         <source>: CHARTS_PLACEHOLDER</source>
         <translation>В следующем обновлении будут графики</translation>
+    </message>
+</context>
+<context>
+    <name>ClientModeWindow</name>
+    <message>
+        <source>Sessio</source>
+        <translation>Sessio</translation>
     </message>
 </context>
 <context>
@@ -479,6 +536,13 @@
     </message>
 </context>
 <context>
+    <name>DeviceCheckWidget</name>
+    <message>
+        <source>Join</source>
+        <translation>Присоединиться</translation>
+    </message>
+</context>
+<context>
     <name>EventDetails</name>
     <message>
         <source>: EVENT_DETAILS_TITLE</source>
@@ -589,6 +653,10 @@
     <message>
         <source>Notes</source>
         <translation>Заметки</translation>
+    </message>
+    <message>
+        <source>Calls</source>
+        <translation>Звонки</translation>
     </message>
     <message>
         <source>Back to clients</source>
@@ -770,6 +838,14 @@
         <translation>Онлайн-сессия</translation>
     </message>
     <message>
+        <source>External link</source>
+        <translation>Внешняя ссылка</translation>
+    </message>
+    <message>
+        <source>LiveKit</source>
+        <translation>LiveKit</translation>
+    </message>
+    <message>
         <source>Scheduled</source>
         <translation>Запланирована</translation>
     </message>
@@ -804,6 +880,10 @@
     <message>
         <source>Session format</source>
         <translation>Формат сессии</translation>
+    </message>
+    <message>
+        <source>Provider</source>
+        <translation>Провайдер</translation>
     </message>
     <message>
         <source>Overlaps with an existing event, %1.</source>
@@ -1270,6 +1350,25 @@ See you!</source>
     </message>
 </context>
 <context>
+    <name>RoleSelectionDialog</name>
+    <message>
+        <source>Welcome to Sessio</source>
+        <translation>Добро пожаловать в Sessio</translation>
+    </message>
+    <message>
+        <source>Who are you?</source>
+        <translation>Кто вы?</translation>
+    </message>
+    <message>
+        <source>I&apos;m a specialist</source>
+        <translation>Я специалист</translation>
+    </message>
+    <message>
+        <source>I&apos;m a client</source>
+        <translation>Я клиент</translation>
+    </message>
+</context>
+<context>
     <name>SettingsDialog</name>
     <message>
         <source>Default buffer before</source>
@@ -1338,6 +1437,10 @@ See you!</source>
     <message>
         <source>Language</source>
         <translation>Язык</translation>
+    </message>
+    <message>
+        <source>LiveKit</source>
+        <translation>LiveKit</translation>
     </message>
     <message>
         <source>System default</source>
@@ -1558,6 +1661,34 @@ See you!</source>
     <message>
         <source>Timeline colors</source>
         <translation>Цвета таймлайна</translation>
+    </message>
+    <message>
+        <source>Token backend</source>
+        <translation>Токен-бэкенд</translation>
+    </message>
+    <message>
+        <source>Token backend URL</source>
+        <translation>URL токен-бэкенда</translation>
+    </message>
+    <message>
+        <source>Base URL of the LiveKit token-issuing backend.</source>
+        <translation>Базовый адрес бэкенда, выдающего токены LiveKit.</translation>
+    </message>
+    <message>
+        <source>https://token-backend.example.com</source>
+        <translation>https://token-backend.example.com</translation>
+    </message>
+    <message>
+        <source>Bearer credential</source>
+        <translation>Bearer-токен</translation>
+    </message>
+    <message>
+        <source>Stored in the system keychain. Leave blank to keep the current credential.</source>
+        <translation>Хранится в системном хранилище ключей. Оставьте поле пустым, чтобы сохранить текущие учётные данные.</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Сохранить</translation>
     </message>
     <message>
         <source>Set application lock</source>

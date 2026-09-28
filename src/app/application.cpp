@@ -134,7 +134,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  app.setApplicationVersion("0.1.34");
+  app.setApplicationVersion("0.2.0");
   app.setWindowIcon(QIcon(":/icons/brain-solid-full.svg"));
   auto *style = new oclero::qlementine::QlementineStyle(&app);
   app.setStyle(style);

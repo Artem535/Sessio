@@ -96,6 +96,56 @@
     </message>
 </context>
 <context>
+    <name>CallEntryWidget</name>
+    <message>
+        <source>Your meetings today</source>
+        <translation>Your meetings today</translation>
+    </message>
+    <message>
+        <source>Join another meeting</source>
+        <translation>Join another meeting</translation>
+    </message>
+    <message>
+        <source>Invitation code or link</source>
+        <translation>Invitation code or link</translation>
+    </message>
+    <message>
+        <source>Passcode (6 digits)</source>
+        <translation>Passcode (6 digits)</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Connect</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Join</translation>
+    </message>
+</context>
+<context>
+    <name>CallPage</name>
+    <message>
+        <source>Connecting...</source>
+        <translation>Connecting...</translation>
+    </message>
+    <message>
+        <source>Reconnecting...</source>
+        <translation>Reconnecting...</translation>
+    </message>
+    <message>
+        <source>Call ended.</source>
+        <translation>Call ended.</translation>
+    </message>
+    <message>
+        <source>Leave</source>
+        <translation>Leave</translation>
+    </message>
+    <message>
+        <source>Notes</source>
+        <translation>Notes</translation>
+    </message>
+</context>
+<context>
     <name>ClientChartsWidget</name>
     <message>
         <source>Months</source>
@@ -266,6 +316,13 @@
     <message>
         <source>: CHARTS_PLACEHOLDER</source>
         <translation>Charts will be available in the next update</translation>
+    </message>
+</context>
+<context>
+    <name>ClientModeWindow</name>
+    <message>
+        <source>Sessio</source>
+        <translation>Sessio</translation>
     </message>
 </context>
 <context>
@@ -478,6 +535,13 @@
     </message>
 </context>
 <context>
+    <name>DeviceCheckWidget</name>
+    <message>
+        <source>Join</source>
+        <translation>Join</translation>
+    </message>
+</context>
+<context>
     <name>EventDetails</name>
     <message>
         <source>: EVENT_DETAILS_TITLE</source>
@@ -588,6 +652,10 @@
     <message>
         <source>Show inactive</source>
         <translation>Show inactive</translation>
+    </message>
+    <message>
+        <source>Calls</source>
+        <translation>Calls</translation>
     </message>
     <message>
         <source>Back to clients</source>
@@ -769,6 +837,14 @@
         <translation>Online session</translation>
     </message>
     <message>
+        <source>External link</source>
+        <translation>External link</translation>
+    </message>
+    <message>
+        <source>LiveKit</source>
+        <translation>LiveKit</translation>
+    </message>
+    <message>
         <source>Scheduled</source>
         <translation>Scheduled</translation>
     </message>
@@ -803,6 +879,10 @@
     <message>
         <source>Session format</source>
         <translation>Session format</translation>
+    </message>
+    <message>
+        <source>Provider</source>
+        <translation>Provider</translation>
     </message>
     <message>
         <source>Overlaps with an existing event, %1.</source>
@@ -1269,6 +1349,25 @@ See you!</translation>
     </message>
 </context>
 <context>
+    <name>RoleSelectionDialog</name>
+    <message>
+        <source>Welcome to Sessio</source>
+        <translation>Welcome to Sessio</translation>
+    </message>
+    <message>
+        <source>Who are you?</source>
+        <translation>Who are you?</translation>
+    </message>
+    <message>
+        <source>I&apos;m a specialist</source>
+        <translation>I&apos;m a specialist</translation>
+    </message>
+    <message>
+        <source>I&apos;m a client</source>
+        <translation>I&apos;m a client</translation>
+    </message>
+</context>
+<context>
     <name>SettingsDialog</name>
     <message>
         <source>Default buffer before</source>
@@ -1337,6 +1436,10 @@ See you!</translation>
     <message>
         <source>Language</source>
         <translation>Language</translation>
+    </message>
+    <message>
+        <source>LiveKit</source>
+        <translation>LiveKit</translation>
     </message>
     <message>
         <source>System default</source>
@@ -1557,6 +1660,34 @@ See you!</translation>
     <message>
         <source>Timeline colors</source>
         <translation>Timeline colors</translation>
+    </message>
+    <message>
+        <source>Token backend</source>
+        <translation>Token backend</translation>
+    </message>
+    <message>
+        <source>Token backend URL</source>
+        <translation>Token backend URL</translation>
+    </message>
+    <message>
+        <source>Base URL of the LiveKit token-issuing backend.</source>
+        <translation>Base URL of the LiveKit token-issuing backend.</translation>
+    </message>
+    <message>
+        <source>https://token-backend.example.com</source>
+        <translation>https://token-backend.example.com</translation>
+    </message>
+    <message>
+        <source>Bearer credential</source>
+        <translation>Bearer credential</translation>
+    </message>
+    <message>
+        <source>Stored in the system keychain. Leave blank to keep the current credential.</source>
+        <translation>Stored in the system keychain. Leave blank to keep the current credential.</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Save</translation>
     </message>
     <message>
         <source>Set application lock</source>
