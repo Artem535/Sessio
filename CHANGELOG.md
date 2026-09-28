@@ -16,15 +16,17 @@ All notable changes to this project will be documented in this file.
   of any `Database`/client-record/notes dependency.
 - A first-launch role-selection dialog ("Я специалист" / "Я клиент") that
   persists the chosen `AppRole` in `Config` and determines which window
-  shell `Application` constructs on every subsequent launch; a
-  low-visibility "Я специалист" action lets a former client switch roles
-  and restart.
+  shell `Application` constructs on every subsequent launch. There is no
+  in-app way back: once a role is chosen, only a manual edit of
+  `Config.yaml` (or a fresh install) returns to the selection dialog.
 - The full call experience driven by `VideoSession`: a device-check /
   pre-join screen with camera preview and camera/microphone/speaker
-  selection, connected/reconnecting/ended/failed call screens with mute,
-  camera toggle, device switching, and a "Завершить" control, plus a
-  "Заметки" side panel (reusing the existing client notes editor) that is
-  only available to the specialist, never exposed to the remote party.
+  selection, plus connected/reconnecting/ended/failed call screens with a
+  "Завершить" (Leave) control, and a "Заметки" side panel (reusing the
+  existing client notes editor) that is only available to the specialist,
+  never exposed to the remote party. There is no in-call mute, camera
+  toggle, or device-switching control yet; device selection only happens
+  on the pre-join screen, before the call connects.
 - `sessio://` deep links for joining a call directly from a shared
   invitation, registered as the default handler for the `sessio` URL
   scheme on Windows (installer registry entry), macOS
@@ -36,6 +38,26 @@ All notable changes to this project will be documented in this file.
   non-functional stub).
 - A keychain-backed credential store and settings section for configuring
   the LiveKit token-backend URL and access credential.
+
+### Fixed
+
+- The "Завершить" (Leave) button now actually ends the call, instead of
+  doing nothing.
+- The other participant's video is now displayed during a call.
+- Join and reconnect failures now show the actual reason on screen instead
+  of silently dropping back to the join form.
+- A LiveKit meeting is now only saved to the event once the backend
+  confirms it was created; a failed create no longer leaves the event
+  referencing a meeting that was never actually made, and a re-applied
+  event no longer accumulates orphaned backend meetings.
+- The Open/Copy link/Copy invite buttons on a LiveKit event now reflect
+  whether a meeting actually exists, instead of behaving as if it were an
+  external-link event.
+- Client mode can now be pointed at a specific token backend, either via a
+  `sessio://` join link or a small settings dialog, and takes effect
+  without restarting the app.
+- Loading or saving a corrupted `Config.yaml` no longer crashes the
+  settings dialog.
 
 ## [0.1.34] - 2026-09-26
 
