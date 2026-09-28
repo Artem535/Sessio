@@ -2,6 +2,7 @@
 
 #include <QCoreApplication>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <gtest/gtest.h>
 
 TEST(SingleInstanceGuardTest, FirstInstanceIsPrimary) {
@@ -57,6 +58,14 @@ TEST(SingleInstanceGuardTest, SecondInstanceForwardsPlainActivationWithNoUrl) {
 }
 
 int main(int argc, char **argv) {
+  // SingleInstanceGuard stores its per-user QLockFile under the generic
+  // config location. Isolate that location before QCoreApplication caches
+  // QStandardPaths, so this test neither conflicts with a running Sessio
+  // instance nor writes to the developer's real ~/.config.
+  QTemporaryDir isolatedHome;
+  qputenv("XDG_CONFIG_HOME", isolatedHome.path().toUtf8());
+  qputenv("HOME", isolatedHome.path().toUtf8());
+
   QCoreApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
