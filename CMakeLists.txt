@@ -264,11 +264,15 @@ elseif(UNIX AND NOT APPLE)
       "Local-first desktop workspace for calendar scheduling, client management, and session tracking.")
   # Registers Sessio.desktop (via its MimeType=x-scheme-handler/sessio entry)
   # as the sessio:// URL handler and refreshes the desktop database on
-  # install/uninstall; see packaging/linux/register-sessio-scheme.sh.
+  # install; see packaging/linux/register-sessio-scheme.sh. Uninstall uses a
+  # separate script that only refreshes the desktop database — it must NOT
+  # re-run the same xdg-mime registration, which would point the system
+  # default handler at a .desktop file that was just removed; see
+  # packaging/linux/unregister-sessio-scheme.sh.
   set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE
       "${CMAKE_SOURCE_DIR}/packaging/linux/register-sessio-scheme.sh")
   set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
-      "${CMAKE_SOURCE_DIR}/packaging/linux/register-sessio-scheme.sh")
+      "${CMAKE_SOURCE_DIR}/packaging/linux/unregister-sessio-scheme.sh")
 endif()
 
 include(CPack)

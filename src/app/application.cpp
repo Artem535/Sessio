@@ -122,9 +122,13 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   // runs.
   mSingleInstanceGuard = std::make_unique<SingleInstanceGuard>();
   if (!mSingleInstanceGuard->isPrimaryInstance()) {
-    if (!launchUrl.isEmpty()) {
-      mSingleInstanceGuard->forwardToPrimaryInstance(launchUrl);
-    }
+    // Forward unconditionally, even when launchUrl is empty: a plain
+    // relaunch (e.g. double-clicking the icon again with no sessio:// link
+    // involved) should still make the primary instance raise its window.
+    // SingleInstanceGuard::forwardToPrimaryInstance() substitutes a
+    // non-empty activation sentinel for an empty url, since writing zero
+    // bytes over the local socket would never reach the primary at all.
+    mSingleInstanceGuard->forwardToPrimaryInstance(launchUrl);
     return 0;
   }
 
@@ -409,11 +413,25 @@ void Application::refreshUpcomingMeetings() {
 
 // Handles a sessio://join?code=...&passcode=... URL, whether it came from
 // this instance's own launch argument or was forwarded by a second instance
-// via mSingleInstanceGuard. Exactly one of mMainWindow / mClientModeWindow is
-// constructed by the time this can run (after the role branch in run()), so
-// this only ever touches the window for the role this process is actually
-// running as.
+// via mSingleInstanceGuard. The forwarded payload is not always a real join
+// link — a plain relaunch with no sessio:// url (e.g. double-clicking the
+// icon again) forwards a non-empty activation sentinel instead (see
+// SingleInstanceGuard::forwardToPrimaryInstance()) so raising the window
+// below always runs regardless of whether url parses as a join link.
+// Exactly one of mMainWindow / mClientModeWindow is constructed by the time
+// this can run (after the role branch in run()), so this only ever touches
+// the window for the role this process is actually running as.
 void Application::handleJoinLink(const QString &url) {
+  // Unconditional: raising/showing the existing window must happen whether
+  // or not url turns out to be a parseable join link.
+  if (mMainWindow) {
+    mMainWindow->show();
+    mMainWindow->raise();
+  } else if (mClientModeWindow) {
+    mClientModeWindow->show();
+    mClientModeWindow->raise();
+  }
+
   const auto link = parseSessioJoinUrl(url);
   if (!link.has_value()) {
     return;
@@ -436,14 +454,10 @@ void Application::handleJoinLink(const QString &url) {
     qCInfo(logApplication) << "Ignoring the join link's backend in specialist mode";
   }
   if (mMainWindow) {
-    mMainWindow->show();
-    mMainWindow->raise();
     if (auto *callsPage = dynamic_cast<CallsPage *>(mMainWindow->getPage(MainWindow::Pages::calls))) {
       callsPage->prefillJoinCode(link->code, link->passcode);
     }
   } else if (mClientModeWindow) {
-    mClientModeWindow->show();
-    mClientModeWindow->raise();
     // ClientModeWindow's CallsPage is its central widget — reuse the same
     // dynamic_cast pattern via centralWidget() rather than a page lookup.
     if (auto *callsPage = dynamic_cast<CallsPage *>(mClientModeWindow->centralWidget())) {
