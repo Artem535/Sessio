@@ -418,6 +418,23 @@ void Application::handleJoinLink(const QString &url) {
   if (!link.has_value()) {
     return;
   }
+  // Client mode: an invitation that names its token backend retargets the
+  // token client before the code is prefilled, so the join that follows goes
+  // to the backend that issued the invitation. Persisted so a later manual
+  // code entry or relaunch keeps using it.
+  //
+  // Specialist mode deliberately ignores it: the specialist's token client
+  // also sends the keychain bearer credential (specialist-token requests from
+  // the Calls tab), so letting any clicked link retarget it would hand that
+  // credential to whatever backend the link names. Specialists configure
+  // their backend in Settings instead.
+  const bool linkNamesBackend = link->backendUrl.has_value() && !link->backendUrl->isEmpty();
+  if (linkNamesBackend && mClientModeWindow && !mMainWindow) {
+    applyTokenBackendBaseUrl(*link->backendUrl);
+    persistTokenBackendBaseUrl(*link->backendUrl);
+  } else if (linkNamesBackend) {
+    qCInfo(logApplication) << "Ignoring the join link's backend in specialist mode";
+  }
   if (mMainWindow) {
     mMainWindow->show();
     mMainWindow->raise();
@@ -433,6 +450,58 @@ void Application::handleJoinLink(const QString &url) {
       callsPage->prefillJoinCode(link->code, link->passcode);
     }
   }
+}
+
+void Application::applyTokenBackendBaseUrl(const QString &baseUrl) {
+  mTokenBackendBaseUrl = baseUrl;
+  if (mTokenClient) {
+    mTokenClient->setBaseUrl(mTokenBackendBaseUrl);
+  }
+}
+
+void Application::persistTokenBackendBaseUrl(const QString &baseUrl) {
+  config::Config conf;
+  try {
+    conf = config::Config::read_config();
+  } catch (const std::exception &error) {
+    // Saving a default-constructed Config here would overwrite the unreadable
+    // file's role and database path, so leave it alone; the new URL still
+    // applies for this session.
+    qCWarning(logApplication) << "Failed to read config, not persisting the token backend URL:"
+                              << error.what();
+    return;
+  }
+  if (conf.token_backend_base_url == baseUrl.toStdString()) {
+    return;
+  }
+  conf.token_backend_base_url = baseUrl.toStdString();
+  try {
+    config::Config::save_config(conf);
+  } catch (const std::exception &error) {
+    qCWarning(logApplication) << "Failed to save the token backend URL:" << error.what();
+  }
+}
+
+// MainWindow emits settingsSaved after its SettingsDialog closes; the LiveKit
+// section may have written a new token backend URL to Config, which the
+// already-constructed token client would otherwise ignore until a restart.
+void Application::onSettingsSaved() {
+  // The same section may also have written a new bearer credential to the
+  // keychain; re-read it so the Calls tab's credential provider (which reads
+  // mBearerCredential) picks it up. The readFinished connection made in
+  // loadBearerCredential() updates mBearerCredential asynchronously.
+  if (mTokenCredentialStore) {
+    mTokenCredentialStore->readBearerCredential();
+  }
+
+  config::Config conf;
+  try {
+    conf = config::Config::read_config();
+  } catch (const std::exception &error) {
+    qCWarning(logApplication) << "Failed to read config after settings changed:" << error.what();
+    return;
+  }
+  applyTokenBackendBaseUrl(QString::fromStdString(conf.token_backend_base_url));
 }
 
 void Application::restorePendingBackup() {
@@ -833,6 +902,7 @@ void Application::connectSignals() {
           &Application::removeClient);
   connect(mMainWindow.get(), &MainWindow::provideClientEventPairSave, this,
           &Application::saveClientEventPair);
+  connect(mMainWindow.get(), &MainWindow::settingsSaved, this, &Application::onSettingsSaved);
 
   {
     const auto widget = mMainWindow->getPage(MainWindow::Pages::eventInfo);

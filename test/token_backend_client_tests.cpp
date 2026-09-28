@@ -153,6 +153,30 @@ TEST(TokenBackendClientTest, InvalidateMeetingErrorStatusEmitsMeetingInvalidateF
   EXPECT_EQ(failedSpy.at(0).at(0).toString(), QStringLiteral("request_failed"));
 }
 
+TEST(TokenBackendClientTest, SetBaseUrlRetargetsLaterRequests) {
+  const QByteArray tokenBody = R"({
+    "endpointUrl": "wss://livekit.example.test",
+    "roomName": "room-4",
+    "token": "jwt-4",
+    "expiresAt": 999
+  })";
+  FakeTokenBackendServer oldServer;
+  oldServer.setNextResponse(200, tokenBody);
+  FakeTokenBackendServer newServer;
+  newServer.setNextResponse(200, tokenBody);
+
+  TokenBackendClient client(oldServer.baseUrl().toString());
+  client.setBaseUrl(newServer.baseUrl().toString());
+  EXPECT_EQ(client.baseUrl(), newServer.baseUrl().toString());
+
+  QSignalSpy receivedSpy(&client, &TokenBackendClient::tokenReceived);
+  client.requestClientToken("code-new", "123456");
+
+  ASSERT_TRUE(receivedSpy.wait(2000));
+  EXPECT_EQ(newServer.lastPath, QStringLiteral("/v1/invitations/code-new/client-token"));
+  EXPECT_TRUE(oldServer.lastPath.isEmpty());
+}
+
 int main(int argc, char **argv) {
   QCoreApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);

@@ -391,6 +391,7 @@ void MainWindow::openSettingsDialog() {
   SettingsDialog dialog(mDb, this);
   dialog.exec();
   refreshPageAppearance();
+  emit settingsSaved();
 }
 
 void MainWindow::openAboutDialog() {

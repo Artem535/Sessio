@@ -547,3 +547,9 @@ add_test(NAME ClientModeWindowHeaderHasNoDatabaseDependency
 add_test(NAME ClientModeWindowSourceHasNoDatabaseDependency
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/client_mode_window_structural_test.sh
                  ${CMAKE_SOURCE_DIR}/src/app/client_mode_window.cpp)
+add_test(NAME ClientModeSettingsDialogHeaderHasNoDatabaseDependency
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/client_mode_window_structural_test.sh
+                 ${CMAKE_SOURCE_DIR}/src/app/client_mode_settings_dialog.h)
+add_test(NAME ClientModeSettingsDialogSourceHasNoDatabaseDependency
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/client_mode_window_structural_test.sh
+                 ${CMAKE_SOURCE_DIR}/src/app/client_mode_settings_dialog.cpp)

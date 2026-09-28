@@ -12,4 +12,10 @@ class ClientModeWindow final : public QMainWindow {
 public:
   ClientModeWindow(pcm::video::DeviceManager *deviceManager,
                    pcm::tokenclient::TokenBackendClient *tokenClient, QWidget *parent = nullptr);
+
+private:
+  void openSettingsDialog();
+
+  // Not owned: Application owns the token client and outlives this window.
+  pcm::tokenclient::TokenBackendClient *mTokenClient;
 };

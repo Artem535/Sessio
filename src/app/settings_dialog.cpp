@@ -11,6 +11,7 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QDateTime>
+#include <QDebug>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -648,8 +649,16 @@ void SettingsDialog::loadSettings() const {
   mPersonalEventColorEditor->setColor(pcm::app_settings::personalEventColor());
   mMeetingInviteTemplateEdit->setPlainText(
       pcm::app_settings::meetingInviteTemplate());
-  mLiveKitBaseUrlEdit->setText(QString::fromStdString(
-      pcm::config::Config::read_config().token_backend_base_url));
+  // A corrupt Config.yaml must not take the whole dialog down: leave the
+  // field at Config's default (empty) and let the rest of Settings work.
+  try {
+    mLiveKitBaseUrlEdit->setText(QString::fromStdString(
+        pcm::config::Config::read_config().token_backend_base_url));
+  } catch (const std::exception &error) {
+    qWarning() << "SettingsDialog: failed to read config, token backend URL left empty:"
+               << error.what();
+    mLiveKitBaseUrlEdit->clear();
+  }
 }
 
 void SettingsDialog::connectSignals() {
@@ -1070,10 +1079,22 @@ void SettingsDialog::browseAutoBackupDestination() {
 }
 
 void SettingsDialog::saveLiveKitSettings() {
-  auto conf = pcm::config::Config::read_config();
-  conf.token_backend_base_url = mLiveKitBaseUrlEdit->text().toStdString();
-  pcm::config::Config::save_config(conf);
+  // One guard covers both the read and the save. A failed read skips the
+  // save: writing a default-constructed Config over an unreadable file would
+  // silently reset the app role and database path stored alongside the URL.
+  try {
+    auto conf = pcm::config::Config::read_config();
+    conf.token_backend_base_url = mLiveKitBaseUrlEdit->text().toStdString();
+    pcm::config::Config::save_config(conf);
+  } catch (const std::exception &error) {
+    qWarning() << "SettingsDialog: failed to save the token backend URL:" << error.what();
+    QMessageBox::warning(
+        this, tr("Token backend"),
+        tr("The token backend URL could not be saved:\n%1").arg(QString::fromUtf8(error.what())));
+  }
 
+  // The bearer credential lives in the keychain, independent of Config.yaml,
+  // so it is still saved when the config write above failed.
   const auto credential = mLiveKitBearerCredentialEdit->text();
   if (!credential.isEmpty()) {
     mTokenBackendCredentialStore->writeBearerCredential(credential);

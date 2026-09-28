@@ -14,6 +14,8 @@ TokenBackendClient::TokenBackendClient(QString baseUrl, QObject *parent)
   qRegisterMetaType<MeetingCreateResult>();
 }
 
+void TokenBackendClient::setBaseUrl(const QString &baseUrl) { mBaseUrl = baseUrl; }
+
 void TokenBackendClient::requestSpecialistToken(const QString &bearerCredential,
                                                 const QString &meetingRef) {
   post(QStringLiteral("/v1/meetings/%1/specialist-token").arg(meetingRef), QByteArray(),

@@ -23,6 +23,7 @@ qt_add_library(${TARGET_NAME} STATIC
         app_lock_dialog.cpp
         role_selection_dialog.cpp
         client_mode_window.cpp
+        client_mode_settings_dialog.cpp
         sessio_url.cpp
         single_instance_guard.cpp
 )

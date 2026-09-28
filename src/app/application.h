@@ -51,6 +51,7 @@ private slots:
   void checkUpcomingEventNotifications();
   void restoreMainWindow();
   void quitApplication();
+  void onSettingsSaved();
 
 private:
   QString notificationKey(const DuckEvent &event) const;
@@ -67,6 +68,10 @@ private:
   void loadBearerCredential();
   void refreshUpcomingMeetings();
   void handleJoinLink(const QString &url);
+  // Points mTokenClient (and mTokenBackendBaseUrl) at a new token backend.
+  void applyTokenBackendBaseUrl(const QString &baseUrl);
+  // Writes the token backend URL to Config; logs and skips on read/save error.
+  void persistTokenBackendBaseUrl(const QString &baseUrl);
 
   // Constructed first, before any other setup, so a second launch can be
   // detected and forwarded as cheaply as possible.
@@ -75,7 +80,9 @@ private:
   // Shared by both role flows. Declared before the windows so they outlive
   // the CallsPage instances that hold raw pointers to them (members are
   // destroyed in reverse declaration order).
-  QString mTokenBackendBaseUrl; // from Config, resolved once in run()
+  // From Config in run(); updated by a sessio:// link carrying a `backend`
+  // item and after the specialist's Settings dialog closes.
+  QString mTokenBackendBaseUrl;
   // A sessio:// URL captured by eventFilter()'s QEvent::FileOpen case before
   // mMainWindow/mClientModeWindow exists yet (a macOS cold start via a
   // sessio:// link, delivered while run() is still constructing the app —

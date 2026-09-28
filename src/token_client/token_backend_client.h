@@ -16,6 +16,12 @@ class TokenBackendClient final : public QObject {
 public:
   explicit TokenBackendClient(QString baseUrl, QObject *parent = nullptr);
 
+  // Retargets every later request at a different token backend. The base URL
+  // is read fresh on each request (never cached elsewhere), so this is safe to
+  // call at any time; requests already in flight finish against the old URL.
+  void setBaseUrl(const QString &baseUrl);
+  [[nodiscard]] QString baseUrl() const { return mBaseUrl; }
+
   void requestSpecialistToken(const QString &bearerCredential, const QString &meetingRef);
   void requestClientToken(const QString &invitationCode, const QString &passcode);
   void requestCreateMeeting(const QString &bearerCredential, const QString &scheduledStartIso,

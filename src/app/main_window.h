@@ -131,6 +131,13 @@ signals:
    */
   void provideClientEventPairSave(const int64_t clientId, const int64_t eventId);
 
+  /**
+   * @brief Emitted after the Settings dialog closes. Its sections save
+   * independently (e.g. the LiveKit section's own Save button), so this fires
+   * unconditionally and listeners re-read whatever they depend on.
+   */
+  void settingsSaved();
+
 private:
   // Map of pages by type
   QHash<Pages, QWidget*> mPages;
