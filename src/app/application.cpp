@@ -12,6 +12,7 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QFileInfo>
+#include <QFileOpenEvent>
 #include <QLocale>
 #include <QStandardPaths>
 #include <QMessageBox>
@@ -100,6 +101,15 @@ Application::Application() = default;
 
 int Application::run(int argc, char *argv[], const QString &launchUrl) {
   QApplication app(argc, argv);
+
+  // Installed on &app as early as possible, before the role dialog or any
+  // other nested event loop below can run: on macOS, a cold start via a
+  // sessio:// link delivers a QFileOpenEvent to the QApplication instance
+  // itself, and it can arrive before mMainWindow/mClientModeWindow exists.
+  // eventFilter() queues that URL into mPendingJoinUrl when neither window
+  // exists yet; runClientFlow()/runSpecialistFlow() replay it via
+  // handleJoinLink() right after constructing their window.
+  app.installEventFilter(this);
 
   // Single-instance guard: must run before any other setup below (style,
   // translations, config read, role dialog, window construction) so a second
@@ -241,6 +251,10 @@ int Application::runClientFlow(QApplication &app, const QString &launchUrl) {
   if (!launchUrl.isEmpty()) {
     handleJoinLink(launchUrl);
   }
+  if (!mPendingJoinUrl.isEmpty()) {
+    handleJoinLink(mPendingJoinUrl);
+    mPendingJoinUrl.clear();
+  }
   return app.exec();
 }
 
@@ -273,7 +287,10 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
   mMainWindow->setDatabase(mDb);
   mMainWindow->connectSignals();
   mMainWindow->installEventFilter(this);
-  app.installEventFilter(this);
+  // app.installEventFilter(this) already happened at the top of run(), before
+  // mMainWindow existed, so a QFileOpenEvent arriving during earlier startup
+  // (e.g. the first-launch role dialog) is queued in mPendingJoinUrl rather
+  // than lost; it is replayed below alongside the launchUrl parameter.
   connectSignals();
   initializeAppLock();
   initializeNotifications();
@@ -284,6 +301,10 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
   mMainWindow->show();
   if (!launchUrl.isEmpty()) {
     handleJoinLink(launchUrl);
+  }
+  if (!mPendingJoinUrl.isEmpty()) {
+    handleJoinLink(mPendingJoinUrl);
+    mPendingJoinUrl.clear();
   }
 
   return app.exec();
@@ -472,6 +493,23 @@ void Application::restorePendingBackup() {
 }
 
 bool Application::eventFilter(QObject *watched, QEvent *event) {
+  // macOS delivers a sessio:// link (or any registered URL scheme/file open
+  // request) as a QFileOpenEvent sent to the QApplication instance itself,
+  // not to mMainWindow/mClientModeWindow — hence the filter installed on
+  // &app at the top of run(). If neither window has been constructed yet
+  // (a cold start), queue the URL in mPendingJoinUrl instead of dropping it;
+  // runClientFlow()/runSpecialistFlow() replay it once their window exists.
+  if (event != nullptr && event->type() == QEvent::FileOpen) {
+    const auto *openEvent = static_cast<QFileOpenEvent *>(event);
+    const QString url = openEvent->url().toString();
+    if (mMainWindow || mClientModeWindow) {
+      handleJoinLink(url);
+    } else {
+      mPendingJoinUrl = url;
+    }
+    return true;
+  }
+
   if (watched == mMainWindow.get() && event != nullptr &&
       event->type() == QEvent::Resize && mAppLockOverlay != nullptr) {
     mAppLockOverlay->setGeometry(mMainWindow->rect());

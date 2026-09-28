@@ -196,6 +196,18 @@ set_target_properties(Sessio PROPERTIES
     MACOSX_BUNDLE TRUE
 )
 
+if(APPLE)
+  # Registers the sessio:// URL scheme in the bundle's Info.plist
+  # (CFBundleURLTypes) so macOS can launch/forward links to Sessio. CMake's
+  # MACOSX_BUNDLE_INFO_PLIST has no first-class property for CFBundleURLTypes,
+  # so this template is a copy of CMake's own default
+  # (Modules/MacOSXBundleInfo.plist.in) with that array added — every other
+  # key/substitution behaves exactly as before this template was introduced.
+  set_target_properties(Sessio PROPERTIES
+      MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in"
+  )
+endif()
+
 add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_app)
 
 # Link with libs
@@ -250,6 +262,13 @@ elseif(UNIX AND NOT APPLE)
   set(CPACK_RPM_PACKAGE_URL "https://github.com/Artem535/Sessio")
   set(CPACK_RPM_PACKAGE_DESCRIPTION
       "Local-first desktop workspace for calendar scheduling, client management, and session tracking.")
+  # Registers Sessio.desktop (via its MimeType=x-scheme-handler/sessio entry)
+  # as the sessio:// URL handler and refreshes the desktop database on
+  # install/uninstall; see packaging/linux/register-sessio-scheme.sh.
+  set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE
+      "${CMAKE_SOURCE_DIR}/packaging/linux/register-sessio-scheme.sh")
+  set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
+      "${CMAKE_SOURCE_DIR}/packaging/linux/register-sessio-scheme.sh")
 endif()
 
 include(CPack)

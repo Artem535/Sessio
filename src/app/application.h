@@ -76,6 +76,14 @@ private:
   // the CallsPage instances that hold raw pointers to them (members are
   // destroyed in reverse declaration order).
   QString mTokenBackendBaseUrl; // from Config, resolved once in run()
+  // A sessio:// URL captured by eventFilter()'s QEvent::FileOpen case before
+  // mMainWindow/mClientModeWindow exists yet (a macOS cold start via a
+  // sessio:// link, delivered while run() is still constructing the app —
+  // e.g. during the first-launch role dialog's nested event loop). Replayed
+  // via handleJoinLink() and cleared as soon as the relevant window is
+  // constructed in runClientFlow()/runSpecialistFlow(), mirroring how the
+  // launchUrl parameter is replayed there.
+  QString mPendingJoinUrl;
   std::unique_ptr<pcm::video::DeviceManager> mDeviceManager;
   std::unique_ptr<pcm::tokenclient::TokenBackendClient> mTokenClient;
   // Specialist flow only: Client mode never reads the specialist bearer

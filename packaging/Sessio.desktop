@@ -6,3 +6,4 @@ Exec=Sessio
 Icon=Sessio
 Categories=Office;Utility;
 Terminal=false
+MimeType=x-scheme-handler/sessio;
