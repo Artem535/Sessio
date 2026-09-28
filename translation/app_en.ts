@@ -319,10 +319,47 @@
     </message>
 </context>
 <context>
+    <name>ClientModeSettingsDialog</name>
+    <message>
+        <source>Settings</source>
+        <translation>Settings</translation>
+    </message>
+    <message>
+        <source>Token backend URL</source>
+        <translation>Token backend URL</translation>
+    </message>
+    <message>
+        <source>Address of the service that issued your invitation. Your specialist can tell you this if joining by code fails.</source>
+        <translation>Address of the service that issued your invitation. Your specialist can tell you this if joining by code fails.</translation>
+    </message>
+    <message>
+        <source>https://token-backend.example.com</source>
+        <translation>https://token-backend.example.com</translation>
+    </message>
+    <message>
+        <source>Enter a valid http or https address.</source>
+        <translation>Enter a valid http or https address.</translation>
+    </message>
+    <message>
+        <source>Token backend</source>
+        <translation>Token backend</translation>
+    </message>
+    <message>
+        <source>The token backend URL applies until Sessio is closed, but could not be saved:
+%1</source>
+        <translation>The token backend URL applies until Sessio is closed, but could not be saved:
+%1</translation>
+    </message>
+</context>
+<context>
     <name>ClientModeWindow</name>
     <message>
         <source>Sessio</source>
         <translation>Sessio</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>Settings</translation>
     </message>
 </context>
 <context>
@@ -883,6 +920,10 @@
     <message>
         <source>Provider</source>
         <translation>Provider</translation>
+    </message>
+    <message>
+        <source>Failed to create the LiveKit meeting: %1</source>
+        <translation>Failed to create the LiveKit meeting: %1</translation>
     </message>
     <message>
         <source>Overlaps with an existing event, %1.</source>
@@ -1770,6 +1811,12 @@ See you!</translation>
     <message>
         <source>Select Automatic Backup Folder</source>
         <translation>Select Automatic Backup Folder</translation>
+    </message>
+    <message>
+        <source>The token backend URL could not be saved:
+%1</source>
+        <translation>The token backend URL could not be saved:
+%1</translation>
     </message>
     <message>
         <source>Validate Backup</source>

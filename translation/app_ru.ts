@@ -319,10 +319,47 @@
     </message>
 </context>
 <context>
+    <name>ClientModeSettingsDialog</name>
+    <message>
+        <source>Settings</source>
+        <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>Token backend URL</source>
+        <translation>URL токен-бэкенда</translation>
+    </message>
+    <message>
+        <source>Address of the service that issued your invitation. Your specialist can tell you this if joining by code fails.</source>
+        <translation>Адрес сервиса, который выдал ваше приглашение. Ваш специалист может сообщить его, если не удаётся присоединиться по коду.</translation>
+    </message>
+    <message>
+        <source>https://token-backend.example.com</source>
+        <translation>https://token-backend.example.com</translation>
+    </message>
+    <message>
+        <source>Enter a valid http or https address.</source>
+        <translation>Введите корректный адрес http или https.</translation>
+    </message>
+    <message>
+        <source>Token backend</source>
+        <translation>Токен-бэкенд</translation>
+    </message>
+    <message>
+        <source>The token backend URL applies until Sessio is closed, but could not be saved:
+%1</source>
+        <translation>URL токен-бэкенда будет использоваться до закрытия Sessio, но не удалось сохранить его:
+%1</translation>
+    </message>
+</context>
+<context>
     <name>ClientModeWindow</name>
     <message>
         <source>Sessio</source>
         <translation>Sessio</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>Настройки</translation>
     </message>
 </context>
 <context>
@@ -884,6 +921,10 @@
     <message>
         <source>Provider</source>
         <translation>Провайдер</translation>
+    </message>
+    <message>
+        <source>Failed to create the LiveKit meeting: %1</source>
+        <translation>Не удалось создать встречу LiveKit: %1</translation>
     </message>
     <message>
         <source>Overlaps with an existing event, %1.</source>
@@ -1771,6 +1812,12 @@ See you!</source>
     <message>
         <source>Select Automatic Backup Folder</source>
         <translation>Выбор папки для автоматических резервных копий</translation>
+    </message>
+    <message>
+        <source>The token backend URL could not be saved:
+%1</source>
+        <translation>Не удалось сохранить URL токен-бэкенда:
+%1</translation>
     </message>
     <message>
         <source>Validate Backup</source>
