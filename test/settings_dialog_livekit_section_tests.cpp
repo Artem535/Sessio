@@ -4,6 +4,7 @@
 #include <QApplication>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QTemporaryDir>
 #include <QTest>
 #include <gtest/gtest.h>
 
@@ -29,6 +30,15 @@ TEST(SettingsDialogLiveKitSectionTest, SavingWritesBaseUrlToConfigAndCredentialT
 }
 
 int main(int argc, char **argv) {
+  // Config::save_config/read_config resolve to Poco::Path::configHome(),
+  // which is the developer's real ~/.config on Linux. Redirect it (and HOME,
+  // since macOS ignores XDG_CONFIG_HOME) to a scratch directory before any
+  // Config or SettingsDialog is constructed, so this test never overwrites
+  // the developer's actual Sessio config.
+  QTemporaryDir isolatedHome;
+  qputenv("XDG_CONFIG_HOME", isolatedHome.path().toUtf8());
+  qputenv("HOME", isolatedHome.path().toUtf8());
+
   QApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
