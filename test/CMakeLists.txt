@@ -562,3 +562,12 @@ add_test(NAME ClientModeSettingsDialogHeaderHasNoDatabaseDependency
 add_test(NAME ClientModeSettingsDialogSourceHasNoDatabaseDependency
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/client_mode_window_structural_test.sh
                  ${CMAKE_SOURCE_DIR}/src/app/client_mode_settings_dialog.cpp)
+
+# CPack runs install scripts through a DESTDIR staging tree. Keep the
+# LiveKit-runtime bundler's staging contract executable without rebuilding
+# the application or its vcpkg dependencies.
+add_test(NAME BundleLiveKitLinuxDepsUsesDestdir
+         COMMAND ${CMAKE_COMMAND}
+                 -DPCM_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+                 -DPCM_TEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/bundle_livekit_linux_deps_test.cmake)

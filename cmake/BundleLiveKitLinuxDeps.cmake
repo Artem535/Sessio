@@ -16,12 +16,12 @@
 #
 #   LIVEKIT_SDK_LIB_DIR      - absolute path to the LiveKit SDK's own lib/
 #                              directory in the BUILD tree.
-#   SESSIO_INSTALL_LIBDIR    - absolute path to the install tree's main lib
-#                              dir (where Qt's own deploy script already
-#                              placed liblivekit.so/liblivekit_ffi.so and
-#                              every Qt/qlementine/qt6keychain .so).
-#   SESSIO_INSTALL_BINDIR    - absolute path to the install tree's bin dir
-#                              (where the Sessio executable itself lives).
+#   SESSIO_INSTALL_LIBDIR    - logical absolute path to the main lib dir
+#                              below CMAKE_INSTALL_PREFIX. The script adds
+#                              DESTDIR before touching the filesystem, so
+#                              CPack RPM staging never writes to the host.
+#   SESSIO_INSTALL_BINDIR    - logical absolute path to the bin dir below
+#                              CMAKE_INSTALL_PREFIX.
 #   SESSIO_PRIVATE_LIBDIR_NAME - the private subdirectory name, "sessio".
 #
 # Does not redefine or rely on any variable not documented above.
@@ -37,7 +37,12 @@ if(NOT PATCHELF_EXECUTABLE)
   return()
 endif()
 
-set(_private_dir "${SESSIO_INSTALL_LIBDIR}/${SESSIO_PRIVATE_LIBDIR_NAME}")
+# CMake's generated install rules apply DESTDIR automatically, but this
+# script uses file(COPY)/patchelf directly. Apply it explicitly to every
+# physical path so CPack's RPM staging tree is used instead of host /usr.
+set(_install_libdir "$ENV{DESTDIR}${SESSIO_INSTALL_LIBDIR}")
+set(_install_bindir "$ENV{DESTDIR}${SESSIO_INSTALL_BINDIR}")
+set(_private_dir "${_install_libdir}/${SESSIO_PRIVATE_LIBDIR_NAME}")
 file(MAKE_DIRECTORY "${_private_dir}")
 
 file(GLOB _lk_own_libs "${LIVEKIT_SDK_LIB_DIR}/*.so*")
@@ -49,6 +54,21 @@ file(GET_RUNTIME_DEPENDENCIES
   LIBRARIES ${_lk_own_libs}
   RESOLVED_DEPENDENCIES_VAR _resolved
   UNRESOLVED_DEPENDENCIES_VAR _unresolved
+  PRE_EXCLUDE_REGEXES
+    "^linux-vdso\\.so.*"
+    "^ld-linux.*"
+  POST_EXCLUDE_REGEXES
+    ".*/ld-linux[^/]*\\.so.*"
+    ".*/libc\\.so\\..*"
+    ".*/libm\\.so\\..*"
+    ".*/libpthread\\.so\\..*"
+    ".*/libdl\\.so\\..*"
+    ".*/librt\\.so\\..*"
+    ".*/libresolv\\.so\\..*"
+    ".*/libutil\\.so\\..*"
+    ".*/libanl\\.so\\..*"
+    ".*/libgcc_s\\.so\\..*"
+    ".*/libstdc\\+\\+\\.so\\..*"
 )
 
 if(_unresolved)
@@ -96,18 +116,20 @@ foreach(_lib_path IN LISTS _lk_own_libs)
   # instead. Only do this once the private copy is confirmed to exist AND
   # be correctly patched, so a failure above can never leave the app with
   # NEITHER a working bare copy NOR a working private one.
-  set(_bare_copy "${SESSIO_INSTALL_LIBDIR}/${_lib_name}")
+  set(_bare_copy "${_install_libdir}/${_lib_name}")
   if(_patch_ok AND EXISTS "${_bare_copy}")
     file(REMOVE "${_bare_copy}")
   endif()
 endforeach()
 
-# Copy every further resolved runtime dependency (curl's own transitive
-# closure: OpenSSL, GnuTLS, Kerberos, LDAP, etc) into the same private dir,
-# also with an $ORIGIN rpath. Unlike liblivekit.so/liblivekit_ffi.so above,
-# Qt's deploy script never placed any of these directly in
-# SESSIO_INSTALL_LIBDIR (it only walks Sessio's own DIRECT link deps), so
-# there is no bare copy to worry about here.
+# Copy the approved non-system portion of curl's transitive closure (OpenSSL,
+# GnuTLS, Kerberos, LDAP, etc) into the same private dir, also with an
+# $ORIGIN rpath. The GET_RUNTIME_DEPENDENCIES filters above deliberately keep
+# the platform ABI/runtime libraries (glibc, loader, libstdc++, libgcc) on
+# the target system. Unlike liblivekit.so/liblivekit_ffi.so above, Qt's deploy
+# script never placed these dependencies directly in SESSIO_INSTALL_LIBDIR
+# (it only walks Sessio's own DIRECT link deps), so there is no bare copy to
+# worry about here.
 list(REMOVE_DUPLICATES _resolved)
 foreach(_lib_path IN LISTS _resolved)
   get_filename_component(_lib_name "${_lib_path}" NAME)
@@ -124,7 +146,7 @@ endforeach()
 # Point the Sessio executable at the private dir too, ADDITIVELY — it
 # already has an rpath entry (from Qt's deploy script) that finds Qt/
 # qlementine/qt6keychain in SESSIO_INSTALL_LIBDIR; this must not be lost.
-set(_sessio_bin "${SESSIO_INSTALL_BINDIR}/Sessio")
+set(_sessio_bin "${_install_bindir}/Sessio")
 execute_process(
   COMMAND "${PATCHELF_EXECUTABLE}" --print-rpath "${_sessio_bin}"
   OUTPUT_VARIABLE _existing_rpath
@@ -147,7 +169,7 @@ else()
   # "$ORIGIN/../lib/sessio". Deriving the relative path from the two
   # absolute, already-resolved directories we WERE given avoids relying on
   # that variable at all.
-  file(RELATIVE_PATH _private_dir_rel_to_bindir "${SESSIO_INSTALL_BINDIR}" "${_private_dir}")
+  file(RELATIVE_PATH _private_dir_rel_to_bindir "${_install_bindir}" "${_private_dir}")
   set(_new_rpath_entry "$ORIGIN/${_private_dir_rel_to_bindir}")
   if(_existing_rpath)
     set(_combined_rpath "${_existing_rpath}:${_new_rpath_entry}")

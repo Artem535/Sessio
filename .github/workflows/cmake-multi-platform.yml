@@ -223,6 +223,14 @@ jobs:
       - name: Configure
         run: cmake --preset vcpkg-release
 
+      - name: Verify LiveKit RPM staging
+        if: runner.os == 'Linux'
+        run: >
+          cmake
+          -DPCM_SOURCE_DIR="${{ github.workspace }}"
+          -DPCM_TEST_BINARY_DIR="${{ github.workspace }}/build-release/packaging-test"
+          -P test/bundle_livekit_linux_deps_test.cmake
+
       - name: Save vcpkg binary cache
         if: steps.cache-vcpkg-binary.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
