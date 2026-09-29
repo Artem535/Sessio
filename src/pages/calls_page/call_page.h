@@ -67,6 +67,12 @@ private:
   QStackedWidget *mStack{nullptr};
   DeviceCheckWidget *mDeviceCheck{nullptr};
   QWidget *mConnectingScreen{nullptr};
+  // Text distinguishes VideoSessionState::Joining ("Connecting...") from
+  // VideoSessionState::WaitingForClient ("Waiting for the other
+  // participant..."), set in onSessionStateChanged() -- both states used to
+  // show the same static "Connecting..." text, leaving a user who had
+  // already joined with no way to tell that from still connecting.
+  QLabel *mConnectingLabel{nullptr};
   QWidget *mConnectedView{nullptr};
   QHBoxLayout *mVideoRow{nullptr};
   // CallPage-owned blank renderer, shown whenever the attached provider

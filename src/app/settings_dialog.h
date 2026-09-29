@@ -65,6 +65,9 @@ private:
   void browseAutoBackupDestination();
   void configureAppLock();
   void saveLiveKitSettings();
+  // Never store or surface `credential` itself -- only whether one exists,
+  // so mLiveKitBearerCredentialStatusLabel never leaks the actual secret.
+  void onBearerCredentialRead(bool ok, const QString &credential, const QString &error);
 
   oclero::qlementine::SegmentedControl *mSettingsSections{nullptr};
   QStackedWidget *mSettingsStack{nullptr};
@@ -108,6 +111,13 @@ private:
   QTextEdit *mMeetingInviteTemplateEdit{nullptr};
   QLineEdit *mLiveKitBaseUrlEdit{nullptr};
   QLineEdit *mLiveKitBearerCredentialEdit{nullptr};
+  // Reports whether a bearer credential is currently stored in the keychain
+  // -- never the credential value itself. Updated on construction (an
+  // eager readBearerCredential()) and again after every successful write,
+  // so the field's write-only design ("leave blank to keep the current
+  // credential") doesn't leave the user wondering if an earlier save
+  // actually took.
+  QLabel *mLiveKitBearerCredentialStatusLabel{nullptr};
   QDialogButtonBox *mButtonBox{nullptr};
   pcm::config::Config mConfig;
   std::shared_ptr<pcm::database::Database> mDb;

@@ -4,6 +4,26 @@
 
 namespace pcm::video {
 
+DeviceManager::DeviceManager(QObject *parent)
+    : QObject(parent), mOwnedMediaDevices(std::make_unique<QMediaDevices>()) {
+  connectMediaDevices(mOwnedMediaDevices.get());
+}
+
+DeviceManager::DeviceManager(QMediaDevices *mediaDevices, QObject *parent) : QObject(parent) {
+  connectMediaDevices(mediaDevices);
+}
+
+DeviceManager::~DeviceManager() = default;
+
+void DeviceManager::connectMediaDevices(QMediaDevices *mediaDevices) {
+  // QMediaDevices' change notifications are backed by a shared, process-wide
+  // platform monitor, so this instance receives them regardless of how many
+  // other QMediaDevices instances exist elsewhere in the app.
+  connect(mediaDevices, &QMediaDevices::videoInputsChanged, this, &DeviceManager::devicesChanged);
+  connect(mediaDevices, &QMediaDevices::audioInputsChanged, this, &DeviceManager::devicesChanged);
+  connect(mediaDevices, &QMediaDevices::audioOutputsChanged, this, &DeviceManager::devicesChanged);
+}
+
 QList<QCameraDevice> DeviceManager::cameras() const {
   return QMediaDevices::videoInputs();
 }

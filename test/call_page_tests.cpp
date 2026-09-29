@@ -338,6 +338,31 @@ TEST(CallPageTest, MediaErrorShowsBannerWithoutEndingCallOrTouchingEndedReason) 
   EXPECT_TRUE(reasonLabel->text().isEmpty());
 }
 
+// Fixwave userfeedback group A, bug 2: VideoSessionState::Joining and
+// VideoSessionState::WaitingForClient both used to route to mConnectingScreen
+// with the exact same static "Connecting..." text, leaving a user who had
+// already joined and was waiting on the other participant indistinguishable
+// from someone still connecting.
+TEST(CallPageTest, WaitingForClientShowsDistinctMessageFromJoining) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  QSignalSpy stateSpy(&session, &VideoSession::stateChanged);
+
+  auto *connectingLabel = page.findChild<QLabel *>("connectingLabel");
+  ASSERT_NE(connectingLabel, nullptr);
+
+  session.join("wss://x", "token");
+  waitForState(session, stateSpy, VideoSessionState::Joining);
+  EXPECT_EQ(connectingLabel->text(), QStringLiteral("Connecting..."));
+
+  provider->simulateJoined();
+  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
+  EXPECT_EQ(connectingLabel->text(), QStringLiteral("Waiting for the other participant to join..."));
+}
+
 TEST(CallPageTest, SidePanelToggleHiddenByDefaultUntilMadeVisible) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);

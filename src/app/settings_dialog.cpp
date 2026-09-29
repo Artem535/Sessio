@@ -192,6 +192,23 @@ SettingsDialog::SettingsDialog(std::shared_ptr<pcm::database::Database> db,
           &SettingsDialog::onManualBackupKeyRead);
   connect(mCredentialStore, &pcm::backup::CredentialStore::writeFinished, this,
           &SettingsDialog::onBackupEncryptionKeyWritten);
+
+  // Bug (fixwave userfeedback group A, bug 1): the bearer-credential field is
+  // deliberately write-only (the real secret is never loaded back into the
+  // UI), but that used to leave zero feedback about whether a credential was
+  // actually stored, so a successful earlier save looked identical to no
+  // save at all. An eager read right after construction, plus a re-read
+  // after every successful write, keeps mLiveKitBearerCredentialStatusLabel
+  // truthful without ever putting the credential value in a widget.
+  connect(mTokenBackendCredentialStore, &TokenBackendCredentialStore::readFinished, this,
+          &SettingsDialog::onBearerCredentialRead);
+  connect(mTokenBackendCredentialStore, &TokenBackendCredentialStore::writeFinished, this,
+          [this](const bool ok, const QString & /*error*/) {
+            if (ok) {
+              mTokenBackendCredentialStore->readBearerCredential();
+            }
+          });
+  mTokenBackendCredentialStore->readBearerCredential();
 }
 
 void SettingsDialog::setupUi() {
@@ -576,6 +593,15 @@ void SettingsDialog::setupLiveKitSection() {
   mLiveKitBearerCredentialEdit->setObjectName(QStringLiteral("liveKitBearerCredentialEdit"));
   mLiveKitBearerCredentialEdit->setEchoMode(QLineEdit::Password);
 
+  // Reports whether a credential is stored, never the credential itself --
+  // see mLiveKitBearerCredentialStatusLabel's doc comment in the header. Set
+  // for the first time once the initial readBearerCredential() call
+  // (triggered at the end of the constructor) completes.
+  mLiveKitBearerCredentialStatusLabel = new QLabel(liveKitBox);
+  mLiveKitBearerCredentialStatusLabel->setObjectName(
+      QStringLiteral("liveKitBearerCredentialStatusLabel"));
+  mLiveKitBearerCredentialStatusLabel->setStyleSheet("color: rgba(255, 255, 255, 0.68);");
+
   auto *liveKitSaveButton = new QPushButton(tr("Save"), liveKitBox);
   liveKitSaveButton->setObjectName(QStringLiteral("liveKitSaveButton"));
   connect(liveKitSaveButton, &QPushButton::clicked, this,
@@ -587,6 +613,7 @@ void SettingsDialog::setupLiveKitSection() {
   liveKitLayout->addWidget(credentialTitle);
   liveKitLayout->addWidget(credentialDescription);
   liveKitLayout->addWidget(mLiveKitBearerCredentialEdit);
+  liveKitLayout->addWidget(mLiveKitBearerCredentialStatusLabel);
   liveKitLayout->addWidget(liveKitSaveButton, 0, Qt::AlignRight);
 
   liveKitPageLayout->addWidget(liveKitBox);
@@ -1099,6 +1126,15 @@ void SettingsDialog::saveLiveKitSettings() {
   if (!credential.isEmpty()) {
     mTokenBackendCredentialStore->writeBearerCredential(credential);
   }
+}
+
+void SettingsDialog::onBearerCredentialRead(const bool ok, const QString &credential,
+                                            const QString & /*error*/) {
+  // `credential` is the real secret; it must never be placed into any widget
+  // or otherwise surfaced -- only whether it is non-empty.
+  mLiveKitBearerCredentialStatusLabel->setText(ok && !credential.isEmpty()
+                                                   ? tr("Credentials are saved")
+                                                   : tr("No credentials saved yet"));
 }
 
 void SettingsDialog::validateBackup() {

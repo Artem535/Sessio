@@ -27,8 +27,9 @@ CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : 
 
   mConnectingScreen = new QWidget(this);
   new QVBoxLayout(mConnectingScreen);
-  static_cast<QVBoxLayout *>(mConnectingScreen->layout())
-      ->addWidget(new QLabel(tr("Connecting..."), mConnectingScreen));
+  mConnectingLabel = new QLabel(tr("Connecting..."), mConnectingScreen);
+  mConnectingLabel->setObjectName("connectingLabel");
+  static_cast<QVBoxLayout *>(mConnectingScreen->layout())->addWidget(mConnectingLabel);
   mStack->addWidget(mConnectingScreen);
 
   buildConnectedScreen();
@@ -251,7 +252,11 @@ void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) 
     mStack->setCurrentWidget(mDeviceCheck);
     break;
   case VideoSessionState::Joining:
+    mConnectingLabel->setText(tr("Connecting..."));
+    mStack->setCurrentWidget(mConnectingScreen);
+    break;
   case VideoSessionState::WaitingForClient:
+    mConnectingLabel->setText(tr("Waiting for the other participant to join..."));
     mStack->setCurrentWidget(mConnectingScreen);
     break;
   case VideoSessionState::Connected:

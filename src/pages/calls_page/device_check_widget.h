@@ -32,6 +32,15 @@ protected:
 private:
   void ensurePreviewAdapter();
   void restartPreview();
+  // Repopulates all three combo boxes from a fresh DeviceManager query,
+  // preserving the current selection (matched by QCameraDevice::id()/
+  // QAudioDevice::id(), the SDK's documented stable-but-not-human-readable
+  // identifier -- unlike description(), which could theoretically collide
+  // for two same-model devices) when that device is still present, instead
+  // of always resetting to index 0. Connected to DeviceManager::
+  // devicesChanged() and also called defensively from showEvent(), in case a
+  // device change happened while this widget did not exist or was hidden.
+  void refreshDeviceLists();
 
   pcm::video::DeviceManager *mDeviceManager;
   std::unique_ptr<pcm::video::VideoCaptureAdapter> mPreviewAdapter;

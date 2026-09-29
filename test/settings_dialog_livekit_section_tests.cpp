@@ -5,11 +5,13 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTextEdit>
 #include <QTimer>
 #include <gtest/gtest.h>
 
@@ -34,6 +36,68 @@ TEST(SettingsDialogLiveKitSectionTest, SavingWritesBaseUrlToConfigAndCredentialT
   EXPECT_EQ(savedConfig.token_backend_base_url, "https://token.example.test");
   EXPECT_TRUE(credentialStore->mHasCredential);
   EXPECT_EQ(credentialStore->mCredential, QStringLiteral("bearer-secret"));
+}
+
+// Fixwave userfeedback group A, bug 1: the bearer-credential field is
+// deliberately write-only (typing a new value and reopening Settings never
+// shows dots back), which used to give a false "not saved" impression -- an
+// earlier successful save and no save at all looked identical, since there
+// was zero feedback either way.
+TEST(SettingsDialogLiveKitSectionTest, StatusLabelShowsSavedAfterSuccessfulWrite) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+
+  auto *statusLabel = dialog.findChild<QLabel *>("liveKitBearerCredentialStatusLabel");
+  ASSERT_NE(statusLabel, nullptr);
+  // The fake store's readBearerCredential() (triggered eagerly by the
+  // dialog's constructor) completes synchronously, so the "not set" state is
+  // already visible with no user action.
+  EXPECT_EQ(statusLabel->text(), QStringLiteral("No credentials saved yet"));
+
+  auto *credentialEdit = dialog.findChild<QLineEdit *>("liveKitBearerCredentialEdit");
+  auto *saveButton = dialog.findChild<QPushButton *>("liveKitSaveButton");
+  ASSERT_NE(credentialEdit, nullptr);
+  ASSERT_NE(saveButton, nullptr);
+
+  credentialEdit->setText("bearer-secret");
+  QTest::mouseClick(saveButton, Qt::LeftButton);
+
+  // No need to close and reopen Settings: the write's writeFinished triggers
+  // a re-read, which updates the label in the same dialog session.
+  EXPECT_EQ(statusLabel->text(), QStringLiteral("Credentials are saved"));
+}
+
+TEST(SettingsDialogLiveKitSectionTest,
+    ExistingStoredCredentialShowsSavedOnConstructionWithoutExposingItsValue) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  credentialStore->mHasCredential = true;
+  credentialStore->mCredential = QStringLiteral("super-secret-bearer-value");
+  SettingsDialog dialog(nullptr, credentialStore);
+
+  auto *statusLabel = dialog.findChild<QLabel *>("liveKitBearerCredentialStatusLabel");
+  ASSERT_NE(statusLabel, nullptr);
+  EXPECT_EQ(statusLabel->text(), QStringLiteral("Credentials are saved"));
+
+  // The bearer-credential edit itself must stay blank -- the whole point of
+  // the write-only design is that the real secret is never loaded back in.
+  auto *credentialEdit = dialog.findChild<QLineEdit *>("liveKitBearerCredentialEdit");
+  ASSERT_NE(credentialEdit, nullptr);
+  EXPECT_TRUE(credentialEdit->text().isEmpty());
+
+  // Belt and suspenders: the raw credential string must never appear as the
+  // text/content of ANY widget in the dialog, not just the obvious one.
+  for (auto *widget : dialog.findChildren<QWidget *>()) {
+    if (auto *label = qobject_cast<QLabel *>(widget)) {
+      EXPECT_FALSE(label->text().contains(credentialStore->mCredential))
+          << "QLabel " << label->objectName().toStdString() << " exposed the credential";
+    } else if (auto *lineEdit = qobject_cast<QLineEdit *>(widget)) {
+      EXPECT_FALSE(lineEdit->text().contains(credentialStore->mCredential))
+          << "QLineEdit " << lineEdit->objectName().toStdString() << " exposed the credential";
+    } else if (auto *textEdit = qobject_cast<QTextEdit *>(widget)) {
+      EXPECT_FALSE(textEdit->toPlainText().contains(credentialStore->mCredential))
+          << "QTextEdit " << textEdit->objectName().toStdString() << " exposed the credential";
+    }
+  }
 }
 
 namespace {

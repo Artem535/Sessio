@@ -124,7 +124,9 @@ target_link_libraries(Sessio_frame_convert_tests PRIVATE
 gtest_discover_tests(Sessio_frame_convert_tests)
 
 # Device manager tests
+find_package(Qt6 REQUIRED COMPONENTS Test)
 add_executable(Sessio_device_manager_tests
+    ${CMAKE_SOURCE_DIR}/src/video/device_manager.h
     ${CMAKE_SOURCE_DIR}/src/video/device_manager.cpp
     device_manager_tests.cpp
 )
@@ -134,7 +136,9 @@ target_link_libraries(Sessio_device_manager_tests PRIVATE
     GTest::gtest_main
     Qt6::Core
     Qt6::Multimedia
+    Qt6::Test
 )
+set_target_properties(Sessio_device_manager_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_device_manager_tests)
 
 # Video capture adapter smoke test (own main(), not GoogleTest — needs a
