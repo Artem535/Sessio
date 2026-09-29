@@ -14,6 +14,7 @@ endif()
 
 find_file(_fixture_library NAMES libz.so.1
   PATHS /lib64 /usr/lib64 /lib /usr/lib
+  PATH_SUFFIXES x86_64-linux-gnu aarch64-linux-gnu
   REQUIRED)
 find_program(_fixture_binary true REQUIRED)
 
