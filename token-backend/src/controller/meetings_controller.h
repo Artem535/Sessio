@@ -1,6 +1,7 @@
 #pragma once
 
 #include "controller/dto.h"
+#include "controller/invitation_url.h"
 #include "controller/request_log.h"
 #include "service/meeting_service.h"
 
@@ -76,7 +77,8 @@ public:
     logRequestOk("POST", kRoute, result.value->meetingRef, Status::CODE_200.code);
     auto dto = CreateMeetingResponseDto::createShared();
     dto->meetingRef = result.value->meetingRef;
-    dto->invitationUrl = invitationBaseUrl_ + result.value->invitationCode;
+    dto->invitationUrl = formatInvitationUrl(invitationBaseUrl_, result.value->invitationCode,
+                                             result.value->passcode);
     dto->passcode = result.value->passcode;
     dto->scheduledStart = result.value->scheduledStart;
     dto->scheduledEnd = result.value->scheduledEnd;
@@ -97,7 +99,8 @@ public:
     logRequestOk("POST", kRoute, result.value->meetingRef, Status::CODE_200.code);
     auto dto = ReissueInvitationResponseDto::createShared();
     dto->meetingRef = result.value->meetingRef;
-    dto->invitationUrl = invitationBaseUrl_ + result.value->invitationCode;
+    dto->invitationUrl = formatInvitationUrl(invitationBaseUrl_, result.value->invitationCode,
+                                             result.value->passcode);
     dto->passcode = result.value->passcode;
     dto->scheduledStart = result.value->scheduledStart;
     dto->scheduledEnd = result.value->scheduledEnd;

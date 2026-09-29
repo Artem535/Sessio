@@ -60,6 +60,22 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
           });
 
   connect(mCallPage, &CallPage::callEnded, this, [this]() { mStack->setCurrentWidget(mEntryWidget); });
+  connect(mCallPage, &CallPage::deviceCheckCanceled, this, [this]() {
+    if (!mSession) {
+      return;
+    }
+    using pcm::video::VideoSessionState;
+    const auto state = mSession->state();
+    if (state != VideoSessionState::NoMeeting && state != VideoSessionState::Provisioned &&
+        state != VideoSessionState::PrejoinCheck) {
+      return;
+    }
+    mSession.reset();
+    mPendingUrl.clear();
+    mPendingToken.clear();
+    mCurrentEventId.reset();
+    mStack->setCurrentWidget(mEntryWidget);
+  });
 
   // Fix round 1: the real join() call is gated behind the user's own
   // confirmation on CallPage's device-check screen, not fired the instant a

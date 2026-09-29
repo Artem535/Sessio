@@ -31,6 +31,7 @@ public:
 
 signals:
   void leaveRequested();
+  void deviceCheckCanceled();
   void callEnded();
   // Emitted when the user confirms their camera/mic/speaker choices on the
   // device-check screen and clicks its own Join button. CallPage has no

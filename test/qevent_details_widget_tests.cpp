@@ -290,6 +290,22 @@ TEST(QEventDetailsWidgetTest, LiveKitEventWithMeetingRefEnablesOpenAndDisablesCo
   EXPECT_FALSE(form.copyInvite->isEnabled());
 }
 
+TEST(QEventDetailsWidgetTest, LiveKitEventWithSessioInvitationEnablesCopyButtons) {
+  MeetingCoordinator coordinator("", "");
+  EventDetailsFixture form(&coordinator);
+  ASSERT_TRUE(form.allFound());
+  const auto event = makeLiveKitEvent(QStringLiteral("ref-old"));
+  event->setMeetingUrl(
+      QStringLiteral("sessio://join?code=code-1&passcode=123456&backend=https%3A%2F%2F"
+                     "livekit.sessio-pcm.ru"));
+
+  form.widget.loadEvent(event.get());
+
+  EXPECT_TRUE(form.openMeeting->isEnabled());
+  EXPECT_TRUE(form.copyLink->isEnabled());
+  EXPECT_TRUE(form.copyInvite->isEnabled());
+}
+
 TEST(QEventDetailsWidgetTest, LiveKitEventWithoutMeetingRefDisablesAllMeetingButtons) {
   MeetingCoordinator coordinator("", "");
   EventDetailsFixture form(&coordinator);

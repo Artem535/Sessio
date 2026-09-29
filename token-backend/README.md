@@ -24,7 +24,7 @@ ctest --test-dir build --output-on-failure
 | `LIVEKIT_API_KEY` | yes | — | Must match the self-hosted LiveKit server's key |
 | `LIVEKIT_API_SECRET` | yes | — | Must match the self-hosted LiveKit server's secret |
 | `LIVEKIT_WS_ENDPOINT` | **yes** | — | Returned to clients as the connection URL |
-| `INVITATION_BASE_URL` | **yes** | — | Prefix the invitation code is appended to |
+| `INVITATION_BASE_URL` | **yes** | — | Legacy code prefix or a `std::format` URL template |
 | `TOKEN_TTL_SECONDS` | no | `600` | LiveKit JWT lifetime |
 
 All of these are read once at startup by `Config::fromEnv()`. A missing or
@@ -38,6 +38,19 @@ set it would silently point every call at that server in plaintext.
 
 `--seed-account` is the exception: it touches only the database, so it needs
 `DB_PATH` alone and none of the required variables.
+
+`INVITATION_BASE_URL` remains backward-compatible with a prefix such as
+`https://join.example.test/j/`, to which the invitation code is appended. For
+the Sessio desktop deep link, configure a positional `std::format` template
+instead (the first field is the code, the second is the passcode):
+
+```sh
+INVITATION_BASE_URL='sessio://join?code={}&passcode={}&backend=https%3A%2F%2Flivekit.sessio-pcm.ru'
+```
+
+Named fields such as `{code}` are not supported by the C++ standard formatter;
+the service rejects an invalid template at startup rather than silently issuing
+broken invitations.
 
 ## API
 
@@ -83,7 +96,7 @@ Response `200`:
 ```json
 {
   "meetingRef": "mtg_AbC123...",
-  "invitationUrl": "https://<INVITATION_BASE_URL>/<invitation code>",
+  "invitationUrl": "<configured invitation URL for this code and passcode>",
   "passcode": "048213",
   "scheduledStart": "2026-10-01T10:00:00Z",
   "scheduledEnd": "2026-10-01T10:50:00Z"

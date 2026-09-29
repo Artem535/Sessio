@@ -150,6 +150,36 @@ TEST(CallsPageTest, RealJoinIsGatedBehindDeviceCheckConfirmation) {
   EXPECT_EQ(fakeProvider->mLastJoinToken, QStringLiteral("jwt-1"));
 }
 
+TEST(CallsPageTest, BackFromDeviceCheckReturnsToTheJoinFormWithoutJoining) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, R"({
+    "endpointUrl": "wss://livekit.example.test", "roomName": "room-1",
+    "token": "jwt-1", "expiresAt": 999
+  })");
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+  FakeVideoProvider *fakeProvider = nullptr;
+  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+    fakeProvider = new FakeVideoProvider();
+    return fakeProvider;
+  });
+
+  page.findChild<QLineEdit *>("joinCodeEdit")->setText("code-1");
+  page.findChild<QLineEdit *>("joinPasscodeEdit")->setText("123456");
+  page.findChild<QPushButton *>("joinByCodeButton")->click();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider != nullptr; }, 2000));
+
+  auto *backButton = page.findChild<QPushButton *>("backFromDeviceCheckButton");
+  ASSERT_NE(backButton, nullptr);
+  EXPECT_EQ(fakeProvider->mJoinCallCount, 0);
+  backButton->click();
+
+  auto *stack = page.findChild<QStackedWidget *>(QString(), Qt::FindDirectChildrenOnly);
+  ASSERT_NE(stack, nullptr);
+  EXPECT_EQ(stack->currentWidget(), page.findChild<CallEntryWidget *>());
+}
+
 namespace {
 
 const char *const kTokenResponse = R"({

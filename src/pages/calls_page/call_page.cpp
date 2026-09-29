@@ -72,6 +72,7 @@ void CallPage::buildDeviceCheckScreen(pcm::video::DeviceManager *deviceManager) 
   // "the user confirmed" to whoever attached the session (CallsPage), which
   // does hold the pending url/token and performs the actual join() call.
   connect(mDeviceCheck, &DeviceCheckWidget::joinRequested, this, &CallPage::joinConfirmed);
+  connect(mDeviceCheck, &DeviceCheckWidget::backRequested, this, &CallPage::deviceCheckCanceled);
   mStack->addWidget(mDeviceCheck);
 }
 

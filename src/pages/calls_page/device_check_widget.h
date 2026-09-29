@@ -24,6 +24,7 @@ public:
 
 signals:
   void joinRequested();
+  void backRequested();
 
 protected:
   void showEvent(QShowEvent *event) override;

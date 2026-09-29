@@ -16,6 +16,8 @@ add_library(token_backend_lib STATIC
   src/controller/health_controller.h
   src/controller/dto.h
   src/controller/request_log.h
+  src/controller/invitation_url.h
+  src/controller/invitation_url.cpp
   src/controller/meetings_controller.h
   src/controller/invitations_controller.h
   src/config.cpp

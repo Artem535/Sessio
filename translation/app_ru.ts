@@ -579,6 +579,10 @@
 <context>
     <name>DeviceCheckWidget</name>
     <message>
+        <source>Back</source>
+        <translation>Назад</translation>
+    </message>
+    <message>
         <source>Join</source>
         <translation>Присоединиться</translation>
     </message>

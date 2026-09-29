@@ -972,7 +972,7 @@ void QEventDetailsWidget::onOpenMeetingClicked() {
 }
 
 void QEventDetailsWidget::onCopyMeetingUrlClicked() {
-  if (!pcm::meeting::isValidMeetingUrl(mMeetingUrlEdit->text())) {
+  if (!pcm::meeting::isValidInvitationUrl(mMeetingUrlEdit->text())) {
     QMessageBox::warning(this, tr(": ERROR_TITLE"),
                          tr("Enter a valid http or https meeting link."));
     return;
@@ -982,7 +982,7 @@ void QEventDetailsWidget::onCopyMeetingUrlClicked() {
 }
 
 void QEventDetailsWidget::onCopyMeetingInviteClicked() {
-  if (!pcm::meeting::isValidMeetingUrl(mMeetingUrlEdit->text())) {
+  if (!pcm::meeting::isValidInvitationUrl(mMeetingUrlEdit->text())) {
     QMessageBox::warning(this, tr(": ERROR_TITLE"),
                          tr("Enter a valid http or https meeting link."));
     return;
@@ -1023,7 +1023,7 @@ void QEventDetailsWidget::updateButtonState() const {
     // URL is still shareable with the participant; the passcode is delivered
     // through the separate channel kept in invitationState.
     mOpenMeetingButton->setEnabled(!mCurrentEvent->meetingRef().isEmpty());
-    const bool hasValidMeetingUrl = pcm::meeting::isValidMeetingUrl(mMeetingUrlEdit->text());
+    const bool hasValidMeetingUrl = pcm::meeting::isValidInvitationUrl(mMeetingUrlEdit->text());
     mCopyMeetingUrlButton->setEnabled(hasValidMeetingUrl);
     mCopyMeetingInviteButton->setEnabled(hasValidMeetingUrl);
     return;

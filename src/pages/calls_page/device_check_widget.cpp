@@ -75,6 +75,11 @@ DeviceCheckWidget::DeviceCheckWidget(pcm::video::DeviceManager *deviceManager, Q
   layout->addWidget(mMicrophoneCombo);
   layout->addWidget(mSpeakerCombo);
 
+  auto *backButton = new QPushButton(tr("Back"), this);
+  backButton->setObjectName("backFromDeviceCheckButton");
+  connect(backButton, &QPushButton::clicked, this, &DeviceCheckWidget::backRequested);
+  layout->addWidget(backButton);
+
   auto *joinButton = new QPushButton(tr("Join"), this);
   joinButton->setObjectName("joinButton");
   connect(joinButton, &QPushButton::clicked, this, &DeviceCheckWidget::joinRequested);

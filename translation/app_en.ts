@@ -578,6 +578,10 @@
 <context>
     <name>DeviceCheckWidget</name>
     <message>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
         <source>Join</source>
         <translation>Join</translation>
     </message>

@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-09-29
+
+### Fixed
+
+- The device-check preview has a Back button that safely returns to the
+  join form without joining a call; leaving an active room continues to
+  return to that same form.
+- LiveKit invitations may now use the Sessio `sessio://join` deep-link
+  format, so the copy controls remain available for generated invitations.
+- The token backend supports an `INVITATION_BASE_URL` positional standard
+  format template, allowing it to embed the invitation code and passcode
+  into a valid Sessio deep link while retaining legacy prefix configuration.
+
 ## [0.2.0] - 2026-09-28
 
 ### Added
