@@ -583,6 +583,19 @@ add_test(NAME ClientModeSettingsDialogSourceHasNoDatabaseDependency
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/client_mode_window_structural_test.sh
                  ${CMAKE_SOURCE_DIR}/src/app/client_mode_settings_dialog.cpp)
 
+# BusySpinner tests
+add_executable(Sessio_busy_spinner_tests
+    busy_spinner_tests.cpp
+)
+target_include_directories(Sessio_busy_spinner_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/widgets)
+target_link_libraries(Sessio_busy_spinner_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Sessio_widgets
+)
+set_target_properties(Sessio_busy_spinner_tests PROPERTIES AUTOMOC ON)
+add_test(NAME BusySpinnerTests COMMAND Sessio_busy_spinner_tests)
+
 # CPack runs install scripts through a DESTDIR staging tree. Keep the
 # LiveKit-runtime bundler's staging contract executable without rebuilding
 # the application or its vcpkg dependencies.

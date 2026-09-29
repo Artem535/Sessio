@@ -19,6 +19,8 @@ qt_add_library(${TARGET_NAME} STATIC
         tab_button.cpp
         rounded_calendar_widget.cpp
         quick_slots_widget.cpp
+        busy_spinner.cpp
+        busy_spinner.h
 )
 
 #add_dependencies(${TARGET_NAME}
