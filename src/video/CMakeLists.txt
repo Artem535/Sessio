@@ -47,6 +47,18 @@ get_filename_component(_lk_cmake_dir "${LiveKit_DIR}" DIRECTORY)
 get_filename_component(_lk_lib_dir "${_lk_cmake_dir}" DIRECTORY)
 target_link_directories(${TARGET_NAME} PUBLIC "${_lk_lib_dir}")
 
+if(UNIX AND NOT APPLE)
+  # The prebuilt Linux LiveKit SDK has a runtime dependency on libcurl, but
+  # its exported CMake target omits that dependency. Link it explicitly so
+  # GNU ld verifies the curl ABI required by liblivekit at build time.
+  set(LIVEKIT_CURL_LIBRARY "" CACHE FILEPATH
+      "libcurl shared library compatible with the prebuilt LiveKit Linux SDK")
+  if(NOT LIVEKIT_CURL_LIBRARY)
+    find_library(LIVEKIT_CURL_LIBRARY NAMES curl libcurl.so.4 REQUIRED)
+  endif()
+  target_link_libraries(${TARGET_NAME} PUBLIC "${LIVEKIT_CURL_LIBRARY}")
+endif()
+
 if(WIN32)
   get_filename_component(_lk_prefix "${_lk_lib_dir}" DIRECTORY)
   set(_lk_bin_dir "${_lk_prefix}/bin")
