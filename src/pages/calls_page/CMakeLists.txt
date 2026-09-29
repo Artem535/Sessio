@@ -23,5 +23,6 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         Qt6::MultimediaWidgets
         ${PROJECT_NAME}_video
         ${PROJECT_NAME}_token_client
+        ${PROJECT_NAME}_widgets
 )
 target_include_directories(${TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})

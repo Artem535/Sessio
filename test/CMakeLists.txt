@@ -509,7 +509,9 @@ target_link_libraries(Sessio_call_page_tests PRIVATE
     Qt6::StateMachine
     Sessio_calls_page
     Sessio_video
+    Sessio_widgets
 )
+target_include_directories(Sessio_call_page_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/widgets)
 set_target_properties(Sessio_call_page_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_call_page_tests)
 

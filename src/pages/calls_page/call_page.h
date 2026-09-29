@@ -1,5 +1,6 @@
 #pragma once
 
+#include "busy_spinner.h"
 #include "device_check_widget.h"
 #include "device_manager.h"
 #include "remote_video_renderer.h"
@@ -85,6 +86,7 @@ private:
   // provider (e.g. when CallsPage replaces its session) while still shown.
   QPointer<QWidget> mActiveRemoteVideoWidget;
   QWidget *mReconnectingBanner{nullptr};
+  QLabel *mReconnectingLabel{nullptr};
   // Non-fatal, transient local-device notice (VideoSession::mediaError()) —
   // distinct from mReconnectingBanner (connection state) and mEndedReasonLabel
   // (a terminal reason on the ended screen): the call keeps running while

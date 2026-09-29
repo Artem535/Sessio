@@ -1,6 +1,7 @@
 #include "call_page.h"
 #include "fake_video_provider.h"
 #include "device_manager.h"
+#include "busy_spinner.h"
 
 #include <QApplication>
 #include <QLabel>
@@ -370,6 +371,33 @@ TEST(CallPageTest, SidePanelToggleHiddenByDefaultUntilMadeVisible) {
 
   page.setSidePanelToggleVisible(true);
   EXPECT_NE(page.findChild<QPushButton *>("notesToggleButton"), nullptr);
+}
+
+TEST(CallPageTest, ConnectingScreenShowsCenteredSpinnerAndHeadline) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  QSignalSpy stateSpy(&session, &VideoSession::stateChanged);
+
+  session.join("wss://x", "token");
+  waitForState(session, stateSpy, VideoSessionState::Joining);
+
+  auto *connectingLabel = page.findChild<QLabel *>("connectingLabel");
+  ASSERT_NE(connectingLabel, nullptr);
+  EXPECT_EQ(connectingLabel->alignment() & Qt::AlignHCenter, Qt::AlignHCenter);
+
+  auto *spinner = page.findChild<pcm::widgets::BusySpinner *>("connectingSpinner");
+  ASSERT_NE(spinner, nullptr);
+  EXPECT_TRUE(spinner->isVisibleTo(spinner->parentWidget()));
+}
+
+TEST(CallPageTest, ReconnectingBannerHasASpinner) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *spinner = page.findChild<pcm::widgets::BusySpinner *>("reconnectingSpinner");
+  ASSERT_NE(spinner, nullptr);
 }
 
 int main(int argc, char **argv) {

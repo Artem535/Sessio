@@ -1,5 +1,6 @@
 #include "call_page.h"
 
+#include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -26,29 +27,56 @@ CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : 
   buildDeviceCheckScreen(deviceManager);
 
   mConnectingScreen = new QWidget(this);
-  new QVBoxLayout(mConnectingScreen);
+  auto *connectingLayout = new QVBoxLayout(mConnectingScreen);
+  connectingLayout->addStretch();
+  auto *connectingSpinner = new pcm::widgets::BusySpinner(mConnectingScreen);
+  connectingSpinner->setObjectName("connectingSpinner");
+  auto *spinnerRow = new QHBoxLayout();
+  spinnerRow->addStretch();
+  spinnerRow->addWidget(connectingSpinner);
+  spinnerRow->addStretch();
+  connectingLayout->addLayout(spinnerRow);
   mConnectingLabel = new QLabel(tr("Connecting..."), mConnectingScreen);
   mConnectingLabel->setObjectName("connectingLabel");
-  static_cast<QVBoxLayout *>(mConnectingScreen->layout())->addWidget(mConnectingLabel);
+  mConnectingLabel->setAlignment(Qt::AlignCenter);
+  mConnectingLabel->setFont(QFont(QStringLiteral("Inter Display"), 20));
+  connectingLayout->addWidget(mConnectingLabel);
+  connectingLayout->addStretch();
   mStack->addWidget(mConnectingScreen);
 
   buildConnectedScreen();
 
-  mReconnectingBanner = new QLabel(tr("Reconnecting..."), this);
+  mReconnectingBanner = new QWidget(this);
   mReconnectingBanner->setObjectName("reconnectingBanner");
   mReconnectingBanner->setVisible(false);
+  auto *reconnectingLayout = new QHBoxLayout(mReconnectingBanner);
+  reconnectingLayout->addStretch();
+  auto *reconnectingSpinner = new pcm::widgets::BusySpinner(mReconnectingBanner);
+  reconnectingSpinner->setObjectName("reconnectingSpinner");
+  reconnectingLayout->addWidget(reconnectingSpinner);
+  mReconnectingLabel = new QLabel(tr("Reconnecting..."), mReconnectingBanner);
+  mReconnectingLabel->setFont(QFont(QStringLiteral("Inter"), 16));
+  reconnectingLayout->addWidget(mReconnectingLabel);
+  reconnectingLayout->addStretch();
   outer->addWidget(mReconnectingBanner);
 
   mEndedScreen = new QWidget(this);
   auto *endedLayout = new QVBoxLayout(mEndedScreen);
-  endedLayout->addWidget(new QLabel(tr("Call ended."), mEndedScreen));
+  endedLayout->addStretch();
+  auto *endedHeadline = new QLabel(tr("Call ended."), mEndedScreen);
+  endedHeadline->setAlignment(Qt::AlignCenter);
+  endedHeadline->setFont(QFont(QStringLiteral("Inter Display"), 20));
+  endedLayout->addWidget(endedHeadline);
   // Shown only when the session failed with a reason (joinFailed()/
   // reconnectFailed()); a normal user-initiated leave shows nothing here.
   mEndedReasonLabel = new QLabel(mEndedScreen);
   mEndedReasonLabel->setObjectName("endedReasonLabel");
   mEndedReasonLabel->setWordWrap(true);
+  mEndedReasonLabel->setAlignment(Qt::AlignCenter);
+  mEndedReasonLabel->setFont(QFont(QStringLiteral("Inter"), 16));
   mEndedReasonLabel->setVisible(false);
   endedLayout->addWidget(mEndedReasonLabel);
+  endedLayout->addStretch();
   mStack->addWidget(mEndedScreen);
 
   mStack->setCurrentWidget(mDeviceCheck);
