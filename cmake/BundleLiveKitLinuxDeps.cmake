@@ -58,16 +58,58 @@ if(_unresolved)
     "without them installed system-wide.")
 endif()
 
-# Copy LiveKit's own libs plus every resolved dependency into the private
-# dir. Skip anything already present directly in SESSIO_INSTALL_LIBDIR
-# (Qt's own deploy script may have already placed a same-named file there,
-# e.g. it already copies liblivekit.so/liblivekit_ffi.so themselves —
-# copying those into the private dir too, alongside curl, is what lets
-# LiveKit's own libs and curl resolve each other via a single $ORIGIN
-# rpath once patched below).
-set(_all_libs ${_lk_own_libs} ${_resolved})
-list(REMOVE_DUPLICATES _all_libs)
-foreach(_lib_path IN LISTS _all_libs)
+# Copy LiveKit's own libs (liblivekit.so, liblivekit_ffi.so, and anything
+# else that ships directly alongside them in the SDK's lib/ dir, such as
+# LiveKit's own bundled libcurl.so.4) into the private dir and give each an
+# $ORIGIN rpath, so they resolve each other and their own further
+# dependencies (patched in below) from within that one private directory.
+foreach(_lib_path IN LISTS _lk_own_libs)
+  get_filename_component(_lib_name "${_lib_path}" NAME)
+  file(COPY "${_lib_path}" DESTINATION "${_private_dir}" FOLLOW_SYMLINK_CHAIN)
+  set(_private_copy "${_private_dir}/${_lib_name}")
+  set(_patch_ok FALSE)
+  if(EXISTS "${_private_copy}")
+    execute_process(
+      COMMAND "${PATCHELF_EXECUTABLE}" --set-rpath "$ORIGIN" "${_private_copy}"
+      RESULT_VARIABLE _rc
+    )
+    if(_rc EQUAL 0)
+      set(_patch_ok TRUE)
+    else()
+      message(WARNING "BundleLiveKitLinuxDeps: patchelf --set-rpath failed on ${_lib_name}")
+    endif()
+  else()
+    message(WARNING "BundleLiveKitLinuxDeps: expected private copy ${_private_copy} does not exist after file(COPY)")
+  endif()
+
+  # qt_generate_deploy_app_script() already placed an UNPATCHED copy of
+  # LiveKit's own direct link libraries (liblivekit.so/liblivekit_ffi.so)
+  # directly in SESSIO_INSTALL_LIBDIR (bare lib/), since they are Sessio's
+  # own direct runtime deps. That bare copy's RUNPATH ($ORIGIN, i.e. bare
+  # lib/ itself) can never see this script's private curl/openssl/etc
+  # chain, and Sessio's rpath search order ($ORIGIN/../lib BEFORE
+  # $ORIGIN/../lib/sessio, set below) means that bare, unpatched copy would
+  # be found FIRST and loaded instead of the correctly-patched one above —
+  # silently defeating this entire script (libcurl.so.4/libssl.so.3/etc
+  # would still resolve against the host system). Delete the bare copy so
+  # Sessio's rpath search falls through to the private, patched one
+  # instead. Only do this once the private copy is confirmed to exist AND
+  # be correctly patched, so a failure above can never leave the app with
+  # NEITHER a working bare copy NOR a working private one.
+  set(_bare_copy "${SESSIO_INSTALL_LIBDIR}/${_lib_name}")
+  if(_patch_ok AND EXISTS "${_bare_copy}")
+    file(REMOVE "${_bare_copy}")
+  endif()
+endforeach()
+
+# Copy every further resolved runtime dependency (curl's own transitive
+# closure: OpenSSL, GnuTLS, Kerberos, LDAP, etc) into the same private dir,
+# also with an $ORIGIN rpath. Unlike liblivekit.so/liblivekit_ffi.so above,
+# Qt's deploy script never placed any of these directly in
+# SESSIO_INSTALL_LIBDIR (it only walks Sessio's own DIRECT link deps), so
+# there is no bare copy to worry about here.
+list(REMOVE_DUPLICATES _resolved)
+foreach(_lib_path IN LISTS _resolved)
   get_filename_component(_lib_name "${_lib_path}" NAME)
   file(COPY "${_lib_path}" DESTINATION "${_private_dir}" FOLLOW_SYMLINK_CHAIN)
   execute_process(
