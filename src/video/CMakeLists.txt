@@ -52,10 +52,20 @@ if(WIN32)
   set(_lk_bin_dir "${_lk_prefix}/bin")
   foreach(_lk_runtime_dll IN ITEMS livekit.dll livekit_ffi.dll)
     if(EXISTS "${_lk_bin_dir}/${_lk_runtime_dll}")
+      # Copied next to the Sessio EXECUTABLE (not this static library's own
+      # .lib output directory, which is a different path and useless here —
+      # Windows resolves a DLL relative to the .exe that needs it at
+      # runtime, not relative to any static library linked into it) so a
+      # local dev build can actually run without a missing-DLL error.
+      # ${TARGET_NAME} (Sessio_video) is a static library with no DLLs of
+      # its own to place; Sessio is this project's one executable target,
+      # defined later in the top-level CMakeLists.txt — a forward reference
+      # through a generator expression is fine, since it resolves after the
+      # whole project is configured, not at the point this command is added.
       add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${_lk_bin_dir}/${_lk_runtime_dll}"
-                "$<TARGET_FILE_DIR:${TARGET_NAME}>")
+                "$<TARGET_FILE_DIR:Sessio>")
     endif()
   endforeach()
 endif()

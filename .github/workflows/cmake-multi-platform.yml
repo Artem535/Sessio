@@ -272,6 +272,19 @@ jobs:
           Copy-Item $keychainDll.FullName (Join-Path $env:QT_ROOT_DIR "bin") -Force
           Copy-Item $keychainDll.FullName build-release/packages/Sessio/ -Force
 
+          # LiveKit's prebuilt SDK ships its own runtime DLLs (not built by
+          # this project, so they never land next to Sessio.exe on their
+          # own) — without this, the installer launches but any LiveKit
+          # call fails immediately with a missing-DLL error.
+          foreach ($dllName in "livekit.dll", "livekit_ffi.dll") {
+            $dll = Get-ChildItem build-release/_deps/livekit-sdk -Recurse -Filter $dllName |
+              Select-Object -First 1
+            if ($null -eq $dll) {
+              throw "$dllName was not found under build-release/_deps/livekit-sdk"
+            }
+            Copy-Item $dll.FullName build-release/packages/Sessio/ -Force
+          }
+
       - name: Run windeployqt
         if: runner.os == 'Windows'
         shell: pwsh
