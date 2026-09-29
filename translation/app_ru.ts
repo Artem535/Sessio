@@ -144,6 +144,10 @@
         <source>Notes</source>
         <translation>Заметки</translation>
     </message>
+    <message>
+        <source>Waiting for the other participant to join...</source>
+        <translation>Ожидание подключения второго участника...</translation>
+    </message>
 </context>
 <context>
     <name>ClientChartsWidget</name>
@@ -1818,6 +1822,14 @@ See you!</source>
 %1</source>
         <translation>Не удалось сохранить URL токен-бэкенда:
 %1</translation>
+    </message>
+    <message>
+        <source>Credentials are saved</source>
+        <translation>Учётные данные сохранены</translation>
+    </message>
+    <message>
+        <source>No credentials saved yet</source>
+        <translation>Учётные данные пока не сохранены</translation>
     </message>
     <message>
         <source>Validate Backup</source>

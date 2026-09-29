@@ -144,6 +144,10 @@
         <source>Notes</source>
         <translation>Notes</translation>
     </message>
+    <message>
+        <source>Waiting for the other participant to join...</source>
+        <translation>Waiting for the other participant to join...</translation>
+    </message>
 </context>
 <context>
     <name>ClientChartsWidget</name>
@@ -1817,6 +1821,14 @@ See you!</translation>
 %1</source>
         <translation>The token backend URL could not be saved:
 %1</translation>
+    </message>
+    <message>
+        <source>Credentials are saved</source>
+        <translation>Credentials are saved</translation>
+    </message>
+    <message>
+        <source>No credentials saved yet</source>
+        <translation>No credentials saved yet</translation>
     </message>
     <message>
         <source>Validate Backup</source>
