@@ -243,6 +243,31 @@ qt_generate_deploy_app_script(
 )
 install(SCRIPT ${deploy_runtime_dependencies_script})
 
+if(UNIX AND NOT APPLE)
+  # The prebuilt Linux LiveKit SDK archive bundles its own libcurl.so.4,
+  # which itself needs ~20 further libraries (OpenSSL, GnuTLS, Kerberos,
+  # LDAP, etc). qt_generate_deploy_app_script() above only walks Sessio's
+  # OWN direct runtime deps (Qt/qlementine/qt6keychain plus liblivekit.so/
+  # liblivekit_ffi.so themselves as direct link deps) — it does not recurse
+  # into what liblivekit.so itself needs. Vendor that whole chain into a
+  # private, RPATH-scoped subdirectory so plain `cpack --generator RPM`
+  # packaging does not silently fall back to the host distro's own
+  # curl/openssl/gnutls/krb5/openldap, which this SDK was never built or
+  # tested against, and does not drop a second libcurl.so.4 at a path
+  # Fedora's own curl package already owns. Linux-only: this problem is
+  # specific to the prebuilt Linux SDK archive's bundled curl; the
+  # AppImage step already handles this correctly via its own linuxdeploy
+  # scan and is untouched by this.
+  set(SESSIO_PRIVATE_LIBDIR_NAME "sessio")
+  install(CODE "
+    set(LIVEKIT_SDK_LIB_DIR \"${LIVEKIT_SDK_LIB_DIR}\")
+    set(SESSIO_INSTALL_LIBDIR \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}\")
+    set(SESSIO_INSTALL_BINDIR \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}\")
+    set(SESSIO_PRIVATE_LIBDIR_NAME \"${SESSIO_PRIVATE_LIBDIR_NAME}\")
+    include(\"${CMAKE_SOURCE_DIR}/cmake/BundleLiveKitLinuxDeps.cmake\")
+  ")
+endif()
+
 set(CPACK_PACKAGE_NAME "Sessio")
 set(CPACK_PACKAGE_VENDOR "Sessio")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})

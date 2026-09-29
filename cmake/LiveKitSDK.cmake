@@ -78,4 +78,10 @@ function(livekit_sdk_setup)
   list(PREPEND CMAKE_PREFIX_PATH "${_extracted_root}")
   set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" PARENT_SCOPE)
   set(LiveKit_DIR "${_extracted_root}/lib/cmake/LiveKit" PARENT_SCOPE)
+  # _extracted_root itself is local to this function and does not escape to
+  # the caller's scope, so export the one piece of it that Linux packaging
+  # needs (the SDK's own lib/ directory, for vendoring its runtime deps —
+  # see cmake/BundleLiveKitLinuxDeps.cmake) explicitly, rather than having
+  # callers reach into this function's internal variable naming.
+  set(LIVEKIT_SDK_LIB_DIR "${_extracted_root}/lib" PARENT_SCOPE)
 endfunction()
