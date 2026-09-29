@@ -253,14 +253,35 @@ QWidget *LiveKitVideoProvider::localVideoWidget() { return mLocalPreviewWidget.d
 void LiveKitVideoProvider::setMicrophoneEnabled(bool enabled) {
   mMicrophoneEnabled = enabled;
   if (mAudioTrack) {
-    enabled ? mAudioTrack->unmute() : mAudioTrack->mute();
+    // mute()/unmute() are documented (local_audio_track.h) to throw
+    // std::runtime_error on FFI failure. This is a local device/publish
+    // problem, never network loss, so it is routed through mediaError() —
+    // same rationale and same try/catch shape as publishTracks() below —
+    // rather than left to escape uncaught out of this slot (CallPage's mute
+    // button calls this directly).
+    try {
+      enabled ? mAudioTrack->unmute() : mAudioTrack->mute();
+    } catch (const std::exception &e) {
+      emit mediaError(QStringLiteral("Failed to %1 microphone: %2")
+                          .arg(enabled ? QStringLiteral("unmute") : QStringLiteral("mute"))
+                          .arg(e.what()));
+    }
   }
 }
 
 void LiveKitVideoProvider::setCameraEnabled(bool enabled) {
   mCameraEnabled = enabled;
   if (mVideoTrack) {
-    enabled ? mVideoTrack->unmute() : mVideoTrack->mute();
+    // See setMicrophoneEnabled() above: mute()/unmute() can throw
+    // std::runtime_error on FFI failure (local_video_track.h), and that must
+    // surface as mediaError(), not escape this slot uncaught.
+    try {
+      enabled ? mVideoTrack->unmute() : mVideoTrack->mute();
+    } catch (const std::exception &e) {
+      emit mediaError(QStringLiteral("Failed to %1 camera: %2")
+                          .arg(enabled ? QStringLiteral("unmute") : QStringLiteral("mute"))
+                          .arg(e.what()));
+    }
   }
 }
 
