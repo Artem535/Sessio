@@ -2,7 +2,30 @@
 #include "livekit_video_provider.h"
 
 #include <QStackedWidget>
+#include <QUrl>
+#include <QUrlQuery>
 #include <QVBoxLayout>
+
+#include <utility>
+
+namespace {
+
+std::pair<QString, QString> joinCredentialsFromInput(const QString &codeOrLink,
+                                                      const QString &passcode) {
+  const QUrl url(codeOrLink.trimmed());
+  if (url.isValid() && url.scheme() == QStringLiteral("sessio") &&
+      url.host() == QStringLiteral("join")) {
+    const QUrlQuery query(url);
+    const QString invitationCode = query.queryItemValue(QStringLiteral("code"));
+    const QString invitationPasscode = query.queryItemValue(QStringLiteral("passcode"));
+    if (!invitationCode.isEmpty() && !invitationPasscode.isEmpty()) {
+      return {invitationCode, invitationPasscode};
+    }
+  }
+  return {codeOrLink, passcode};
+}
+
+} // namespace
 
 CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *deviceManager,
                      pcm::tokenclient::TokenBackendClient *tokenClient, QWidget *parent)
@@ -40,7 +63,9 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
           [this](const QString &code, const QString &passcode) {
             mCurrentEventId.reset(); // a code/passcode join never has a known Event
             mEntryWidget->clearError();
-            mTokenClient->requestClientToken(code, passcode);
+            const auto [invitationCode, invitationPasscode] =
+                joinCredentialsFromInput(code, passcode);
+            mTokenClient->requestClientToken(invitationCode, invitationPasscode);
           });
 
   connect(mEntryWidget, &CallEntryWidget::ownMeetingJoinRequested, this,

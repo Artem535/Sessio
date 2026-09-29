@@ -180,6 +180,23 @@ TEST(CallsPageTest, BackFromDeviceCheckReturnsToTheJoinFormWithoutJoining) {
   EXPECT_EQ(stack->currentWidget(), page.findChild<CallEntryWidget *>());
 }
 
+TEST(CallsPageTest, PastingSessioInvitationUsesItsCodeAndPasscodeForTokenRequest) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(400, R"({"error":"invalid_invitation"})");
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+
+  page.findChild<QLineEdit *>("joinCodeEdit")
+      ->setText("sessio://join?code=code-1&passcode=123456&backend=https%3A%2F%2F"
+                "livekit.sessio-pcm.ru");
+  page.findChild<QPushButton *>("joinByCodeButton")->click();
+
+  ASSERT_TRUE(QTest::qWaitFor([&server]() { return !server.lastPath.isEmpty(); }, 2000));
+  EXPECT_EQ(server.lastPath, QStringLiteral("/v1/invitations/code-1/client-token"));
+  EXPECT_EQ(server.lastBody, QByteArrayLiteral("{\"passcode\":\"123456\"}"));
+}
+
 namespace {
 
 const char *const kTokenResponse = R"({

@@ -10,7 +10,9 @@ All notable changes to this project will be documented in this file.
   join form without joining a call; leaving an active room continues to
   return to that same form.
 - LiveKit invitations may now use the Sessio `sessio://join` deep-link
-  format, so the copy controls remain available for generated invitations.
+  format: pasting one into the join field extracts its code and passcode, and
+  the copy controls remain available in both the event editor and timeline
+  context menu.
 - The token backend supports an `INVITATION_BASE_URL` positional standard
   format template, allowing it to embed the invitation code and passcode
   into a valid Sessio deep link while retaining legacy prefix configuration.

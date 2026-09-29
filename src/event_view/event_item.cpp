@@ -470,7 +470,7 @@ void QEventItem::contextMenuEvent(QGraphicsSceneContextMenuEvent *event) {
   }
 
   QMenu menu;
-  const bool hasValidMeetingUrl = pcm::meeting::isValidMeetingUrl(mMeetingUrl);
+  const bool hasValidMeetingUrl = pcm::meeting::isValidInvitationUrl(mMeetingUrl);
   if (mIsOnline) {
     auto *openMeetingAction = menu.addAction(tr("Open meeting"));
     auto *copyMeetingUrlAction = menu.addAction(tr("Copy meeting link"));
