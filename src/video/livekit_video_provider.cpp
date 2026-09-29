@@ -6,7 +6,11 @@
 #include "remote_video_renderer.h"
 #include "video_capture_adapter.h"
 
+#include <QLabel>
 #include <QMetaObject>
+#include <QPixmap>
+#include <QVideoFrame>
+#include <QVideoSink>
 #include <atomic>
 #include <chrono>
 
@@ -67,6 +71,18 @@ LiveKitVideoProvider::LiveKitVideoProvider(QObject *parent)
   connect(mAudioCapture.get(), &AudioCaptureAdapter::captureFailed, this,
           &VideoProvider::mediaError);
 
+  mLocalPreviewWidget = new QLabel();
+  mLocalPreviewWidget->setObjectName("localVideoWidget");
+  connect(mVideoCapture->previewSink(), &QVideoSink::videoFrameChanged, this,
+          [this](const QVideoFrame &frame) {
+            if (mLocalPreviewWidget && frame.isValid()) {
+              mLocalPreviewWidget->setPixmap(
+                  QPixmap::fromImage(frame.toImage())
+                      .scaled(mLocalPreviewWidget->size(), Qt::KeepAspectRatio,
+                              Qt::SmoothTransformation));
+            }
+          });
+
   // Camera/microphone capture starts in join(), not here: starting it at
   // construction time — before any call is joined or even requested — is
   // a privacy problem (the device's capture indicator lights up with no
@@ -92,6 +108,21 @@ LiveKitVideoProvider::~LiveKitVideoProvider() {
   // second case: the UI never deletes a borrowed widget, it only hands it
   // back with setParent(nullptr) when swapping it out.
   delete mRemoteVideo.data();
+  // This provider owns mLocalPreviewWidget for its whole life, even while a
+  // UI (CallPage) has reparented it into its own layout via
+  // localVideoWidget(). Deleting it here unconditionally is safe in every
+  // ordering, and is NOT a double delete:
+  //  - UI destroyed first: Qt's parent-child cleanup deleted the widget,
+  //    which nulled this QPointer, so this is `delete nullptr` (a no-op).
+  //  - Provider destroyed first while the widget is still embedded: deleting
+  //    a child QWidget is well-defined in Qt — ~QObject detaches it from its
+  //    parent's children list (so the parent never deletes it again) and the
+  //    parent's layout drops its item on the resulting ChildRemoved event.
+  //    The UI holds it only through a QPointer, which nulls too.
+  // Deleting only when parent() == nullptr would instead leak it in the
+  // second case: the UI never deletes a borrowed widget, it only hands it
+  // back with setParent(nullptr) when swapping it out.
+  delete mLocalPreviewWidget.data();
   // No explicit releaseLiveKitRuntime() call here: mRuntimeGuard's own
   // destructor handles it automatically, and — because it is declared
   // first in the header — runs last, after mVideoCapture/mAudioCapture/
@@ -217,6 +248,41 @@ void LiveKitVideoProvider::join(const QString &url, const QString &token) {
 
 QWidget *LiveKitVideoProvider::remoteVideoWidget() { return mRemoteVideo.data(); }
 
+QWidget *LiveKitVideoProvider::localVideoWidget() { return mLocalPreviewWidget.data(); }
+
+void LiveKitVideoProvider::setMicrophoneEnabled(bool enabled) {
+  mMicrophoneEnabled = enabled;
+  if (mAudioTrack) {
+    enabled ? mAudioTrack->unmute() : mAudioTrack->mute();
+  }
+}
+
+void LiveKitVideoProvider::setCameraEnabled(bool enabled) {
+  mCameraEnabled = enabled;
+  if (mVideoTrack) {
+    enabled ? mVideoTrack->unmute() : mVideoTrack->mute();
+  }
+}
+
+void LiveKitVideoProvider::switchCamera(const QCameraDevice &device) {
+  // Same livekit::VideoSource the whole call publishes from — start()
+  // only restarts the Qt-side QCamera/capture worker, so no republish is
+  // needed.
+  mVideoCapture->start(device);
+}
+
+void LiveKitVideoProvider::switchMicrophone(const QAudioDevice &device) {
+  mAudioCapture->start(device);
+}
+
+void LiveKitVideoProvider::switchSpeaker(const QAudioDevice &device) {
+  mSelectedSpeaker = device;
+  if (mRemoteAudioTrack) {
+    mRemoteAudio->detach();
+    mRemoteAudio->attachTrack(mRemoteAudioTrack, device);
+  }
+}
+
 void LiveKitVideoProvider::leave() {
   if (mRemoteVideo) {
     mRemoteVideo->detach();
@@ -253,6 +319,9 @@ void LiveKitVideoProvider::publishTracks() {
     audioOptions.dtx = false;
     audioOptions.simulcast = false;
     localParticipant->publishTrack(mAudioTrack, audioOptions);
+    if (!mMicrophoneEnabled) {
+      mAudioTrack->mute();
+    }
   } catch (const std::exception &e) {
     emit mediaError(QStringLiteral("Failed to publish audio: %1").arg(e.what()));
   }
@@ -264,6 +333,9 @@ void LiveKitVideoProvider::publishTracks() {
     videoOptions.dtx = false;
     videoOptions.simulcast = true;
     localParticipant->publishTrack(mVideoTrack, videoOptions);
+    if (!mCameraEnabled) {
+      mVideoTrack->mute();
+    }
   } catch (const std::exception &e) {
     emit mediaError(QStringLiteral("Failed to publish video: %1").arg(e.what()));
   }
@@ -302,7 +374,7 @@ void LiveKitVideoProvider::onTrackSubscribed(livekit::Room &, const livekit::Tra
           }
         } else if (kind == livekit::TrackKind::KIND_AUDIO) {
           mRemoteAudioTrack = track;
-          const auto device = mDeviceManager->defaultSpeaker();
+          const auto device = mSelectedSpeaker ? mSelectedSpeaker : mDeviceManager->defaultSpeaker();
           if (device) {
             mRemoteAudio->attachTrack(track, *device);
           }

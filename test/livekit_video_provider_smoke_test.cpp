@@ -84,5 +84,40 @@ int main(int argc, char *argv[]) {
   }
   std::cout << "livekit_video_provider_smoke_test: remote video widget ownership checks passed"
             << std::endl;
+
+  {
+    // Construct-only checks: localVideoWidget() must be non-null, the
+    // mic/camera flags must default to enabled, and toggling either before
+    // any join() must not crash or throw -- mAudioTrack/mVideoTrack are both
+    // still null at this point, so this only passes if
+    // setMicrophoneEnabled()/setCameraEnabled() actually hit their
+    // `if (mAudioTrack)`/`if (mVideoTrack)` guards instead of dereferencing a
+    // null track.
+    auto provider = std::make_unique<pcm::video::LiveKitVideoProvider>();
+    if (provider->localVideoWidget() == nullptr) {
+      std::cerr << "livekit_video_provider_smoke_test: no local video widget" << std::endl;
+      return 1;
+    }
+    if (!provider->isMicrophoneEnabled() || !provider->isCameraEnabled()) {
+      std::cerr << "livekit_video_provider_smoke_test: mic/camera not enabled by default"
+                << std::endl;
+      return 1;
+    }
+    provider->setMicrophoneEnabled(false);
+    provider->setCameraEnabled(false);
+    if (provider->isMicrophoneEnabled() || provider->isCameraEnabled()) {
+      std::cerr << "livekit_video_provider_smoke_test: mic/camera state not updated" << std::endl;
+      return 1;
+    }
+    provider->setMicrophoneEnabled(true);
+    provider->setCameraEnabled(true);
+    if (!provider->isMicrophoneEnabled() || !provider->isCameraEnabled()) {
+      std::cerr << "livekit_video_provider_smoke_test: mic/camera state not restored" << std::endl;
+      return 1;
+    }
+  }
+  std::cout << "livekit_video_provider_smoke_test: local video widget / mic-camera toggle checks "
+               "passed"
+            << std::endl;
   return 0;
 }

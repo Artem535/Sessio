@@ -13,6 +13,9 @@
 // initialize()/shutdown() declarations this class needs.
 #include <livekit/livekit.h>
 #include <memory>
+#include <optional>
+
+class QLabel;
 
 namespace pcm::video {
 
@@ -39,6 +42,14 @@ public:
   // Owned by this provider (see the destructor for the ownership rules once
   // a UI has reparented it into its own layout).
   QWidget *remoteVideoWidget() override;
+  QWidget *localVideoWidget() override;
+  void setMicrophoneEnabled(bool enabled) override;
+  void setCameraEnabled(bool enabled) override;
+  [[nodiscard]] bool isMicrophoneEnabled() const override { return mMicrophoneEnabled; }
+  [[nodiscard]] bool isCameraEnabled() const override { return mCameraEnabled; }
+  void switchCamera(const QCameraDevice &device) override;
+  void switchMicrophone(const QAudioDevice &device) override;
+  void switchSpeaker(const QAudioDevice &device) override;
 
 private:
   // livekit::RoomDelegate overrides — invoked on a LiveKit-internal thread;
@@ -86,6 +97,10 @@ private:
   std::unique_ptr<AudioCaptureAdapter> mAudioCapture;
   QPointer<RemoteVideoRenderer> mRemoteVideo;
   std::unique_ptr<RemoteAudioPlayer> mRemoteAudio;
+  QPointer<QLabel> mLocalPreviewWidget;
+  bool mMicrophoneEnabled{true};
+  bool mCameraEnabled{true};
+  std::optional<QAudioDevice> mSelectedSpeaker;
 
   std::unique_ptr<livekit::Room> mRoom;
   std::shared_ptr<livekit::LocalAudioTrack> mAudioTrack;
