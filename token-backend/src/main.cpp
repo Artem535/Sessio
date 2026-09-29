@@ -21,7 +21,35 @@
 #include <iostream>
 #include <sodium.h>
 
+namespace {
+void printHelp() {
+  std::cout <<
+      "pcm-token-backend - mints LiveKit JWTs for a self-hosted LiveKit deployment\n"
+      "\n"
+      "Usage:\n"
+      "  pcm-token-backend                 Start the HTTP server (the default).\n"
+      "                                    Requires LIVEKIT_API_KEY, LIVEKIT_API_SECRET,\n"
+      "                                    LIVEKIT_WS_ENDPOINT, and INVITATION_BASE_URL to\n"
+      "                                    be set in the environment; aborts naming the\n"
+      "                                    first one missing otherwise. See README.md's\n"
+      "                                    Configuration table for the full list.\n"
+      "  pcm-token-backend --seed-account  Seed (or re-seed) the one MVP account and print\n"
+      "                                    its bearer credential to stdout, then exit\n"
+      "                                    without starting the server. Only needs DB_PATH\n"
+      "                                    (or its default ./token-backend.sqlite3) --\n"
+      "                                    none of the server-only variables above.\n"
+      "                                    Re-running this replaces the existing account:\n"
+      "                                    its old bearer credential stops working.\n"
+      "  pcm-token-backend --help, -h      Print this message and exit.\n";
+}
+} // namespace
+
 int main(int argc, char **argv) {
+  if (argc > 1 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h")) {
+    printHelp();
+    return 0;
+  }
+
   oatpp::base::Environment::init();
 
   if (sodium_init() < 0) {
