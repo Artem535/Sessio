@@ -2,6 +2,8 @@
 
 #include <QMutex>
 #include <QOpenGLWidget>
+#include <QRect>
+#include <QSize>
 #include <atomic>
 #include <livekit/video_stream.h>
 #include <memory>
@@ -24,6 +26,13 @@ public:
 
 protected:
   void paintGL() override;
+
+public:
+  // Pure geometry helper (no GL/paint dependency) — where a frame of
+  // `frameSize`, scaled with Qt::KeepAspectRatio, lands inside a widget of
+  // `widgetSize`. Exposed only so paintGL()'s letterbox math is directly
+  // testable without an OpenGL context.
+  static QRect scaledFrameRect(const QSize &frameSize, const QSize &widgetSize);
 
 private:
   std::shared_ptr<livekit::VideoStream> mStream;

@@ -64,6 +64,13 @@ void RemoteVideoRenderer::setLatestFrame(const QImage &image) {
                             Qt::QueuedConnection);
 }
 
+QRect RemoteVideoRenderer::scaledFrameRect(const QSize &frameSize, const QSize &widgetSize) {
+  const QSize scaled = frameSize.scaled(widgetSize, Qt::KeepAspectRatio);
+  const QPoint topLeft((widgetSize.width() - scaled.width()) / 2,
+                        (widgetSize.height() - scaled.height()) / 2);
+  return QRect(topLeft, scaled);
+}
+
 void RemoteVideoRenderer::paintGL() {
   QImage frame;
   {
@@ -72,12 +79,18 @@ void RemoteVideoRenderer::paintGL() {
   }
 
   QPainter painter(this);
+  // Always fill first: QOpenGLWidget shows whatever was in its buffer
+  // before this call for any pixel paintGL() doesn't touch — with no frame
+  // yet, or with a KeepAspectRatio-scaled frame leaving letterbox bars,
+  // that used to be a see-through/garbage region instead of a solid
+  // background (see this plan's Task 4 / design doc §6).
+  painter.fillRect(rect(), Qt::black);
   if (frame.isNull()) {
     return;
   }
-  const auto scaled = frame.scaled(size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-  const QPoint topLeft((width() - scaled.width()) / 2, (height() - scaled.height()) / 2);
-  painter.drawImage(topLeft, scaled);
+  const QRect target = scaledFrameRect(frame.size(), size());
+  const QImage scaled = frame.scaled(target.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+  painter.drawImage(target.topLeft(), scaled);
 }
 
 } // namespace pcm::video
