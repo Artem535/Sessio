@@ -84,6 +84,7 @@ jobs:
             libxcb-xkb1 \
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
+            libpulse-dev \
             libsecret-1-dev \
             libwayland-client0 \
             libwayland-cursor0 \
