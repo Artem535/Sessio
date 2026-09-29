@@ -74,6 +74,7 @@ private:
 struct SavedMeeting {
   std::optional<ProviderKind> kind;
   QString meetingRef;
+  QString meetingUrl;
   std::optional<QString> invitationState;
   qsizetype backendRequestsAtSave = 0;
 };
@@ -100,7 +101,7 @@ public:
     QObject::connect(&widget, &QEventDetailsWidget::provideEventSave, &widget,
                      [this, server](QEventItem *event) {
                        ASSERT_NE(event, nullptr);
-                       saves.push_back({event->providerKind(), event->meetingRef(),
+                       saves.push_back({event->providerKind(), event->meetingRef(), event->meetingUrl(),
                                         event->invitationState(),
                                         server ? server->requestPaths.size() : 0});
                        if (event->getId() <= 0) {
@@ -185,6 +186,7 @@ TEST(QEventDetailsWidgetTest, NewLiveKitEventIsSavedWithCreatedMeetingOnceCreate
   ASSERT_EQ(form.saves.size(), 1u);
   EXPECT_EQ(form.saves.front().kind, ProviderKind::LiveKit);
   EXPECT_EQ(form.saves.front().meetingRef, QStringLiteral("ref-new"));
+  EXPECT_EQ(form.saves.front().meetingUrl, QStringLiteral("https://x/code-new"));
   EXPECT_EQ(form.saves.front().invitationState, QStringLiteral("https://x/code-new|123456"));
   EXPECT_EQ(acceptSpy.count(), 1);
   EXPECT_FALSE(form.widget.isInEditMode());
@@ -243,6 +245,8 @@ TEST(QEventDetailsWidgetTest, RescheduledLiveKitEventReplacesMeetingAndInvalidat
             (QStringList{QStringLiteral("/v1/meetings"),
                          QStringLiteral("/v1/meetings/ref-old/invalidate")}));
   EXPECT_EQ(event->meetingRef(), QStringLiteral("ref-new"));
+  EXPECT_TRUE(form.copyLink->isEnabled());
+  EXPECT_TRUE(form.copyInvite->isEnabled());
   EXPECT_FALSE(form.widget.isInEditMode());
   // The freshly created meeting can be opened without reloading the event.
   EXPECT_TRUE(form.openMeeting->isEnabled());

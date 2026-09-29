@@ -22,6 +22,8 @@ TEST(LiveKitMeetingProviderTest, CreateCallsTokenBackendAndEmitsCreatedDescripto
   const auto descriptor = createdSpy.at(0).at(0).value<pcm::meeting::MeetingDescriptor>();
   EXPECT_EQ(descriptor.kind, pcm::meeting::ProviderKind::LiveKit);
   EXPECT_EQ(descriptor.meetingRef, QStringLiteral("ref-9"));
+  ASSERT_TRUE(descriptor.meetingUrl.has_value());
+  EXPECT_EQ(*descriptor.meetingUrl, QStringLiteral("https://x/code-9"));
   ASSERT_TRUE(descriptor.invitationState.has_value());
   EXPECT_EQ(*descriptor.invitationState, QStringLiteral("https://x/code-9|222222"));
 

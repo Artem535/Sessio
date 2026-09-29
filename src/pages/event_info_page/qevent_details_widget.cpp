@@ -731,8 +731,9 @@ void QEventDetailsWidget::onMeetingCreated(const pcm::meeting::MeetingDescriptor
     updateButtonState();
     return;
   }
-  applyProviderFields(descriptor.kind, descriptor.meetingRef, descriptor.invitationState,
-                     descriptor.meetingUrl.value_or(QString{}));
+  const auto meetingUrl = descriptor.meetingUrl.value_or(QString{});
+  applyProviderFields(descriptor.kind, descriptor.meetingRef, descriptor.invitationState, meetingUrl);
+  mMeetingUrlEdit->setText(meetingUrl);
 
   if (!mPendingMeetingCreation) {
     // Synchronous ExternalUrl result: onApplyClicked continues the apply.
@@ -1018,11 +1019,13 @@ void QEventDetailsWidget::updateButtonState() const {
 
   if (mCurrentEvent &&
       mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit) {
-    // A LiveKit meeting has no browser URL: Open joins it natively by its
-    // meetingRef (onOpenMeetingClicked), and there is no external link to copy.
+    // Open joins a LiveKit meeting natively by its meetingRef. Its invitation
+    // URL is still shareable with the participant; the passcode is delivered
+    // through the separate channel kept in invitationState.
     mOpenMeetingButton->setEnabled(!mCurrentEvent->meetingRef().isEmpty());
-    mCopyMeetingUrlButton->setEnabled(false);
-    mCopyMeetingInviteButton->setEnabled(false);
+    const bool hasValidMeetingUrl = pcm::meeting::isValidMeetingUrl(mMeetingUrlEdit->text());
+    mCopyMeetingUrlButton->setEnabled(hasValidMeetingUrl);
+    mCopyMeetingInviteButton->setEnabled(hasValidMeetingUrl);
     return;
   }
 

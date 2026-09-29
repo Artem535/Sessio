@@ -12,6 +12,7 @@ LiveKitMeetingProvider::LiveKitMeetingProvider(QString tokenBackendBaseUrl,
             MeetingDescriptor descriptor;
             descriptor.kind = ProviderKind::LiveKit;
             descriptor.meetingRef = result.meetingRef;
+            descriptor.meetingUrl = result.invitationUrl;
             descriptor.invitationState = result.invitationUrl + "|" + result.passcode;
             emit created(descriptor);
           });
