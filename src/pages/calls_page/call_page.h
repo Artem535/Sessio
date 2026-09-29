@@ -8,12 +8,39 @@
 #include "video_session_state.h"
 
 #include <QPointer>
+#include <QResizeEvent>
 #include <QWidget>
 
 class QHBoxLayout;
 class QLabel;
 class QPushButton;
 class QStackedWidget;
+
+namespace pcm::video::detail {
+
+// Hosts the remote-video widget stretched to fill the available area, with
+// the local self-preview overlaid as a fixed-size tile in the bottom-right
+// corner. A plain QWidget with no layout manager: QLayout has no way to
+// express "fill entirely" and "float pinned to a corner" for two children
+// at once, so both are positioned directly in resizeEvent().
+class VideoStage final : public QWidget {
+public:
+  explicit VideoStage(QWidget *parent = nullptr);
+
+  void setRemoteWidget(QWidget *widget);
+  void setLocalPreviewWidget(QWidget *widget);
+
+protected:
+  void resizeEvent(QResizeEvent *event) override;
+
+private:
+  void layoutChildren();
+
+  QPointer<QWidget> mRemoteWidget;
+  QPointer<QWidget> mLocalPreviewWidget;
+};
+
+} // namespace pcm::video::detail
 
 // Drives the visible call screen (device-check / connecting / connected /
 // reconnecting / ended) off an attached pcm::video::VideoSession's state
@@ -52,12 +79,17 @@ private:
   void buildDeviceCheckScreen(pcm::video::DeviceManager *deviceManager);
   void buildConnectedScreen();
   // Puts the attached session's provider's remoteVideoWidget() (or, if it
-  // has none, mRemoteVideoPlaceholder) into slot 0 of mVideoRow. The
-  // provider's widget is only borrowed: it is reparented into
-  // mConnectedView while shown, and handed back with setParent(nullptr)
-  // (never deleted) when swapped out — see LiveKitVideoProvider's
-  // destructor for the other half of this ownership contract.
+  // has none, mRemoteVideoPlaceholder) into mVideoStage's remote slot. The
+  // provider's widget is only borrowed: it is reparented into mVideoStage
+  // while shown, and handed back with setParent(nullptr) (never deleted)
+  // when swapped out — see LiveKitVideoProvider's destructor for the other
+  // half of this ownership contract.
   void updateRemoteVideoWidget();
+  // Same borrowed-widget contract as updateRemoteVideoWidget(), but for the
+  // attached provider's localVideoWidget() (self-preview), shown in
+  // mVideoStage's picture-in-picture corner. Unlike the remote slot there is
+  // no CallPage-owned placeholder: nullptr just means no preview is shown.
+  void updateLocalPreviewWidget();
   void onSessionFailureReason(const QString &reason);
   void refreshEndedReason();
   // Shows mMediaErrorBanner with `reason` and starts its auto-hide timer.
@@ -77,14 +109,16 @@ private:
   QLabel *mConnectingLabel{nullptr};
   QWidget *mConnectedView{nullptr};
   QHBoxLayout *mVideoRow{nullptr};
+  pcm::video::detail::VideoStage *mVideoStage{nullptr};
   // CallPage-owned blank renderer, shown whenever the attached provider
   // offers no remote-video widget of its own (or before any session is
-  // attached). Never reparented away from mConnectedView.
+  // attached). Never reparented away from mVideoStage.
   QWidget *mRemoteVideoPlaceholder{nullptr};
-  // Whichever widget currently occupies slot 0 of mVideoRow. A QPointer
-  // because a borrowed provider widget can be destroyed along with its
-  // provider (e.g. when CallsPage replaces its session) while still shown.
+  // Whichever widget currently occupies mVideoStage's remote slot.
   QPointer<QWidget> mActiveRemoteVideoWidget;
+  // Whichever widget currently occupies mVideoStage's local-preview slot
+  // (nullptr when the attached provider has none).
+  QPointer<QWidget> mActiveLocalPreviewWidget;
   QWidget *mReconnectingBanner{nullptr};
   QLabel *mReconnectingLabel{nullptr};
   // Non-fatal, transient local-device notice (VideoSession::mediaError()) —

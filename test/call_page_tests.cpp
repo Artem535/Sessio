@@ -185,16 +185,16 @@ TEST(CallPageTest, EmbedsProviderRemoteVideoWidgetInPlaceOfPlaceholder) {
   VideoSession session(provider);
   page.attachSession(&session);
 
+  auto *videoStage = page.findChild<QWidget *>("videoStage");
+  ASSERT_NE(videoStage, nullptr);
+
   EXPECT_TRUE(page.isAncestorOf(remoteVideo));
-  EXPECT_EQ(remoteVideo->parentWidget(), placeholder->parentWidget());
-  EXPECT_TRUE(remoteVideo->isVisibleTo(placeholder->parentWidget()));
-  EXPECT_FALSE(placeholder->isVisibleTo(placeholder->parentWidget()));
-  // It takes the placeholder's slot: first in the video row, left of the
-  // side-panel host.
-  auto *videoRow = placeholder->parentWidget()->layout()->itemAt(0)->layout();
-  ASSERT_NE(videoRow, nullptr);
-  EXPECT_EQ(videoRow->indexOf(remoteVideo), 0);
-  EXPECT_EQ(videoRow->indexOf(placeholder), -1);
+  EXPECT_EQ(remoteVideo->parentWidget(), videoStage);
+  EXPECT_TRUE(remoteVideo->isVisibleTo(videoStage));
+  EXPECT_FALSE(placeholder->isVisibleTo(videoStage));
+  // It takes the placeholder's slot: VideoStage stretches exactly one
+  // remote widget to fill it at a time.
+  EXPECT_EQ(remoteVideo->geometry(), videoStage->rect());
 
   // The widget is only borrowed: CallPage never deletes it. (Here the test
   // plays the provider's role and releases it.)
@@ -209,16 +209,20 @@ TEST(CallPageTest, KeepsPlaceholderWhenProviderHasNoRemoteVideoWidget) {
   page.attachSession(&session);
 
   auto *placeholder = page.findChild<QWidget *>("remoteVideoPlaceholder");
+  auto *videoStage = page.findChild<QWidget *>("videoStage");
   ASSERT_NE(placeholder, nullptr);
-  EXPECT_TRUE(placeholder->isVisibleTo(placeholder->parentWidget()));
-  auto *videoRow = placeholder->parentWidget()->layout()->itemAt(0)->layout();
-  EXPECT_EQ(videoRow->indexOf(placeholder), 0);
+  ASSERT_NE(videoStage, nullptr);
+  EXPECT_TRUE(placeholder->isVisibleTo(videoStage));
+  EXPECT_EQ(placeholder->parentWidget(), videoStage);
+  EXPECT_EQ(placeholder->geometry(), videoStage->rect());
 }
 
 TEST(CallPageTest, ReattachingHandsBorrowedRemoteVideoWidgetBackToItsProvider) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);
   auto *placeholder = page.findChild<QWidget *>("remoteVideoPlaceholder");
+  auto *videoStage = page.findChild<QWidget *>("videoStage");
+  ASSERT_NE(videoStage, nullptr);
 
   auto *firstProvider = new FakeVideoProvider();
   QPointer<QLabel> firstVideo = new QLabel("first");
@@ -227,17 +231,13 @@ TEST(CallPageTest, ReattachingHandsBorrowedRemoteVideoWidgetBackToItsProvider) {
   page.attachSession(&firstSession);
   ASSERT_TRUE(page.isAncestorOf(firstVideo));
 
-  // A session whose provider has no widget: the placeholder comes back and
-  // the first provider's widget is handed back unparented, not deleted.
   auto *secondProvider = new FakeVideoProvider();
   VideoSession secondSession(secondProvider);
   page.attachSession(&secondSession);
   ASSERT_FALSE(firstVideo.isNull());
   EXPECT_EQ(firstVideo->parent(), nullptr);
-  EXPECT_TRUE(placeholder->isVisibleTo(placeholder->parentWidget()));
-  auto *videoRow = placeholder->parentWidget()->layout()->itemAt(0)->layout();
-  EXPECT_EQ(videoRow->indexOf(placeholder), 0);
-  EXPECT_EQ(videoRow->indexOf(firstVideo), -1);
+  EXPECT_TRUE(placeholder->isVisibleTo(videoStage));
+  EXPECT_EQ(placeholder->parentWidget(), videoStage);
   delete firstVideo.data();
 }
 
@@ -248,8 +248,8 @@ TEST(CallPageTest, ToleratesEmbeddedRemoteVideoWidgetDestroyedWithItsProvider) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);
   auto *placeholder = page.findChild<QWidget *>("remoteVideoPlaceholder");
-  auto *videoRow = placeholder->parentWidget()->layout()->itemAt(0)->layout();
-  const int rowCountWithOneVideo = videoRow->count();
+  auto *videoStage = page.findChild<QWidget *>("videoStage");
+  ASSERT_NE(videoStage, nullptr);
 
   auto *oldProvider = new FakeVideoProvider();
   QPointer<QLabel> oldVideo = new QLabel("old");
@@ -261,16 +261,15 @@ TEST(CallPageTest, ToleratesEmbeddedRemoteVideoWidgetDestroyedWithItsProvider) {
   // What LiveKitVideoProvider's destructor does to its embedded renderer.
   delete oldVideo.data();
   oldSession.reset();
-  EXPECT_EQ(videoRow->count(), rowCountWithOneVideo - 1) << "Qt drops a deleted widget from its layout";
 
   auto *newProvider = new FakeVideoProvider();
   QPointer<QLabel> newVideo = new QLabel("new");
   newProvider->mRemoteVideoWidget = newVideo;
   VideoSession newSession(newProvider);
   page.attachSession(&newSession);
-  EXPECT_EQ(videoRow->indexOf(newVideo), 0);
-  EXPECT_EQ(videoRow->count(), rowCountWithOneVideo);
-  EXPECT_FALSE(placeholder->isVisibleTo(placeholder->parentWidget()));
+  EXPECT_EQ(newVideo->parentWidget(), videoStage);
+  EXPECT_EQ(newVideo->geometry(), videoStage->rect());
+  EXPECT_FALSE(placeholder->isVisibleTo(videoStage));
   delete newVideo.data();
 }
 
@@ -398,6 +397,53 @@ TEST(CallPageTest, ReconnectingBannerHasASpinner) {
   CallPage page(&deviceManager);
   auto *spinner = page.findChild<pcm::widgets::BusySpinner *>("reconnectingSpinner");
   ASSERT_NE(spinner, nullptr);
+}
+
+TEST(CallPageTest, ShowsLocalPreviewWhenProviderSuppliesOne) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  QPointer<QLabel> localPreview = new QLabel("local");
+  provider->mLocalVideoWidget = localPreview;
+  VideoSession session(provider);
+  page.attachSession(&session);
+
+  EXPECT_TRUE(page.isAncestorOf(localPreview));
+  EXPECT_TRUE(localPreview->isVisibleTo(localPreview->parentWidget()));
+  delete localPreview.data();
+}
+
+TEST(CallPageTest, NoLocalPreviewWidgetWhenProviderHasNone) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider(); // localVideoWidget() == nullptr
+  VideoSession session(provider);
+  page.attachSession(&session);
+
+  auto *videoStage = page.findChild<QWidget *>("videoStage");
+  ASSERT_NE(videoStage, nullptr);
+  // No crash and no orphaned preview child beyond the remote-video slot.
+  EXPECT_EQ(videoStage->findChildren<QLabel *>().size(), 0);
+}
+
+TEST(CallPageTest, SwappingProviderHandsLocalPreviewBackUnparented) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+
+  auto *firstProvider = new FakeVideoProvider();
+  QPointer<QLabel> firstPreview = new QLabel("first-local");
+  firstProvider->mLocalVideoWidget = firstPreview;
+  VideoSession firstSession(firstProvider);
+  page.attachSession(&firstSession);
+  ASSERT_TRUE(page.isAncestorOf(firstPreview));
+
+  auto *secondProvider = new FakeVideoProvider(); // no local preview
+  VideoSession secondSession(secondProvider);
+  page.attachSession(&secondSession);
+
+  ASSERT_FALSE(firstPreview.isNull());
+  EXPECT_EQ(firstPreview->parent(), nullptr);
+  delete firstPreview.data();
 }
 
 int main(int argc, char **argv) {

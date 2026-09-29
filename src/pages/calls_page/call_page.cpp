@@ -19,6 +19,45 @@ namespace {
 constexpr int kMediaErrorBannerAutoHideMs = 6000;
 } // namespace
 
+namespace pcm::video::detail {
+
+namespace {
+constexpr int kLocalPreviewWidth = 160;
+constexpr int kLocalPreviewHeight = 90;
+constexpr int kLocalPreviewMargin = 12;
+} // namespace
+
+VideoStage::VideoStage(QWidget *parent) : QWidget(parent) {}
+
+void VideoStage::setRemoteWidget(QWidget *widget) {
+  mRemoteWidget = widget;
+  layoutChildren();
+}
+
+void VideoStage::setLocalPreviewWidget(QWidget *widget) {
+  mLocalPreviewWidget = widget;
+  layoutChildren();
+}
+
+void VideoStage::resizeEvent(QResizeEvent *event) {
+  QWidget::resizeEvent(event);
+  layoutChildren();
+}
+
+void VideoStage::layoutChildren() {
+  if (mRemoteWidget) {
+    mRemoteWidget->setGeometry(rect());
+  }
+  if (mLocalPreviewWidget) {
+    mLocalPreviewWidget->setGeometry(width() - kLocalPreviewWidth - kLocalPreviewMargin,
+                                      height() - kLocalPreviewHeight - kLocalPreviewMargin,
+                                      kLocalPreviewWidth, kLocalPreviewHeight);
+    mLocalPreviewWidget->raise();
+  }
+}
+
+} // namespace pcm::video::detail
+
 CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : QWidget(parent) {
   auto *outer = new QVBoxLayout(this);
   mStack = new QStackedWidget(this);
@@ -122,10 +161,13 @@ void CallPage::buildConnectedScreen() {
   // attached provider's real remoteVideoWidget() (the one the provider
   // actually attaches the subscribed remote track to) when it has one.
   mVideoRow = new QHBoxLayout();
-  mRemoteVideoPlaceholder = new pcm::video::RemoteVideoRenderer(mConnectedView);
+  mVideoStage = new pcm::video::detail::VideoStage(mConnectedView);
+  mVideoStage->setObjectName("videoStage");
+  mRemoteVideoPlaceholder = new pcm::video::RemoteVideoRenderer(mVideoStage);
   mRemoteVideoPlaceholder->setObjectName("remoteVideoPlaceholder");
-  mVideoRow->addWidget(mRemoteVideoPlaceholder, 1);
+  mVideoStage->setRemoteWidget(mRemoteVideoPlaceholder);
   mActiveRemoteVideoWidget = mRemoteVideoPlaceholder;
+  mVideoRow->addWidget(mVideoStage, 1);
   mSidePanelHost = new QWidget(mConnectedView);
   mSidePanelHost->setVisible(false);
   new QVBoxLayout(mSidePanelHost);
@@ -176,6 +218,7 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
   // mediaError() never ends the call — its own, separate, non-fatal banner.
   connect(session, &pcm::video::VideoSession::mediaError, this, &CallPage::onMediaError);
   updateRemoteVideoWidget();
+  updateLocalPreviewWidget();
 }
 
 void CallPage::updateRemoteVideoWidget() {
@@ -190,10 +233,8 @@ void CallPage::updateRemoteVideoWidget() {
 
   // mActiveRemoteVideoWidget may already be null here: a borrowed provider
   // widget is destroyed together with its provider (e.g. CallsPage::
-  // startJoin() replacing its session before attaching the new one), and
-  // Qt has then already removed it from mVideoRow.
+  // startJoin() replacing its session before attaching the new one).
   if (QWidget *previous = mActiveRemoteVideoWidget.data()) {
-    mVideoRow->removeWidget(previous);
     previous->hide();
     if (previous != mRemoteVideoPlaceholder) {
       // Borrowed from a provider: hand it back instead of deleting it —
@@ -202,14 +243,38 @@ void CallPage::updateRemoteVideoWidget() {
     }
   }
 
-  if (target->parentWidget() != mConnectedView) {
-    target->setParent(mConnectedView);
+  if (target->parentWidget() != mVideoStage) {
+    target->setParent(mVideoStage);
   }
-  mVideoRow->insertWidget(0, target, /*stretch=*/1);
+  mVideoStage->setRemoteWidget(target);
   // setParent() hides a widget, and a swapped-out placeholder was hidden
   // explicitly above; either way it has to be shown again.
   target->show();
   mActiveRemoteVideoWidget = target;
+}
+
+void CallPage::updateLocalPreviewWidget() {
+  QWidget *provided = nullptr;
+  if (mSession && mSession->provider()) {
+    provided = mSession->provider()->localVideoWidget();
+  }
+  if (provided == mActiveLocalPreviewWidget) {
+    return;
+  }
+
+  if (QWidget *previous = mActiveLocalPreviewWidget.data()) {
+    previous->hide();
+    previous->setParent(nullptr);
+  }
+
+  mActiveLocalPreviewWidget = provided;
+  if (provided) {
+    if (provided->parentWidget() != mVideoStage) {
+      provided->setParent(mVideoStage);
+    }
+    provided->show();
+  }
+  mVideoStage->setLocalPreviewWidget(provided);
 }
 
 void CallPage::onSessionFailureReason(const QString &reason) {
