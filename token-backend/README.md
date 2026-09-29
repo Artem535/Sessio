@@ -209,12 +209,51 @@ against the 5-attempt limit.
 parsed as UTC in the `YYYY-MM-DDTHH:MM:SSZ` form. A value that cannot be
 parsed fails closed (the window is treated as shut).
 
-## First deploy: seed the one account
+## Account management: one credential per specialist
+
+Each specialist gets their own bearer credential; every meeting and
+invitation is scoped to the account that created it, so credentials are never
+shared between specialists.
+
+### First deploy: bootstrap the first account
 
 ```bash
 pcm_token_backend --seed-account
 ```
 
 Copy the printed bearer credential into PsyClientManager's Settings once —
-it is never shown again. Losing it means re-seeding, which invalidates the
-previous credential (see `AccountsRepository::seedAccount`).
+it is never shown again. This only works when the database has **no**
+accounts yet (genuine first-run bootstrap); once at least one account exists,
+it refuses and points you at `--add-account` / `--revoke-account` instead of
+silently destroying an existing specialist's credential (see
+`AccountsRepository::seedAccount`).
+
+### Adding another specialist
+
+```bash
+pcm_token_backend --add-account
+```
+
+Creates a new account and prints its bearer credential to stdout (shown once,
+same as `--seed-account`). Does not touch any existing account.
+
+### Listing accounts
+
+```bash
+pcm_token_backend --list-accounts
+```
+
+Prints `id` and `created_at` for every account, one per line — never the
+credential itself, since only its hash is stored. Prints `No accounts.` if
+none exist yet.
+
+### Revoking a specialist's account
+
+```bash
+pcm_token_backend --revoke-account <id>
+```
+
+Removes the account with the given id, immediately invalidating its bearer
+credential. Refuses (exit 1) if the account still has meetings or invitations
+referencing it — re-issue or invalidate those first, or delete them, before
+revoking the account.

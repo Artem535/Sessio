@@ -33,13 +33,27 @@ void printHelp() {
       "                                    be set in the environment; aborts naming the\n"
       "                                    first one missing otherwise. See README.md's\n"
       "                                    Configuration table for the full list.\n"
-      "  pcm-token-backend --seed-account  Seed (or re-seed) the one MVP account and print\n"
-      "                                    its bearer credential to stdout, then exit\n"
-      "                                    without starting the server. Only needs DB_PATH\n"
-      "                                    (or its default ./token-backend.sqlite3) --\n"
-      "                                    none of the server-only variables above.\n"
-      "                                    Re-running this replaces the existing account:\n"
-      "                                    its old bearer credential stops working.\n"
+      "  pcm-token-backend --seed-account  First-time bootstrap only: seed the very first\n"
+      "                                    account and print its bearer credential to\n"
+      "                                    stdout, then exit without starting the server.\n"
+      "                                    Only needs DB_PATH (or its default\n"
+      "                                    ./token-backend.sqlite3) -- none of the\n"
+      "                                    server-only variables above. Refuses if any\n"
+      "                                    account already exists -- use --add-account to\n"
+      "                                    add another one instead.\n"
+      "  pcm-token-backend --add-account   Add a new account (e.g. for another specialist)\n"
+      "                                    and print its bearer credential to stdout, then\n"
+      "                                    exit without starting the server. Does not\n"
+      "                                    remove any existing account. Only needs DB_PATH.\n"
+      "  pcm-token-backend --list-accounts\n"
+      "                                    List every account's id and creation time, then\n"
+      "                                    exit without starting the server. Only needs\n"
+      "                                    DB_PATH.\n"
+      "  pcm-token-backend --revoke-account <id>\n"
+      "                                    Remove the account with the given id, then exit\n"
+      "                                    without starting the server. Refuses (exit 1) if\n"
+      "                                    the account still has meetings or invitations\n"
+      "                                    referencing it. Only needs DB_PATH.\n"
       "  pcm-token-backend --help, -h      Print this message and exit.\n";
 }
 } // namespace
@@ -68,11 +82,91 @@ int main(int argc, char **argv) {
                                                   : "token-backend.sqlite3");
     pcm::tokenbackend::runMigrations(conn);
     pcm::tokenbackend::AccountsRepository accounts(conn);
+    if (!accounts.listAccounts().empty()) {
+      std::cerr << "Refusing to reseed: accounts already exist. Use --add-account to add a new\n"
+                   "one, or --revoke-account <id> to remove one, instead of --seed-account\n"
+                   "(which is for first-time bootstrap only)."
+                << std::endl;
+      oatpp::base::Environment::destroy();
+      return 1;
+    }
     auto credential = accounts.seedAccount();
     std::cout << "Seeded account. Bearer credential (copy this now, it will not be shown again):\n"
               << credential << std::endl;
     oatpp::base::Environment::destroy();
     return 0;
+  }
+
+  if (argc > 1 && std::string(argv[1]) == "--add-account") {
+    const char *dbPathEnv = std::getenv("DB_PATH");
+    pcm::tokenbackend::SqliteConnection conn(dbPathEnv && dbPathEnv[0] != '\0'
+                                                  ? dbPathEnv
+                                                  : "token-backend.sqlite3");
+    pcm::tokenbackend::runMigrations(conn);
+    pcm::tokenbackend::AccountsRepository accounts(conn);
+    auto credential = accounts.createAccount();
+    std::cout << "Added account. Bearer credential (copy this now, it will not be shown again):\n"
+              << credential << std::endl;
+    oatpp::base::Environment::destroy();
+    return 0;
+  }
+
+  if (argc > 1 && std::string(argv[1]) == "--list-accounts") {
+    const char *dbPathEnv = std::getenv("DB_PATH");
+    pcm::tokenbackend::SqliteConnection conn(dbPathEnv && dbPathEnv[0] != '\0'
+                                                  ? dbPathEnv
+                                                  : "token-backend.sqlite3");
+    pcm::tokenbackend::runMigrations(conn);
+    pcm::tokenbackend::AccountsRepository accounts(conn);
+    auto list = accounts.listAccounts();
+    if (list.empty()) {
+      std::cout << "No accounts." << std::endl;
+    } else {
+      std::cout << "id\tcreated_at\n";
+      for (const auto &summary : list) {
+        std::cout << summary.id << "\t" << summary.createdAt << "\n";
+      }
+      std::cout.flush();
+    }
+    oatpp::base::Environment::destroy();
+    return 0;
+  }
+
+  if (argc > 1 && std::string(argv[1]) == "--revoke-account") {
+    char *end = nullptr;
+    long parsed = (argc > 2) ? std::strtol(argv[2], &end, 10) : 0;
+    bool valid = argc > 2 && end != argv[2] && *end == '\0' && parsed > 0;
+    if (!valid) {
+      std::cerr << "Usage: pcm-token-backend --revoke-account <id>" << std::endl;
+      oatpp::base::Environment::destroy();
+      return 1;
+    }
+    pcm::tokenbackend::AccountId id = static_cast<pcm::tokenbackend::AccountId>(parsed);
+
+    const char *dbPathEnv = std::getenv("DB_PATH");
+    pcm::tokenbackend::SqliteConnection conn(dbPathEnv && dbPathEnv[0] != '\0'
+                                                  ? dbPathEnv
+                                                  : "token-backend.sqlite3");
+    pcm::tokenbackend::runMigrations(conn);
+    pcm::tokenbackend::AccountsRepository accounts(conn);
+    auto result = accounts.revokeAccount(id);
+    switch (result) {
+    case pcm::tokenbackend::RevokeResult::Removed:
+      std::cout << "Revoked account " << id << "." << std::endl;
+      oatpp::base::Environment::destroy();
+      return 0;
+    case pcm::tokenbackend::RevokeResult::NotFound:
+      std::cerr << "No account with id " << id << "." << std::endl;
+      oatpp::base::Environment::destroy();
+      return 1;
+    case pcm::tokenbackend::RevokeResult::InUse:
+      std::cerr << "Cannot revoke account " << id
+                << ": it still has meetings or invitations referencing it." << std::endl;
+      oatpp::base::Environment::destroy();
+      return 1;
+    }
+    oatpp::base::Environment::destroy();
+    return 1;
   }
 
   {
