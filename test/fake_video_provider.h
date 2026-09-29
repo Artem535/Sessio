@@ -26,6 +26,34 @@ public:
   // existing tests keep exercising CallPage's placeholder path.
   QWidget *remoteVideoWidget() override { return mRemoteVideoWidget; }
 
+  // nullptr unless a test sets mLocalVideoWidget (the base default), same
+  // rationale as remoteVideoWidget() above.
+  QWidget *localVideoWidget() override { return mLocalVideoWidget; }
+
+  void setMicrophoneEnabled(bool enabled) override {
+    mMicrophoneEnabled = enabled;
+    ++mSetMicrophoneEnabledCallCount;
+  }
+  void setCameraEnabled(bool enabled) override {
+    mCameraEnabled = enabled;
+    ++mSetCameraEnabledCallCount;
+  }
+  [[nodiscard]] bool isMicrophoneEnabled() const override { return mMicrophoneEnabled; }
+  [[nodiscard]] bool isCameraEnabled() const override { return mCameraEnabled; }
+
+  void switchCamera(const QCameraDevice &device) override {
+    mLastSwitchedCamera = device;
+    ++mSwitchCameraCallCount;
+  }
+  void switchMicrophone(const QAudioDevice &device) override {
+    mLastSwitchedMicrophone = device;
+    ++mSwitchMicrophoneCallCount;
+  }
+  void switchSpeaker(const QAudioDevice &device) override {
+    mLastSwitchedSpeaker = device;
+    ++mSwitchSpeakerCallCount;
+  }
+
   // Test-driving methods: call these to simulate the real provider emitting
   // its outcome signals asynchronously, exactly as LiveKitVideoProvider
   // would once its own SDK callbacks fire.
@@ -45,6 +73,17 @@ public:
   int mLeaveCallCount{0};
   // Not owned: the test decides the widget's lifetime.
   QWidget *mRemoteVideoWidget{nullptr};
+  QWidget *mLocalVideoWidget{nullptr};
+  bool mMicrophoneEnabled{true};
+  bool mCameraEnabled{true};
+  int mSetMicrophoneEnabledCallCount{0};
+  int mSetCameraEnabledCallCount{0};
+  int mSwitchCameraCallCount{0};
+  int mSwitchMicrophoneCallCount{0};
+  int mSwitchSpeakerCallCount{0};
+  QCameraDevice mLastSwitchedCamera;
+  QAudioDevice mLastSwitchedMicrophone;
+  QAudioDevice mLastSwitchedSpeaker;
 };
 
 } // namespace pcm::video::test

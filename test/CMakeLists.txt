@@ -349,7 +349,14 @@ gtest_discover_tests(Sessio_backup_tests)
 # shares a .cpp's basename); listing it explicitly as a source here — same
 # pattern as the LiveKit video provider smoke test above — is what makes
 # AUTOMOC generate its moc so VideoProvider's signals link.
-find_package(Qt6 REQUIRED COMPONENTS Test StateMachine)
+#
+# Qt6::Multimedia is required here (not just Core/Test/StateMachine) because
+# video_provider.h itself now includes <QAudioDevice>/<QCameraDevice> for the
+# switchCamera()/switchMicrophone()/switchSpeaker() device-switch API; unlike
+# the targets below that link the Sessio_video library (which already
+# PUBLIC-links Qt6::Multimedia), this target compiles video_provider.h
+# directly and needs the dependency named explicitly.
+find_package(Qt6 REQUIRED COMPONENTS Test StateMachine Multimedia)
 add_executable(Sessio_video_session_tests
     ${CMAKE_SOURCE_DIR}/src/video/video_provider.h
     ${CMAKE_SOURCE_DIR}/src/video/video_session.cpp
@@ -362,9 +369,22 @@ target_link_libraries(Sessio_video_session_tests PRIVATE
     Qt6::Core
     Qt6::Test
     Qt6::StateMachine
+    Qt6::Multimedia
 )
 set_target_properties(Sessio_video_session_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_video_session_tests)
+
+# FakeVideoProvider tests
+add_executable(Sessio_fake_video_provider_tests
+    fake_video_provider_tests.cpp
+)
+target_link_libraries(Sessio_fake_video_provider_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Sessio_video
+)
+set_target_properties(Sessio_fake_video_provider_tests PROPERTIES AUTOMOC ON)
+add_test(NAME FakeVideoProviderTests COMMAND Sessio_fake_video_provider_tests)
 
 # Role selection dialog tests
 find_package(Qt6 REQUIRED COMPONENTS Test)

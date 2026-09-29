@@ -2,6 +2,8 @@
 
 #include <QObject>
 #include <QString>
+#include <QAudioDevice>
+#include <QCameraDevice>
 
 class QWidget;
 
@@ -40,6 +42,29 @@ public:
   // it when swapping it out, and must tolerate it being destroyed along
   // with the provider (hold it through a QPointer).
   virtual QWidget *remoteVideoWidget() { return nullptr; }
+
+  // The widget this provider renders the LOCAL camera preview into (the
+  // same capture that is being published, not a second parallel camera
+  // session), or nullptr if it has none (e.g. a test double). Same
+  // ownership contract as remoteVideoWidget(): the provider owns it: a UI
+  // embedding it may reparent it, but must hand it back
+  // (setParent(nullptr)) rather than delete it when swapping it out.
+  virtual QWidget *localVideoWidget() { return nullptr; }
+
+  // Mutes/unmutes the corresponding locally published track. Never stops
+  // physically capturing the device (matches the LiveKit SDK's own
+  // documented mute() contract) — only whether the track is transmitted.
+  virtual void setMicrophoneEnabled(bool enabled) { Q_UNUSED(enabled); }
+  virtual void setCameraEnabled(bool enabled) { Q_UNUSED(enabled); }
+  [[nodiscard]] virtual bool isMicrophoneEnabled() const { return true; }
+  [[nodiscard]] virtual bool isCameraEnabled() const { return true; }
+
+  // Switches the corresponding local capture device mid-call. Errors
+  // (device removed, already in use) surface through the existing
+  // mediaError() signal below — no new error signal.
+  virtual void switchCamera(const QCameraDevice &device) { Q_UNUSED(device); }
+  virtual void switchMicrophone(const QAudioDevice &device) { Q_UNUSED(device); }
+  virtual void switchSpeaker(const QAudioDevice &device) { Q_UNUSED(device); }
 
 signals:
   void joined();
