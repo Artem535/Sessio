@@ -20,6 +20,7 @@ public:
   [[nodiscard]] VideoSessionState state() const { return mState; }
   // The provider this session drives (Qt-owned by this session).
   [[nodiscard]] VideoProvider *provider() const { return mProvider; }
+  [[nodiscard]] ParticipantModel *participants() const { return mProvider->participants(); }
 
   void join(const QString &url, const QString &token);
   void leave();

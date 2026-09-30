@@ -36,6 +36,104 @@ TEST_F(VideoSessionTest, StartsInNoMeetingState) {
   EXPECT_EQ(session.state(), pcm::video::VideoSessionState::NoMeeting);
 }
 
+TEST_F(VideoSessionTest, PresenceBeforeJoinedIncludesAudioOnlyAndExcludesLocal) {
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake);
+  EXPECT_EQ(session.participants(), fake->participants());
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateParticipantJoined({"local", {}, "practitioner", true});
+  fake->simulateParticipantJoined({"audio", {}, "client", false, true, false});
+  fake->simulateJoined();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
+  EXPECT_EQ(session.participants()->remoteCount(), 1);
+}
+
+TEST_F(VideoSessionTest, OnlyLastRemoteDepartureReturnsToWaiting) {
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake);
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateJoined();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+  fake->simulateParticipantJoined({"a"});
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
+  stateSpy.clear();
+  fake->simulateParticipantJoined({"a"});
+  fake->simulateParticipantJoined({"b"});
+  QCoreApplication::processEvents();
+  EXPECT_EQ(session.participants()->remoteCount(), 2);
+  fake->simulateParticipantLeft("a");
+  fake->simulateParticipantLeft("a");
+  fake->simulateParticipantLeft("unknown");
+  fake->simulateParticipantJoined({"b", {}, {}, false, true, false});
+  QCoreApplication::processEvents();
+  EXPECT_EQ(session.participants()->remoteCount(), 1);
+  EXPECT_EQ(session.state(), pcm::video::VideoSessionState::Connected);
+  EXPECT_TRUE(stateSpy.isEmpty());
+  fake->simulateParticipantLeft("b");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+}
+
+TEST_F(VideoSessionTest, ReconnectAfterLastDepartureReturnsToWaitingAndStopsTimer) {
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake, std::chrono::milliseconds(30));
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateParticipantJoined({"a"});
+  fake->simulateJoined();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
+  fake->simulateReconnecting();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Reconnecting);
+  fake->simulateParticipantLeft("a");
+  fake->simulateReconnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+  QSignalSpy failures(&session, &pcm::video::VideoSession::reconnectFailed);
+  EXPECT_FALSE(failures.wait(80));
+  EXPECT_EQ(session.state(), pcm::video::VideoSessionState::WaitingForParticipants);
+  fake->simulateReconnecting();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Reconnecting);
+  fake->simulateParticipantJoined({"b"});
+  fake->simulateReconnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
+}
+
+TEST_F(VideoSessionTest, TerminalFailureClearsLocalAndRemoteParticipants) {
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake);
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateParticipantJoined({"local", {}, {}, true});
+  fake->simulateParticipantJoined({"a"});
+  fake->simulateJoined();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
+  fake->simulateConnectionLost("ended");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Failed);
+  EXPECT_EQ(session.participants()->rowCount(), 0);
+  EXPECT_EQ(fake->mLeaveCallCount, 1);
+}
+
+TEST_F(VideoSessionTest, ExplicitLeaveClearsParticipantsBeforeProviderAcknowledges) {
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake);
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateParticipantJoined({"a"});
+  fake->simulateJoined();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
+  session.leave();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Leaving);
+  EXPECT_EQ(session.participants()->rowCount(), 0);
+  fake->simulateLeft();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Ended);
+  EXPECT_EQ(session.participants()->rowCount(), 0);
+}
+
 TEST_F(VideoSessionTest, JoinReachesJoiningStateThroughProvisionedAndPrejoinCheck) {
   auto *fake = new pcm::video::test::FakeVideoProvider();
   pcm::video::VideoSession session(fake);
@@ -79,9 +177,9 @@ TEST_F(VideoSessionTest, JoinedThenRemoteParticipantConnectedReachesConnected) {
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
 
   fake->simulateJoined();
-  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
 
-  fake->simulateRemoteParticipantConnected();
+  fake->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 }
 
@@ -113,8 +211,8 @@ TEST_F(VideoSessionTest, ReconnectingThenReconnectedReturnsToConnected) {
   session.join("wss://example.invalid", "token");
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
   fake->simulateJoined();
-  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
-  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+  fake->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 
   fake->simulateReconnecting();
@@ -132,8 +230,8 @@ TEST_F(VideoSessionTest, ReconnectTimeoutTransitionsToFailedWithoutReconnection)
   session.join("wss://example.invalid", "token");
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
   fake->simulateJoined();
-  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
-  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+  fake->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 
   QSignalSpy reconnectFailedSpy(&session, &pcm::video::VideoSession::reconnectFailed);
@@ -155,8 +253,8 @@ TEST_F(VideoSessionTest, ConnectionLostWhileReconnectingGoesToFailedImmediately)
   session.join("wss://example.invalid", "token");
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
   fake->simulateJoined();
-  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
-  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+  fake->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 
   fake->simulateReconnecting();
@@ -178,15 +276,15 @@ TEST_F(VideoSessionTest, ConnectionLostFromConnectedGoesDirectlyToFailed) {
   session.join("wss://example.invalid", "token");
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
   fake->simulateJoined();
-  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
-  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+  fake->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 
   fake->simulateConnectionLost("room ended");
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Failed);
 }
 
-TEST_F(VideoSessionTest, RemoteParticipantDisconnectedReturnsToWaitingForClient) {
+TEST_F(VideoSessionTest, RemoteParticipantDisconnectedReturnsToWaitingForParticipants) {
   auto *fake = new pcm::video::test::FakeVideoProvider();
   pcm::video::VideoSession session(fake);
   QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
@@ -194,12 +292,12 @@ TEST_F(VideoSessionTest, RemoteParticipantDisconnectedReturnsToWaitingForClient)
   session.join("wss://example.invalid", "token");
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
   fake->simulateJoined();
-  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
-  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+  fake->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 
-  fake->simulateRemoteParticipantDisconnected();
-  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
+  fake->simulateParticipantLeft("remote");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
 }
 
 TEST_F(VideoSessionTest, LeaveFromFailedIsSafelyIgnored) {
@@ -236,8 +334,8 @@ TEST_F(VideoSessionTest, MediaErrorDoesNotAffectStateMachine) {
   session.join("wss://example.invalid", "token");
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
   fake->simulateJoined();
-  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
-  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+  fake->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 
   fake->simulateMediaError("camera unplugged");
@@ -260,8 +358,8 @@ TEST_F(VideoSessionTest, ConnectionLostRelaysReasonWithSameSignal) {
   session.join("wss://example.invalid", "token");
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
   fake->simulateJoined();
-  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
-  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+  fake->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 
   fake->simulateConnectionLost("room ended");
@@ -284,8 +382,8 @@ TEST_F(VideoSessionTest, MediaErrorRelaysReasonAndDoesNotChangeState) {
   session.join("wss://example.invalid", "token");
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
   fake->simulateJoined();
-  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
-  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+  fake->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 
   // The relay connection is direct (same thread), so it has already fired
@@ -306,8 +404,8 @@ TEST_F(VideoSessionTest, LeaveFromConnectedTransitionsToEnded) {
   session.join("wss://example.invalid", "token");
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
   fake->simulateJoined();
-  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
-  fake->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+  fake->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 
   session.leave();
@@ -332,8 +430,8 @@ TEST_F(VideoSessionTest, RepeatedJoinLeaveDestroyCyclesDoNotHang) {
     session.join("wss://example.invalid", "token");
     waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
     fake->simulateJoined();
-    waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
-    fake->simulateRemoteParticipantConnected();
+    waitForState(session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+    fake->simulateParticipantJoined({"remote"});
     waitForState(session, stateSpy, pcm::video::VideoSessionState::Connected);
 
     session.leave();

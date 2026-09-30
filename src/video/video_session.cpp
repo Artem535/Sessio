@@ -1,8 +1,27 @@
 #include "video_session.h"
 
 #include <QMetaObject>
+#include <QSignalTransition>
 
 namespace pcm::video {
+
+namespace {
+class PresenceTransition final : public QSignalTransition {
+public:
+  PresenceTransition(QObject *sender, const char *signal, ParticipantModel *model,
+                     bool present, QState *source, QState *target)
+      : QSignalTransition(sender, signal, source), mModel(model), mPresent(present) {
+    setTargetState(target);
+  }
+protected:
+  bool eventTest(QEvent *event) override {
+    return QSignalTransition::eventTest(event) && (mModel->remoteCount() > 0) == mPresent;
+  }
+private:
+  ParticipantModel *mModel;
+  bool mPresent;
+};
+} // namespace
 
 VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseconds reconnectTimeout,
                            QObject *parent)
@@ -33,7 +52,7 @@ VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseco
   wireEntered(provisioned, VideoSessionState::Provisioned);
   wireEntered(prejoinCheck, VideoSessionState::PrejoinCheck);
   wireEntered(joining, VideoSessionState::Joining);
-  wireEntered(waitingForClient, VideoSessionState::WaitingForClient);
+  wireEntered(waitingForClient, VideoSessionState::WaitingForParticipants);
   wireEntered(connected, VideoSessionState::Connected);
   wireEntered(reconnecting, VideoSessionState::Reconnecting);
   wireEntered(leaving, VideoSessionState::Leaving);
@@ -55,10 +74,13 @@ VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseco
   connect(joining, &QState::entered, this,
           [this]() { mProvider->join(mPendingUrl, mPendingToken); });
 
-  joining->addTransition(mProvider, &VideoProvider::joined, waitingForClient);
+  new PresenceTransition(mProvider, SIGNAL(joined()), participants(), false, joining, waitingForClient);
+  new PresenceTransition(mProvider, SIGNAL(joined()), participants(), true, joining, connected);
   joining->addTransition(mProvider, &VideoProvider::joinFailed, failed);
-  waitingForClient->addTransition(mProvider, &VideoProvider::remoteParticipantConnected, connected);
-  connected->addTransition(mProvider, &VideoProvider::remoteParticipantDisconnected, waitingForClient);
+  new PresenceTransition(participants(), SIGNAL(remoteCountChanged(int)), participants(), true,
+                         waitingForClient, connected);
+  new PresenceTransition(participants(), SIGNAL(remoteCountChanged(int)), participants(), false,
+                         connected, waitingForClient);
   connect(mProvider, &VideoProvider::joinFailed, this,
           [this](const QString &reason) { emit joinFailed(reason); });
 
@@ -77,24 +99,18 @@ VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseco
   // first) and always goes straight to Failed, from Connected,
   // WaitingForClient, or Reconnecting.
   //
-  // Reconnecting is only reachable from Connected, not WaitingForClient:
-  // Reconnecting's own exit (reconnected() -> Connected) has nowhere else
-  // to go, so a WaitingForClient -> Reconnecting leg would report Connected
-  // once the SDK reconnects even though no remote participant was ever
-  // actually present — misreporting the call as live with nobody on it.
-  // A network blip while still WaitingForClient is not otherwise
-  // observable yet (no UI consumes this state today, #80's job); if that
-  // needs its own visible state later, it needs a way back to
-  // WaitingForClient specifically (e.g. tracking presence across the
-  // reconnect), not just this single shared Reconnecting state.
+  // Resolve reconnect from current presence, including updates during retries.
   connected->addTransition(mProvider, &VideoProvider::reconnecting, reconnecting);
-  reconnecting->addTransition(mProvider, &VideoProvider::reconnected, connected);
+  waitingForClient->addTransition(mProvider, &VideoProvider::reconnecting, reconnecting);
+  new PresenceTransition(mProvider, SIGNAL(reconnected()), participants(), true, reconnecting, connected);
+  new PresenceTransition(mProvider, SIGNAL(reconnected()), participants(), false, reconnecting, waitingForClient);
   reconnecting->addTransition(mProvider, &VideoProvider::connectionLost, failed);
   reconnecting->addTransition(&mReconnectTimer, &QTimer::timeout, failed);
   waitingForClient->addTransition(mProvider, &VideoProvider::connectionLost, failed);
   connected->addTransition(mProvider, &VideoProvider::connectionLost, failed);
   connect(reconnecting, &QState::entered, this, [this]() { mReconnectTimer.start(); });
   connect(connected, &QState::entered, this, [this]() { mReconnectTimer.stop(); });
+  connect(waitingForClient, &QState::entered, this, [this]() { mReconnectTimer.stop(); });
   connect(&mReconnectTimer, &QTimer::timeout, this,
           [this]() { emit reconnectFailed(QStringLiteral("Reconnection timed out.")); });
 
@@ -106,8 +122,12 @@ VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseco
   connect(leaving, &QState::entered, this, [this]() {
     mReconnectTimer.stop();
     mProvider->leave();
+    participants()->clear();
+    mPendingUrl.clear();
+    mPendingToken.clear();
   });
   leaving->addTransition(mProvider, &VideoProvider::left, ended);
+  connect(ended, &QState::entered, participants(), &ParticipantModel::clear);
 
   // Failed is a terminal state for the state machine, but not for the
   // provider: whatever local devices/room connection are still open (e.g.
@@ -121,6 +141,7 @@ VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseco
     mPendingUrl.clear();
     mPendingToken.clear();
     mProvider->leave();
+    participants()->clear();
   });
 
   mMachine.setInitialState(noMeeting);

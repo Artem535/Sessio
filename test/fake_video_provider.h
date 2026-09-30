@@ -60,8 +60,26 @@ public:
   void simulateJoined() { emit joined(); }
   void simulateJoinFailed(const QString &reason) { emit joinFailed(reason); }
   void simulateLeft() { emit left(); }
-  void simulateRemoteParticipantConnected() { emit remoteParticipantConnected(); }
-  void simulateRemoteParticipantDisconnected() { emit remoteParticipantDisconnected(); }
+  void simulateParticipantJoined(const Participant &participant) {
+    const bool exists = participants()->participant(participant.id).has_value();
+    participants()->upsert(participant);
+    if (!exists)
+      emit participantJoined(participant.id);
+  }
+  void simulateParticipantLeft(const QString &id) {
+    if (!participants()->participant(id))
+      return;
+    participants()->remove(id);
+    emit participantLeft(id);
+  }
+  void simulateRemoteParticipantConnected() {
+    simulateParticipantJoined({QStringLiteral("remote")});
+    emit remoteParticipantConnected();
+  }
+  void simulateRemoteParticipantDisconnected() {
+    simulateParticipantLeft(QStringLiteral("remote"));
+    emit remoteParticipantDisconnected();
+  }
   void simulateReconnecting() { emit reconnecting(); }
   void simulateReconnected() { emit reconnected(); }
   void simulateConnectionLost(const QString &reason) { emit connectionLost(reason); }
