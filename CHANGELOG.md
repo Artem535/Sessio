@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2026-09-30
+
+### Added
+
+- Mute and camera toggle buttons on the call screen, letting participants
+  silence their microphone or turn off their camera without leaving the
+  call.
+- A mid-call device-switch popover for choosing a different camera,
+  microphone, or speaker while a call is in progress.
+- A self-preview (picture-in-picture) view showing the local camera feed
+  during a call.
+- A fullscreen toggle for the call screen.
+- The notes side panel now opens by default when a call is linked to a
+  client.
+
+### Fixed
+
+- Areas of the call screen without an active video feed no longer render
+  a transparent/see-through artifact.
+
 ## [0.2.1] - 2026-09-29
 
 ### Fixed
