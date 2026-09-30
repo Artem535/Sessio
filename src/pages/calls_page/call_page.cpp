@@ -101,6 +101,9 @@ void VideoStage::layoutChildren() {
                                       kLocalPreviewWidth, kLocalPreviewHeight);
     mLocalPreviewWidget->raise();
   }
+  // Raise order is remote, preview, bar, notes toggle: the bar and notes
+  // toggle stay above the self-preview (on a narrow stage the 160x90 preview
+  // would otherwise cover the bar's right end).
   if (mControlBarWidget) {
     const QSize hint = mControlBarWidget->sizeHint();
     const int barWidth = hint.width() > 0 ? hint.width() : mControlBarWidget->width();
@@ -115,12 +118,6 @@ void VideoStage::layoutChildren() {
     constexpr int kMargin = 12;
     mNotesToggleWidget->setGeometry(width() - kMargin - kSize, kMargin, kSize, kSize);
     mNotesToggleWidget->raise();
-  }
-  // Re-raise the self-preview above the new control-bar/notes-toggle slots
-  // in case their geometries ever come to overlap; free given they don't
-  // today, and it protects against future constant drift.
-  if (mLocalPreviewWidget) {
-    mLocalPreviewWidget->raise();
   }
 }
 
@@ -311,11 +308,12 @@ void CallPage::buildConnectedScreen() {
 
   mControlBar = new QWidget(mVideoStage);
   mControlBar->setObjectName("controlBar");
-  mControlBar->setAutoFillBackground(true);
-  QPalette controlBarPalette = mControlBar->palette();
-  controlBarPalette.setColor(QPalette::Window, QColor(20, 20, 20));
-  mControlBar->setPalette(controlBarPalette);
-  mControlBar->setStyleSheet(QStringLiteral("#controlBar { border-radius: 24px; }"));
+  // The fill has to come from the stylesheet: once a QSS rule matches,
+  // QStyleSheetStyle owns background painting and an autoFillBackground/
+  // QPalette fill is never painted. Fully opaque (no alpha) because the bar
+  // overlays a QOpenGLWidget video renderer.
+  mControlBar->setStyleSheet(
+      QStringLiteral("#controlBar { background-color: rgb(20, 20, 20); border-radius: 24px; }"));
   auto *controlBarLayout = new QHBoxLayout(mControlBar);
   controlBarLayout->setContentsMargins(12, 6, 12, 6);
   controlBarLayout->setSpacing(8);
@@ -569,11 +567,12 @@ void CallPage::setSidePanelToggleVisible(bool visible) {
     mNotesToggleButton->setIcon(pcm::widgets::notesIcon());
     mNotesToggleButton->setToolTip(tr("Notes"));
     mNotesToggleButton->setAccessibleName(tr("Notes"));
-    mNotesToggleButton->setAutoFillBackground(true);
-    QPalette notesPalette = mNotesToggleButton->palette();
-    notesPalette.setColor(QPalette::Button, QColor(20, 20, 20));
-    mNotesToggleButton->setPalette(notesPalette);
-    mNotesToggleButton->setStyleSheet(QStringLiteral("#notesToggleButton { border-radius: 20px; }"));
+    // Opaque QSS fills (no alpha: overlays a QOpenGLWidget); the :checked
+    // state gives the toggle a visible on/off difference.
+    mNotesToggleButton->setStyleSheet(QStringLiteral(
+        "#notesToggleButton { background-color: rgb(20, 20, 20); border: none; border-radius: 20px; }"
+        "#notesToggleButton:hover { background-color: rgb(45, 45, 45); }"
+        "#notesToggleButton:checked { background-color: rgb(70, 70, 70); }"));
     connect(mNotesToggleButton, &QToolButton::toggled, this,
             [this](bool checked) { mSidePanelHost->setVisible(checked); });
     mVideoStage->setNotesToggleWidget(mNotesToggleButton);

@@ -4,7 +4,9 @@
 #include "busy_spinner.h"
 
 #include <QApplication>
+#include <QColor>
 #include <QComboBox>
+#include <QImage>
 #include <QLabel>
 #include <QLayout>
 #include <QPointer>
@@ -46,6 +48,26 @@ void resizeAndDeliverEvent(QWidget *widget, const QSize &size) {
   widget->resize(size);
   QResizeEvent event(widget->size(), oldSize);
   QApplication::sendEvent(widget, &event);
+}
+
+// Drives a CallPage's attached session to Connected (as the individual tests
+// below do inline) so the connected screen and its floating overlays exist.
+void connectSession(VideoSession &session, FakeVideoProvider *provider) {
+  QSignalSpy stateSpy(&session, &VideoSession::stateChanged);
+  session.join("wss://x", "token");
+  waitForState(session, stateSpy, VideoSessionState::Joining);
+  provider->simulateJoined();
+  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
+  provider->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, VideoSessionState::Connected);
+}
+
+// Renders `root` (the video stage, so the result is what the user sees: the
+// overlay composited over whatever is behind it) and returns the pixel at
+// `point` given in `target`'s coordinates.
+QColor grabbedPixel(QWidget *root, QWidget *target, const QPoint &point) {
+  const QImage image = root->grab().toImage().convertToFormat(QImage::Format_ARGB32);
+  return image.pixelColor(target->mapTo(root, point));
 }
 
 } // namespace
@@ -356,6 +378,97 @@ TEST(CallPageTest, SwappingControlBarHandsPreviousOneBackUnparented) {
   EXPECT_EQ(firstBar->parentWidget(), nullptr);
   EXPECT_EQ(secondBar->parentWidget(), &stage);
   delete firstBar;
+}
+
+// The floating bar and notes button sit over a QOpenGLWidget video renderer,
+// so their fill must be fully opaque. Once a QSS rule matches, QStyleSheetStyle
+// owns background painting and a QPalette + autoFillBackground fill is never
+// painted, so these tests render the widgets and check real pixels.
+TEST(CallPageTest, ControlBarPaintsAnOpaqueDarkBackground) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  connectSession(session, provider);
+
+  auto *videoStage = page.findChild<QWidget *>("videoStage");
+  ASSERT_NE(videoStage, nullptr);
+  page.show();
+  resizeAndDeliverEvent(videoStage, QSize(1280, 720));
+  auto *controlBar = page.findChild<QWidget *>("controlBar");
+  ASSERT_NE(controlBar, nullptr);
+  ASSERT_EQ(controlBar->height(), 48);
+
+  // x=8 is left of the 12px layout margin (no child button there) and inside
+  // the pill's rounded end (24px radius, so the circle centre is at x=24).
+  const QColor inside = grabbedPixel(videoStage, controlBar, QPoint(8, controlBar->height() / 2));
+  EXPECT_EQ(inside.alpha(), 255);
+  EXPECT_EQ(inside.red(), 20);
+  EXPECT_EQ(inside.green(), 20);
+  EXPECT_EQ(inside.blue(), 20);
+}
+
+TEST(CallPageTest, NotesToggleButtonPaintsAnOpaqueBackgroundThatDiffersWhenChecked) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  page.setSidePanelToggleVisible(true);
+  connectSession(session, provider);
+
+  auto *videoStage = page.findChild<QWidget *>("videoStage");
+  ASSERT_NE(videoStage, nullptr);
+  page.show();
+  resizeAndDeliverEvent(videoStage, QSize(1280, 720));
+  auto *notesToggle = page.findChild<QToolButton *>("notesToggleButton");
+  ASSERT_NE(notesToggle, nullptr);
+  ASSERT_EQ(notesToggle->size(), QSize(40, 40));
+  notesToggle->setChecked(false);
+
+  // x=4 is left of the 24px icon and still inside the 20px-radius disc.
+  const QPoint sample(4, notesToggle->height() / 2);
+  const QColor unchecked = grabbedPixel(videoStage, notesToggle, sample);
+  EXPECT_EQ(unchecked.alpha(), 255);
+  EXPECT_EQ(unchecked.red(), 20);
+  EXPECT_EQ(unchecked.green(), 20);
+  EXPECT_EQ(unchecked.blue(), 20);
+
+  notesToggle->setChecked(true);
+  const QColor checked = grabbedPixel(videoStage, notesToggle, sample);
+  EXPECT_EQ(checked.alpha(), 255);
+  EXPECT_NE(checked, unchecked);
+}
+
+// The design puts the control bar and notes toggle above the self-preview:
+// on a narrow stage the 160x90 preview would otherwise cover the bar's right
+// end (the Leave button). Qt stacks later children above earlier ones.
+TEST(CallPageTest, ControlBarAndNotesToggleStackAboveLocalPreviewOnNarrowStage) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  QPointer<QLabel> localPreview = new QLabel("local");
+  provider->mLocalVideoWidget = localPreview;
+  VideoSession session(provider);
+  page.attachSession(&session);
+  page.setSidePanelToggleVisible(true);
+  connectSession(session, provider);
+
+  auto *videoStage = page.findChild<QWidget *>("videoStage");
+  ASSERT_NE(videoStage, nullptr);
+  resizeAndDeliverEvent(videoStage, QSize(640, 360));
+  auto *controlBar = page.findChild<QWidget *>("controlBar");
+  auto *notesToggle = page.findChild<QToolButton *>("notesToggleButton");
+  ASSERT_NE(controlBar, nullptr);
+  ASSERT_NE(notesToggle, nullptr);
+  ASSERT_EQ(localPreview->parentWidget(), videoStage);
+
+  const QObjectList children = videoStage->children();
+  const auto previewIndex = children.indexOf(localPreview.data());
+  EXPECT_GT(children.indexOf(controlBar), previewIndex);
+  EXPECT_GT(children.indexOf(notesToggle), previewIndex);
+  delete localPreview.data();
 }
 
 // Fixwave group 5, bug 1: a live call dropping (VideoProvider::connectionLost())

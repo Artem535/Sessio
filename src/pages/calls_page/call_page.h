@@ -24,8 +24,8 @@ namespace pcm::video::detail {
 // Hosts the remote-video widget stretched to fill the available area, with
 // the local self-preview overlaid as a fixed-size tile in the bottom-right
 // corner, plus two floating overlay slots: a control bar centered near the
-// bottom and a notes-toggle in the top-right corner (both wired up by later
-// tasks; here they are just positioned). A plain QWidget with no layout
+// bottom and a notes-toggle in the top-right corner (both stacked above the
+// remote video and the self-preview). A plain QWidget with no layout
 // manager: QLayout has no way to express "fill entirely" and "float pinned
 // to a corner/edge" for several children at once, so all are positioned
 // directly in resizeEvent().
