@@ -12,8 +12,11 @@
 #include <sodium.h>
 
 #include <chrono>
+#include <barrier>
 #include <ctime>
+#include <future>
 #include <set>
+#include <vector>
 
 namespace {
 
@@ -211,6 +214,39 @@ TEST_F(MeetingServiceTest, RepeatedTokensHaveUniqueSignedIdentitiesAndDisplayRol
     }
   }
   EXPECT_EQ(identities.size(), 8u);
+}
+
+TEST_F(MeetingServiceTest, ConcurrentClientTokensHaveDistinctSignedIdentitiesInTheSameRoom) {
+  const auto created = service->createMeeting(credential, windowStart, windowEnd);
+  ASSERT_TRUE(created.ok());
+  constexpr int issuances = 4;
+  std::barrier start(issuances);
+  using TokenOutcome = pcm::tokenbackend::Result<pcm::tokenbackend::TokenResult>;
+  std::vector<std::future<TokenOutcome>> tokens;
+  for (int issuance = 0; issuance < issuances; ++issuance) {
+    tokens.emplace_back(std::async(std::launch::async, [&] {
+      start.arrive_and_wait();
+      return service->issueClientToken(created.value->invitationCode, created.value->passcode);
+    }));
+  }
+  std::set<std::string> identities;
+  std::string room;
+  for (auto &pending : tokens) {
+    std::optional<TokenOutcome> token;
+    ASSERT_NO_THROW(token.emplace(pending.get()));
+    ASSERT_TRUE(token->ok());
+    const auto payload = verifiedPayload(token->value->jwt, config.liveKitApiSecret);
+    EXPECT_TRUE(identities.insert(subject(payload)).second);
+    EXPECT_TRUE(subject(payload).starts_with("client-" + created.value->meetingRef + "-"));
+    EXPECT_NE(payload.find(R"("metadata":"{\"role\":\"client\"}")"), std::string::npos);
+    if (room.empty()) room = token->value->roomName;
+    EXPECT_EQ(token->value->roomName, room);
+    EXPECT_NE(payload.find("\"room\":\"" + room + "\""), std::string::npos);
+    for (const auto *grant : {"roomJoin", "canPublish", "canSubscribe", "canPublishData"}) {
+      EXPECT_NE(payload.find(std::string("\"") + grant + "\":true"), std::string::npos);
+    }
+  }
+  EXPECT_EQ(identities.size(), issuances);
 }
 
 TEST_F(MeetingServiceTest, InvalidateStopsFurtherTokenIssuance) {
