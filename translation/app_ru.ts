@@ -1553,11 +1553,11 @@ See you!</source>
     </message>
     <message>
         <source>Backup</source>
-        <translation>Резервное копирование</translation>
+        <translation>Резервные копии</translation>
     </message>
     <message>
         <source>Privacy &amp; Security</source>
-        <translation>Конфиденциальность и безопасность</translation>
+        <translation>Безопасность</translation>
     </message>
     <message>
         <source>Create a full backup (database and attachments) as a single .psybackup file, or validate an existing one.</source>

@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - On Linux (Wayland), the application now sets its desktop file name and
-  themed window icon, so the panel shows the Sessio icon.
+  themed window icon, so panels can match the window to the Sessio icon.
 
 ## [0.2.3] - 2026-09-30
 
