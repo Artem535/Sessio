@@ -451,10 +451,10 @@ TEST(CallPageTest, WaitingForClientShowsDistinctMessageFromJoining) {
 TEST(CallPageTest, SidePanelToggleHiddenByDefaultUntilMadeVisible) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);
-  EXPECT_EQ(page.findChild<QPushButton *>("notesToggleButton"), nullptr);
+  EXPECT_EQ(page.findChild<QToolButton *>("notesToggleButton"), nullptr);
 
   page.setSidePanelToggleVisible(true);
-  EXPECT_NE(page.findChild<QPushButton *>("notesToggleButton"), nullptr);
+  EXPECT_NE(page.findChild<QToolButton *>("notesToggleButton"), nullptr);
 }
 
 TEST(CallPageTest, ConnectingScreenShowsCenteredSpinnerAndHeadline) {
@@ -696,7 +696,7 @@ TEST(CallPageTest, SetSidePanelExpandedByDefaultChecksTheNotesToggle) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);
   page.setSidePanelToggleVisible(true);
-  auto *toggle = page.findChild<QPushButton *>("notesToggleButton");
+  auto *toggle = page.findChild<QToolButton *>("notesToggleButton");
   ASSERT_NE(toggle, nullptr);
   EXPECT_FALSE(toggle->isChecked());
 
@@ -711,7 +711,7 @@ TEST(CallPageTest, SetSidePanelExpandedByDefaultIsANoOpWithoutATotoggleYet) {
   // mode, or before Application's eventKnownForCurrentCall handler ever
   // fires).
   page.setSidePanelExpandedByDefault(true);
-  EXPECT_EQ(page.findChild<QPushButton *>("notesToggleButton"), nullptr);
+  EXPECT_EQ(page.findChild<QToolButton *>("notesToggleButton"), nullptr);
 }
 
 int main(int argc, char **argv) {

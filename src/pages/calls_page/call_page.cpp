@@ -329,10 +329,9 @@ void CallPage::buildConnectedScreen() {
   // Non-fatal, transient local-device notice — see mMediaErrorBanner's doc
   // comment in call_page.h. Hidden by default; onMediaError() shows it and
   // sets its text, independent of mReconnectingBanner and the ended screen.
-  // Added after mVideoRow now that the control buttons live in mControlBar
-  // (VideoStage's floating overlay) rather than in a `controls` row of this
-  // layout, so mConnectedView->layout()->itemAt(1) below no longer means
-  // "the controls row" -- see setSidePanelToggleVisible().
+  // Its position in mConnectedView's layout carries no meaning for other
+  // code (setSidePanelToggleVisible() places the notes toggle on mVideoStage
+  // directly, not by indexing into this layout).
   mMediaErrorBanner = new QLabel(mConnectedView);
   mMediaErrorBanner->setObjectName("mediaErrorBanner");
   mMediaErrorBanner->setWordWrap(true);
@@ -564,13 +563,20 @@ void CallPage::setSidePanelWidget(QWidget *panel) {
 
 void CallPage::setSidePanelToggleVisible(bool visible) {
   if (visible && !mNotesToggleButton) {
-    mNotesToggleButton = new QPushButton(tr("Notes"), mConnectedView);
+    mNotesToggleButton = new QToolButton(mVideoStage);
     mNotesToggleButton->setObjectName("notesToggleButton");
     mNotesToggleButton->setCheckable(true);
-    connect(mNotesToggleButton, &QPushButton::toggled, this,
+    mNotesToggleButton->setIcon(pcm::widgets::notesIcon());
+    mNotesToggleButton->setToolTip(tr("Notes"));
+    mNotesToggleButton->setAccessibleName(tr("Notes"));
+    mNotesToggleButton->setAutoFillBackground(true);
+    QPalette notesPalette = mNotesToggleButton->palette();
+    notesPalette.setColor(QPalette::Button, QColor(20, 20, 20));
+    mNotesToggleButton->setPalette(notesPalette);
+    mNotesToggleButton->setStyleSheet(QStringLiteral("#notesToggleButton { border-radius: 20px; }"));
+    connect(mNotesToggleButton, &QToolButton::toggled, this,
             [this](bool checked) { mSidePanelHost->setVisible(checked); });
-    static_cast<QHBoxLayout *>(mConnectedView->layout()->itemAt(1)->layout())
-        ->addWidget(mNotesToggleButton);
+    mVideoStage->setNotesToggleWidget(mNotesToggleButton);
   } else if (!visible && mNotesToggleButton) {
     delete mNotesToggleButton;
     mNotesToggleButton = nullptr;

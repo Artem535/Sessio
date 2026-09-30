@@ -154,7 +154,7 @@ private:
   QWidget *mEndedScreen{nullptr};
   QLabel *mEndedReasonLabel{nullptr};
   QWidget *mSidePanelHost{nullptr};
-  QPushButton *mNotesToggleButton{nullptr};
+  QToolButton *mNotesToggleButton{nullptr};
   QToolButton *mMicrophoneToggleButton{nullptr};
   QToolButton *mCameraToggleButton{nullptr};
   QToolButton *mFullscreenToggleButton{nullptr};
