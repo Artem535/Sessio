@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.4] - 2026-09-30
+
+### Changed
+
+- The Settings dialog is regrouped into General, Privacy & Security, Backup,
+  Events, Online, and LiveKit tabs. Notifications and app lock moved into
+  Privacy & Security, and Backup is now its own tab.
+- The Events tab is split into Scheduling defaults, Billing, and Event
+  colors groups instead of one mixed box.
+- The clipboard-clearing options now have their own "Clipboard" group.
+- Every settings page scrolls, and the dialog height is capped to the screen
+  so it always fits.
+
+### Fixed
+
+- On Linux (Wayland), the application now sets its desktop file name and
+  themed window icon, so the panel shows the Sessio icon.
+
 ## [0.2.3] - 2026-09-30
 
 ### Changed

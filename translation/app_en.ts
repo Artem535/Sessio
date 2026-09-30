@@ -1555,6 +1555,10 @@ See you!</translation>
         <translation>Backup</translation>
     </message>
     <message>
+        <source>Privacy &amp; Security</source>
+        <translation>Privacy &amp; Security</translation>
+    </message>
+    <message>
         <source>Create a full backup (database and attachments) as a single .psybackup file, or validate an existing one.</source>
         <translation>Create a full backup (database and attachments) as a single .psybackup file, or validate an existing one.</translation>
     </message>
@@ -1691,10 +1695,6 @@ See you!</translation>
         <translation>How much a reminder reveals on a shared or locked screen. Client name and session title are never shown outside Full details.</translation>
     </message>
     <message>
-        <source>Privacy</source>
-        <translation>Privacy</translation>
-    </message>
-    <message>
         <source>Change PIN or password</source>
         <translation>Change PIN or password</translation>
     </message>
@@ -1733,10 +1733,6 @@ See you!</translation>
     <message>
         <source>Delay before copied meeting details are removed.</source>
         <translation>Delay before copied meeting details are removed.</translation>
-    </message>
-    <message>
-        <source>Timeline colors</source>
-        <translation>Timeline colors</translation>
     </message>
     <message>
         <source>Token backend</source>
@@ -1823,6 +1819,26 @@ See you!</translation>
     <message>
         <source>Backup Failed</source>
         <translation>Backup Failed</translation>
+    </message>
+    <message>
+        <source>App lock</source>
+        <translation>App lock</translation>
+    </message>
+    <message>
+        <source>Clipboard</source>
+        <translation>Clipboard</translation>
+    </message>
+    <message>
+        <source>Scheduling defaults</source>
+        <translation>Scheduling defaults</translation>
+    </message>
+    <message>
+        <source>Billing</source>
+        <translation>Billing</translation>
+    </message>
+    <message>
+        <source>Event colors</source>
+        <translation>Event colors</translation>
     </message>
     <message>
         <source>Backup Encryption</source>

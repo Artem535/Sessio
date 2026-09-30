@@ -1556,6 +1556,10 @@ See you!</source>
         <translation>Резервное копирование</translation>
     </message>
     <message>
+        <source>Privacy &amp; Security</source>
+        <translation>Конфиденциальность и безопасность</translation>
+    </message>
+    <message>
         <source>Create a full backup (database and attachments) as a single .psybackup file, or validate an existing one.</source>
         <translation>Создайте полную резервную копию (базу данных и вложения) в виде одного файла .psybackup или проверьте существующую.</translation>
     </message>
@@ -1692,10 +1696,6 @@ See you!</source>
         <translation>Сколько напоминание показывает на общем или заблокированном экране. Имя клиента и тема сеанса не отображаются нигде, кроме режима «Полная информация».</translation>
     </message>
     <message>
-        <source>Privacy</source>
-        <translation>Конфиденциальность</translation>
-    </message>
-    <message>
         <source>Change PIN or password</source>
         <translation>Изменить PIN-код или пароль</translation>
     </message>
@@ -1734,10 +1734,6 @@ See you!</source>
     <message>
         <source>Delay before copied meeting details are removed.</source>
         <translation>Задержка перед удалением скопированных данных встречи.</translation>
-    </message>
-    <message>
-        <source>Timeline colors</source>
-        <translation>Цвета таймлайна</translation>
     </message>
     <message>
         <source>Token backend</source>
@@ -1824,6 +1820,26 @@ See you!</source>
     <message>
         <source>Backup Failed</source>
         <translation>Не удалось создать резервную копию</translation>
+    </message>
+    <message>
+        <source>App lock</source>
+        <translation>Блокировка приложения</translation>
+    </message>
+    <message>
+        <source>Clipboard</source>
+        <translation>Буфер обмена</translation>
+    </message>
+    <message>
+        <source>Scheduling defaults</source>
+        <translation>Параметры планирования по умолчанию</translation>
+    </message>
+    <message>
+        <source>Billing</source>
+        <translation>Оплата</translation>
+    </message>
+    <message>
+        <source>Event colors</source>
+        <translation>Цвета событий</translation>
     </message>
     <message>
         <source>Backup Encryption</source>
