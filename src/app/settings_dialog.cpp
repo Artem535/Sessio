@@ -17,6 +17,7 @@
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QGuiApplication>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -25,6 +26,8 @@
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QScreen>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStackedWidget>
@@ -43,6 +46,15 @@
 #include <algorithm>
 
 namespace {
+QScrollArea *makeScrollPage(QWidget *page, QWidget *parent) {
+  auto *scrollArea = new QScrollArea(parent);
+  scrollArea->setWidgetResizable(true);
+  scrollArea->setFrameShape(QFrame::NoFrame);
+  scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  scrollArea->setWidget(page);
+  return scrollArea;
+}
+
 QWidget *makeSettingRow(const QString &title, const QString &description,
                         QWidget *control,
                         QWidget *parent = nullptr) {
@@ -214,7 +226,14 @@ SettingsDialog::SettingsDialog(std::shared_ptr<pcm::database::Database> db,
 void SettingsDialog::setupUi() {
   setWindowTitle(tr("Settings"));
   setModal(true);
-  resize(560, 760);
+  const auto *screen = QGuiApplication::primaryScreen();
+  const int availableHeight =
+      screen != nullptr ? screen->availableGeometry().height() : 760;
+  // Leave room for the window frame and panels, but keep the dialog usable on
+  // very small screens (never taller than the screen itself).
+  const int dialogHeight =
+      qMax(qMin(760, availableHeight - 80), qMin(400, availableHeight));
+  resize(560, dialogHeight);
 
   auto *rootLayout = new QVBoxLayout(this);
   rootLayout->setContentsMargins(20, 20, 20, 20);
@@ -265,11 +284,11 @@ void SettingsDialog::setupUi() {
   onlineSettingsLayout->setContentsMargins(0, 0, 0, 0);
   onlineSettingsLayout->setSpacing(16);
 
-  mSettingsStack->addWidget(generalPage);
-  mSettingsStack->addWidget(privacyPage);
-  mSettingsStack->addWidget(backupPage);
-  mSettingsStack->addWidget(eventsPage);
-  mSettingsStack->addWidget(onlinePage);
+  mSettingsStack->addWidget(makeScrollPage(generalPage, mSettingsStack));
+  mSettingsStack->addWidget(makeScrollPage(privacyPage, mSettingsStack));
+  mSettingsStack->addWidget(makeScrollPage(backupPage, mSettingsStack));
+  mSettingsStack->addWidget(makeScrollPage(eventsPage, mSettingsStack));
+  mSettingsStack->addWidget(makeScrollPage(onlinePage, mSettingsStack));
 
   auto *languageBox = new QGroupBox(tr("Language"), generalPage);
   auto *languageLayout = new QVBoxLayout(languageBox);
@@ -655,7 +674,7 @@ void SettingsDialog::setupLiveKitSection() {
   liveKitPageLayout->addWidget(liveKitBox);
   liveKitPageLayout->addStretch();
 
-  mSettingsStack->addWidget(liveKitPage);
+  mSettingsStack->addWidget(makeScrollPage(liveKitPage, mSettingsStack));
 }
 
 void SettingsDialog::loadSettings() const {

@@ -3,7 +3,11 @@
 
 #include <QApplication>
 #include <QGroupBox>
+#include <QGuiApplication>
 #include <QPushButton>
+#include <QScreen>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QStackedWidget>
 #include <QTemporaryDir>
 #include <QWidget>
@@ -105,4 +109,41 @@ int main(int argc, char **argv) {
   QApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+
+TEST(SettingsDialogLayoutTest, EveryPageIsAVerticallyScrollableScrollArea) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  auto *stack = dialog.findChild<QStackedWidget *>();
+  ASSERT_NE(stack, nullptr);
+  ASSERT_EQ(stack->count(), 6);
+  for (int i = 0; i < stack->count(); ++i) {
+    auto *scrollArea = qobject_cast<QScrollArea *>(stack->widget(i));
+    ASSERT_NE(scrollArea, nullptr) << "page " << i << " is not a QScrollArea";
+    EXPECT_TRUE(scrollArea->widgetResizable());
+    EXPECT_EQ(scrollArea->horizontalScrollBarPolicy(), Qt::ScrollBarAlwaysOff);
+    EXPECT_EQ(scrollArea->frameShape(), QFrame::NoFrame);
+  }
+}
+
+TEST(SettingsDialogLayoutTest, DialogHeightNeverExceedsTheAvailableScreenHeight) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  const auto *screen = QGuiApplication::primaryScreen();
+  ASSERT_NE(screen, nullptr);
+  EXPECT_LE(dialog.height(), screen->availableGeometry().height());
+}
+
+TEST(SettingsDialogLayoutTest, TallPagesScrollInsteadOfOverflowingTheDialog) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  dialog.resize(560, 300);
+  dialog.show();
+  auto *stack = dialog.findChild<QStackedWidget *>();
+  ASSERT_NE(stack, nullptr);
+  auto *backupPage = qobject_cast<QScrollArea *>(stack->widget(2));
+  ASSERT_NE(backupPage, nullptr);
+  stack->setCurrentIndex(2);
+  QApplication::processEvents();
+  EXPECT_GT(backupPage->verticalScrollBar()->maximum(), 0);
 }
