@@ -15,6 +15,7 @@ class QHBoxLayout;
 class QLabel;
 class QPushButton;
 class QStackedWidget;
+class QToolButton;
 
 namespace pcm::video::detail {
 
@@ -131,6 +132,9 @@ private:
   QLabel *mEndedReasonLabel{nullptr};
   QWidget *mSidePanelHost{nullptr};
   QPushButton *mNotesToggleButton{nullptr};
+  QToolButton *mMicrophoneToggleButton{nullptr};
+  QToolButton *mCameraToggleButton{nullptr};
+  QToolButton *mFullscreenToggleButton{nullptr};
   QPointer<QWidget> mSidePanel;
   QPointer<pcm::video::VideoSession> mSession;
   // The reason from the attached session's most recent joinFailed()/

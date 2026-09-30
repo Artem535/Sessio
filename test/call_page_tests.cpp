@@ -11,6 +11,7 @@
 #include <QResizeEvent>
 #include <QSignalSpy>
 #include <QStackedWidget>
+#include <QToolButton>
 #include <gtest/gtest.h>
 
 using pcm::video::test::FakeVideoProvider;
@@ -468,6 +469,47 @@ TEST(CallPageTest, SwappingProviderHandsLocalPreviewBackUnparented) {
   ASSERT_FALSE(firstPreview.isNull());
   EXPECT_EQ(firstPreview->parent(), nullptr);
   delete firstPreview.data();
+}
+
+TEST(CallPageTest, MicrophoneToggleButtonCallsProviderAndStartsEnabled) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+
+  auto *micButton = page.findChild<QToolButton *>("microphoneToggleButton");
+  ASSERT_NE(micButton, nullptr);
+  EXPECT_TRUE(micButton->isChecked());
+
+  micButton->setChecked(false);
+  EXPECT_EQ(provider->mSetMicrophoneEnabledCallCount, 1);
+  EXPECT_FALSE(provider->isMicrophoneEnabled());
+}
+
+TEST(CallPageTest, CameraToggleButtonCallsProvider) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+
+  auto *cameraButton = page.findChild<QToolButton *>("cameraToggleButton");
+  ASSERT_NE(cameraButton, nullptr);
+  EXPECT_TRUE(cameraButton->isChecked());
+
+  cameraButton->setChecked(false);
+  EXPECT_EQ(provider->mSetCameraEnabledCallCount, 1);
+  EXPECT_FALSE(provider->isCameraEnabled());
+}
+
+TEST(CallPageTest, FullscreenToggleButtonExistsAndIsCheckable) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *fullscreenButton = page.findChild<QToolButton *>("fullscreenToggleButton");
+  ASSERT_NE(fullscreenButton, nullptr);
+  EXPECT_TRUE(fullscreenButton->isCheckable());
+  EXPECT_FALSE(fullscreenButton->isChecked());
 }
 
 int main(int argc, char **argv) {

@@ -1,11 +1,15 @@
 #include "call_page.h"
 
+#include "call_control_icons.h"
+
 #include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 namespace {
@@ -175,6 +179,52 @@ void CallPage::buildConnectedScreen() {
   layout->addLayout(mVideoRow);
 
   auto *controls = new QHBoxLayout();
+
+  mMicrophoneToggleButton = new QToolButton(mConnectedView);
+  mMicrophoneToggleButton->setObjectName("microphoneToggleButton");
+  mMicrophoneToggleButton->setCheckable(true);
+  mMicrophoneToggleButton->setChecked(true);
+  mMicrophoneToggleButton->setIcon(pcm::widgets::microphoneIcon(true));
+  connect(mMicrophoneToggleButton, &QToolButton::toggled, this, [this](bool checked) {
+    mMicrophoneToggleButton->setIcon(pcm::widgets::microphoneIcon(checked));
+    if (mSession && mSession->provider()) {
+      mSession->provider()->setMicrophoneEnabled(checked);
+    }
+  });
+  controls->addWidget(mMicrophoneToggleButton);
+
+  mCameraToggleButton = new QToolButton(mConnectedView);
+  mCameraToggleButton->setObjectName("cameraToggleButton");
+  mCameraToggleButton->setCheckable(true);
+  mCameraToggleButton->setChecked(true);
+  mCameraToggleButton->setIcon(pcm::widgets::cameraIcon(true));
+  connect(mCameraToggleButton, &QToolButton::toggled, this, [this](bool checked) {
+    mCameraToggleButton->setIcon(pcm::widgets::cameraIcon(checked));
+    if (mSession && mSession->provider()) {
+      mSession->provider()->setCameraEnabled(checked);
+    }
+  });
+  controls->addWidget(mCameraToggleButton);
+
+  mFullscreenToggleButton = new QToolButton(mConnectedView);
+  mFullscreenToggleButton->setObjectName("fullscreenToggleButton");
+  mFullscreenToggleButton->setCheckable(true);
+  mFullscreenToggleButton->setIcon(pcm::widgets::fullscreenIcon(false));
+  connect(mFullscreenToggleButton, &QToolButton::toggled, this, [this](bool checked) {
+    mFullscreenToggleButton->setIcon(pcm::widgets::fullscreenIcon(checked));
+    if (!window()) {
+      return;
+    }
+    if (checked) {
+      window()->showFullScreen();
+    } else {
+      window()->showNormal();
+    }
+  });
+  controls->addWidget(mFullscreenToggleButton);
+
+  controls->addStretch();
+
   auto *leaveButton = new QPushButton(tr("Leave"), mConnectedView);
   leaveButton->setObjectName("leaveButton");
   connect(leaveButton, &QPushButton::clicked, this, &CallPage::leaveRequested);
@@ -219,6 +269,16 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
   connect(session, &pcm::video::VideoSession::mediaError, this, &CallPage::onMediaError);
   updateRemoteVideoWidget();
   updateLocalPreviewWidget();
+  if (mMicrophoneToggleButton && mSession->provider()) {
+    const QSignalBlocker blocker(mMicrophoneToggleButton);
+    mMicrophoneToggleButton->setChecked(mSession->provider()->isMicrophoneEnabled());
+    mMicrophoneToggleButton->setIcon(pcm::widgets::microphoneIcon(mMicrophoneToggleButton->isChecked()));
+  }
+  if (mCameraToggleButton && mSession->provider()) {
+    const QSignalBlocker blocker(mCameraToggleButton);
+    mCameraToggleButton->setChecked(mSession->provider()->isCameraEnabled());
+    mCameraToggleButton->setIcon(pcm::widgets::cameraIcon(mCameraToggleButton->isChecked()));
+  }
 }
 
 void CallPage::updateRemoteVideoWidget() {
