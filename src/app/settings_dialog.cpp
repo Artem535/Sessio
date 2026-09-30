@@ -476,80 +476,95 @@ void SettingsDialog::setupUi() {
   generalSettingsLayout->addStretch();
   privacySettingsLayout->addStretch();
 
-  auto *eventsBox = new QGroupBox(tr("Timeline colors"), eventsPage);
-  auto *eventsLayout = new QVBoxLayout(eventsBox);
-  eventsLayout->setContentsMargins(16, 16, 16, 16);
-  eventsLayout->setSpacing(14);
-  mPreventOverlapsSwitch = new oclero::qlementine::Switch(eventsBox);
-  mWorkEventColorEditor = new oclero::qlementine::ColorEditor(eventsBox);
-  mPersonalEventColorEditor = new oclero::qlementine::ColorEditor(eventsBox);
-  mCurrencyCombo = new QComboBox(eventsBox);
+  auto *schedulingDefaultsBox = new QGroupBox(tr("Scheduling defaults"), eventsPage);
+  auto *schedulingDefaultsLayout = new QVBoxLayout(schedulingDefaultsBox);
+  schedulingDefaultsLayout->setContentsMargins(16, 16, 16, 16);
+  schedulingDefaultsLayout->setSpacing(14);
+  mPreventOverlapsSwitch = new oclero::qlementine::Switch(schedulingDefaultsBox);
+  mPreventOverlapsSwitch->setObjectName(QStringLiteral("preventOverlapsSwitch"));
+  mWorkDayStartEdit = new QTimeEdit(schedulingDefaultsBox);
+  mWorkDayStartEdit->setDisplayFormat("HH:mm");
+  mWorkDayEndEdit = new QTimeEdit(schedulingDefaultsBox);
+  mWorkDayEndEdit->setDisplayFormat("HH:mm");
+  mDefaultSessionDurationSpinBox = new QSpinBox(schedulingDefaultsBox);
+  mDefaultSessionDurationSpinBox->setMinimum(5);
+  mDefaultSessionDurationSpinBox->setMaximum(480);
+  mDefaultSessionDurationSpinBox->setSingleStep(5);
+  mDefaultSessionDurationSpinBox->setSuffix(tr(" min"));
+  mDefaultBufferBeforeSpinBox = new QSpinBox(schedulingDefaultsBox);
+  mDefaultBufferBeforeSpinBox->setRange(0, 240);
+  mDefaultBufferBeforeSpinBox->setSuffix(tr(" min"));
+  mDefaultBufferAfterSpinBox = new QSpinBox(schedulingDefaultsBox);
+  mDefaultBufferAfterSpinBox->setRange(0, 240);
+  mDefaultBufferAfterSpinBox->setSuffix(tr(" min"));
+  schedulingDefaultsLayout->addWidget(
+      makeSettingRow(tr("Disallow overlapping events"),
+                     tr("Reject saves when the selected time range intersects another event."),
+                     mPreventOverlapsSwitch, schedulingDefaultsBox));
+  schedulingDefaultsLayout->addWidget(
+      makeSettingRow(tr("Work day start"),
+                     tr("Start time used for quick session suggestions."),
+                     mWorkDayStartEdit, schedulingDefaultsBox));
+  schedulingDefaultsLayout->addWidget(
+      makeSettingRow(tr("Work day end"),
+                     tr("End time used for quick session suggestions."),
+                     mWorkDayEndEdit, schedulingDefaultsBox));
+  schedulingDefaultsLayout->addWidget(
+      makeSettingRow(tr("Default session duration"),
+                     tr("Duration used for quick session suggestions and new sessions."),
+                     mDefaultSessionDurationSpinBox, schedulingDefaultsBox));
+  schedulingDefaultsLayout->addWidget(
+      makeSettingRow(tr("Default buffer before"),
+                     tr("Time reserved before each new session and Quick Slot."),
+                     mDefaultBufferBeforeSpinBox, schedulingDefaultsBox));
+  schedulingDefaultsLayout->addWidget(
+      makeSettingRow(tr("Default buffer after"),
+                     tr("Time reserved after each new session and Quick Slot."),
+                     mDefaultBufferAfterSpinBox, schedulingDefaultsBox));
+  eventSettingsLayout->addWidget(schedulingDefaultsBox);
+
+  auto *billingBox = new QGroupBox(tr("Billing"), eventsPage);
+  auto *billingLayout = new QVBoxLayout(billingBox);
+  billingLayout->setContentsMargins(16, 16, 16, 16);
+  billingLayout->setSpacing(14);
+  mCurrencyCombo = new QComboBox(billingBox);
+  mCurrencyCombo->setObjectName(QStringLiteral("currencyCombo"));
   mCurrencyCombo->addItem(tr("Russian Ruble (₽)"), QStringLiteral("RUB"));
   mCurrencyCombo->addItem(tr("US Dollar ($)"), QStringLiteral("USD"));
   mCurrencyCombo->addItem(tr("Euro (€)"), QStringLiteral("EUR"));
   mCurrencyCombo->addItem(tr("British Pound (£)"), QStringLiteral("GBP"));
-  mDefaultWorkCostSpinBox = new QDoubleSpinBox(eventsBox);
+  mDefaultWorkCostSpinBox = new QDoubleSpinBox(billingBox);
   mDefaultWorkCostSpinBox->setDecimals(2);
   mDefaultWorkCostSpinBox->setMinimum(0.0);
   mDefaultWorkCostSpinBox->setMaximum(1'000'000.0);
   mDefaultWorkCostSpinBox->setSingleStep(100.0);
   mDefaultWorkCostSpinBox->setSuffix(QStringLiteral(" ") + pcm::app_settings::currencySymbol());
-  mWorkDayStartEdit = new QTimeEdit(eventsBox);
-  mWorkDayStartEdit->setDisplayFormat("HH:mm");
-  mWorkDayEndEdit = new QTimeEdit(eventsBox);
-  mWorkDayEndEdit->setDisplayFormat("HH:mm");
-  mDefaultSessionDurationSpinBox = new QSpinBox(eventsBox);
-  mDefaultSessionDurationSpinBox->setMinimum(5);
-  mDefaultSessionDurationSpinBox->setMaximum(480);
-  mDefaultSessionDurationSpinBox->setSingleStep(5);
-  mDefaultSessionDurationSpinBox->setSuffix(tr(" min"));
-  mDefaultBufferBeforeSpinBox = new QSpinBox(eventsBox);
-  mDefaultBufferBeforeSpinBox->setRange(0, 240);
-  mDefaultBufferBeforeSpinBox->setSuffix(tr(" min"));
-  mDefaultBufferAfterSpinBox = new QSpinBox(eventsBox);
-  mDefaultBufferAfterSpinBox->setRange(0, 240);
-  mDefaultBufferAfterSpinBox->setSuffix(tr(" min"));
-  eventsLayout->addWidget(
-      makeSettingRow(tr("Disallow overlapping events"),
-                     tr("Reject saves when the selected time range intersects another event."),
-                     mPreventOverlapsSwitch, eventsBox));
-  eventsLayout->addWidget(
-      makeSettingRow(tr("Work day start"),
-                     tr("Start time used for quick session suggestions."),
-                     mWorkDayStartEdit, eventsBox));
-  eventsLayout->addWidget(
-      makeSettingRow(tr("Work day end"),
-                     tr("End time used for quick session suggestions."),
-                     mWorkDayEndEdit, eventsBox));
-  eventsLayout->addWidget(
-      makeSettingRow(tr("Default session duration"),
-                     tr("Duration used for quick session suggestions and new sessions."),
-                     mDefaultSessionDurationSpinBox, eventsBox));
-  eventsLayout->addWidget(
-      makeSettingRow(tr("Default buffer before"),
-                     tr("Time reserved before each new session and Quick Slot."),
-                     mDefaultBufferBeforeSpinBox, eventsBox));
-  eventsLayout->addWidget(
-      makeSettingRow(tr("Default buffer after"),
-                     tr("Time reserved after each new session and Quick Slot."),
-                     mDefaultBufferAfterSpinBox, eventsBox));
-  eventsLayout->addWidget(
+  billingLayout->addWidget(
       makeSettingRow(tr("Currency"),
                      tr("Symbol shown next to cost values throughout the app."),
-                     mCurrencyCombo, eventsBox));
-  eventsLayout->addWidget(
+                     mCurrencyCombo, billingBox));
+  billingLayout->addWidget(
       makeSettingRow(tr("Default work event cost"),
                      tr("Used to prefill new work sessions."),
-                     mDefaultWorkCostSpinBox, eventsBox));
-  eventsLayout->addWidget(
+                     mDefaultWorkCostSpinBox, billingBox));
+  eventSettingsLayout->addWidget(billingBox);
+
+  auto *eventColorsBox = new QGroupBox(tr("Event colors"), eventsPage);
+  auto *eventColorsLayout = new QVBoxLayout(eventColorsBox);
+  eventColorsLayout->setContentsMargins(16, 16, 16, 16);
+  eventColorsLayout->setSpacing(14);
+  mWorkEventColorEditor = new oclero::qlementine::ColorEditor(eventColorsBox);
+  mWorkEventColorEditor->setObjectName(QStringLiteral("workEventColorEditor"));
+  mPersonalEventColorEditor = new oclero::qlementine::ColorEditor(eventColorsBox);
+  eventColorsLayout->addWidget(
       makeSettingRow(tr("Work events"),
                      tr("Accent color for work sessions in the timeline."),
-                     mWorkEventColorEditor, eventsBox));
-  eventsLayout->addWidget(
+                     mWorkEventColorEditor, eventColorsBox));
+  eventColorsLayout->addWidget(
       makeSettingRow(tr("Personal events"),
                      tr("Accent color for personal events in the timeline."),
-                     mPersonalEventColorEditor, eventsBox));
-  eventSettingsLayout->addWidget(eventsBox);
+                     mPersonalEventColorEditor, eventColorsBox));
+  eventSettingsLayout->addWidget(eventColorsBox);
   eventSettingsLayout->addStretch();
 
   auto *onlineBox = new QGroupBox(tr("Online sessions"), onlinePage);

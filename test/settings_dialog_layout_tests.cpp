@@ -2,6 +2,7 @@
 #include "fake_token_backend_credential_store.h"
 
 #include <QApplication>
+#include <QGroupBox>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTemporaryDir>
@@ -57,6 +58,41 @@ TEST(SettingsDialogLayoutTest, LiveKitSaveButtonIsOnTheLastPage) {
   auto *credentialStore = new FakeTokenBackendCredentialStore();
   SettingsDialog dialog(nullptr, credentialStore);
   EXPECT_EQ(pageIndexOf(dialog, "liveKitSaveButton"), 5);
+}
+
+TEST(SettingsDialogLayoutTest, SchedulingAndBillingBoxesAreBothOnTheEventsPage) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  EXPECT_EQ(pageIndexOf(dialog, "preventOverlapsSwitch"), 3);
+  EXPECT_EQ(pageIndexOf(dialog, "currencyCombo"), 3);
+  EXPECT_EQ(pageIndexOf(dialog, "workEventColorEditor"), 3);
+}
+
+TEST(SettingsDialogLayoutTest, SchedulingBillingAndColorsAreThreeSeparateGroupBoxes) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  auto *overlapsSwitch = dialog.findChild<QWidget *>("preventOverlapsSwitch");
+  auto *currencyCombo = dialog.findChild<QWidget *>("currencyCombo");
+  auto *colorEditor = dialog.findChild<QWidget *>("workEventColorEditor");
+  ASSERT_NE(overlapsSwitch, nullptr);
+  ASSERT_NE(currencyCombo, nullptr);
+  ASSERT_NE(colorEditor, nullptr);
+
+  auto groupBoxOf = [](QWidget *w) -> QWidget * {
+    while (w != nullptr && qobject_cast<QGroupBox *>(w) == nullptr) {
+      w = w->parentWidget();
+    }
+    return w;
+  };
+  QWidget *schedulingBox = groupBoxOf(overlapsSwitch);
+  QWidget *billingBox = groupBoxOf(currencyCombo);
+  QWidget *colorsBox = groupBoxOf(colorEditor);
+  ASSERT_NE(schedulingBox, nullptr);
+  ASSERT_NE(billingBox, nullptr);
+  ASSERT_NE(colorsBox, nullptr);
+  EXPECT_NE(schedulingBox, billingBox);
+  EXPECT_NE(billingBox, colorsBox);
+  EXPECT_NE(schedulingBox, colorsBox);
 }
 
 int main(int argc, char **argv) {
