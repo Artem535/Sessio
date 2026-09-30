@@ -1,6 +1,7 @@
 # Sessio #95: participant model and 1:2 calls
 
-Status: proposed for review. Issue: https://github.com/Artem535/Sessio/issues/95.
+Status: implementation authorized; layout B approved on 2026-09-30.
+Issue: https://github.com/Artem535/Sessio/issues/95.
 
 ## Intent and scope
 
@@ -87,17 +88,18 @@ Layout selection is separate from participant storage and rendering:
 
 - Zero remote participants: visible waiting state with the local preview.
 - One remote participant: large remote video plus local picture-in-picture.
-- Two remote participants (1:2): equally sized remote tiles plus local PiP;
-  use vertical stacking when the stage is taller than it is wide.
-- More remote participants: reuse the tile strategy with a basic balanced grid
-  of remote videos and local PiP, keeping every participant visible. This is a
+- Two or more remote participants: equally sized tiles for all participants,
+  including the local preview, in a balanced grid. Use QGridLayout for the
+  tile host and a separate strategy selecting rows/columns from available
+  stage size and 16:9 tile proportions. Center an incomplete final row.
+  This is a
   geometry fallback; active-speaker selection, pinning, pagination and other
   advanced group layouts remain deferred. The live acceptance scenario is 1:2.
 
 Participants with no camera display their name and camera-off placeholder.
 Names are escaped/rendered as plain text. The side panel reduces the video stage
-size; tile geometry is computed from that size. Local PiP stays inside the
-stage on narrow windows and above video but below floating controls.
+size; tile geometry is computed from that size. Local PiP in 1:1 stays inside
+the stage on narrow windows and above video but below floating controls.
 
 On attaching another session, disconnect model/source observers and discard
 the old UI-owned tiles. Source deletion must be safe while the UI is visible.
