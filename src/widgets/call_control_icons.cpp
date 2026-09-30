@@ -1,6 +1,7 @@
 #include "call_control_icons.h"
 
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 
 namespace pcm::widgets {
@@ -82,6 +83,28 @@ QIcon fullscreenIcon(bool active) {
     painter.drawLine(QPointF(o, 24 - o), QPointF(o + l, 24 - o));
     painter.drawLine(QPointF(24 - o, 24 - o - l), QPointF(24 - o, 24 - o));
     painter.drawLine(QPointF(24 - o, 24 - o), QPointF(24 - o - l, 24 - o));
+  });
+}
+
+QIcon notesIcon() {
+  return renderIcon(false, [](QPainter &painter, const QColor &color) {
+    painter.setPen(QPen(color, 1.5));
+    painter.setBrush(Qt::NoBrush);
+    // Notepad page with a folded top-right corner.
+    QPainterPath page;
+    page.moveTo(6, 3);
+    page.lineTo(15, 3);
+    page.lineTo(19, 7);
+    page.lineTo(19, 21);
+    page.lineTo(6, 21);
+    page.closeSubpath();
+    painter.drawPath(page);
+    painter.drawLine(QPointF(15, 3), QPointF(15, 7));
+    painter.drawLine(QPointF(15, 7), QPointF(19, 7));
+    // Three lines of text, the last one shorter.
+    painter.drawLine(QPointF(9, 11), QPointF(16, 11));
+    painter.drawLine(QPointF(9, 14.5), QPointF(16, 14.5));
+    painter.drawLine(QPointF(9, 18), QPointF(13, 18));
   });
 }
 

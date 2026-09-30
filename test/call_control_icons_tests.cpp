@@ -14,6 +14,11 @@ TEST(CallControlIconsTest, EveryIconIsNonNull) {
   EXPECT_FALSE(fullscreenIcon(false).isNull());
 }
 
+TEST(CallControlIconsTest, NotesIconIsNonNull) {
+  const QIcon icon = pcm::widgets::notesIcon();
+  EXPECT_FALSE(icon.isNull());
+}
+
 int main(int argc, char **argv) {
   // QPixmap (used internally by renderIcon()) requires a QGuiApplication to
   // exist before construction — without one it aborts with "Must construct
