@@ -45,6 +45,10 @@ public:
                           QWidget *parent = nullptr);
   ~SettingsDialog() override = default;
 
+  // Dialog height for a screen with the given available height: leaves room
+  // for the window frame and panels, but never exceeds the screen itself.
+  static int heightForAvailableScreen(int availableHeight);
+
 private:
   void setupUi();
   void setupLiveKitSection();

@@ -3,14 +3,12 @@
 
 #include <QApplication>
 #include <QGroupBox>
-#include <QGuiApplication>
-#include <QPushButton>
-#include <QScreen>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QStackedWidget>
 #include <QTemporaryDir>
 #include <QWidget>
+#include <oclero/qlementine/widgets/AbstractItemListWidget.hpp>
 #include <gtest/gtest.h>
 
 namespace {
@@ -99,16 +97,48 @@ TEST(SettingsDialogLayoutTest, SchedulingBillingAndColorsAreThreeSeparateGroupBo
   EXPECT_NE(schedulingBox, colorsBox);
 }
 
-int main(int argc, char **argv) {
-  // Redirect the config home to a scratch directory so SettingsDialog never
-  // reads or writes the developer's real Sessio config.
-  QTemporaryDir isolatedHome;
-  qputenv("XDG_CONFIG_HOME", isolatedHome.path().toUtf8());
-  qputenv("HOME", isolatedHome.path().toUtf8());
+TEST(SettingsDialogLayoutTest, ClipboardSettingsAreInTheirOwnGroupBoxOnThePrivacyPage) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  EXPECT_EQ(pageIndexOf(dialog, "clearSensitiveClipboardSwitch"), 1);
+  auto *clipboardSwitch = dialog.findChild<QWidget *>("clearSensitiveClipboardSwitch");
+  auto *appLockSwitch = dialog.findChild<QWidget *>("appLockEnabledSwitch");
+  ASSERT_NE(clipboardSwitch, nullptr);
+  ASSERT_NE(appLockSwitch, nullptr);
+  auto groupBoxOf = [](QWidget *w) -> QWidget * {
+    while (w != nullptr && qobject_cast<QGroupBox *>(w) == nullptr) {
+      w = w->parentWidget();
+    }
+    return w;
+  };
+  QWidget *clipboardBox = groupBoxOf(clipboardSwitch);
+  QWidget *appLockBox = groupBoxOf(appLockSwitch);
+  ASSERT_NE(clipboardBox, nullptr);
+  ASSERT_NE(appLockBox, nullptr);
+  EXPECT_NE(clipboardBox, appLockBox);
+}
 
-  QApplication app(argc, argv);
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+TEST(SettingsDialogLayoutTest, SegmentedControlHasOneItemPerStackedPage) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  auto *stack = dialog.findChild<QStackedWidget *>();
+  auto *sections = dialog.findChild<oclero::qlementine::AbstractItemListWidget *>();
+  ASSERT_NE(stack, nullptr);
+  ASSERT_NE(sections, nullptr);
+  EXPECT_EQ(sections->itemCount(), stack->count());
+}
+
+TEST(SettingsDialogLayoutTest, HeightForAvailableScreenNeverExceedsTheScreen) {
+  struct Case {
+    int available;
+    int expected;
+  };
+  for (const Case c : {Case{300, 300}, Case{480, 400}, Case{600, 520},
+                       Case{800, 720}, Case{1080, 760}}) {
+    const int height = SettingsDialog::heightForAvailableScreen(c.available);
+    EXPECT_LE(height, c.available) << "available " << c.available;
+    EXPECT_EQ(height, c.expected) << "available " << c.available;
+  }
 }
 
 TEST(SettingsDialogLayoutTest, EveryPageIsAVerticallyScrollableScrollArea) {
@@ -126,14 +156,6 @@ TEST(SettingsDialogLayoutTest, EveryPageIsAVerticallyScrollableScrollArea) {
   }
 }
 
-TEST(SettingsDialogLayoutTest, DialogHeightNeverExceedsTheAvailableScreenHeight) {
-  auto *credentialStore = new FakeTokenBackendCredentialStore();
-  SettingsDialog dialog(nullptr, credentialStore);
-  const auto *screen = QGuiApplication::primaryScreen();
-  ASSERT_NE(screen, nullptr);
-  EXPECT_LE(dialog.height(), screen->availableGeometry().height());
-}
-
 TEST(SettingsDialogLayoutTest, TallPagesScrollInsteadOfOverflowingTheDialog) {
   auto *credentialStore = new FakeTokenBackendCredentialStore();
   SettingsDialog dialog(nullptr, credentialStore);
@@ -146,4 +168,16 @@ TEST(SettingsDialogLayoutTest, TallPagesScrollInsteadOfOverflowingTheDialog) {
   stack->setCurrentIndex(2);
   QApplication::processEvents();
   EXPECT_GT(backupPage->verticalScrollBar()->maximum(), 0);
+}
+
+int main(int argc, char **argv) {
+  // Redirect the config home to a scratch directory so SettingsDialog never
+  // reads or writes the developer's real Sessio config.
+  QTemporaryDir isolatedHome;
+  qputenv("XDG_CONFIG_HOME", isolatedHome.path().toUtf8());
+  qputenv("HOME", isolatedHome.path().toUtf8());
+
+  QApplication app(argc, argv);
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

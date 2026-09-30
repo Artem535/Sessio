@@ -223,16 +223,19 @@ SettingsDialog::SettingsDialog(std::shared_ptr<pcm::database::Database> db,
   mTokenBackendCredentialStore->readBearerCredential();
 }
 
+int SettingsDialog::heightForAvailableScreen(const int availableHeight) {
+  return qMax(qMin(760, availableHeight - 80), qMin(400, availableHeight));
+}
+
 void SettingsDialog::setupUi() {
   setWindowTitle(tr("Settings"));
   setModal(true);
-  const auto *screen = QGuiApplication::primaryScreen();
+  const QScreen *screen = parentWidget() != nullptr
+                              ? parentWidget()->screen()
+                              : QGuiApplication::primaryScreen();
   const int availableHeight =
       screen != nullptr ? screen->availableGeometry().height() : 760;
-  // Leave room for the window frame and panels, but keep the dialog usable on
-  // very small screens (never taller than the screen itself).
-  const int dialogHeight =
-      qMax(qMin(760, availableHeight - 80), qMin(400, availableHeight));
+  const int dialogHeight = heightForAvailableScreen(availableHeight);
   resize(560, dialogHeight);
 
   auto *rootLayout = new QVBoxLayout(this);
@@ -261,27 +264,27 @@ void SettingsDialog::setupUi() {
 
   auto *generalPage = new QWidget(mSettingsStack);
   auto *generalSettingsLayout = new QVBoxLayout(generalPage);
-  generalSettingsLayout->setContentsMargins(0, 0, 0, 0);
+  generalSettingsLayout->setContentsMargins(0, 0, 8, 0);
   generalSettingsLayout->setSpacing(16);
 
   auto *privacyPage = new QWidget(mSettingsStack);
   auto *privacySettingsLayout = new QVBoxLayout(privacyPage);
-  privacySettingsLayout->setContentsMargins(0, 0, 0, 0);
+  privacySettingsLayout->setContentsMargins(0, 0, 8, 0);
   privacySettingsLayout->setSpacing(16);
 
   auto *backupPage = new QWidget(mSettingsStack);
   auto *backupSettingsLayout = new QVBoxLayout(backupPage);
-  backupSettingsLayout->setContentsMargins(0, 0, 0, 0);
+  backupSettingsLayout->setContentsMargins(0, 0, 8, 0);
   backupSettingsLayout->setSpacing(16);
 
   auto *eventsPage = new QWidget(mSettingsStack);
   auto *eventSettingsLayout = new QVBoxLayout(eventsPage);
-  eventSettingsLayout->setContentsMargins(0, 0, 0, 0);
+  eventSettingsLayout->setContentsMargins(0, 0, 8, 0);
   eventSettingsLayout->setSpacing(16);
 
   auto *onlinePage = new QWidget(mSettingsStack);
   auto *onlineSettingsLayout = new QVBoxLayout(onlinePage);
-  onlineSettingsLayout->setContentsMargins(0, 0, 0, 0);
+  onlineSettingsLayout->setContentsMargins(0, 0, 8, 0);
   onlineSettingsLayout->setSpacing(16);
 
   mSettingsStack->addWidget(makeScrollPage(generalPage, mSettingsStack));
@@ -463,35 +466,42 @@ void SettingsDialog::setupUi() {
   privacySettingsLayout->addWidget(notificationsBox);
 
   auto *appLockBox = new QGroupBox(tr("App lock"), privacyPage);
-  auto *privacyLayout = new QVBoxLayout(appLockBox);
-  privacyLayout->setContentsMargins(16, 16, 16, 16);
-  privacyLayout->setSpacing(14);
+  auto *appLockLayout = new QVBoxLayout(appLockBox);
+  appLockLayout->setContentsMargins(16, 16, 16, 16);
+  appLockLayout->setSpacing(14);
   mAppLockEnabledSwitch = new oclero::qlementine::Switch(appLockBox);
   mAppLockEnabledSwitch->setObjectName(QStringLiteral("appLockEnabledSwitch"));
   mAppLockTimeoutSpinBox = new QSpinBox(appLockBox);
   mAppLockTimeoutSpinBox->setRange(1, 24 * 60);
   mAppLockTimeoutSpinBox->setSuffix(tr(" min"));
   mChangeAppLockCredentialButton = new QPushButton(tr("Change PIN or password"), appLockBox);
-  mClearSensitiveClipboardSwitch = new oclero::qlementine::Switch(appLockBox);
-  mSensitiveClipboardDelaySpinBox = new QSpinBox(appLockBox);
-  mSensitiveClipboardDelaySpinBox->setRange(5, 10 * 60);
-  mSensitiveClipboardDelaySpinBox->setSuffix(tr(" sec"));
-  privacyLayout->addWidget(makeSettingRow(
+  appLockLayout->addWidget(makeSettingRow(
       tr("Lock application"),
       tr("Require a PIN or password after inactivity or from the system tray."),
       mAppLockEnabledSwitch, appLockBox));
-  privacyLayout->addWidget(makeSettingRow(
+  appLockLayout->addWidget(makeSettingRow(
       tr("Lock after"), tr("Time without keyboard or mouse activity."),
       mAppLockTimeoutSpinBox, appLockBox));
-  privacyLayout->addWidget(mChangeAppLockCredentialButton, 0, Qt::AlignRight);
-  privacyLayout->addWidget(makeSettingRow(
+  appLockLayout->addWidget(mChangeAppLockCredentialButton, 0, Qt::AlignRight);
+  privacySettingsLayout->addWidget(appLockBox);
+
+  auto *clipboardBox = new QGroupBox(tr("Clipboard"), privacyPage);
+  auto *clipboardLayout = new QVBoxLayout(clipboardBox);
+  clipboardLayout->setContentsMargins(16, 16, 16, 16);
+  clipboardLayout->setSpacing(14);
+  mClearSensitiveClipboardSwitch = new oclero::qlementine::Switch(clipboardBox);
+  mClearSensitiveClipboardSwitch->setObjectName(QStringLiteral("clearSensitiveClipboardSwitch"));
+  mSensitiveClipboardDelaySpinBox = new QSpinBox(clipboardBox);
+  mSensitiveClipboardDelaySpinBox->setRange(5, 10 * 60);
+  mSensitiveClipboardDelaySpinBox->setSuffix(tr(" sec"));
+  clipboardLayout->addWidget(makeSettingRow(
       tr("Clear copied meeting details"),
       tr("Clear meeting links and invitations copied by the application."),
-      mClearSensitiveClipboardSwitch, appLockBox));
-  privacyLayout->addWidget(makeSettingRow(
+      mClearSensitiveClipboardSwitch, clipboardBox));
+  clipboardLayout->addWidget(makeSettingRow(
       tr("Clear after"), tr("Delay before copied meeting details are removed."),
-      mSensitiveClipboardDelaySpinBox, appLockBox));
-  privacySettingsLayout->addWidget(appLockBox);
+      mSensitiveClipboardDelaySpinBox, clipboardBox));
+  privacySettingsLayout->addWidget(clipboardBox);
   generalSettingsLayout->addStretch();
   privacySettingsLayout->addStretch();
 
@@ -615,7 +625,7 @@ void SettingsDialog::setupUi() {
 void SettingsDialog::setupLiveKitSection() {
   auto *liveKitPage = new QWidget(mSettingsStack);
   auto *liveKitPageLayout = new QVBoxLayout(liveKitPage);
-  liveKitPageLayout->setContentsMargins(0, 0, 0, 0);
+  liveKitPageLayout->setContentsMargins(0, 0, 8, 0);
   liveKitPageLayout->setSpacing(16);
 
   auto *liveKitBox = new QGroupBox(tr("Token backend"), liveKitPage);
