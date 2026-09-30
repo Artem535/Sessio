@@ -2,35 +2,37 @@
 
 #include "video_provider.h"
 
-#include <QPointer>
-// The brief's original spike code included only <livekit/room.h>, but that
-// header merely forward-declares LocalParticipant and doesn't declare
-// LocalAudioTrack/LocalVideoTrack at all, nor livekit::initialize()/
-// shutdown() (those live only in the umbrella header). <livekit/livekit.h>
-// is the vendored SDK's public umbrella header (see
-// build/_deps/livekit-sdk/*/include/livekit/livekit.h) and pulls in room.h
-// plus local_audio_track.h/local_video_track.h/local_participant.h and the
-// initialize()/shutdown() declarations this class needs.
 #include <livekit/livekit.h>
+#include <functional>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
-
-class QLabel;
+#include <set>
 
 namespace pcm::video {
 
 class VideoCaptureAdapter;
 class AudioCaptureAdapter;
-class RemoteVideoRenderer;
+class LiveKitVideoFrameSource;
 class RemoteAudioPlayer;
 class DeviceManager;
 
-// Production VideoProvider implementation: connects to a real LiveKit
-// server, captures the default camera/microphone, publishes local tracks,
-// and renders/plays the first subscribed remote video/audio track. Ported
-// from spike/77-livekit-cpp-spike, with every stderr-only error path turned
-// into a signal.
-class LiveKitVideoProvider final : public VideoProvider, private livekit::RoomDelegate {
+// Copied SDK callback values; only track shared ownership crosses threads.
+struct ParticipantSnapshot {
+  Participant value;
+  QString sid;
+};
+struct TrackSnapshot {
+  QString id;
+  QString participantSid;
+  QString sid;
+  livekit::TrackKind kind;
+  bool muted;
+  std::shared_ptr<livekit::Track> track;
+};
+
+class LiveKitVideoProvider final : public VideoProvider {
   Q_OBJECT
 public:
   explicit LiveKitVideoProvider(QObject *parent = nullptr);
@@ -38,11 +40,7 @@ public:
 
   void join(const QString &url, const QString &token) override;
   void leave() override;
-  // The renderer the first subscribed remote video track is attached to.
-  // Owned by this provider (see the destructor for the ownership rules once
-  // a UI has reparented it into its own layout).
-  QWidget *remoteVideoWidget() override;
-  QWidget *localVideoWidget() override;
+  VideoFrameSource *frameSource(const QString &id) override;
   void setMicrophoneEnabled(bool enabled) override;
   void setCameraEnabled(bool enabled) override;
   [[nodiscard]] bool isMicrophoneEnabled() const override { return mMicrophoneEnabled; }
@@ -52,40 +50,33 @@ public:
   void switchSpeaker(const QAudioDevice &device) override;
 
 private:
-  // livekit::RoomDelegate overrides — invoked on a LiveKit-internal thread;
-  // every override marshals to the GUI thread via QMetaObject::invokeMethod
-  // and guards its body with `if (!mRoom) return;` since leave() may run
-  // before a queued callback executes.
-  void onTrackSubscribed(livekit::Room &room, const livekit::TrackSubscribedEvent &event) override;
-  void onParticipantConnected(livekit::Room &room,
-                              const livekit::ParticipantConnectedEvent &event) override;
-  void onParticipantDisconnected(livekit::Room &room,
-                                 const livekit::ParticipantDisconnectedEvent &event) override;
-  // Wired so VideoSession's Connected<->Reconnecting state graph (Task 8)
-  // actually has something driving it from real network events, not just
-  // local device-capture failures. leave() clears the delegate before
-  // resetting mRoom, so its own disconnect should not reach onDisconnected
-  // at all; the `if (!mRoom) return;` guard in the .cpp instead protects
-  // against a concurrent LiveKit-internal-thread dispatch racing leave().
-  void onDisconnected(livekit::Room &room, const livekit::DisconnectedEvent &event) override;
-  void onReconnecting(livekit::Room &room, const livekit::ReconnectingEvent &event) override;
-  void onReconnected(livekit::Room &room, const livekit::ReconnectedEvent &event) override;
+  friend struct LiveKitVideoProviderTestAccess;
+  class CallbackDelegate;
+  struct ParticipantMedia {
+    QString sid;
+    std::unique_ptr<LiveKitVideoFrameSource> video;
+    std::unique_ptr<RemoteAudioPlayer> audio;
+    QString videoSid;
+    QString audioSid;
+    std::set<QString> retiredVideoSids;
+    std::set<QString> retiredAudioSids;
+    std::shared_ptr<livekit::Track> audioTrack;
+  };
 
+  void queueCallback(uint64_t generation, std::function<void(LiveKitVideoProvider &)> callback);
+  void applyParticipant(const ParticipantSnapshot &snapshot, bool allowInsert);
+  void applyDeparture(const QString &id, const QString &sid);
+  void applySubscribed(const TrackSnapshot &snapshot);
+  void applyUnsubscribed(const TrackSnapshot &snapshot);
+  void applyMuted(const TrackSnapshot &snapshot, bool muted);
+  void updateLocalState();
   void publishTracks();
   void unpublishTracks();
+  void teardown();
+  void snapshotParticipants();
 
-  // Reference-counts livekit::initialize()/shutdown() (see the anonymous
-  // namespace in the .cpp). MUST be the first member declared in this
-  // class: C++ constructs members in declaration order and destroys them
-  // in reverse — declaring it first guarantees livekit::initialize() runs
-  // before mVideoCapture/mAudioCapture below (whose constructors make
-  // LiveKit FFI calls: VideoCaptureAdapter constructs a livekit::VideoSource,
-  // AudioCaptureAdapter a livekit::AudioSource) and that livekit::shutdown()
-  // runs only after every other member — including those two — has already
-  // been destroyed. Do not reorder this declaration relative to the members
-  // below it, and do not add it to this class's constructor's member-init
-  // list (its default constructor already runs at the right time by virtue
-  // of declaration order alone).
+  // First constructed, last destroyed: every stream/track/capture dies before
+  // the final SDK shutdown. Never move this below SDK-holding members.
   struct LiveKitRuntimeGuard {
     LiveKitRuntimeGuard();
     ~LiveKitRuntimeGuard();
@@ -95,17 +86,23 @@ private:
   std::unique_ptr<DeviceManager> mDeviceManager;
   std::unique_ptr<VideoCaptureAdapter> mVideoCapture;
   std::unique_ptr<AudioCaptureAdapter> mAudioCapture;
-  QPointer<RemoteVideoRenderer> mRemoteVideo;
-  std::unique_ptr<RemoteAudioPlayer> mRemoteAudio;
-  QPointer<QLabel> mLocalPreviewWidget;
+  std::map<QString, std::unique_ptr<ParticipantMedia>> mMedia;
+  std::set<std::pair<QString, QString>> mDeparted;
+  QString mLocalIdentity;
   bool mMicrophoneEnabled{true};
   bool mCameraEnabled{true};
   std::optional<QAudioDevice> mSelectedSpeaker;
+  uint64_t mGeneration{0};
+  std::mutex mCallbackMutex;
+  uint64_t mNextCallback{0};
+  std::map<uint64_t, std::function<void(LiveKitVideoProvider &)>> mPendingCallbacks;
 
+  // Room is destroyed before its delegate. Delegate invalidation is synchronized
+  // with callback dispatch; queued work retains its original generation.
+  std::unique_ptr<CallbackDelegate> mDelegate;
   std::unique_ptr<livekit::Room> mRoom;
   std::shared_ptr<livekit::LocalAudioTrack> mAudioTrack;
   std::shared_ptr<livekit::LocalVideoTrack> mVideoTrack;
-  std::shared_ptr<livekit::Track> mRemoteAudioTrack;
 };
 
 } // namespace pcm::video

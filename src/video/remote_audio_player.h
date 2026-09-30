@@ -27,15 +27,18 @@ signals:
   void playbackFailed(QString reason);
 
 private:
+  friend struct RemoteAudioPlayerTestAccess;
   std::shared_ptr<livekit::AudioStream> mStream;
   QAudioDevice mOutputDevice;
   std::unique_ptr<QAudioSink> mSink;
   QIODevice *mSinkDevice{nullptr};
   std::thread mReaderThread;
   std::atomic<bool> mRunning{false};
+  uint64_t mGeneration{0}; // owner-thread attachment epoch
 
-  void readerLoop();
-  void deliverAudioOnGuiThread(QByteArray pcmBytes, int sampleRate, int numChannels);
+  void readerLoop(uint64_t generation);
+  void deliverAudioOnGuiThread(QByteArray pcmBytes, int sampleRate, int numChannels,
+                               uint64_t generation);
 };
 
 } // namespace pcm::video

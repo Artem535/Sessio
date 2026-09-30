@@ -179,12 +179,11 @@ add_test(NAME AudioCaptureAdapterSmokeTest COMMAND Sessio_audio_capture_adapter_
 set_tests_properties(AudioCaptureAdapterSmokeTest PROPERTIES TIMEOUT 30)
 
 # Remote video renderer smoke test (own main(), not GoogleTest — mirrors the
-# local capture adapter smoke tests above). Proves repeated
-# attach(null)/detach/destroy cycles never hang, which is what a
-# Leave-before-any-remote-track-ever-subscribed race would exercise in
-# production; no real remote LiveKit track is reachable without a server and
-# a second participant.
+# local capture adapter smoke tests above). Exercises Qt-only source attachment,
+# pending frame notifications and source deletion while a renderer survives.
+# No SDK is linked; this is a lifecycle test, not hardware GL paint verification.
 add_executable(Sessio_remote_video_renderer_smoke_test
+    ${CMAKE_SOURCE_DIR}/src/video/video_frame_source.cpp
     ${CMAKE_SOURCE_DIR}/src/video/remote_video_renderer.cpp
     remote_video_renderer_smoke_test.cpp
 )
@@ -194,7 +193,6 @@ target_link_libraries(Sessio_remote_video_renderer_smoke_test PRIVATE
     Qt6::Gui
     Qt6::Widgets
     Qt6::OpenGLWidgets
-    LiveKit::livekit
 )
 add_test(NAME RemoteVideoRendererSmokeTest COMMAND Sessio_remote_video_renderer_smoke_test)
 set_tests_properties(RemoteVideoRendererSmokeTest PROPERTIES TIMEOUT 30)
@@ -204,6 +202,7 @@ set_tests_properties(RemoteVideoRendererSmokeTest PROPERTIES TIMEOUT 30)
 # paintGL() uses to place a KeepAspectRatio-scaled frame, per this plan's
 # Task 4 transparency-artifact fix).
 add_executable(Sessio_remote_video_renderer_letterbox_test
+    ${CMAKE_SOURCE_DIR}/src/video/video_frame_source.cpp
     ${CMAKE_SOURCE_DIR}/src/video/remote_video_renderer.cpp
     remote_video_renderer_letterbox_test.cpp
 )
@@ -214,15 +213,13 @@ target_link_libraries(Sessio_remote_video_renderer_letterbox_test PRIVATE
     Qt6::Gui
     Qt6::Widgets
     Qt6::OpenGLWidgets
-    LiveKit::livekit
 )
 add_test(NAME RemoteVideoRendererLetterboxTest COMMAND Sessio_remote_video_renderer_letterbox_test)
 
 # LiveKit video provider smoke test (own main(), not GoogleTest — mirrors the
-# other video smoke tests above). Proves repeated construct/join-against-an-
-# unreachable-url/destroy cycles never hang, and that join() against a real
-# SDK call that will fail reports joinFailed() rather than hanging or
-# crashing, per this plan's Task 9 lifecycle-stress acceptance criterion.
+# other video smoke tests above). Exercises copied participant/track handlers,
+# generation/SID guards, payload release, zero QWidget construction, and five
+# construct/refused-join/destroy cycles. Real room media is a separate gate.
 #
 # video_provider.h defines the Q_OBJECT VideoProvider base class but has no
 # paired .cpp of its own (CMake's AUTOMOC only auto-scans a header that
@@ -234,6 +231,7 @@ add_executable(Sessio_livekit_video_provider_smoke_test
     ${CMAKE_SOURCE_DIR}/src/video/participant_model.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_frame_source.cpp
     ${CMAKE_SOURCE_DIR}/src/video/livekit_video_provider.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/livekit_video_frame_source.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/audio_capture_adapter.cpp
@@ -256,6 +254,24 @@ target_link_libraries(Sessio_livekit_video_provider_smoke_test PRIVATE
 set_target_properties(Sessio_livekit_video_provider_smoke_test PROPERTIES AUTOMOC ON)
 add_test(NAME LiveKitVideoProviderSmokeTest COMMAND Sessio_livekit_video_provider_smoke_test)
 set_tests_properties(LiveKitVideoProviderSmokeTest PROPERTIES TIMEOUT 40)
+
+add_executable(Sessio_remote_audio_player_lifecycle_test
+    ${CMAKE_SOURCE_DIR}/src/video/remote_audio_player.cpp
+    remote_audio_player_lifecycle_test.cpp
+)
+target_include_directories(Sessio_remote_audio_player_lifecycle_test PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_remote_audio_player_lifecycle_test PRIVATE Qt6::Core Qt6::Multimedia LiveKit::livekit)
+add_test(NAME RemoteAudioPlayerLifecycleTest COMMAND Sessio_remote_audio_player_lifecycle_test)
+
+add_executable(Sessio_livekit_video_frame_source_smoke_test
+    ${CMAKE_SOURCE_DIR}/src/video/video_frame_source.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/livekit_video_frame_source.cpp
+    livekit_video_frame_source_smoke_test.cpp
+)
+target_include_directories(Sessio_livekit_video_frame_source_smoke_test PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_livekit_video_frame_source_smoke_test PRIVATE Qt6::Core Qt6::Gui LiveKit::livekit)
+add_test(NAME LiveKitVideoFrameSourceSmokeTest COMMAND Sessio_livekit_video_frame_source_smoke_test)
+set_tests_properties(LiveKitVideoFrameSourceSmokeTest PROPERTIES TIMEOUT 15)
 
 # External URL meeting provider tests
 add_executable(Sessio_external_url_meeting_provider_tests

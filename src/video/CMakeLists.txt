@@ -13,6 +13,8 @@ qt_add_library(${TARGET_NAME} STATIC
         participant_model.cpp
         video_frame_source.h
         video_frame_source.cpp
+        livekit_video_frame_source.h
+        livekit_video_frame_source.cpp
         video_session_state.h
         video_session.h
         video_session.cpp

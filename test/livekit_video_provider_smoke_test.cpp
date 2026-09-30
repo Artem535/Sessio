@@ -1,123 +1,154 @@
 #include "livekit_video_provider.h"
 
-// LiveKitVideoProvider's constructor creates a RemoteVideoRenderer, which is
-// a QOpenGLWidget/QWidget (see src/video/remote_video_renderer.h) — like
-// Task 6's own remote_video_renderer_smoke_test.cpp, this needs a full
-// QApplication rather than QCoreApplication, or QWidget construction aborts
-// with "QWidget: Cannot create a QWidget without QApplication".
-#include <QApplication>
+#include <QCoreApplication>
 #include <QEventLoop>
-#include <QPointer>
 #include <QTimer>
-#include <QVBoxLayout>
-#include <QWidget>
 #include <iostream>
+#include <thread>
+
+namespace pcm::video {
+
+// Exercise the same copied-value handlers used by the SDK delegate without
+// borrowing SDK callback pointers or requiring devices/network participants.
+struct LiveKitVideoProviderTestAccess {
+  static bool run(LiveKitVideoProvider &provider) {
+    const auto check = [](bool ok, const char *message) {
+      if (!ok) std::cerr << message << std::endl;
+      return ok;
+    };
+    int joins = 0, leaves = 0;
+    QObject::connect(&provider, &VideoProvider::participantJoined, &provider,
+                     [&joins] { ++joins; });
+    QObject::connect(&provider, &VideoProvider::participantLeft, &provider,
+                     [&leaves] { ++leaves; });
+    bool sourceBeforeRow = false;
+    QObject::connect(provider.participants(), &QAbstractItemModel::rowsInserted,
+                     &provider, [&] {
+      sourceBeforeRow = provider.frameSource("a") != nullptr;
+    });
+    ParticipantSnapshot a{{"a", "Synthetic A", {}, false, false, false}, "PA"};
+    ParticipantSnapshot b{{"b", "Synthetic B", "client", false, false, false}, "PB"};
+    provider.applyParticipant(a, true);
+    auto *sourceA = provider.frameSource("a");
+    provider.applyParticipant(a, true);
+    provider.applyParticipant(b, true);
+    if (!check(sourceBeforeRow && sourceA && sourceA != provider.frameSource("b"),
+               "sources must exist before rows, be stable and independent")) return false;
+    if (!check(joins == 2 && provider.participants()->remoteCount() == 2,
+               "duplicate presence must be ignored; audio-only remotes counted")) return false;
+    if (!check(provider.participants()->participant("a")->role.isEmpty(),
+               "absent legacy role metadata must be accepted")) return false;
+    a.value.displayName = "Synthetic updated";
+    a.value.role = "practitioner";
+    provider.applyParticipant(a, false);
+    if (!check(provider.participants()->participant("a")->displayName == a.value.displayName,
+               "copied metadata update missing")) return false;
+
+    TrackSnapshot video{"a", "PA", "V1", livekit::TrackKind::KIND_VIDEO, false, {}};
+    provider.applySubscribed(video);
+    QImage red(4, 4, QImage::Format_RGBA8888);
+    red.fill(Qt::red);
+    sourceA->submitFrame(red);
+    auto replacement = video;
+    replacement.sid = "V2";
+    provider.applySubscribed(replacement);
+    if (!check(sourceA == provider.frameSource("a") && sourceA->latestFrame().isNull(),
+               "replacement must clear frame and preserve source")) return false;
+    sourceA->submitFrame(red);
+    provider.applySubscribed(video); // delayed old subscribe cannot replace V2
+    if (!check(!sourceA->latestFrame().isNull(),
+               "old subscribed SID replaced successor stream")) return false;
+    provider.applyMuted(video, true);
+    provider.applyUnsubscribed(video);
+    if (!check(provider.participants()->participant("a")->cameraEnabled,
+               "old SID changed replacement camera state")) return false;
+    provider.applyMuted(replacement, true);
+    if (!check(!provider.participants()->participant("a")->cameraEnabled &&
+               provider.participants()->remoteCount() == 2, "mute removed presence")) return false;
+    provider.applyMuted(replacement, false);
+    provider.applyUnsubscribed(replacement);
+    provider.applyParticipant(a, false); // display metadata cannot undo unsubscribe
+    if (!check(!provider.participants()->participant("a")->cameraEnabled &&
+               provider.participants()->remoteCount() == 2, "unsubscribe removed presence")) return false;
+    TrackSnapshot audioA{"a", "PA", "A1", livekit::TrackKind::KIND_AUDIO, false, {}};
+    TrackSnapshot audioB{"b", "PB", "B1", livekit::TrackKind::KIND_AUDIO, false, {}};
+    provider.applySubscribed(audioA);
+    provider.applySubscribed(audioB);
+    provider.applyUnsubscribed(audioA);
+    if (!check(!provider.participants()->participant("a")->microphoneEnabled &&
+               provider.participants()->participant("b")->microphoneEnabled,
+               "one audio unsubscribe affected another participant")) return false;
+
+    provider.applyDeparture("a", "PA");
+    provider.applySubscribed(replacement);
+    provider.applyParticipant(a, false);
+    if (!check(!provider.participants()->participant("a") &&
+               provider.participants()->remoteCount() == 1, "late track resurrected departure")) return false;
+    a.sid = "PA-new";
+    provider.applyParticipant(a, true);
+    provider.applyDeparture("a", "PA");
+    provider.applySubscribed(replacement);
+    if (!check(provider.participants()->remoteCount() == 2 &&
+               !provider.participants()->participant("a")->cameraEnabled,
+               "old participant SID affected rejoin")) return false;
+    provider.applyDeparture("unknown", "unknown");
+    if (!check(leaves == 1, "unknown departure emitted signal")) return false;
+
+    provider.mRoom = std::make_unique<livekit::Room>();
+    const auto oldGeneration = provider.mGeneration;
+    auto captured = std::make_shared<int>(42);
+    std::weak_ptr<int> capturedLifetime = captured;
+    std::thread worker([&] {
+      provider.queueCallback(oldGeneration, [a, captured](LiveKitVideoProvider &target) {
+        target.applyParticipant(a, true);
+      });
+    });
+    worker.join();
+    captured.reset();
+    provider.leave();
+    if (!check(capturedLifetime.expired(),
+               "teardown retained callback payload until Qt event delivery")) return false;
+    provider.mRoom = std::make_unique<livekit::Room>();
+    QCoreApplication::processEvents();
+    if (!check(provider.participants()->rowCount() == 0,
+               "old queued generation populated a new room")) return false;
+    provider.leave();
+    return check(provider.frameSource("a") == nullptr, "teardown retained sources");
+  }
+};
+
+} // namespace pcm::video
 
 int main(int argc, char *argv[]) {
-  QApplication app(argc, argv);
-
+  // No QApplication: constructing a QWidget here aborts, proving the production
+  // provider no longer owns either local or remote presentation.
+  QCoreApplication app(argc, argv);
   QTimer watchdog;
   watchdog.setSingleShot(true);
   QObject::connect(&watchdog, &QTimer::timeout, [] {
-    std::cerr << "livekit_video_provider_smoke_test: watchdog fired, hang detected" << std::endl;
+    std::cerr << "provider watchdog: hang detected" << std::endl;
     std::exit(1);
   });
-  watchdog.start(20000);
-
+  watchdog.start(25000);
+  {
+    pcm::video::LiveKitVideoProvider provider;
+    if (provider.remoteVideoWidget() || provider.localVideoWidget()) return 1;
+    if (!pcm::video::LiveKitVideoProviderTestAccess::run(provider)) return 1;
+    provider.setMicrophoneEnabled(false);
+    provider.setCameraEnabled(false);
+    if (provider.isMicrophoneEnabled() || provider.isCameraEnabled()) return 1;
+    provider.setMicrophoneEnabled(true);
+    provider.setCameraEnabled(true);
+    if (!provider.isMicrophoneEnabled() || !provider.isCameraEnabled()) return 1;
+  }
   for (int cycle = 0; cycle < 5; ++cycle) {
-    auto provider = std::make_unique<pcm::video::LiveKitVideoProvider>();
-
-    // A deliberately unreachable URL: proves join() against a real SDK call
-    // that will fail reports joinFailed() rather than hanging, and that a
-    // provider can be safely destroyed either mid-attempt or after failure.
+    pcm::video::LiveKitVideoProvider provider;
     QEventLoop loop;
-    QObject::connect(provider.get(), &pcm::video::VideoProvider::joinFailed, &loop, &QEventLoop::quit);
-    provider->join("wss://127.0.0.1:1", "not-a-real-token");
+    QObject::connect(&provider, &pcm::video::VideoProvider::joinFailed, &loop, &QEventLoop::quit);
+    provider.join("wss://127.0.0.1:1", "not-a-real-token");
     loop.exec();
-
-    provider->leave();
-    provider.reset();
+    provider.leave();
   }
-
-  std::cout << "livekit_video_provider_smoke_test: 5 construct/join/destroy cycles completed"
+  std::cout << "provider copied handlers, generation/SID guards, zero widgets and 5 failed joins passed"
             << std::endl;
-
-  // remoteVideoWidget() ownership: CallPage borrows the provider's renderer
-  // by reparenting it into its own layout. Neither destruction order may
-  // double-delete it (see ~LiveKitVideoProvider).
-  {
-    // Provider destroyed first, while its widget is still embedded.
-    QWidget host;
-    auto *hostLayout = new QVBoxLayout(&host);
-    auto provider = std::make_unique<pcm::video::LiveKitVideoProvider>();
-    QPointer<QWidget> video = provider->remoteVideoWidget();
-    if (video.isNull()) {
-      std::cerr << "livekit_video_provider_smoke_test: no remote video widget" << std::endl;
-      return 1;
-    }
-    video->setParent(&host);
-    hostLayout->addWidget(video);
-    provider.reset();
-    if (!video.isNull() || hostLayout->count() != 0) {
-      std::cerr << "livekit_video_provider_smoke_test: embedded remote video widget not released "
-                   "cleanly with its provider"
-                << std::endl;
-      return 1;
-    }
-  } // host destroyed afterwards: must not touch the already-deleted widget
-  {
-    // Embedding UI destroyed first, then the provider.
-    auto provider = std::make_unique<pcm::video::LiveKitVideoProvider>();
-    QPointer<QWidget> video = provider->remoteVideoWidget();
-    {
-      QWidget host;
-      auto *hostLayout = new QVBoxLayout(&host);
-      video->setParent(&host);
-      hostLayout->addWidget(video);
-    }
-    if (!video.isNull()) {
-      std::cerr << "livekit_video_provider_smoke_test: host did not delete its embedded child"
-                << std::endl;
-      return 1;
-    }
-    provider.reset(); // must not delete the already-deleted widget again
-  }
-  std::cout << "livekit_video_provider_smoke_test: remote video widget ownership checks passed"
-            << std::endl;
-
-  {
-    // Construct-only checks: localVideoWidget() must be non-null, the
-    // mic/camera flags must default to enabled, and toggling either before
-    // any join() must not crash or throw -- mAudioTrack/mVideoTrack are both
-    // still null at this point, so this only passes if
-    // setMicrophoneEnabled()/setCameraEnabled() actually hit their
-    // `if (mAudioTrack)`/`if (mVideoTrack)` guards instead of dereferencing a
-    // null track.
-    auto provider = std::make_unique<pcm::video::LiveKitVideoProvider>();
-    if (provider->localVideoWidget() == nullptr) {
-      std::cerr << "livekit_video_provider_smoke_test: no local video widget" << std::endl;
-      return 1;
-    }
-    if (!provider->isMicrophoneEnabled() || !provider->isCameraEnabled()) {
-      std::cerr << "livekit_video_provider_smoke_test: mic/camera not enabled by default"
-                << std::endl;
-      return 1;
-    }
-    provider->setMicrophoneEnabled(false);
-    provider->setCameraEnabled(false);
-    if (provider->isMicrophoneEnabled() || provider->isCameraEnabled()) {
-      std::cerr << "livekit_video_provider_smoke_test: mic/camera state not updated" << std::endl;
-      return 1;
-    }
-    provider->setMicrophoneEnabled(true);
-    provider->setCameraEnabled(true);
-    if (!provider->isMicrophoneEnabled() || !provider->isCameraEnabled()) {
-      std::cerr << "livekit_video_provider_smoke_test: mic/camera state not restored" << std::endl;
-      return 1;
-    }
-  }
-  std::cout << "livekit_video_provider_smoke_test: local video widget / mic-camera toggle checks "
-               "passed"
-            << std::endl;
-  return 0;
 }
