@@ -11,6 +11,72 @@ namespace pcm::video {
 // Exercise the same copied-value handlers used by the SDK delegate without
 // borrowing SDK callback pointers or requiring devices/network participants.
 struct LiveKitVideoProviderTestAccess {
+  static bool replacementParticipantSidResetsMedia() {
+    LiveKitVideoProvider provider;
+    ParticipantSnapshot participant{{"replace", {}, {}, false, true, true}, "P-old"};
+    provider.applyParticipant(participant, true);
+    auto *source = provider.frameSource("replace");
+    QImage frame(4, 4, QImage::Format_RGBA8888);
+    frame.fill(Qt::red);
+    source->submitFrame(frame);
+    participant.sid = "P-new";
+    participant.value.microphoneEnabled = false;
+    participant.value.cameraEnabled = false;
+    provider.applyParticipant(participant, true); // replacement without departure
+    const auto current = provider.participants()->participant("replace");
+    const bool ok = current && !current->microphoneEnabled && !current->cameraEnabled &&
+        source == provider.frameSource("replace") && source->latestFrame().isNull() &&
+        provider.participants()->remoteCount() == 1;
+    if (!ok) std::cerr << "new participant SID inherited predecessor media flags" << std::endl;
+    return ok;
+  }
+
+  static bool unsubscribeHistoryRejectsOldSubscribe(livekit::TrackKind kind) {
+    LiveKitVideoProvider provider;
+    provider.applyParticipant({{"history", {}, {}, false, false, false}, "P"}, true);
+    const auto enabled = [&] {
+      const auto participant = provider.participants()->participant("history");
+      return kind == livekit::TrackKind::KIND_VIDEO ? participant->cameraEnabled
+                                                   : participant->microphoneEnabled;
+    };
+    TrackSnapshot first{"history", "P", "T1", kind, false, {}};
+    provider.applySubscribed(first);
+    provider.applyUnsubscribed(first);
+    provider.applySubscribed(first); // same publication resubscription is legitimate
+    if (!enabled()) {
+      std::cerr << "same publication resubscription rejected" << std::endl;
+      return false;
+    }
+    provider.applyUnsubscribed(first);
+    auto successor = first;
+    successor.sid = "T2";
+    successor.muted = true;
+    provider.applySubscribed(successor);
+    QImage frame(4, 4, QImage::Format_RGBA8888);
+    frame.fill(Qt::blue);
+    auto *source = provider.frameSource("history");
+    source->submitFrame(frame);
+    provider.applySubscribed(first); // T1 was unsubscribed before T2 arrived
+    if (enabled() || source->latestFrame().isNull()) {
+      std::cerr << "old " << (kind == livekit::TrackKind::KIND_VIDEO ? "video" : "audio")
+                << " subscription replaced successor after unsubscribe" << std::endl;
+      return false;
+    }
+    provider.applyMuted(successor, false);
+    provider.applyUnsubscribed(successor);
+    if (enabled()) {
+      std::cerr << "successor SID no longer handles unsubscribe" << std::endl;
+      return false;
+    }
+    successor.muted = false;
+    provider.applySubscribed(successor);
+    if (!enabled()) {
+      std::cerr << "successor same publication resubscription rejected" << std::endl;
+      return false;
+    }
+    return provider.participants()->remoteCount() == 1;
+  }
+
   static bool run(LiveKitVideoProvider &provider) {
     const auto check = [](bool ok, const char *message) {
       if (!ok) std::cerr << message << std::endl;
@@ -130,6 +196,15 @@ int main(int argc, char *argv[]) {
     std::exit(1);
   });
   watchdog.start(25000);
+  const bool participantReplacement =
+      pcm::video::LiveKitVideoProviderTestAccess::replacementParticipantSidResetsMedia();
+  const bool videoHistory =
+      pcm::video::LiveKitVideoProviderTestAccess::unsubscribeHistoryRejectsOldSubscribe(
+          livekit::TrackKind::KIND_VIDEO);
+  const bool audioHistory =
+      pcm::video::LiveKitVideoProviderTestAccess::unsubscribeHistoryRejectsOldSubscribe(
+          livekit::TrackKind::KIND_AUDIO);
+  if (!participantReplacement || !videoHistory || !audioHistory) return 1;
   {
     pcm::video::LiveKitVideoProvider provider;
     if (provider.remoteVideoWidget() || provider.localVideoWidget()) return 1;

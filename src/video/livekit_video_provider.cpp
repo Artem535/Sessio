@@ -315,6 +315,7 @@ void LiveKitVideoProvider::applyParticipant(const ParticipantSnapshot &snapshot,
   if (id.isEmpty() || mDeparted.contains({id, snapshot.sid})) return;
   auto it = mMedia.find(id);
   const bool newIdentity = it == mMedia.end();
+  const bool sameParticipant = !newIdentity && it->second->sid == snapshot.sid;
   if (newIdentity && !allowInsert) return;
   if (!newIdentity && it->second->sid != snapshot.sid) {
     if (!allowInsert) return;
@@ -324,6 +325,8 @@ void LiveKitVideoProvider::applyParticipant(const ParticipantSnapshot &snapshot,
     it->second->audioTrack.reset();
     it->second->videoSid.clear();
     it->second->audioSid.clear();
+    it->second->lastVideoSid.clear();
+    it->second->lastAudioSid.clear();
     it->second->retiredVideoSids.clear();
     it->second->retiredAudioSids.clear();
     it->second->sid = snapshot.sid;
@@ -337,7 +340,7 @@ void LiveKitVideoProvider::applyParticipant(const ParticipantSnapshot &snapshot,
     mMedia.emplace(id, std::move(media)); // visible to rowsInserted observers
   }
   auto value = snapshot.value;
-  if (!newIdentity) {
+  if (sameParticipant) {
     // Display updates and duplicate connected events do not undo an unsubscribe
     // or mute; effective track state is updated by its own SID-guarded handler.
     if (const auto current = participants()->participant(id)) {
@@ -372,16 +375,20 @@ void LiveKitVideoProvider::applySubscribed(const TrackSnapshot &snapshot) {
     if (snapshot.kind == livekit::TrackKind::KIND_VIDEO) {
       if (media.retiredVideoSids.contains(snapshot.sid)) return;
       if (media.videoSid == snapshot.sid) return;
-      if (!media.videoSid.isEmpty()) media.retiredVideoSids.insert(media.videoSid);
+      if (!media.lastVideoSid.isEmpty() && media.lastVideoSid != snapshot.sid)
+        media.retiredVideoSids.insert(media.lastVideoSid);
       media.video->attachTrack(snapshot.track);
       media.videoSid = snapshot.sid;
+      media.lastVideoSid = snapshot.sid;
       participant->cameraEnabled = !snapshot.muted;
     } else if (snapshot.kind == livekit::TrackKind::KIND_AUDIO) {
       if (media.retiredAudioSids.contains(snapshot.sid)) return;
       if (media.audioSid == snapshot.sid) return;
-      if (!media.audioSid.isEmpty()) media.retiredAudioSids.insert(media.audioSid);
+      if (!media.lastAudioSid.isEmpty() && media.lastAudioSid != snapshot.sid)
+        media.retiredAudioSids.insert(media.lastAudioSid);
       media.audio->detach();
       media.audioSid = snapshot.sid;
+      media.lastAudioSid = snapshot.sid;
       media.audioTrack = snapshot.track;
       const auto device = mSelectedSpeaker ? mSelectedSpeaker : mDeviceManager->defaultSpeaker();
       if (device) media.audio->attachTrack(snapshot.track, *device);

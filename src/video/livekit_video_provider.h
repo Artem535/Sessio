@@ -58,6 +58,10 @@ private:
     std::unique_ptr<RemoteAudioPlayer> audio;
     QString videoSid;
     QString audioSid;
+    // Retained through unsubscribe so a different successor retires this SID;
+    // attached SID above can be empty while this publication can resubscribe.
+    QString lastVideoSid;
+    QString lastAudioSid;
     std::set<QString> retiredVideoSids;
     std::set<QString> retiredAudioSids;
     std::shared_ptr<livekit::Track> audioTrack;
