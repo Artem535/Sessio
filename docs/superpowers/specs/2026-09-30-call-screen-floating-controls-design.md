@@ -68,13 +68,11 @@ private:
 ```cpp
 mControlBar = new QWidget(mVideoStage);
 mControlBar->setObjectName("controlBar");
-mControlBar->setAutoFillBackground(true);
-{
-  auto pal = mControlBar->palette();
-  pal.setColor(QPalette::Window, QColor(20, 20, 20)); // непрозрачно, без альфы
-  mControlBar->setPalette(pal);
-}
-mControlBar->setStyleSheet("#controlBar { border-radius: 24px; }");
+// Фон задаётся только через QSS (непрозрачно, без альфы): как только QSS-правило
+// сматчилось, QStyleSheetStyle сам рисует виджет и заливка через
+// setAutoFillBackground/QPalette не отрисовывается вовсе (проверено рендером).
+mControlBar->setStyleSheet(
+    "#controlBar { background-color: rgb(20,20,20); border-radius: 24px; }");
 auto *controlsLayout = new QHBoxLayout(mControlBar);
 controlsLayout->setContentsMargins(12, 6, 12, 6);
 controlsLayout->setSpacing(8);
@@ -103,13 +101,11 @@ void CallPage::setSidePanelToggleVisible(bool visible) {
     mNotesToggleButton->setIcon(pcm::widgets::notesIcon());
     mNotesToggleButton->setToolTip(tr("Notes"));
     mNotesToggleButton->setAccessibleName(tr("Notes"));
-    mNotesToggleButton->setAutoFillBackground(true);
-    {
-      auto pal = mNotesToggleButton->palette();
-      pal.setColor(QPalette::Button, QColor(20, 20, 20));
-      mNotesToggleButton->setPalette(pal);
-    }
-    mNotesToggleButton->setStyleSheet("#notesToggleButton { border-radius: 20px; }");
+    mNotesToggleButton->setStyleSheet(
+        "#notesToggleButton { background-color: rgb(20,20,20); border: none;"
+        " border-radius: 20px; }"
+        "#notesToggleButton:hover { background-color: rgb(45,45,45); }"
+        "#notesToggleButton:checked { background-color: rgb(70,70,70); }");
     connect(mNotesToggleButton, &QToolButton::toggled, this,
             [this](bool checked) { mSidePanelHost->setVisible(checked); });
     mVideoStage->setNotesToggleWidget(mNotesToggleButton);
