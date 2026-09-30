@@ -299,6 +299,40 @@ TEST(CallPageTest, ToleratesEmbeddedRemoteVideoWidgetDestroyedWithItsProvider) {
   delete newVideo.data();
 }
 
+TEST(CallPageTest, VideoStagePositionsControlBarCenteredAtBottom) {
+  pcm::video::detail::VideoStage stage;
+  auto *controlBar = new QWidget(&stage);
+  controlBar->resize(200, 48);
+  stage.setControlBarWidget(controlBar);
+  resizeAndDeliverEvent(&stage, QSize(640, 360));
+
+  EXPECT_EQ(controlBar->parentWidget(), &stage);
+  EXPECT_EQ(controlBar->geometry().center().x(), stage.rect().center().x());
+  EXPECT_EQ(controlBar->geometry().bottom(), stage.height() - 20 - 1);
+}
+
+TEST(CallPageTest, VideoStagePositionsNotesToggleInTopRightCorner) {
+  pcm::video::detail::VideoStage stage;
+  auto *notesToggle = new QWidget(&stage);
+  stage.setNotesToggleWidget(notesToggle);
+  resizeAndDeliverEvent(&stage, QSize(640, 360));
+
+  EXPECT_EQ(notesToggle->parentWidget(), &stage);
+  EXPECT_EQ(notesToggle->geometry(), QRect(640 - 12 - 40, 12, 40, 40));
+}
+
+TEST(CallPageTest, SwappingControlBarHandsPreviousOneBackUnparented) {
+  pcm::video::detail::VideoStage stage;
+  auto *firstBar = new QWidget(&stage);
+  stage.setControlBarWidget(firstBar);
+  auto *secondBar = new QWidget(&stage);
+  stage.setControlBarWidget(secondBar);
+
+  EXPECT_EQ(firstBar->parentWidget(), nullptr);
+  EXPECT_EQ(secondBar->parentWidget(), &stage);
+  delete firstBar;
+}
+
 // Fixwave group 5, bug 1: a live call dropping (VideoProvider::connectionLost())
 // used to bounce the user straight to the ended screen with zero explanation
 // — the reason string was dropped on the floor. Reuses the exact same

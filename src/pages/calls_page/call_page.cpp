@@ -50,6 +50,42 @@ void VideoStage::setLocalPreviewWidget(QWidget *widget) {
   layoutChildren();
 }
 
+// Unlike setRemoteWidget()/setLocalPreviewWidget() above (whose callers in
+// CallPage reparent the borrowed provider widget themselves before handing
+// it over), the control-bar and notes-toggle widgets set here are owned and
+// constructed by CallPage/CallsPage as plain child widgets with no separate
+// reparenting step, so VideoStage does that reparenting itself and hands a
+// previous widget back unparented (rather than deleting it) when swapped.
+void VideoStage::setControlBarWidget(QWidget *widget) {
+  if (mControlBarWidget == widget) {
+    return;
+  }
+  if (mControlBarWidget) {
+    mControlBarWidget->setParent(nullptr);
+  }
+  mControlBarWidget = widget;
+  if (mControlBarWidget) {
+    mControlBarWidget->setParent(this);
+    mControlBarWidget->show();
+  }
+  layoutChildren();
+}
+
+void VideoStage::setNotesToggleWidget(QWidget *widget) {
+  if (mNotesToggleWidget == widget) {
+    return;
+  }
+  if (mNotesToggleWidget) {
+    mNotesToggleWidget->setParent(nullptr);
+  }
+  mNotesToggleWidget = widget;
+  if (mNotesToggleWidget) {
+    mNotesToggleWidget->setParent(this);
+    mNotesToggleWidget->show();
+  }
+  layoutChildren();
+}
+
 void VideoStage::resizeEvent(QResizeEvent *event) {
   QWidget::resizeEvent(event);
   layoutChildren();
@@ -63,6 +99,27 @@ void VideoStage::layoutChildren() {
     mLocalPreviewWidget->setGeometry(width() - kLocalPreviewWidth - kLocalPreviewMargin,
                                       height() - kLocalPreviewHeight - kLocalPreviewMargin,
                                       kLocalPreviewWidth, kLocalPreviewHeight);
+    mLocalPreviewWidget->raise();
+  }
+  if (mControlBarWidget) {
+    const QSize hint = mControlBarWidget->sizeHint();
+    const int barWidth = hint.width() > 0 ? hint.width() : mControlBarWidget->width();
+    const int barHeight = 48;
+    const int x = (width() - barWidth) / 2;
+    const int y = height() - 20 - barHeight;
+    mControlBarWidget->setGeometry(x, y, barWidth, barHeight);
+    mControlBarWidget->raise();
+  }
+  if (mNotesToggleWidget) {
+    constexpr int kSize = 40;
+    constexpr int kMargin = 12;
+    mNotesToggleWidget->setGeometry(width() - kMargin - kSize, kMargin, kSize, kSize);
+    mNotesToggleWidget->raise();
+  }
+  // Re-raise the self-preview above the new control-bar/notes-toggle slots
+  // in case their geometries ever come to overlap; free given they don't
+  // today, and it protects against future constant drift.
+  if (mLocalPreviewWidget) {
     mLocalPreviewWidget->raise();
   }
 }

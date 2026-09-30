@@ -23,15 +23,20 @@ namespace pcm::video::detail {
 
 // Hosts the remote-video widget stretched to fill the available area, with
 // the local self-preview overlaid as a fixed-size tile in the bottom-right
-// corner. A plain QWidget with no layout manager: QLayout has no way to
-// express "fill entirely" and "float pinned to a corner" for two children
-// at once, so both are positioned directly in resizeEvent().
+// corner, plus two floating overlay slots: a control bar centered near the
+// bottom and a notes-toggle in the top-right corner (both wired up by later
+// tasks; here they are just positioned). A plain QWidget with no layout
+// manager: QLayout has no way to express "fill entirely" and "float pinned
+// to a corner/edge" for several children at once, so all are positioned
+// directly in resizeEvent().
 class VideoStage final : public QWidget {
 public:
   explicit VideoStage(QWidget *parent = nullptr);
 
   void setRemoteWidget(QWidget *widget);
   void setLocalPreviewWidget(QWidget *widget);
+  void setControlBarWidget(QWidget *widget);
+  void setNotesToggleWidget(QWidget *widget);
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
@@ -41,6 +46,8 @@ private:
 
   QPointer<QWidget> mRemoteWidget;
   QPointer<QWidget> mLocalPreviewWidget;
+  QPointer<QWidget> mControlBarWidget;
+  QPointer<QWidget> mNotesToggleWidget;
 };
 
 } // namespace pcm::video::detail
