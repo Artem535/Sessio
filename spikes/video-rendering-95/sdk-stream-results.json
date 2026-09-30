@@ -1,0 +1,18 @@
+{
+  "prototype": true,
+  "remote_subscriptions_verified": false,
+  "local_track_routing_valid": true,
+  "close_join_ms": 0.809638,
+  "tracks": [
+    {"id": 0, "frames": 90, "wrong_frames": 0},
+    {"id": 1, "frames": 90, "wrong_frames": 0},
+    {"id": 2, "frames": 90, "wrong_frames": 0},
+    {"id": 3, "frames": 90, "wrong_frames": 0},
+    {"id": 4, "frames": 90, "wrong_frames": 0},
+    {"id": 5, "frames": 90, "wrong_frames": 0},
+    {"id": 6, "frames": 90, "wrong_frames": 0},
+    {"id": 7, "frames": 90, "wrong_frames": 0},
+    {"id": 8, "frames": 90, "wrong_frames": 0},
+    {"id": 9, "frames": 90, "wrong_frames": 0}
+  ]
+}

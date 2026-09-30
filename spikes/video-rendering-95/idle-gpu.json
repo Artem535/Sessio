@@ -1,0 +1,26 @@
+{
+  "gpu_busy_percent_systemwide_idle_samples": [
+    1,
+    2,
+    3,
+    3,
+    3,
+    2,
+    2,
+    2,
+    3,
+    3,
+    4,
+    5,
+    5,
+    6,
+    6,
+    7,
+    7,
+    7,
+    7,
+    6
+  ],
+  "p50": 3.5,
+  "note": "Sampled after the rendering matrix with all benchmark windows closed; includes desktop and other processes."
+}
