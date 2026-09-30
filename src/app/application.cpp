@@ -13,6 +13,7 @@
 #include <QEventLoop>
 #include <QFileInfo>
 #include <QFileOpenEvent>
+#include <QGuiApplication>
 #include <QLocale>
 #include <QStandardPaths>
 #include <QMessageBox>
@@ -139,7 +140,12 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
   app.setApplicationVersion("0.2.3");
-  app.setWindowIcon(QIcon(":/icons/brain-solid-full.svg"));
+  // Wayland panels match a window to its .desktop entry (and icon) by app_id,
+  // which Qt derives from the desktop file name; without this an RPM-installed
+  // Sessio's window can end up with a foreign icon.
+  QGuiApplication::setDesktopFileName(QStringLiteral("Sessio"));
+  app.setWindowIcon(QIcon::fromTheme(QStringLiteral("Sessio"),
+                                     QIcon(":/icons/brain-solid-full.svg")));
   auto *style = new oclero::qlementine::QlementineStyle(&app);
   app.setStyle(style);
 
