@@ -4,6 +4,8 @@
 #include <QString>
 #include <QAudioDevice>
 #include <QCameraDevice>
+#include "participant_model.h"
+#include "video_frame_source.h"
 
 class QWidget;
 
@@ -22,8 +24,14 @@ namespace pcm::video {
 class VideoProvider : public QObject {
   Q_OBJECT
 public:
-  using QObject::QObject;
+  explicit VideoProvider(QObject *parent = nullptr)
+      : QObject(parent), mParticipants(new ParticipantModel(this)) {}
   ~VideoProvider() override = default;
+  [[nodiscard]] ParticipantModel *participants() const { return mParticipants; }
+  [[nodiscard]] virtual VideoFrameSource *frameSource(const QString &id) {
+    Q_UNUSED(id);
+    return nullptr;
+  }
 
   // Connects to the given server url with the given (pre-obtained) JWT
   // token, and publishes local audio/video tracks. This provider does not
@@ -70,6 +78,9 @@ signals:
   void joined();
   void joinFailed(QString reason);
   void left();
+  void participantJoined(QString id);
+  void participantLeft(QString id);
+  // Transitional compatibility until production/UI migration; presence is model-driven.
   void remoteParticipantConnected();
   void remoteParticipantDisconnected();
   void reconnecting();
@@ -86,6 +97,9 @@ signals:
   // which models the state of the connection to the server, not of local
   // devices.
   void mediaError(QString reason);
+
+private:
+  ParticipantModel *mParticipants;
 };
 
 } // namespace pcm::video

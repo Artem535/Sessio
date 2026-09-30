@@ -231,6 +231,8 @@ add_test(NAME RemoteVideoRendererLetterboxTest COMMAND Sessio_remote_video_rende
 # generate its moc so VideoProvider's signals link.
 add_executable(Sessio_livekit_video_provider_smoke_test
     ${CMAKE_SOURCE_DIR}/src/video/video_provider.h
+    ${CMAKE_SOURCE_DIR}/src/video/participant_model.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/video_frame_source.cpp
     ${CMAKE_SOURCE_DIR}/src/video/livekit_video_provider.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_worker.cpp
@@ -376,8 +378,28 @@ gtest_discover_tests(Sessio_backup_tests)
 # PUBLIC-links Qt6::Multimedia), this target compiles video_provider.h
 # directly and needs the dependency named explicitly.
 find_package(Qt6 REQUIRED COMPONENTS Test StateMachine Multimedia)
+add_executable(Sessio_participant_model_tests
+    ${CMAKE_SOURCE_DIR}/src/video/participant_model.cpp
+    participant_model_tests.cpp
+)
+target_include_directories(Sessio_participant_model_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_participant_model_tests PRIVATE GTest::gtest_main Qt6::Core Qt6::Test)
+set_target_properties(Sessio_participant_model_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_participant_model_tests)
+
+add_executable(Sessio_video_frame_source_tests
+    ${CMAKE_SOURCE_DIR}/src/video/video_frame_source.cpp
+    video_frame_source_tests.cpp
+)
+target_include_directories(Sessio_video_frame_source_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_video_frame_source_tests PRIVATE GTest::gtest_main Qt6::Core Qt6::Gui Qt6::Test)
+set_target_properties(Sessio_video_frame_source_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_video_frame_source_tests)
+
 add_executable(Sessio_video_session_tests
     ${CMAKE_SOURCE_DIR}/src/video/video_provider.h
+    ${CMAKE_SOURCE_DIR}/src/video/participant_model.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/video_frame_source.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_session.cpp
     video_session_tests.cpp
 )

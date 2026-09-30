@@ -9,6 +9,10 @@ find_package(Qt6 REQUIRED COMPONENTS Core Multimedia MultimediaWidgets OpenGLWid
 
 qt_add_library(${TARGET_NAME} STATIC
         video_provider.h
+        participant_model.h
+        participant_model.cpp
+        video_frame_source.h
+        video_frame_source.cpp
         video_session_state.h
         video_session.h
         video_session.cpp
