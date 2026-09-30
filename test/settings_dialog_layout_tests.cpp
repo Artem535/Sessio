@@ -41,6 +41,18 @@ TEST(SettingsDialogLayoutTest, AutoBackupEnabledSwitchIsOnTheBackupPage) {
   EXPECT_EQ(pageIndexOf(dialog, "autoBackupEnabledSwitch"), 2);
 }
 
+TEST(SettingsDialogLayoutTest, NotificationsEnabledSwitchIsOnThePrivacyPage) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  EXPECT_EQ(pageIndexOf(dialog, "notificationsEnabledSwitch"), 1);
+}
+
+TEST(SettingsDialogLayoutTest, AppLockEnabledSwitchIsOnThePrivacyPage) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  EXPECT_EQ(pageIndexOf(dialog, "appLockEnabledSwitch"), 1);
+}
+
 TEST(SettingsDialogLayoutTest, LiveKitSaveButtonIsOnTheLastPage) {
   auto *credentialStore = new FakeTokenBackendCredentialStore();
   SettingsDialog dialog(nullptr, credentialStore);

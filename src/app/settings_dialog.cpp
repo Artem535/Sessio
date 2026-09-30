@@ -410,11 +410,12 @@ void SettingsDialog::setupUi() {
   backupSettingsLayout->addWidget(autoBackupBox);
   backupSettingsLayout->addStretch();
 
-  auto *notificationsBox = new QGroupBox(tr("Notifications"), generalPage);
+  auto *notificationsBox = new QGroupBox(tr("Notifications"), privacyPage);
   auto *notificationsLayout = new QVBoxLayout(notificationsBox);
   notificationsLayout->setContentsMargins(16, 16, 16, 16);
   notificationsLayout->setSpacing(14);
   mNotificationsEnabledSwitch = new oclero::qlementine::Switch(notificationsBox);
+  mNotificationsEnabledSwitch->setObjectName(QStringLiteral("notificationsEnabledSwitch"));
   mNotificationLeadMinutesSpinBox = new QSpinBox(notificationsBox);
   mNotificationLeadMinutesSpinBox->setMinimum(1);
   mNotificationLeadMinutesSpinBox->setMaximum(24 * 60);
@@ -440,37 +441,38 @@ void SettingsDialog::setupUi() {
       tr("How much a reminder reveals on a shared or locked screen. Client name and "
         "session title are never shown outside Full details."),
       mNotificationPrivacyModeCombo, notificationsBox));
-  generalSettingsLayout->addWidget(notificationsBox);
+  privacySettingsLayout->addWidget(notificationsBox);
 
-  auto *privacyBox = new QGroupBox(tr("Privacy"), generalPage);
-  auto *privacyLayout = new QVBoxLayout(privacyBox);
+  auto *appLockBox = new QGroupBox(tr("App lock"), privacyPage);
+  auto *privacyLayout = new QVBoxLayout(appLockBox);
   privacyLayout->setContentsMargins(16, 16, 16, 16);
   privacyLayout->setSpacing(14);
-  mAppLockEnabledSwitch = new oclero::qlementine::Switch(privacyBox);
-  mAppLockTimeoutSpinBox = new QSpinBox(privacyBox);
+  mAppLockEnabledSwitch = new oclero::qlementine::Switch(appLockBox);
+  mAppLockEnabledSwitch->setObjectName(QStringLiteral("appLockEnabledSwitch"));
+  mAppLockTimeoutSpinBox = new QSpinBox(appLockBox);
   mAppLockTimeoutSpinBox->setRange(1, 24 * 60);
   mAppLockTimeoutSpinBox->setSuffix(tr(" min"));
-  mChangeAppLockCredentialButton = new QPushButton(tr("Change PIN or password"), privacyBox);
-  mClearSensitiveClipboardSwitch = new oclero::qlementine::Switch(privacyBox);
-  mSensitiveClipboardDelaySpinBox = new QSpinBox(privacyBox);
+  mChangeAppLockCredentialButton = new QPushButton(tr("Change PIN or password"), appLockBox);
+  mClearSensitiveClipboardSwitch = new oclero::qlementine::Switch(appLockBox);
+  mSensitiveClipboardDelaySpinBox = new QSpinBox(appLockBox);
   mSensitiveClipboardDelaySpinBox->setRange(5, 10 * 60);
   mSensitiveClipboardDelaySpinBox->setSuffix(tr(" sec"));
   privacyLayout->addWidget(makeSettingRow(
       tr("Lock application"),
       tr("Require a PIN or password after inactivity or from the system tray."),
-      mAppLockEnabledSwitch, privacyBox));
+      mAppLockEnabledSwitch, appLockBox));
   privacyLayout->addWidget(makeSettingRow(
       tr("Lock after"), tr("Time without keyboard or mouse activity."),
-      mAppLockTimeoutSpinBox, privacyBox));
+      mAppLockTimeoutSpinBox, appLockBox));
   privacyLayout->addWidget(mChangeAppLockCredentialButton, 0, Qt::AlignRight);
   privacyLayout->addWidget(makeSettingRow(
       tr("Clear copied meeting details"),
       tr("Clear meeting links and invitations copied by the application."),
-      mClearSensitiveClipboardSwitch, privacyBox));
+      mClearSensitiveClipboardSwitch, appLockBox));
   privacyLayout->addWidget(makeSettingRow(
       tr("Clear after"), tr("Delay before copied meeting details are removed."),
-      mSensitiveClipboardDelaySpinBox, privacyBox));
-  generalSettingsLayout->addWidget(privacyBox);
+      mSensitiveClipboardDelaySpinBox, appLockBox));
+  privacySettingsLayout->addWidget(appLockBox);
   generalSettingsLayout->addStretch();
   privacySettingsLayout->addStretch();
 
