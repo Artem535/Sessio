@@ -229,6 +229,8 @@ void SettingsDialog::setupUi() {
 
   mSettingsSections = new oclero::qlementine::SegmentedControl(this);
   mSettingsSections->addItem(tr("General"), {}, {}, QStringLiteral("general"));
+  mSettingsSections->addItem(tr("Privacy & Security"), {}, {}, QStringLiteral("privacy"));
+  mSettingsSections->addItem(tr("Backup"), {}, {}, QStringLiteral("backup"));
   mSettingsSections->addItem(tr("Events"), {}, {}, QStringLiteral("events"));
   mSettingsSections->addItem(tr("Online"), {}, {}, QStringLiteral("online"));
   mSettingsSections->addItem(tr("LiveKit"), {}, {}, QStringLiteral("livekit"));
@@ -243,6 +245,16 @@ void SettingsDialog::setupUi() {
   generalSettingsLayout->setContentsMargins(0, 0, 0, 0);
   generalSettingsLayout->setSpacing(16);
 
+  auto *privacyPage = new QWidget(mSettingsStack);
+  auto *privacySettingsLayout = new QVBoxLayout(privacyPage);
+  privacySettingsLayout->setContentsMargins(0, 0, 0, 0);
+  privacySettingsLayout->setSpacing(16);
+
+  auto *backupPage = new QWidget(mSettingsStack);
+  auto *backupSettingsLayout = new QVBoxLayout(backupPage);
+  backupSettingsLayout->setContentsMargins(0, 0, 0, 0);
+  backupSettingsLayout->setSpacing(16);
+
   auto *eventsPage = new QWidget(mSettingsStack);
   auto *eventSettingsLayout = new QVBoxLayout(eventsPage);
   eventSettingsLayout->setContentsMargins(0, 0, 0, 0);
@@ -254,6 +266,8 @@ void SettingsDialog::setupUi() {
   onlineSettingsLayout->setSpacing(16);
 
   mSettingsStack->addWidget(generalPage);
+  mSettingsStack->addWidget(privacyPage);
+  mSettingsStack->addWidget(backupPage);
   mSettingsStack->addWidget(eventsPage);
   mSettingsStack->addWidget(onlinePage);
 
@@ -289,7 +303,7 @@ void SettingsDialog::setupUi() {
   databaseLayout->addWidget(mOpenDatabaseFolderButton, 0, Qt::AlignLeft);
   generalSettingsLayout->addWidget(databaseBox);
 
-  auto *backupBox = new QGroupBox(tr("Backup"), generalPage);
+  auto *backupBox = new QGroupBox(tr("Backup"), backupPage);
   auto *backupLayout = new QVBoxLayout(backupBox);
   backupLayout->setContentsMargins(16, 16, 16, 16);
   backupLayout->setSpacing(10);
@@ -304,6 +318,7 @@ void SettingsDialog::setupUi() {
   backupButtonsLayout->setContentsMargins(0, 0, 0, 0);
   backupButtonsLayout->setSpacing(10);
   mCreateBackupButton = new QPushButton(tr("Create backup..."), backupBox);
+  mCreateBackupButton->setObjectName(QStringLiteral("createBackupButton"));
   mValidateBackupButton = new QPushButton(tr("Validate backup..."), backupBox);
   mRestoreBackupButton = new QPushButton(tr("Restore backup..."), backupBox);
   backupButtonsLayout->addWidget(mCreateBackupButton);
@@ -323,6 +338,7 @@ void SettingsDialog::setupUi() {
   backupLayout->addWidget(mBackupProgressBar);
 
   mBackupEncryptionEnabledSwitch = new oclero::qlementine::Switch(backupBox);
+  mBackupEncryptionEnabledSwitch->setObjectName(QStringLiteral("backupEncryptionEnabledSwitch"));
   mBackupEncryptionDetails = new QWidget(backupBox);
   auto *encryptionDetailsLayout = new QVBoxLayout(mBackupEncryptionDetails);
   encryptionDetailsLayout->setContentsMargins(0, 0, 0, 0);
@@ -352,13 +368,14 @@ void SettingsDialog::setupUi() {
       tr("Protect new backups with a recovery password and the system keychain."),
       mBackupEncryptionEnabledSwitch, backupBox));
   backupLayout->addWidget(mBackupEncryptionDetails);
-  generalSettingsLayout->addWidget(backupBox);
+  backupSettingsLayout->addWidget(backupBox);
 
-  auto *autoBackupBox = new QGroupBox(tr("Automatic Backups"), generalPage);
+  auto *autoBackupBox = new QGroupBox(tr("Automatic Backups"), backupPage);
   auto *autoBackupLayout = new QVBoxLayout(autoBackupBox);
   autoBackupLayout->setContentsMargins(16, 16, 16, 16);
   autoBackupLayout->setSpacing(14);
   mAutoBackupEnabledSwitch = new oclero::qlementine::Switch(autoBackupBox);
+  mAutoBackupEnabledSwitch->setObjectName(QStringLiteral("autoBackupEnabledSwitch"));
   mAutoBackupIntervalSpinBox = new QSpinBox(autoBackupBox);
   mAutoBackupIntervalSpinBox->setMinimum(1);
   mAutoBackupIntervalSpinBox->setMaximum(90);
@@ -390,7 +407,8 @@ void SettingsDialog::setupUi() {
   autoBackupLayout->addWidget(makeSettingRow(tr("Destination folder"),
                                              tr("Where automatic backups are saved."),
                                              destinationRow, autoBackupBox));
-  generalSettingsLayout->addWidget(autoBackupBox);
+  backupSettingsLayout->addWidget(autoBackupBox);
+  backupSettingsLayout->addStretch();
 
   auto *notificationsBox = new QGroupBox(tr("Notifications"), generalPage);
   auto *notificationsLayout = new QVBoxLayout(notificationsBox);
@@ -454,6 +472,7 @@ void SettingsDialog::setupUi() {
       mSensitiveClipboardDelaySpinBox, privacyBox));
   generalSettingsLayout->addWidget(privacyBox);
   generalSettingsLayout->addStretch();
+  privacySettingsLayout->addStretch();
 
   auto *eventsBox = new QGroupBox(tr("Timeline colors"), eventsPage);
   auto *eventsLayout = new QVBoxLayout(eventsBox);

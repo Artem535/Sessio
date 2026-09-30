@@ -461,6 +461,22 @@ target_link_libraries(Sessio_settings_dialog_livekit_section_tests PRIVATE
 set_target_properties(Sessio_settings_dialog_livekit_section_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_settings_dialog_livekit_section_tests)
 
+# Settings dialog tab layout tests
+add_executable(Sessio_settings_dialog_layout_tests
+    fake_token_backend_credential_store.h
+    settings_dialog_layout_tests.cpp
+)
+target_include_directories(Sessio_settings_dialog_layout_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app)
+target_link_libraries(Sessio_settings_dialog_layout_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Widgets
+    Qt6::Test
+    Sessio_app
+)
+set_target_properties(Sessio_settings_dialog_layout_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_settings_dialog_layout_tests)
+
 # CallEntryWidget tests
 add_executable(Sessio_call_entry_widget_tests call_entry_widget_tests.cpp)
 target_link_libraries(Sessio_call_entry_widget_tests PRIVATE
