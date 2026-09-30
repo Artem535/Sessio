@@ -11,8 +11,10 @@
 #include <QResizeEvent>
 #include <QWidget>
 
+class QComboBox;
 class QHBoxLayout;
 class QLabel;
+class QMenu;
 class QPushButton;
 class QStackedWidget;
 class QToolButton;
@@ -98,6 +100,11 @@ private:
   // mediaError() is a non-fatal, transient local-device notice, not a call
   // end (see VideoProvider::mediaError()'s doc comment).
   void onMediaError(const QString &reason);
+  // Builds and pops up the camera/microphone/speaker selector menu anchored
+  // below mDevicesButton. Rebuilt from scratch on every click (the menu sets
+  // Qt::WA_DeleteOnClose) so it always reflects the current device list and
+  // the currently attached session's provider.
+  void showDevicesPopover();
 
   QStackedWidget *mStack{nullptr};
   DeviceCheckWidget *mDeviceCheck{nullptr};
@@ -135,8 +142,19 @@ private:
   QToolButton *mMicrophoneToggleButton{nullptr};
   QToolButton *mCameraToggleButton{nullptr};
   QToolButton *mFullscreenToggleButton{nullptr};
+  QToolButton *mDevicesButton{nullptr};
+  // Owned by whichever showDevicesPopover() call last ran; the popover menu
+  // deletes itself (Qt::WA_DeleteOnClose) on close, at which point these
+  // dangle deliberately until the next click rebuilds them.
+  QComboBox *mDeviceCameraCombo{nullptr};
+  QComboBox *mDeviceMicrophoneCombo{nullptr};
+  QComboBox *mDeviceSpeakerCombo{nullptr};
   QPointer<QWidget> mSidePanel;
   QPointer<pcm::video::VideoSession> mSession;
+  // Not owned; passed into the constructor and outlives this CallPage (see
+  // CallsPage, which owns the DeviceManager). Used by showDevicesPopover()
+  // to enumerate the current camera/microphone/speaker lists.
+  pcm::video::DeviceManager *mDeviceManager{nullptr};
   // The reason from the attached session's most recent joinFailed()/
   // reconnectFailed(), shown on the ended screen. Reset per session.
   QString mLastFailureReason;

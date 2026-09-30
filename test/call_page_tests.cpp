@@ -4,6 +4,7 @@
 #include "busy_spinner.h"
 
 #include <QApplication>
+#include <QComboBox>
 #include <QLabel>
 #include <QLayout>
 #include <QPointer>
@@ -510,6 +511,41 @@ TEST(CallPageTest, FullscreenToggleButtonExistsAndIsCheckable) {
   ASSERT_NE(fullscreenButton, nullptr);
   EXPECT_TRUE(fullscreenButton->isCheckable());
   EXPECT_FALSE(fullscreenButton->isChecked());
+}
+
+TEST(CallPageTest, DevicesButtonOpensPopoverWithThreeCombos) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *devicesButton = page.findChild<QToolButton *>("devicesButton");
+  ASSERT_NE(devicesButton, nullptr);
+
+  devicesButton->click();
+
+  auto *cameraCombo = page.findChild<QComboBox *>("deviceCameraCombo");
+  auto *microphoneCombo = page.findChild<QComboBox *>("deviceMicrophoneCombo");
+  auto *speakerCombo = page.findChild<QComboBox *>("deviceSpeakerCombo");
+  EXPECT_NE(cameraCombo, nullptr);
+  EXPECT_NE(microphoneCombo, nullptr);
+  EXPECT_NE(speakerCombo, nullptr);
+}
+
+TEST(CallPageTest, SelectingADeviceCallsSwitchOnTheAttachedProvider) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+
+  auto *devicesButton = page.findChild<QToolButton *>("devicesButton");
+  ASSERT_NE(devicesButton, nullptr);
+  devicesButton->click();
+
+  auto *microphoneCombo = page.findChild<QComboBox *>("deviceMicrophoneCombo");
+  ASSERT_NE(microphoneCombo, nullptr);
+  if (microphoneCombo->count() > 1) {
+    microphoneCombo->setCurrentIndex(microphoneCombo->currentIndex() == 0 ? 1 : 0);
+    EXPECT_EQ(provider->mSwitchMicrophoneCallCount, 1);
+  }
 }
 
 int main(int argc, char **argv) {

@@ -2,15 +2,22 @@
 
 #include "call_control_icons.h"
 
+#include <QAudioDevice>
+#include <QCameraDevice>
+#include <QComboBox>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMediaDevices>
+#include <QMenu>
+#include <QPoint>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <QWidgetAction>
 
 namespace {
 // How long CallPage's transient media-error banner stays visible before
@@ -63,6 +70,7 @@ void VideoStage::layoutChildren() {
 } // namespace pcm::video::detail
 
 CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : QWidget(parent) {
+  mDeviceManager = deviceManager;
   auto *outer = new QVBoxLayout(this);
   mStack = new QStackedWidget(this);
   outer->addWidget(mStack);
@@ -223,6 +231,12 @@ void CallPage::buildConnectedScreen() {
   });
   controls->addWidget(mFullscreenToggleButton);
 
+  mDevicesButton = new QToolButton(mConnectedView);
+  mDevicesButton->setObjectName("devicesButton");
+  mDevicesButton->setIcon(pcm::widgets::devicesIcon());
+  connect(mDevicesButton, &QToolButton::clicked, this, &CallPage::showDevicesPopover);
+  controls->addWidget(mDevicesButton);
+
   controls->addStretch();
 
   auto *leaveButton = new QPushButton(tr("Leave"), mConnectedView);
@@ -362,6 +376,84 @@ void CallPage::onMediaError(const QString &reason) {
       mMediaErrorBanner->setVisible(false);
     }
   });
+}
+
+void CallPage::showDevicesPopover() {
+  auto *menu = new QMenu(this);
+  menu->setAttribute(Qt::WA_DeleteOnClose);
+
+  // Builds one combo row (object name + entries + selection callback) and
+  // adds it to `menu` via a QWidgetAction, since QMenu cannot host a plain
+  // QComboBox as a regular action. Devices are re-looked-up by id inside
+  // each callback (via QMediaDevices::videoInputs()/audioInputs()/
+  // audioOutputs()) rather than captured by value, because
+  // DeviceManager::cameras()/microphones()/speakers() are themselves
+  // thin, live-queried wrappers over QMediaDevices (see device_manager.h) —
+  // re-querying is as cheap as using a captured snapshot, and stays correct
+  // if a device is unplugged between opening the popover and picking an
+  // entry.
+  auto addDeviceRow = [menu](const QString &objectName, const auto &devices, const QByteArray &currentId,
+                              auto onSelected) -> QComboBox * {
+    auto *combo = new QComboBox(menu);
+    combo->setObjectName(objectName);
+    for (const auto &device : devices) {
+      combo->addItem(device.description(), device.id());
+      if (device.id() == currentId) {
+        combo->setCurrentIndex(combo->count() - 1);
+      }
+    }
+    QObject::connect(combo, &QComboBox::currentIndexChanged, menu, [combo, onSelected](int index) {
+      if (index < 0) {
+        return;
+      }
+      onSelected(combo->itemData(index).toByteArray());
+    });
+    auto *action = new QWidgetAction(menu);
+    action->setDefaultWidget(combo);
+    menu->addAction(action);
+    return combo;
+  };
+
+  auto *provider = mSession ? mSession->provider() : nullptr;
+
+  mDeviceCameraCombo = addDeviceRow(QStringLiteral("deviceCameraCombo"), mDeviceManager->cameras(),
+                                     QByteArray(), [provider](const QByteArray &id) {
+                                       if (!provider) {
+                                         return;
+                                       }
+                                       for (const auto &device : QMediaDevices::videoInputs()) {
+                                         if (device.id() == id) {
+                                           provider->switchCamera(device);
+                                           return;
+                                         }
+                                       }
+                                     });
+  mDeviceMicrophoneCombo = addDeviceRow(QStringLiteral("deviceMicrophoneCombo"), mDeviceManager->microphones(),
+                                         QByteArray(), [provider](const QByteArray &id) {
+                                           if (!provider) {
+                                             return;
+                                           }
+                                           for (const auto &device : QMediaDevices::audioInputs()) {
+                                             if (device.id() == id) {
+                                               provider->switchMicrophone(device);
+                                               return;
+                                             }
+                                           }
+                                         });
+  mDeviceSpeakerCombo = addDeviceRow(QStringLiteral("deviceSpeakerCombo"), mDeviceManager->speakers(),
+                                      QByteArray(), [provider](const QByteArray &id) {
+                                        if (!provider) {
+                                          return;
+                                        }
+                                        for (const auto &device : QMediaDevices::audioOutputs()) {
+                                          if (device.id() == id) {
+                                            provider->switchSpeaker(device);
+                                            return;
+                                          }
+                                        }
+                                      });
+
+  menu->popup(mDevicesButton->mapToGlobal(QPoint(0, mDevicesButton->height())));
 }
 
 void CallPage::refreshEndedReason() {
