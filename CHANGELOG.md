@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3] - 2026-09-30
+
+### Changed
+
+- The call screen's control bar (mute, camera, devices, fullscreen, leave)
+  now floats as an opaque bar over the video instead of sitting in a
+  docked strip below it.
+- The notes toggle is now a separate floating button in the corner of the
+  call screen instead of living in the control bar.
+
 ## [0.2.2] - 2026-09-30
 
 ### Added
