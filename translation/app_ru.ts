@@ -137,6 +137,34 @@
         <translation>Звонок завершён.</translation>
     </message>
     <message>
+        <source>Mute microphone</source>
+        <translation>Выключить микрофон</translation>
+    </message>
+    <message>
+        <source>Unmute microphone</source>
+        <translation>Включить микрофон</translation>
+    </message>
+    <message>
+        <source>Turn off camera</source>
+        <translation>Выключить камеру</translation>
+    </message>
+    <message>
+        <source>Turn on camera</source>
+        <translation>Включить камеру</translation>
+    </message>
+    <message>
+        <source>Enter fullscreen</source>
+        <translation>Развернуть на весь экран</translation>
+    </message>
+    <message>
+        <source>Exit fullscreen</source>
+        <translation>Выйти из полноэкранного режима</translation>
+    </message>
+    <message>
+        <source>Switch camera, microphone, or speaker</source>
+        <translation>Переключить камеру, микрофон или динамик</translation>
+    </message>
+    <message>
         <source>Leave</source>
         <translation>Завершить</translation>
     </message>

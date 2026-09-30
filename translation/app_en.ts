@@ -137,6 +137,34 @@
         <translation>Call ended.</translation>
     </message>
     <message>
+        <source>Mute microphone</source>
+        <translation>Mute microphone</translation>
+    </message>
+    <message>
+        <source>Unmute microphone</source>
+        <translation>Unmute microphone</translation>
+    </message>
+    <message>
+        <source>Turn off camera</source>
+        <translation>Turn off camera</translation>
+    </message>
+    <message>
+        <source>Turn on camera</source>
+        <translation>Turn on camera</translation>
+    </message>
+    <message>
+        <source>Enter fullscreen</source>
+        <translation>Enter fullscreen</translation>
+    </message>
+    <message>
+        <source>Exit fullscreen</source>
+        <translation>Exit fullscreen</translation>
+    </message>
+    <message>
+        <source>Switch camera, microphone, or speaker</source>
+        <translation>Switch camera, microphone, or speaker</translation>
+    </message>
+    <message>
         <source>Leave</source>
         <translation>Leave</translation>
     </message>

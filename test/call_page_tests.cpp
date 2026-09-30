@@ -488,6 +488,25 @@ TEST(CallPageTest, MicrophoneToggleButtonCallsProviderAndStartsEnabled) {
   EXPECT_FALSE(provider->isMicrophoneEnabled());
 }
 
+TEST(CallPageTest, MicrophoneToggleButtonHasAccessibleLabelThatUpdatesOnToggle) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+
+  auto *micButton = page.findChild<QToolButton *>("microphoneToggleButton");
+  ASSERT_NE(micButton, nullptr);
+  EXPECT_FALSE(micButton->toolTip().isEmpty());
+  EXPECT_FALSE(micButton->accessibleName().isEmpty());
+  const QString mutedLabel = micButton->toolTip();
+
+  micButton->setChecked(false);
+  EXPECT_NE(micButton->toolTip(), mutedLabel);
+  EXPECT_EQ(micButton->toolTip(), QObject::tr("Unmute microphone"));
+  EXPECT_EQ(micButton->accessibleName(), micButton->toolTip());
+}
+
 TEST(CallPageTest, CameraToggleButtonCallsProvider) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);
@@ -504,6 +523,25 @@ TEST(CallPageTest, CameraToggleButtonCallsProvider) {
   EXPECT_FALSE(provider->isCameraEnabled());
 }
 
+TEST(CallPageTest, CameraToggleButtonHasAccessibleLabelThatUpdatesOnToggle) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+
+  auto *cameraButton = page.findChild<QToolButton *>("cameraToggleButton");
+  ASSERT_NE(cameraButton, nullptr);
+  EXPECT_FALSE(cameraButton->toolTip().isEmpty());
+  EXPECT_FALSE(cameraButton->accessibleName().isEmpty());
+  const QString onLabel = cameraButton->toolTip();
+
+  cameraButton->setChecked(false);
+  EXPECT_NE(cameraButton->toolTip(), onLabel);
+  EXPECT_EQ(cameraButton->toolTip(), QObject::tr("Turn on camera"));
+  EXPECT_EQ(cameraButton->accessibleName(), cameraButton->toolTip());
+}
+
 TEST(CallPageTest, FullscreenToggleButtonExistsAndIsCheckable) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);
@@ -511,6 +549,53 @@ TEST(CallPageTest, FullscreenToggleButtonExistsAndIsCheckable) {
   ASSERT_NE(fullscreenButton, nullptr);
   EXPECT_TRUE(fullscreenButton->isCheckable());
   EXPECT_FALSE(fullscreenButton->isChecked());
+}
+
+TEST(CallPageTest, FullscreenToggleButtonHasAccessibleLabelThatUpdatesOnToggle) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  // Toggling this button also calls window()->showFullScreen(), which shows
+  // the CallPage's top-level window and, with it, whichever QStackedWidget
+  // page is currently current. Left on the default device-check screen, that
+  // cascade fires DeviceCheckWidget::showEvent() and starts a *real* camera
+  // preview adapter, which throws in this LiveKit-less test environment.
+  // Driving the session to Connected first makes connectedView (backed by
+  // FakeVideoProvider) the current page instead, so no real device is
+  // touched.
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  QSignalSpy stateSpy(&session, &VideoSession::stateChanged);
+  session.join("wss://x", "token");
+  waitForState(session, stateSpy, VideoSessionState::Joining);
+  provider->simulateJoined();
+  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
+  provider->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, VideoSessionState::Connected);
+
+  auto *fullscreenButton = page.findChild<QToolButton *>("fullscreenToggleButton");
+  ASSERT_NE(fullscreenButton, nullptr);
+  EXPECT_FALSE(fullscreenButton->toolTip().isEmpty());
+  EXPECT_FALSE(fullscreenButton->accessibleName().isEmpty());
+  const QString windowedLabel = fullscreenButton->toolTip();
+
+  fullscreenButton->setChecked(true);
+  EXPECT_NE(fullscreenButton->toolTip(), windowedLabel);
+  EXPECT_EQ(fullscreenButton->toolTip(), QObject::tr("Exit fullscreen"));
+  EXPECT_EQ(fullscreenButton->accessibleName(), fullscreenButton->toolTip());
+
+  // Leave fullscreen so later tests in the same process don't inherit a
+  // fullscreen top-level window.
+  fullscreenButton->setChecked(false);
+}
+
+TEST(CallPageTest, DevicesButtonHasAccessibleLabel) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *devicesButton = page.findChild<QToolButton *>("devicesButton");
+  ASSERT_NE(devicesButton, nullptr);
+  EXPECT_FALSE(devicesButton->toolTip().isEmpty());
+  EXPECT_EQ(devicesButton->accessibleName(), devicesButton->toolTip());
 }
 
 TEST(CallPageTest, DevicesButtonOpensPopoverWithThreeCombos) {

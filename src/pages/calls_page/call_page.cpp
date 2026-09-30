@@ -193,8 +193,13 @@ void CallPage::buildConnectedScreen() {
   mMicrophoneToggleButton->setCheckable(true);
   mMicrophoneToggleButton->setChecked(true);
   mMicrophoneToggleButton->setIcon(pcm::widgets::microphoneIcon(true));
+  mMicrophoneToggleButton->setToolTip(tr("Mute microphone"));
+  mMicrophoneToggleButton->setAccessibleName(tr("Mute microphone"));
   connect(mMicrophoneToggleButton, &QToolButton::toggled, this, [this](bool checked) {
     mMicrophoneToggleButton->setIcon(pcm::widgets::microphoneIcon(checked));
+    const QString label = checked ? tr("Mute microphone") : tr("Unmute microphone");
+    mMicrophoneToggleButton->setToolTip(label);
+    mMicrophoneToggleButton->setAccessibleName(label);
     if (mSession && mSession->provider()) {
       mSession->provider()->setMicrophoneEnabled(checked);
     }
@@ -206,8 +211,13 @@ void CallPage::buildConnectedScreen() {
   mCameraToggleButton->setCheckable(true);
   mCameraToggleButton->setChecked(true);
   mCameraToggleButton->setIcon(pcm::widgets::cameraIcon(true));
+  mCameraToggleButton->setToolTip(tr("Turn off camera"));
+  mCameraToggleButton->setAccessibleName(tr("Turn off camera"));
   connect(mCameraToggleButton, &QToolButton::toggled, this, [this](bool checked) {
     mCameraToggleButton->setIcon(pcm::widgets::cameraIcon(checked));
+    const QString label = checked ? tr("Turn off camera") : tr("Turn on camera");
+    mCameraToggleButton->setToolTip(label);
+    mCameraToggleButton->setAccessibleName(label);
     if (mSession && mSession->provider()) {
       mSession->provider()->setCameraEnabled(checked);
     }
@@ -218,8 +228,13 @@ void CallPage::buildConnectedScreen() {
   mFullscreenToggleButton->setObjectName("fullscreenToggleButton");
   mFullscreenToggleButton->setCheckable(true);
   mFullscreenToggleButton->setIcon(pcm::widgets::fullscreenIcon(false));
+  mFullscreenToggleButton->setToolTip(tr("Enter fullscreen"));
+  mFullscreenToggleButton->setAccessibleName(tr("Enter fullscreen"));
   connect(mFullscreenToggleButton, &QToolButton::toggled, this, [this](bool checked) {
     mFullscreenToggleButton->setIcon(pcm::widgets::fullscreenIcon(checked));
+    const QString label = checked ? tr("Exit fullscreen") : tr("Enter fullscreen");
+    mFullscreenToggleButton->setToolTip(label);
+    mFullscreenToggleButton->setAccessibleName(label);
     if (!window()) {
       return;
     }
@@ -234,6 +249,8 @@ void CallPage::buildConnectedScreen() {
   mDevicesButton = new QToolButton(mConnectedView);
   mDevicesButton->setObjectName("devicesButton");
   mDevicesButton->setIcon(pcm::widgets::devicesIcon());
+  mDevicesButton->setToolTip(tr("Switch camera, microphone, or speaker"));
+  mDevicesButton->setAccessibleName(tr("Switch camera, microphone, or speaker"));
   connect(mDevicesButton, &QToolButton::clicked, this, &CallPage::showDevicesPopover);
   controls->addWidget(mDevicesButton);
 
@@ -287,11 +304,19 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
     const QSignalBlocker blocker(mMicrophoneToggleButton);
     mMicrophoneToggleButton->setChecked(mSession->provider()->isMicrophoneEnabled());
     mMicrophoneToggleButton->setIcon(pcm::widgets::microphoneIcon(mMicrophoneToggleButton->isChecked()));
+    const QString label =
+        mMicrophoneToggleButton->isChecked() ? tr("Mute microphone") : tr("Unmute microphone");
+    mMicrophoneToggleButton->setToolTip(label);
+    mMicrophoneToggleButton->setAccessibleName(label);
   }
   if (mCameraToggleButton && mSession->provider()) {
     const QSignalBlocker blocker(mCameraToggleButton);
     mCameraToggleButton->setChecked(mSession->provider()->isCameraEnabled());
     mCameraToggleButton->setIcon(pcm::widgets::cameraIcon(mCameraToggleButton->isChecked()));
+    const QString label =
+        mCameraToggleButton->isChecked() ? tr("Turn off camera") : tr("Turn on camera");
+    mCameraToggleButton->setToolTip(label);
+    mCameraToggleButton->setAccessibleName(label);
   }
 }
 
