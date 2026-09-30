@@ -13,9 +13,10 @@
 - Ничего не удаляется и не переименовывается на уровне `pcm::app_settings::*` API или `connectSignals()` — только физическое место контрола в дереве виджетов.
 - Единственный существующий тест-файл (`test/settings_dialog_livekit_section_tests.cpp`) не должен сломаться — LiveKit-вкладка не меняется по содержимому; тест ищет виджеты через `findChild`, индекс вкладки ему не важен.
 - `makeSettingRow()` — переиспользуется как есть, не меняется.
+- Диалог настроек никогда не выше доступной высоты экрана, а каждая вкладка прокручивается по вертикали, если её содержимое не помещается (исходная жалоба: окно было слишком длинным и не влезало на экран) — см. Task 4.
 - Итоговое число вкладок верхнего уровня — 6 (General, Privacy & Security, Backup, Events, Online, LiveKit), не больше.
 - Каждый шаг, трогающий `tr()`-строки (новые заголовки вкладок/коробок), заканчивается синхронизацией `translation/app_ru.ts`/`app_en.ts`.
-- Каждый MR поднимает версию и обновляет `CHANGELOG.md` (см. Task 4).
+- Каждый MR поднимает версию и обновляет `CHANGELOG.md` (см. Task 5).
 
 ---
 
@@ -363,7 +364,109 @@ Expected: PASS все.
 
 ---
 
-### Task 4: Версия, changelog, переводы, финальная проверка
+### Task 4: Прокручиваемые страницы и ограничение высоты диалога по экрану
+
+Исходная жалоба: окно настроек слишком длинное и не помещается на экран. Одной перегруппировки по вкладкам недостаточно (вкладки Backup и Events всё равно высокие, а `resize(560, 760)` фиксирован), поэтому каждая страница должна прокручиваться по вертикали, а высота диалога — ограничиваться доступной высотой экрана.
+
+**Files:**
+- Modify: `src/app/settings_dialog.cpp`
+- Modify: `test/settings_dialog_layout_tests.cpp`
+
+**Interfaces:**
+- Consumes: 6 страниц `mSettingsStack` из Tasks 1–3.
+- Produces: каждая страница `mSettingsStack` теперь — `QScrollArea` (виджет страницы лежит внутри). `pageIndexOf` из Task 1 не меняется: обход родителей контрол -> ... -> страница -> viewport -> `QScrollArea` доходит до виджета, у которого `stack->indexOf(...)` определён.
+
+- [ ] **Step 1: Падающие тесты**
+
+Добавить в `test/settings_dialog_layout_tests.cpp` (включить `<QScrollArea>`, `<QScrollBar>`, `<QGuiApplication>`, `<QScreen>`):
+
+```cpp
+TEST(SettingsDialogLayoutTest, EveryPageIsAVerticallyScrollableScrollArea) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  auto *stack = dialog.findChild<QStackedWidget *>();
+  ASSERT_NE(stack, nullptr);
+  ASSERT_EQ(stack->count(), 6);
+  for (int i = 0; i < stack->count(); ++i) {
+    auto *scrollArea = qobject_cast<QScrollArea *>(stack->widget(i));
+    ASSERT_NE(scrollArea, nullptr) << "page " << i << " is not a QScrollArea";
+    EXPECT_TRUE(scrollArea->widgetResizable());
+    EXPECT_EQ(scrollArea->horizontalScrollBarPolicy(), Qt::ScrollBarAlwaysOff);
+    EXPECT_EQ(scrollArea->frameShape(), QFrame::NoFrame);
+  }
+}
+
+TEST(SettingsDialogLayoutTest, DialogHeightNeverExceedsTheAvailableScreenHeight) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  const auto *screen = QGuiApplication::primaryScreen();
+  ASSERT_NE(screen, nullptr);
+  EXPECT_LE(dialog.height(), screen->availableGeometry().height());
+}
+
+TEST(SettingsDialogLayoutTest, TallPagesScrollInsteadOfOverflowingTheDialog) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  dialog.resize(560, 300);
+  dialog.show();
+  auto *stack = dialog.findChild<QStackedWidget *>();
+  ASSERT_NE(stack, nullptr);
+  auto *backupPage = qobject_cast<QScrollArea *>(stack->widget(2));
+  ASSERT_NE(backupPage, nullptr);
+  stack->setCurrentIndex(2);
+  QApplication::processEvents();
+  EXPECT_GT(backupPage->verticalScrollBar()->maximum(), 0);
+}
+```
+
+- [ ] **Step 2: Прогнать — должно упасть**
+
+Run: `cmake --build build --target Sessio_settings_dialog_layout_tests && ctest --test-dir build -R "EveryPageIsAVerticallyScrollableScrollArea|DialogHeightNeverExceedsTheAvailableScreenHeight|TallPagesScrollInsteadOfOverflowingTheDialog" --output-on-failure`
+Expected: FAIL (страницы — обычные `QWidget`, не `QScrollArea`; высота фиксирована 760).
+
+- [ ] **Step 3: Реализация**
+
+В анонимный namespace `settings_dialog.cpp` (рядом с `makeSettingRow`) добавить хелпер:
+
+```cpp
+QScrollArea *makeScrollPage(QWidget *page, QWidget *parent) {
+  auto *scrollArea = new QScrollArea(parent);
+  scrollArea->setWidgetResizable(true);
+  scrollArea->setFrameShape(QFrame::NoFrame);
+  scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  scrollArea->setWidget(page);
+  return scrollArea;
+}
+```
+
+В `setupUi()` каждый `mSettingsStack->addWidget(xxxPage)` заменить на `mSettingsStack->addWidget(makeScrollPage(xxxPage, mSettingsStack))` — для всех шести страниц, включая LiveKit-страницу (она добавляется в `setupLiveKitSection()`, найти её `addWidget` и обернуть так же). Родитель самих страниц (`new QWidget(mSettingsStack)`) не менять — `setWidget` переродит их во viewport.
+
+Высоту диалога ограничить доступной высотой экрана: заменить `resize(560, 760);` на
+
+```cpp
+const auto *screen = QGuiApplication::primaryScreen();
+const int availableHeight =
+    screen != nullptr ? screen->availableGeometry().height() : 760;
+resize(560, qMin(760, availableHeight - 80));
+```
+
+(`80` — запас на рамку окна и панели; включить `<QGuiApplication>`, `<QScreen>`, `<QScrollArea>`.)
+
+- [ ] **Step 4: Прогнать все `SettingsDialogLayoutTest` и `SettingsDialogLiveKitSectionTest`**
+
+Run: `cmake --build build --target Sessio_settings_dialog_layout_tests Sessio_settings_dialog_livekit_section_tests && ctest --test-dir build -R "SettingsDialogLayoutTest|SettingsDialogLiveKitSectionTest" --output-on-failure`
+Expected: PASS все (тесты индексов страниц из Tasks 1–3 продолжают проходить).
+
+- [ ] **Step 5: Commit**
+
+```bash
+/usr/bin/git add src/app/settings_dialog.cpp test/settings_dialog_layout_tests.cpp
+/usr/bin/git commit -m "Make settings pages scrollable and cap the dialog height to the screen"
+```
+
+---
+
+### Task 5: Версия, changelog, переводы, финальная проверка
 
 **Files:**
 - Modify: `CMakeLists.txt`
@@ -385,7 +488,13 @@ Expected: PASS все.
 - The Settings dialog is reorganized into more focused tabs: Backup and
   Privacy & Security are now their own sections instead of being crowded
   into General; the Events tab's scheduling defaults, billing, and event
-  colors are now separate groups instead of one mixed box.
+  colors are now separate groups instead of one mixed box. Long tabs now
+  scroll, and the dialog no longer grows taller than the screen.
+
+### Fixed
+
+- On Linux (Wayland), the application window is now tied to its desktop
+  entry, so the taskbar/panel shows the Sessio icon instead of a foreign one.
 ```
 
 - [ ] **Step 3: Синхронизация переводов**
