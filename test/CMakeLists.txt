@@ -617,6 +617,19 @@ target_link_libraries(Sessio_busy_spinner_tests PRIVATE
 set_target_properties(Sessio_busy_spinner_tests PROPERTIES AUTOMOC ON)
 add_test(NAME BusySpinnerTests COMMAND Sessio_busy_spinner_tests)
 
+# Call control icons tests (self-drawn glyph icons for the call control bar)
+add_executable(Sessio_call_control_icons_tests
+    call_control_icons_tests.cpp
+)
+target_include_directories(Sessio_call_control_icons_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/widgets)
+target_link_libraries(Sessio_call_control_icons_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Gui
+    Sessio_widgets
+)
+gtest_discover_tests(Sessio_call_control_icons_tests)
+
 # CPack runs install scripts through a DESTDIR staging tree. Keep the
 # LiveKit-runtime bundler's staging contract executable without rebuilding
 # the application or its vcpkg dependencies.
