@@ -57,6 +57,31 @@ TEST(CallPageTest, StartsOnDeviceCheckScreen) {
   EXPECT_EQ(page.findChild<QWidget *>("connectedView"), nullptr);
 }
 
+TEST(CallPageTest, ControlBarIsAChildOfVideoStageNotConnectedView) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+
+  auto *micButton = page.findChild<QToolButton *>("microphoneToggleButton");
+  ASSERT_NE(micButton, nullptr);
+  // VideoStage has no Q_OBJECT macro, so it cannot be used as a
+  // findChild<T*>() template argument (compile error: "No Q_OBJECT in the
+  // class passed to QObject::findChild"); look it up by its object name
+  // instead, exactly as buildConnectedScreen() assigns it.
+  auto *videoStage = page.findChild<QWidget *>("videoStage");
+  ASSERT_NE(videoStage, nullptr);
+
+  QWidget *ancestor = micButton->parentWidget();
+  bool foundVideoStageAncestor = false;
+  while (ancestor != nullptr) {
+    if (ancestor == videoStage) {
+      foundVideoStageAncestor = true;
+      break;
+    }
+    ancestor = ancestor->parentWidget();
+  }
+  EXPECT_TRUE(foundVideoStageAncestor);
+}
+
 TEST(CallPageTest, ConnectedStateShowsConnectedViewWithLeaveButton) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);

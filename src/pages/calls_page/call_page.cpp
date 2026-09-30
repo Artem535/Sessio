@@ -243,8 +243,6 @@ void CallPage::buildConnectedScreen() {
   mVideoRow->addWidget(mSidePanelHost);
   layout->addLayout(mVideoRow);
 
-  auto *controls = new QHBoxLayout();
-
   mMicrophoneToggleButton = new QToolButton(mConnectedView);
   mMicrophoneToggleButton->setObjectName("microphoneToggleButton");
   mMicrophoneToggleButton->setCheckable(true);
@@ -261,7 +259,6 @@ void CallPage::buildConnectedScreen() {
       mSession->provider()->setMicrophoneEnabled(checked);
     }
   });
-  controls->addWidget(mMicrophoneToggleButton);
 
   mCameraToggleButton = new QToolButton(mConnectedView);
   mCameraToggleButton->setObjectName("cameraToggleButton");
@@ -279,7 +276,6 @@ void CallPage::buildConnectedScreen() {
       mSession->provider()->setCameraEnabled(checked);
     }
   });
-  controls->addWidget(mCameraToggleButton);
 
   mFullscreenToggleButton = new QToolButton(mConnectedView);
   mFullscreenToggleButton->setObjectName("fullscreenToggleButton");
@@ -301,7 +297,6 @@ void CallPage::buildConnectedScreen() {
       window()->showNormal();
     }
   });
-  controls->addWidget(mFullscreenToggleButton);
 
   mDevicesButton = new QToolButton(mConnectedView);
   mDevicesButton->setObjectName("devicesButton");
@@ -309,22 +304,35 @@ void CallPage::buildConnectedScreen() {
   mDevicesButton->setToolTip(tr("Switch camera, microphone, or speaker"));
   mDevicesButton->setAccessibleName(tr("Switch camera, microphone, or speaker"));
   connect(mDevicesButton, &QToolButton::clicked, this, &CallPage::showDevicesPopover);
-  controls->addWidget(mDevicesButton);
-
-  controls->addStretch();
 
   auto *leaveButton = new QPushButton(tr("Leave"), mConnectedView);
   leaveButton->setObjectName("leaveButton");
   connect(leaveButton, &QPushButton::clicked, this, &CallPage::leaveRequested);
-  controls->addWidget(leaveButton);
-  layout->addLayout(controls);
+
+  mControlBar = new QWidget(mVideoStage);
+  mControlBar->setObjectName("controlBar");
+  mControlBar->setAutoFillBackground(true);
+  QPalette controlBarPalette = mControlBar->palette();
+  controlBarPalette.setColor(QPalette::Window, QColor(20, 20, 20));
+  mControlBar->setPalette(controlBarPalette);
+  mControlBar->setStyleSheet(QStringLiteral("#controlBar { border-radius: 24px; }"));
+  auto *controlBarLayout = new QHBoxLayout(mControlBar);
+  controlBarLayout->setContentsMargins(12, 6, 12, 6);
+  controlBarLayout->setSpacing(8);
+  controlBarLayout->addWidget(mMicrophoneToggleButton);
+  controlBarLayout->addWidget(mCameraToggleButton);
+  controlBarLayout->addWidget(mDevicesButton);
+  controlBarLayout->addWidget(mFullscreenToggleButton);
+  controlBarLayout->addWidget(leaveButton);
+  mVideoStage->setControlBarWidget(mControlBar);
 
   // Non-fatal, transient local-device notice — see mMediaErrorBanner's doc
   // comment in call_page.h. Hidden by default; onMediaError() shows it and
   // sets its text, independent of mReconnectingBanner and the ended screen.
-  // Added last (after `controls`) so setSidePanelToggleVisible()'s hard-coded
-  // mConnectedView->layout()->itemAt(1) lookup — which means "the controls
-  // row" — keeps working unchanged.
+  // Added after mVideoRow now that the control buttons live in mControlBar
+  // (VideoStage's floating overlay) rather than in a `controls` row of this
+  // layout, so mConnectedView->layout()->itemAt(1) below no longer means
+  // "the controls row" -- see setSidePanelToggleVisible().
   mMediaErrorBanner = new QLabel(mConnectedView);
   mMediaErrorBanner->setObjectName("mediaErrorBanner");
   mMediaErrorBanner->setWordWrap(true);

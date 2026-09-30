@@ -130,6 +130,10 @@ private:
   QWidget *mConnectedView{nullptr};
   QHBoxLayout *mVideoRow{nullptr};
   pcm::video::detail::VideoStage *mVideoStage{nullptr};
+  // Floating, opaque overlay carrying the mic/camera/devices/fullscreen/leave
+  // buttons. Owned by VideoStage once handed to setControlBarWidget() --
+  // VideoStage reparents, positions, and shows/hides it internally.
+  QWidget *mControlBar{nullptr};
   // CallPage-owned blank renderer, shown whenever the attached provider
   // offers no remote-video widget of its own (or before any session is
   // attached). Never reparented away from mVideoStage.
