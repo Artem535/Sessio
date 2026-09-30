@@ -548,6 +548,28 @@ TEST(CallPageTest, SelectingADeviceCallsSwitchOnTheAttachedProvider) {
   }
 }
 
+TEST(CallPageTest, SetSidePanelExpandedByDefaultChecksTheNotesToggle) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  page.setSidePanelToggleVisible(true);
+  auto *toggle = page.findChild<QPushButton *>("notesToggleButton");
+  ASSERT_NE(toggle, nullptr);
+  EXPECT_FALSE(toggle->isChecked());
+
+  page.setSidePanelExpandedByDefault(true);
+  EXPECT_TRUE(toggle->isChecked());
+}
+
+TEST(CallPageTest, SetSidePanelExpandedByDefaultIsANoOpWithoutATotoggleYet) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  // No crash when called before setSidePanelToggleVisible(true) (client
+  // mode, or before Application's eventKnownForCurrentCall handler ever
+  // fires).
+  page.setSidePanelExpandedByDefault(true);
+  EXPECT_EQ(page.findChild<QPushButton *>("notesToggleButton"), nullptr);
+}
+
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);

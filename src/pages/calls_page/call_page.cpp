@@ -487,6 +487,12 @@ void CallPage::setSidePanelToggleVisible(bool visible) {
   }
 }
 
+void CallPage::setSidePanelExpandedByDefault(bool expanded) {
+  if (mNotesToggleButton) {
+    mNotesToggleButton->setChecked(expanded);
+  }
+}
+
 void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) {
   using pcm::video::VideoSessionState;
   mReconnectingBanner->setVisible(state == VideoSessionState::Reconnecting);

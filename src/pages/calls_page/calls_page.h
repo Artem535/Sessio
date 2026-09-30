@@ -40,6 +40,7 @@ public:
   void preselectOwnMeeting(const QString &meetingRef);
   void prefillJoinCode(const QString &code, const QString &passcode);
   void setSidePanelWidget(QWidget *panel);
+  void setSidePanelExpandedByDefault(bool expanded);
 
   // Testing seam only: overrides the VideoProvider constructed for
   // subsequent joins. Production callers (MainWindow/ClientModeWindow) never

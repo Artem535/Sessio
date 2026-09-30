@@ -59,6 +59,11 @@ public:
   void attachSession(pcm::video::VideoSession *session); // does not take ownership
   void setSidePanelWidget(QWidget *panel);                // nullptr clears it; hidden until toggled
   void setSidePanelToggleVisible(bool visible);            // false in client mode: no toggle at all
+  // Expands (or collapses) the notes side panel immediately if the toggle
+  // button already exists (setSidePanelToggleVisible(true) was already
+  // called); a no-op otherwise. Called by CallsPage once it knows whether
+  // the current call is linked to a real client/event.
+  void setSidePanelExpandedByDefault(bool expanded);
 
 signals:
   void leaveRequested();

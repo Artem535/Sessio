@@ -978,6 +978,7 @@ void Application::connectSignals() {
                 callsPage->setSidePanelWidget(mCallNotesPanel);
               }
               mCallNotesPanel->setClientInfo(client);
+              callsPage->setSidePanelExpandedByDefault(client.has_value());
             });
   }
 }

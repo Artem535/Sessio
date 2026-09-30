@@ -162,6 +162,8 @@ void CallsPage::prefillJoinCode(const QString &code, const QString &passcode) {
 
 void CallsPage::setSidePanelWidget(QWidget *panel) { mCallPage->setSidePanelWidget(panel); }
 
+void CallsPage::setSidePanelExpandedByDefault(bool expanded) { mCallPage->setSidePanelExpandedByDefault(expanded); }
+
 void CallsPage::setVideoProviderFactoryForTesting(std::function<pcm::video::VideoProvider *()> factory) {
   mVideoProviderFactory = std::move(factory);
 }
