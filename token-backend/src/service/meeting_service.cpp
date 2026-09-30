@@ -1,6 +1,7 @@
 #include "service/meeting_service.h"
 
 #include "crypto/hashing.h"
+#include "crypto/random_token.h"
 
 #include <chrono>
 #include <ctime>
@@ -139,9 +140,9 @@ Result<TokenResult> MeetingService::issueSpecialistToken(const std::string &bear
 
   VideoGrants grants;
   grants.room = meeting->roomName;
-  std::string identity = "practitioner-" + meeting->meetingRef;
+  std::string identity = "practitioner-" + meeting->meetingRef + "-" + generateUrlSafeToken(16);
   auto jwt = mintLiveKitJwt(config_.liveKitApiKey, config_.liveKitApiSecret, identity, grants,
-                             config_.tokenTtlSeconds);
+                             config_.tokenTtlSeconds, R"({"role":"practitioner"})");
 
   auto now = std::chrono::system_clock::now();
   auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
@@ -194,9 +195,9 @@ Result<TokenResult> MeetingService::issueClientToken(const std::string &invitati
 
   VideoGrants grants;
   grants.room = meeting->roomName;
-  std::string identity = "client-" + meeting->meetingRef;
+  std::string identity = "client-" + meeting->meetingRef + "-" + generateUrlSafeToken(16);
   auto jwt = mintLiveKitJwt(config_.liveKitApiKey, config_.liveKitApiSecret, identity, grants,
-                             config_.tokenTtlSeconds);
+                             config_.tokenTtlSeconds, R"({"role":"client"})");
 
   auto now = std::chrono::system_clock::now();
   auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();

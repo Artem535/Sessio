@@ -59,7 +59,7 @@ std::string jsonEscape(const std::string &s) {
 
 std::string mintLiveKitJwt(const std::string &apiKey, const std::string &apiSecret,
                             const std::string &identity, const VideoGrants &grants,
-                            int ttlSeconds) {
+                            int ttlSeconds, const std::string &metadata) {
   if (apiKey.empty() || apiSecret.empty() || identity.empty() || grants.room.empty()) {
     throw std::invalid_argument("apiKey, apiSecret, identity, and grants.room are required");
   }
@@ -76,8 +76,11 @@ std::string mintLiveKitJwt(const std::string &apiKey, const std::string &apiSecr
           << "\"iss\":\"" << jsonEscape(apiKey) << "\","
           << "\"sub\":\"" << jsonEscape(identity) << "\","
           << "\"nbf\":" << nowSeconds << ","
-          << "\"exp\":" << expSeconds << ","
-          << "\"video\":{"
+          << "\"exp\":" << expSeconds << ",";
+  if (!metadata.empty()) {
+    payload << "\"metadata\":\"" << jsonEscape(metadata) << "\",";
+  }
+  payload << "\"video\":{"
           << "\"room\":\"" << jsonEscape(grants.room) << "\","
           << "\"roomJoin\":" << (grants.roomJoin ? "true" : "false") << ","
           << "\"canPublish\":" << (grants.canPublish ? "true" : "false") << ","

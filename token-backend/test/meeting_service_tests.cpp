@@ -13,8 +13,42 @@
 
 #include <chrono>
 #include <ctime>
+#include <set>
 
 namespace {
+
+std::string decodeJwtPart(const std::string &part) {
+  std::string decoded(part.size(), '\0');
+  size_t size = 0;
+  if (sodium_base642bin(reinterpret_cast<unsigned char *>(decoded.data()), decoded.size(),
+                        part.data(), part.size(), nullptr, &size, nullptr,
+                        sodium_base64_VARIANT_URLSAFE_NO_PADDING) != 0) {
+    return {};
+  }
+  decoded.resize(size);
+  return decoded;
+}
+
+std::string verifiedPayload(const std::string &jwt, const std::string &secret) {
+  const auto first = jwt.find('.');
+  const auto second = jwt.find('.', first + 1);
+  const auto signature = decodeJwtPart(jwt.substr(second + 1));
+  unsigned char expected[crypto_auth_hmacsha256_BYTES];
+  crypto_auth_hmacsha256_state state;
+  crypto_auth_hmacsha256_init(&state, reinterpret_cast<const unsigned char *>(secret.data()), secret.size());
+  crypto_auth_hmacsha256_update(&state, reinterpret_cast<const unsigned char *>(jwt.data()), second);
+  crypto_auth_hmacsha256_final(&state, expected);
+  EXPECT_EQ(signature.size(), sizeof(expected));
+  if (signature.size() == sizeof(expected)) {
+    EXPECT_EQ(sodium_memcmp(signature.data(), expected, sizeof(expected)), 0);
+  }
+  return decodeJwtPart(jwt.substr(first + 1, second - first - 1));
+}
+
+std::string subject(const std::string &payload) {
+  const auto start = payload.find("\"sub\":\"") + 7;
+  return payload.substr(start, payload.find('"', start) - start);
+}
 
 // Mirrors the production nowIso8601() format
 // ("%Y-%m-%dT%H:%M:%SZ", see meetings_repository.cpp) but offset from now, so
@@ -149,6 +183,34 @@ TEST_F(MeetingServiceTest, ClientAndSpecialistTokensShareTheSameRoom) {
   ASSERT_TRUE(specialistToken.ok());
   ASSERT_TRUE(clientToken.ok());
   EXPECT_EQ(specialistToken.value->roomName, clientToken.value->roomName);
+}
+
+TEST_F(MeetingServiceTest, RepeatedTokensHaveUniqueSignedIdentitiesAndDisplayRoles) {
+  const auto created = service->createMeeting(credential, windowStart, windowEnd);
+  ASSERT_TRUE(created.ok());
+  std::set<std::string> identities;
+  std::string room;
+  for (const auto &role : {std::string("client"), std::string("practitioner")}) {
+    for (int issuance = 0; issuance < 4; ++issuance) {
+      const auto token = role == "client"
+          ? service->issueClientToken(created.value->invitationCode, created.value->passcode)
+          : service->issueSpecialistToken(credential, created.value->meetingRef);
+      ASSERT_TRUE(token.ok());
+      const auto payload = verifiedPayload(token.value->jwt, config.liveKitApiSecret);
+      const auto identity = subject(payload);
+      EXPECT_TRUE(identities.insert(identity).second);
+      EXPECT_TRUE(identity.starts_with(role + "-" + created.value->meetingRef + "-"));
+      EXPECT_EQ(subject(verifiedPayload(token.value->jwt, config.liveKitApiSecret)), identity);
+      EXPECT_NE(payload.find("\"metadata\":\"{\\\"role\\\":\\\"" + role + "\\\"}\""), std::string::npos);
+      if (room.empty()) room = token.value->roomName;
+      EXPECT_EQ(token.value->roomName, room);
+      EXPECT_NE(payload.find("\"room\":\"" + room + "\""), std::string::npos);
+      for (const auto *grant : {"roomJoin", "canPublish", "canSubscribe", "canPublishData"}) {
+        EXPECT_NE(payload.find(std::string("\"") + grant + "\":true"), std::string::npos);
+      }
+    }
+  }
+  EXPECT_EQ(identities.size(), 8u);
 }
 
 TEST_F(MeetingServiceTest, InvalidateStopsFurtherTokenIssuance) {
