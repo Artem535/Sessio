@@ -8,6 +8,7 @@
 #include <QLayout>
 #include <QPointer>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QSignalSpy>
 #include <QStackedWidget>
 #include <gtest/gtest.h>
@@ -31,6 +32,18 @@ void waitForState(VideoSession &session, QSignalSpy &stateSpy, VideoSessionState
   while (session.state() != target) {
     ASSERT_TRUE(stateSpy.wait(1000)) << "timed out waiting for state " << static_cast<int>(target);
   }
+}
+
+// QWidget::resize() alone does not synchronously invoke resizeEvent() unless
+// the widget is actually visible (Qt defers the event until the widget's
+// ancestor chain is shown). These tests never show() the page, so exercising
+// VideoStage::layoutChildren() against a real, non-default size requires
+// explicitly delivering the QResizeEvent after resizing.
+void resizeAndDeliverEvent(QWidget *widget, const QSize &size) {
+  const QSize oldSize = widget->size();
+  widget->resize(size);
+  QResizeEvent event(widget->size(), oldSize);
+  QApplication::sendEvent(widget, &event);
 }
 
 } // namespace
@@ -187,6 +200,11 @@ TEST(CallPageTest, EmbedsProviderRemoteVideoWidgetInPlaceOfPlaceholder) {
 
   auto *videoStage = page.findChild<QWidget *>("videoStage");
   ASSERT_NE(videoStage, nullptr);
+  // Widgets default to Qt's un-laid-out geometry (0,0,100,30) until
+  // actually resized; give VideoStage a real size so layoutChildren()'s
+  // setGeometry(rect()) call is the thing actually being verified below,
+  // not two widgets that both happen to still be at the same default.
+  resizeAndDeliverEvent(videoStage, QSize(800, 600));
 
   EXPECT_TRUE(page.isAncestorOf(remoteVideo));
   EXPECT_EQ(remoteVideo->parentWidget(), videoStage);
@@ -212,6 +230,9 @@ TEST(CallPageTest, KeepsPlaceholderWhenProviderHasNoRemoteVideoWidget) {
   auto *videoStage = page.findChild<QWidget *>("videoStage");
   ASSERT_NE(placeholder, nullptr);
   ASSERT_NE(videoStage, nullptr);
+  // See EmbedsProviderRemoteVideoWidgetInPlaceOfPlaceholder for why this
+  // resize is needed before the geometry assertion below means anything.
+  resizeAndDeliverEvent(videoStage, QSize(800, 600));
   EXPECT_TRUE(placeholder->isVisibleTo(videoStage));
   EXPECT_EQ(placeholder->parentWidget(), videoStage);
   EXPECT_EQ(placeholder->geometry(), videoStage->rect());
@@ -250,6 +271,9 @@ TEST(CallPageTest, ToleratesEmbeddedRemoteVideoWidgetDestroyedWithItsProvider) {
   auto *placeholder = page.findChild<QWidget *>("remoteVideoPlaceholder");
   auto *videoStage = page.findChild<QWidget *>("videoStage");
   ASSERT_NE(videoStage, nullptr);
+  // See EmbedsProviderRemoteVideoWidgetInPlaceOfPlaceholder for why this
+  // resize is needed before the geometry assertion below means anything.
+  resizeAndDeliverEvent(videoStage, QSize(800, 600));
 
   auto *oldProvider = new FakeVideoProvider();
   QPointer<QLabel> oldVideo = new QLabel("old");
