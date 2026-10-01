@@ -58,31 +58,46 @@ DeviceCheckWidget::DeviceCheckWidget(pcm::video::DeviceManager *deviceManager, Q
   // that never call show()) to depend on that global LiveKit setup. Instead
   // the adapter is created lazily in ensurePreviewAdapter(), on first
   // showEvent().
-  auto *layout = new QVBoxLayout(this);
+  // Content is capped to a comfortable width and centred, so the preview and the selectors form
+  // one column instead of stretching edge to edge with the preview stuck to the left.
+  auto *outer = new QVBoxLayout(this);
+  auto *column = new QWidget(this);
+  column->setMaximumWidth(720);
+  auto *layout = new QVBoxLayout(column);
+  layout->setContentsMargins(0, 0, 0, 0);
+  outer->addWidget(column, 0, Qt::AlignHCenter | Qt::AlignTop);
 
-  mPreviewLabel = new QLabel(this);
-  mPreviewLabel->setMinimumSize(320, 180);
+  mPreviewLabel = new QLabel(column);
+  mPreviewLabel->setMinimumSize(640, 360); // 16:9, matching the camera feed
+  mPreviewLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+  mPreviewLabel->setAlignment(Qt::AlignCenter);
   layout->addWidget(mPreviewLabel);
 
-  mCameraCombo = new QComboBox(this);
+  const auto addLabeled = [&](const QString &caption, QComboBox *combo) {
+    auto *label = new QLabel(caption, column);
+    layout->addWidget(label);
+    layout->addWidget(combo);
+  };
+
+  mCameraCombo = new QComboBox(column);
   mCameraCombo->setObjectName("cameraCombo");
-  mMicrophoneCombo = new QComboBox(this);
+  mMicrophoneCombo = new QComboBox(column);
   mMicrophoneCombo->setObjectName("microphoneCombo");
-  mSpeakerCombo = new QComboBox(this);
+  mSpeakerCombo = new QComboBox(column);
   mSpeakerCombo->setObjectName("speakerCombo");
   // Populated up front (and not just in showEvent) so the screen already reflects the
   // system default devices, and selected*() are meaningful, before it is first shown.
   refreshDeviceLists();
-  layout->addWidget(mCameraCombo);
-  layout->addWidget(mMicrophoneCombo);
-  layout->addWidget(mSpeakerCombo);
+  addLabeled(tr("Camera"), mCameraCombo);
+  addLabeled(tr("Microphone"), mMicrophoneCombo);
+  addLabeled(tr("Speaker"), mSpeakerCombo);
 
-  auto *backButton = new QPushButton(tr("Back"), this);
+  auto *backButton = new QPushButton(tr("Back"), column);
   backButton->setObjectName("backFromDeviceCheckButton");
   connect(backButton, &QPushButton::clicked, this, &DeviceCheckWidget::backRequested);
   layout->addWidget(backButton);
 
-  auto *joinButton = new QPushButton(tr("Join"), this);
+  auto *joinButton = new QPushButton(tr("Join"), column);
   joinButton->setObjectName("joinButton");
   connect(joinButton, &QPushButton::clicked, this, &DeviceCheckWidget::joinRequested);
   layout->addWidget(joinButton);
@@ -130,7 +145,8 @@ void DeviceCheckWidget::ensurePreviewAdapter() {
           [this](const QVideoFrame &frame) {
             if (frame.isValid()) {
               mPreviewLabel->setPixmap(QPixmap::fromImage(frame.toImage())
-                                           .scaled(mPreviewLabel->size(), Qt::KeepAspectRatio));
+                                           .scaled(mPreviewLabel->size(), Qt::KeepAspectRatio,
+                                                   Qt::SmoothTransformation));
             }
           });
 }
