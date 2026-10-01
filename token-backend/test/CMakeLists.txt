@@ -3,6 +3,7 @@ find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
 add_executable(token_backend_tests
+  schedule_tests.cpp
   health_controller_tests.cpp
   sqlite_connection_tests.cpp
   config_tests.cpp

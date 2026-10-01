@@ -6,6 +6,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(pcm_token_backend LANGUAGES CXX)
 
+add_subdirectory(schedule)
+
 find_package(oatpp REQUIRED)
 find_package(unofficial-sodium REQUIRED)
 find_package(unofficial-sqlite3 REQUIRED)
@@ -36,6 +38,7 @@ add_library(token_backend_lib STATIC
 set_target_properties(token_backend_lib PROPERTIES LINKER_LANGUAGE CXX)
 target_include_directories(token_backend_lib PUBLIC src)
 target_link_libraries(token_backend_lib PUBLIC
+  pcm_schedule
   oatpp::oatpp
   unofficial-sodium::sodium
   unofficial::sqlite3::sqlite3
