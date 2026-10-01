@@ -34,6 +34,29 @@ included those three duplicates. The OFF configuration reproduced exactly the
 CI deletion before the fix; subsequent ON/OFF updates preserve identical file
 hashes. The three existing button-label tests cover the corrected context.
 
+## Remote audio crash follow-up
+
+A native user run crashed when another participant joined. The private core
+showed the GUI-thread queued remote PCM delivery calling `QIODevice::write()`
+through an already freed device (its vtable storage had been reused). The sink
+was retained, but its backend-owned push device was stored as a raw pointer.
+The core and user runtime data are not included in this repository.
+
+The handle now uses `QPointer<QIODevice>` and delivery requires a writable
+device. Backend destruction invalidates the handle before subsequent queued
+PCM is processed. The deterministic lifecycle regression first proves live
+output receives PCM, then destroys that output while PCM is queued; it failed
+on the original raw pointer and passes with the fix. The existing attachment
+generation regression remains covered.
+
+The explicit hardware probe also started the production player on the default
+output, processed silence for 500 ms, stopped its real sink with PCM queued,
+and exited successfully. Run the lifecycle executable with `--output-smoke`
+using the dependency environment below. This probe is deliberately separate
+from device-independent CTest. The specific backend event that released the
+device in the user call is not established; a repeat of that two-person call
+is still required to verify the reported scenario end to end.
+
 ## Real synthetic room
 
 `test/group_call_runtime_smoke.cpp` is an explicit manual executable target,

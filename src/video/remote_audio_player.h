@@ -3,6 +3,7 @@
 #include <QAudioDevice>
 #include <QAudioSink>
 #include <QObject>
+#include <QPointer>
 #include <atomic>
 #include <livekit/audio_stream.h>
 #include <memory>
@@ -31,7 +32,8 @@ private:
   std::shared_ptr<livekit::AudioStream> mStream;
   QAudioDevice mOutputDevice;
   std::unique_ptr<QAudioSink> mSink;
-  QIODevice *mSinkDevice{nullptr};
+  // The audio backend owns this device and can destroy it before the sink.
+  QPointer<QIODevice> mSinkDevice;
   std::thread mReaderThread;
   std::atomic<bool> mRunning{false};
   uint64_t mGeneration{0}; // owner-thread attachment epoch

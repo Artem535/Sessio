@@ -88,7 +88,7 @@ void RemoteAudioPlayer::deliverAudioOnGuiThread(QByteArray pcmBytes, const int s
     mSinkDevice = mSink->start();
   }
 
-  if (mSinkDevice) {
+  if (mSinkDevice && mSinkDevice->isWritable()) {
     mSinkDevice->write(pcmBytes);
   }
 }

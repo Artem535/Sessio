@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
   Leaving, rejoining, muting and changing the speaker retain the other
   participants' media and release departed streams.
 - Participant names remain literal text in labels and tooltips.
+- Remote audio no longer writes through a destroyed backend device, preventing
+  a crash when queued participant audio arrives after the output is released.
 
 ## [0.2.4] - 2026-09-30
 
