@@ -31,7 +31,7 @@ Sessio остаётся источником расписания. Первая 
 
 | Объект | Данные и ограничения |
 | --- | --- |
-| ScheduleSeries | account_id, series_uid (UUID), revision, timezone, dtstart_local, duration_seconds, rrule, until_utc, active |
+| ScheduleSeries | account_id, series_uid (UUID), revision, timezone, dtstart_local, duration_seconds, rrule, until_utc, active, join_enabled |
 | OccurrenceOverride | series_uid, original_start_utc, start_utc, end_utc, join_enabled; уникальный ключ (series_uid, original_start_utc) |
 | OccurrenceException | series_uid, original_start_utc; подавляет базовое повторение |
 | SeriesInvitation | случайный непрогнозируемый код, хеш кода и passcode, generation, failed_attempts, revoked_at; принадлежит серии |
@@ -100,6 +100,7 @@ account ownership. Ресурсы другого account возвращают 40
   "rrule": "FREQ=WEEKLY;INTERVAL=1;BYDAY=TU",
   "until_utc": null,
   "active": true,
+  "join_enabled": true,
   "overrides": [],
   "exceptions": []
 }
@@ -211,6 +212,11 @@ invitation сохраняется отдельный строгий лимит �
 при шестой ошибке; лимит не сбрасывается еженедельно. Счётчик изменяется атомарно.
 Действующая политика одиночных приглашений сохраняется; изменения способа
 доставки passcode не входят в эту задачу.
+
+`join_enabled` серии запрещает вход для базовых повторений при отмене статуса
+всей серии; override содержит своё явно заданное значение. `active=false`
+закрывает все повторения, включая overrides. Отсутствующее join_enabled не
+подменяется true: поле обязательно в version 1.
 
 Вычисление RRULE ограничено по времени/числу итераций. При исчерпании бюджета
 вычисления (100 ms / 10000 итераций) — 503 schedule_resolution_unavailable,
