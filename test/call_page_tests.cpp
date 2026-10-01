@@ -584,6 +584,47 @@ TEST(CallPageTest, VideoStagePositionsWaitingBannerCenteredAboveTheControlBar) {
   EXPECT_GE(controlBar->geometry().top() - banner->geometry().bottom(), 8);
 }
 
+// Waiting alone: the only tile (yours) is inset from the stage edges with rounded corners rather
+// than bleeding to the edges; in a 1:1 call the main (remote) tile still fills the stage and stays
+// square, with the local picture-in-picture rounded.
+TEST(CallPageTest, WaitingAloneShowsAnInsetRoundedTileWhileOneToOneKeepsTheMainTileFullBleed) {
+  pcm::video::detail::VideoStage stage;
+  auto *bar = new QWidget;
+  bar->resize(300, 48);
+  stage.setControlBarWidget(bar);
+  auto *local = new pcm::video::ParticipantTile({"local", "Me", "", true}, &stage);
+  stage.setTiles({local});
+  resizeAndDeliverEvent(&stage, QSize(1280, 720));
+
+  const QRect aloneGeometry(local->mapTo(&stage, QPoint()), local->size());
+  EXPECT_NE(aloneGeometry, stage.rect());
+  EXPECT_GT(aloneGeometry.left(), 0);
+  EXPECT_GT(aloneGeometry.top(), 0);
+  EXPECT_GT(local->cornerRadius(), 0);
+  EXPECT_FALSE(local->mask().isEmpty());
+
+  auto *remote = new pcm::video::ParticipantTile({"remote"}, &stage);
+  stage.setTiles({local, remote});
+  resizeAndDeliverEvent(&stage, QSize(1281, 720));
+  EXPECT_EQ(QRect(remote->mapTo(&stage, QPoint()), remote->size()), stage.rect());
+  EXPECT_EQ(remote->cornerRadius(), 0);
+  EXPECT_GT(local->cornerRadius(), 0);
+}
+
+// A rounded tile clips its corners (so the video and placeholder inside are rounded too).
+TEST(CallPageTest, RoundedParticipantTileClipsItsCornersButNotItsCentre) {
+  pcm::video::ParticipantTile tile({"p", "Name"});
+  tile.resize(200, 120);
+  tile.setCornerRadius(16);
+  const QRegion mask = tile.mask();
+  EXPECT_FALSE(mask.contains(QPoint(0, 0)));
+  EXPECT_FALSE(mask.contains(QPoint(199, 119)));
+  EXPECT_TRUE(mask.contains(QPoint(100, 60)));
+  EXPECT_TRUE(mask.contains(QPoint(100, 0)));
+  tile.setCornerRadius(0);
+  EXPECT_TRUE(tile.mask().isEmpty());
+}
+
 TEST(CallPageTest, VideoStagePositionsNotesToggleInTopRightCorner) {
   pcm::video::detail::VideoStage stage;
   auto *notesToggle = new QWidget(&stage);

@@ -122,10 +122,14 @@ void VideoStage::layoutChildren() {
     if (tile->isLocal())
       local = tile;
   const bool solo = mTiles.size() == 1 || (mTiles.size() == 2 && local);
-  const QRect available = solo ? rect() :
+  // Waiting alone (just your own tile) is inset like the group grid, so its rounded corners show;
+  // in a 1:1 call the main tile still fills the stage.
+  const bool fullBleed = solo && mTiles.size() == 2;
+  const QRect available = fullBleed ? rect() :
       QRect(12, top, std::max(0, width() - 24), std::max(0, height() - top - kBottomReserved));
   auto strategy = CallLayoutStrategy::select(mTiles.size(), local != nullptr, available.size());
   if (solo) strategy.tileSize = available.size();
+  constexpr int kTileCornerRadius = 12;
   const int gridCount = mTiles.size() - (strategy.pictureInPicture ? 1 : 0);
   const QSize gridSize(strategy.columns * strategy.tileSize.width() + std::max(0, strategy.columns - 1) * 8,
                        strategy.rows * strategy.tileSize.height() + std::max(0, strategy.rows - 1) * 8);
@@ -137,6 +141,7 @@ void VideoStage::layoutChildren() {
       const int pipWidth = std::min(std::max(0, width() / 3), std::clamp(width() / 5, 200, 280));
       const int pipHeight = pipWidth * 9 / 16;
       tile->setFixedSize(pipWidth, pipHeight);
+      tile->setCornerRadius(kTileCornerRadius);
       tile->setGeometry(std::max(0, width() - pipWidth - 20), std::max(0, height() - pipHeight - kBottomReserved),
                         pipWidth, pipHeight);
       tile->show();
@@ -145,6 +150,7 @@ void VideoStage::layoutChildren() {
     }
     tile->setParent(mTileHost);
     tile->setFixedSize(strategy.tileSize);
+    tile->setCornerRadius(fullBleed ? 0 : kTileCornerRadius);
     if (strategy.columns > 0) {
       const int row = index / strategy.columns;
       const int rowCount = std::min(strategy.columns, gridCount - row * strategy.columns);

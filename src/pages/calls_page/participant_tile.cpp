@@ -2,6 +2,7 @@
 #include "remote_video_renderer.h"
 
 #include <QLabel>
+#include <QRegion>
 #include <QResizeEvent>
 #include <QTextDocument>
 #include <algorithm>
@@ -61,8 +62,36 @@ void ParticipantTile::refreshMedia() {
   mName->raise();
 }
 
+void ParticipantTile::setCornerRadius(int radius) {
+  radius = std::max(0, radius);
+  if (radius == mCornerRadius) {
+    return;
+  }
+  mCornerRadius = radius;
+  applyCornerMask();
+}
+
+// A rectangle with its four corners cut by quarter circles. Built from regions (a cross plus four
+// ellipses) so it clips the child OpenGL video widget as well as the placeholder.
+void ParticipantTile::applyCornerMask() {
+  if (mCornerRadius <= 0 || width() <= 0 || height() <= 0) {
+    clearMask();
+    return;
+  }
+  const int r = std::min({mCornerRadius, width() / 2, height() / 2});
+  const int d = 2 * r;
+  QRegion region(QRect(r, 0, width() - d, height()));
+  region += QRegion(QRect(0, r, width(), height() - d));
+  region += QRegion(QRect(0, 0, d, d), QRegion::Ellipse);
+  region += QRegion(QRect(width() - d, 0, d, d), QRegion::Ellipse);
+  region += QRegion(QRect(0, height() - d, d, d), QRegion::Ellipse);
+  region += QRegion(QRect(width() - d, height() - d, d, d), QRegion::Ellipse);
+  setMask(region);
+}
+
 void ParticipantTile::resizeEvent(QResizeEvent *event) {
   QWidget::resizeEvent(event);
+  applyCornerMask();
   mRenderer->setGeometry(rect());
   mPlaceholder->setGeometry(rect());
   mName->setGeometry(8, 8, std::min({std::max(0, width() - 72), mName->sizeHint().width(), 320}), std::min(30, height()));

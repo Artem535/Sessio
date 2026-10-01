@@ -17,6 +17,9 @@ public:
   void attachSource(VideoFrameSource *source);
   [[nodiscard]] bool isLocal() const { return mParticipant.isLocal; }
   [[nodiscard]] QString identity() const { return mParticipant.id; }
+  // Rounds the tile's corners (clipping the video and placeholder inside it); 0 = square.
+  void setCornerRadius(int radius);
+  [[nodiscard]] int cornerRadius() const { return mCornerRadius; }
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
@@ -27,6 +30,8 @@ private:
   QPointer<VideoFrameSource> mSource;
   QMetaObject::Connection mFrameConnection;
   QMetaObject::Connection mDestroyedConnection;
+  void applyCornerMask();
+  int mCornerRadius{0};
   RemoteVideoRenderer *mRenderer;
   QLabel *mPlaceholder;
   QLabel *mName;
