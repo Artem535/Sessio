@@ -106,16 +106,20 @@
         <translation>Ваше имя</translation>
     </message>
     <message>
-        <source>Your meetings today</source>
-        <translation>Ваши встречи сегодня</translation>
+        <source>Shown to other participants</source>
+        <translation>Видно другим участникам</translation>
     </message>
     <message>
-        <source>Join another meeting</source>
-        <translation>Присоединиться к чужой встрече</translation>
+        <source>Join a meeting</source>
+        <translation>Подключиться к встрече</translation>
     </message>
     <message>
         <source>Invitation code or link</source>
         <translation>Код приглашения или ссылка</translation>
+    </message>
+    <message>
+        <source>Passcode</source>
+        <translation>Код доступа</translation>
     </message>
     <message>
         <source>Passcode (6 digits)</source>
@@ -124,6 +128,14 @@
     <message>
         <source>Connect</source>
         <translation>Подключиться</translation>
+    </message>
+    <message>
+        <source>Your calls today</source>
+        <translation>Ваши звонки на сегодня</translation>
+    </message>
+    <message>
+        <source>No calls today</source>
+        <translation>Сегодня звонков нет</translation>
     </message>
     <message>
         <source>Join</source>
@@ -143,6 +155,10 @@
     <message>
         <source>Call ended.</source>
         <translation>Звонок завершён.</translation>
+    </message>
+    <message>
+        <source>Waiting for others to join</source>
+        <translation>Ожидание других участников</translation>
     </message>
     <message>
         <source>Mute microphone</source>
@@ -179,10 +195,6 @@
     <message>
         <source>Notes</source>
         <translation>Заметки</translation>
-    </message>
-    <message>
-        <source>Waiting for the other participant to join...</source>
-        <translation>Ожидание подключения второго участника...</translation>
     </message>
 </context>
 <context>
@@ -618,6 +630,34 @@
 </context>
 <context>
     <name>DeviceCheckWidget</name>
+    <message>
+        <source>Check your devices</source>
+        <translation>Проверьте устройства</translation>
+    </message>
+    <message>
+        <source>Only you see this preview until you join</source>
+        <translation>Пока вы не подключились, это превью видите только вы</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Камера</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Микрофон</translation>
+    </message>
+    <message>
+        <source>Speaker</source>
+        <translation>Динамик</translation>
+    </message>
+    <message>
+        <source>Test</source>
+        <translation>Проверить</translation>
+    </message>
+    <message>
+        <source>Play a short tone through the selected speaker</source>
+        <translation>Воспроизвести короткий сигнал через выбранный динамик</translation>
+    </message>
     <message>
         <source>Back</source>
         <translation>Назад</translation>

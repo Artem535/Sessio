@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.6] - 2026-10-01
+
+### Added
+
+- The Calls page is organised into a name card on top, a "Join a meeting"
+  group on the left and "Your calls today" on the right (with the start time
+  of each call and an empty state).
+- The device-check screen before a call is rebuilt: a larger 16:9 camera
+  preview beside a card with labelled camera, microphone and speaker
+  selectors, a live microphone level meter and a "Test" button that plays a
+  short tone through the selected speaker.
+- The notes panel in a call can be resized by dragging the handle between it
+  and the video.
+- While you wait for others to join, a "Waiting for others to join" pill
+  floats above the control bar, and your own video is shown inset with
+  rounded corners. Participant tiles in grid calls have rounded corners too.
+
+### Changed
+
+- Fullscreen in a call now hides the navigation, headers and the notes panel,
+  leaving only the participants and the control bar; Esc or ending the call
+  leaves fullscreen.
+- The call control bar uses round buttons and sits closer to the bottom edge.
+
+### Fixed
+
+- The camera, microphone and speaker chosen on the device-check screen are now
+  the ones the call actually uses (previously the screen only drove the
+  preview and the call opened the defaults).
+- Calls and the device-check screen start from the system default camera,
+  microphone and speaker instead of the first device in the list.
+- The device-check screen no longer crashes the application when it is
+  opened.
+
+### Internal
+
+- Added `Sessio_fake_client`, a manual test tool that joins a call as one or
+  more fake participants publishing an animation and a tone.
+
 ## [0.2.5] - 2026-10-01
 
 ### Added
