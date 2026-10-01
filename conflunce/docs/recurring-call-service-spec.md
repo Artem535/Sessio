@@ -80,6 +80,7 @@ account ownership. Ресурсы другого account возвращают 40
 
 | Метод | Назначение |
 | --- | --- |
+| GET /v1/capabilities | Авторизованное обнаружение поддержки: `{"scheduleSeries":true}` |
 | PUT /v1/schedule-series/{series_uid} | Атомарно заменить snapshot серии, overrides и exceptions |
 | GET /v1/schedule-series/{series_uid} | Получить подтверждённые revision, content_hash и snapshot для восстановления синхронизации |
 | POST /v1/schedule-series/{series_uid}/invitation | Создать или явно перевыпустить приглашение серии |
@@ -116,6 +117,10 @@ duration до 24 часов, RRULE до 512 байт. Превышение не 
 Ответ PUT: `{"series_uid":"UUID","revision":1,"content_hash":"sha256"}`.
 Hash считается сервером по нормализованному snapshot без revision/base_revision;
 GET возвращает тот же hash. PUT не выдаёт приглашение и не создаёт комнаты.
+
+Клиент проверяет capabilities до первой публикации. На старом сервере 404 этого
+метода означает отсутствие поддержки: локальный календарь доступен, публикация
+LiveKit-серии явно недоступна. Создавать одиночную комнату вместо серии запрещено.
 
 Первый POST invitation принимает `{"reissue":false}` и Idempotency-Key UUID,
 возвращает invitation_url, passcode, generation. Повторная выдача существует
