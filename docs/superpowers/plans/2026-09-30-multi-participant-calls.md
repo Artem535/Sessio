@@ -40,7 +40,7 @@
 - [ ] Build/run these targets with coherent Qt environment described below and commit focused changes.
 
 ### Task 2: LiveKit per-participant media and unique backend identities
-**Files:** Modify src/video/livekit_video_provider.{h,cpp}, remote_video_renderer.{h,cpp}, capture adapter if needed; create src/video/livekit_video_frame_source.{h,cpp}; relevant video CMake and smoke tests. Modify token-backend/src/service/token_service.cpp (locate actual service implementation), crypto/livekit_jwt.{h,cpp}, backend tests.
+**Files:** Modify src/video/livekit_video_provider.{h,cpp}, remote_video_renderer.{h,cpp}, capture adapter if needed; create src/video/livekit_video_frame_source.{h,cpp}; relevant video CMake and smoke tests. Modify token-backend/src/service/meeting_service.cpp, crypto/livekit_jwt.{h,cpp}, backend tests.
 **Interfaces:** Consume Task 1 contracts. LiveKitVideoFrameSource : VideoFrameSource exposes attachTrack(shared_ptr<livekit::Track>), detach(). RemoteVideoRenderer exposes attachSource(VideoFrameSource*), detach(), scaledFrameRect unchanged; QPointer source, no SDK reader/widgets owned by provider.
 - [ ] Write failing tests proving distinct same-meeting client/practitioner token identities and signed role metadata, unchanged room/grants/authorization.
 - [ ] Implement cryptographically random per-issuance suffix using existing random helper; identity stable within reused token; absent role metadata accepted by desktop.
@@ -75,4 +75,3 @@ QT_PLUGIN_PATH=/usr/lib64/qt6/plugins
 QT_QPA_PLATFORM=offscreen for headless tests only.
 Baseline VideoSessionTest/CallPageTest/CallsPageTest: 65 passing tests.
 Use temporary HOME/XDG_CONFIG_HOME when testing settings.
-
