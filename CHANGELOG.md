@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.7] - 2026-10-01
+
+### Fixed
+
+- The Linux RPM no longer bundles Qt, qtkeychain, ICU, ffmpeg or Qt plugins and
+  no longer advertises system library names as Provides, so installing it can
+  not overwrite the distribution's own libraries. It now depends on the
+  distribution's Qt 6 and qtkeychain packages; only LiveKit and its private
+  dependencies live under `/usr/lib*/sessio`. Licence and readme moved to
+  `/usr/share/doc/Sessio`. The AppImage still bundles everything it needs.
+
 ## [0.2.6] - 2026-10-01
 
 ### Added

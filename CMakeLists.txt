@@ -8,7 +8,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Define the project
-project(Sessio VERSION 0.2.6 LANGUAGES CXX)
+project(Sessio VERSION 0.2.7 LANGUAGES CXX)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Svg PrintSupport LinguistTools Multimedia MultimediaWidgets OpenGLWidgets)
 include(GNUInstallDirs)
 include(FetchContent)
@@ -75,6 +75,21 @@ if(NOT pcm_ecm_POPULATED)
 endif()
 list(PREPEND CMAKE_MODULE_PATH "${pcm_ecm_SOURCE_DIR}/modules")
 
+# On Linux the RPM links against the distribution's own Qt and qtkeychain
+# instead of bundling them: a package that ships libQt6*.so.6 (and Provides
+# them) overwrites the system Qt on install. The AppImage build opts back in
+# with -DSESSIO_BUNDLE_QT=ON, because it needs Qt and friends in the install
+# tree for linuxdeploy.
+if(UNIX AND NOT APPLE)
+  option(SESSIO_BUNDLE_QT "Install Qt and bundled third-party libraries into the install tree" OFF)
+else()
+  set(SESSIO_BUNDLE_QT ON)
+endif()
+set(SESSIO_THIRD_PARTY_SUBDIR_ARGS "")
+if(NOT SESSIO_BUNDLE_QT)
+  set(SESSIO_THIRD_PARTY_SUBDIR_ARGS EXCLUDE_FROM_ALL)
+endif()
+
 set(BUILD_WITH_QT6 ON CACHE BOOL "" FORCE)
 set(BUILD_TEST_APPLICATION OFF CACHE BOOL "" FORCE)
 set(BUILD_TRANSLATIONS OFF CACHE BOOL "" FORCE)
@@ -84,6 +99,7 @@ FetchContent_Declare(
   URL https://github.com/frankosterfeld/qtkeychain/archive/refs/tags/0.14.3.tar.gz
   URL_HASH SHA512=d1d87553db94bf54da1373016a847476e6cd608db6d427ed72532658e2272501daf45d7c9976efdde2f26ab3810ba9dbfec2518d46dee5a76ecaa369bfee2e4a
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  ${SESSIO_THIRD_PARTY_SUBDIR_ARGS}
 )
 FetchContent_MakeAvailable(qtkeychain)
 
@@ -118,7 +134,7 @@ add_custom_target(apply_qlementine_patch
 
 set(QLEMENTINE_SANDBOX OFF CACHE BOOL "" FORCE)
 set(QLEMENTINE_SHOWCASE OFF CACHE BOOL "" FORCE)
-add_subdirectory(third_party/qlementine)
+add_subdirectory(third_party/qlementine ${SESSIO_THIRD_PARTY_SUBDIR_ARGS})
 
 qt_add_library(qcustomplot STATIC
     third_party/qcustomplot/qcustomplot.cpp
@@ -218,11 +234,20 @@ install(TARGETS Sessio
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-install(FILES
-    ${CMAKE_SOURCE_DIR}/LICENSE
-    ${CMAKE_SOURCE_DIR}/README.md
-    DESTINATION .
-)
+if(UNIX AND NOT APPLE)
+  # Not "." — that would drop /usr/LICENSE and /usr/README.md into the prefix.
+  install(FILES
+      ${CMAKE_SOURCE_DIR}/LICENSE
+      ${CMAKE_SOURCE_DIR}/README.md
+      DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/Sessio
+  )
+else()
+  install(FILES
+      ${CMAKE_SOURCE_DIR}/LICENSE
+      ${CMAKE_SOURCE_DIR}/README.md
+      DESTINATION .
+  )
+endif()
 
 if(UNIX AND NOT APPLE)
   install(FILES
@@ -236,12 +261,14 @@ if(UNIX AND NOT APPLE)
   )
 endif()
 
-qt_generate_deploy_app_script(
-    TARGET Sessio
-    OUTPUT_SCRIPT deploy_runtime_dependencies_script
-    NO_UNSUPPORTED_PLATFORM_ERROR
-)
-install(SCRIPT ${deploy_runtime_dependencies_script})
+if(SESSIO_BUNDLE_QT)
+  qt_generate_deploy_app_script(
+      TARGET Sessio
+      OUTPUT_SCRIPT deploy_runtime_dependencies_script
+      NO_UNSUPPORTED_PLATFORM_ERROR
+  )
+  install(SCRIPT ${deploy_runtime_dependencies_script})
+endif()
 
 if(UNIX AND NOT APPLE)
   # The prebuilt Linux LiveKit SDK archive bundles its own libcurl.so.4,
@@ -287,6 +314,18 @@ elseif(UNIX AND NOT APPLE)
   set(CPACK_RPM_PACKAGE_URL "https://github.com/Artem535/Sessio")
   set(CPACK_RPM_PACKAGE_DESCRIPTION
       "Local-first desktop workspace for calendar scheduling, client management, and session tracking.")
+  # Qt and qtkeychain come from the distribution; nothing Qt-related is
+  # bundled (see SESSIO_BUNDLE_QT). Exact sonames/versions are added by rpm's
+  # automatic dependency generator on top of these.
+  set(CPACK_RPM_PACKAGE_REQUIRES
+      "qt6-qtbase >= 6.8, qt6-qtbase-gui, qt6-qtsvg, qt6-qtwayland, qt6-qtmultimedia, qtkeychain-qt6")
+  # The private /usr/lib/sessio directory (LiveKit and its curl/OpenSSL/...
+  # chain) must neither advertise Provides for those sonames — that would
+  # shadow the system packages — nor generate Requires for them.
+  set(CPACK_RPM_SPEC_MORE_DEFINE
+"%global __provides_exclude_from ^/usr/lib(64)?/sessio/.*$
+%global __requires_exclude_from ^/usr/lib(64)?/sessio/.*$
+%global __requires_exclude ^liblivekit(_ffi)?\\.so")
   # Registers Sessio.desktop (via its MimeType=x-scheme-handler/sessio entry)
   # as the sessio:// URL handler and refreshes the desktop database on
   # install; see packaging/linux/register-sessio-scheme.sh. Uninstall uses a
