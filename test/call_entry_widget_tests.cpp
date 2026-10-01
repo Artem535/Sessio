@@ -25,6 +25,42 @@ TEST(CallEntryWidgetTest, SpecialistModeShowsOwnMeetingsListAndEmitsJoinRequest)
   EXPECT_EQ(joinSpy.at(0).at(0).toString(), QStringLiteral("ref-1"));
 }
 
+// Layout contract: the name card sits on top, the join group on the left and the practitioner's
+// calls for today on the right; a client sees only the join group.
+TEST(CallEntryWidgetTest, SpecialistModeSplitsJoinAndTodaysCallsIntoTwoGroupsUnderTheNameCard) {
+  CallEntryWidget widget(/*showOwnMeetings=*/true);
+  widget.resize(900, 600);
+  widget.show();
+  auto *nameCard = widget.findChild<QWidget *>("nameCard");
+  auto *joinGroup = widget.findChild<QWidget *>("joinGroup");
+  auto *callsGroup = widget.findChild<QWidget *>("callsGroup");
+  ASSERT_NE(nameCard, nullptr);
+  ASSERT_NE(joinGroup, nullptr);
+  ASSERT_NE(callsGroup, nullptr);
+  const auto pos = [&](QWidget *w) { return w->mapTo(&widget, QPoint(0, 0)); };
+  EXPECT_LT(pos(nameCard).y(), pos(joinGroup).y());
+  EXPECT_LT(pos(nameCard).y(), pos(callsGroup).y());
+  EXPECT_LT(pos(joinGroup).x(), pos(callsGroup).x());
+}
+
+TEST(CallEntryWidgetTest, EmptyCallsGroupSaysThereAreNoCallsToday) {
+  CallEntryWidget widget(/*showOwnMeetings=*/true);
+  widget.show();
+  auto *empty = widget.findChild<QWidget *>("noCallsLabel");
+  ASSERT_NE(empty, nullptr);
+  EXPECT_TRUE(empty->isVisibleTo(&widget));
+  widget.setUpcomingMeetings({{"ref-1", "Anna", QDateTime::currentDateTime(), true, 7}});
+  EXPECT_FALSE(empty->isVisibleTo(&widget));
+  widget.setUpcomingMeetings({});
+  EXPECT_TRUE(empty->isVisibleTo(&widget));
+}
+
+TEST(CallEntryWidgetTest, ClientModeHasNoCallsGroup) {
+  CallEntryWidget widget(/*showOwnMeetings=*/false);
+  EXPECT_EQ(widget.findChild<QWidget *>("callsGroup"), nullptr);
+  EXPECT_NE(widget.findChild<QWidget *>("joinGroup"), nullptr);
+}
+
 TEST(CallEntryWidgetTest, ClientModeHasNoOwnMeetingsList) {
   CallEntryWidget widget(/*showOwnMeetings=*/false);
   auto *list = widget.findChild<QWidget *>("ownMeetingsList");

@@ -46,4 +46,6 @@ private:
   QLineEdit *mPasscodeEdit{nullptr};
   QLineEdit *mDisplayNameEdit{nullptr};
   QLabel *mErrorLabel{nullptr};
+  QLabel *mAvatarLabel{nullptr};
+  QLabel *mNoCallsLabel{nullptr};
 };
