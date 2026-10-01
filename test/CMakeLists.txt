@@ -570,6 +570,14 @@ target_include_directories(Sessio_call_page_tests PRIVATE ${CMAKE_SOURCE_DIR}/sr
 set_target_properties(Sessio_call_page_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_call_page_tests)
 
+# Explicit manual integration gate: needs a disposable loopback LiveKit server
+# (--room) or a native display with hardware OpenGL (--native-ui). It is not a
+# default CTest entry and never contacts a production room.
+add_executable(Sessio_group_call_runtime_smoke group_call_runtime_smoke.cpp)
+target_link_libraries(Sessio_group_call_runtime_smoke PRIVATE
+    Sessio_calls_page Sessio_video Qt6::Widgets Qt6::OpenGLWidgets LiveKit::livekit
+)
+
 # CallsPage tests
 #
 # Like Sessio_call_page_tests above, this links Sessio_calls_page (which

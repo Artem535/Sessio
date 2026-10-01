@@ -1,5 +1,7 @@
 #include "client_mode_settings_dialog.h"
 #include "client_mode_window.h"
+#include "call_page.h"
+#include "fake_video_provider.h"
 #include "config.h"
 #include "token_backend_client.h"
 
@@ -29,6 +31,29 @@ TEST(ClientModeWindowTest, HostsCallsPageWithNoOwnMeetingsList) {
 
   EXPECT_NE(window.findChild<QLineEdit *>("joinCodeEdit"), nullptr);
   EXPECT_EQ(window.findChild<QWidget *>("ownMeetingsList"), nullptr);
+}
+
+TEST(ClientModeWindowTest, PractitionerDisplayRolesCannotExposeNotesInGroupCall) {
+  pcm::video::DeviceManager devices;
+  pcm::tokenclient::TokenBackendClient tokenClient("http://127.0.0.1:1");
+  ClientModeWindow window(&devices, &tokenClient);
+  auto *page = window.findChild<CallPage *>();
+  ASSERT_NE(page, nullptr);
+  auto *provider = new pcm::video::test::FakeVideoProvider;
+  pcm::video::VideoSession session(provider);
+  page->attachSession(&session);
+  provider->simulateParticipantJoined({"local", "Synthetic local", "practitioner", true});
+  provider->simulateParticipantJoined({"first", "Synthetic first", "practitioner"});
+  provider->simulateParticipantJoined({"second", "Synthetic second", "practitioner"});
+  QApplication::processEvents();
+  EXPECT_NE(page->findChild<QWidget *>("participantTile_local"), nullptr);
+  EXPECT_NE(page->findChild<QWidget *>("participantTile_first"), nullptr);
+  EXPECT_NE(page->findChild<QWidget *>("participantTile_second"), nullptr);
+  EXPECT_EQ(page->findChild<QWidget *>("notesToggleButton"), nullptr);
+  EXPECT_EQ(window.findChild<QWidget *>("ownMeetingsList"), nullptr);
+  provider->simulateParticipantJoined({"second", "Renamed", "client"});
+  QApplication::processEvents();
+  EXPECT_EQ(page->findChild<QWidget *>("notesToggleButton"), nullptr);
 }
 
 TEST(ClientModeWindowTest, SettingsActionRetargetsTokenClientAndPersistsUrl) {
