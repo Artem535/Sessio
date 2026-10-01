@@ -574,8 +574,7 @@ TEST(CallPageTest, VideoStagePositionsWaitingBannerCenteredAboveTheControlBar) {
   auto *controlBar = new QWidget;
   controlBar->resize(200, 48);
   stage.setControlBarWidget(controlBar);
-  auto *banner = new QWidget;
-  banner->setMinimumSize(180, 36);
+  auto *banner = new QLabel(QStringLiteral("Waiting for others to join"));
   stage.setWaitingBanner(banner);
   resizeAndDeliverEvent(&stage, QSize(640, 360));
 
