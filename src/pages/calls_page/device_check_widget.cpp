@@ -11,6 +11,7 @@
 #include <QHBoxLayout>
 #include <QImage>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QPushButton>
 #include <QSignalBlocker>
@@ -33,6 +34,28 @@ protected:
     painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 12.0, 12.0);
   }
 };
+
+// A label that keeps a 16:9 shape as the screen grows, so the preview scales instead of being
+// letterboxed inside a tall box.
+class PreviewLabel final : public QLabel {
+public:
+  using QLabel::QLabel;
+  [[nodiscard]] bool hasHeightForWidth() const override { return true; }
+  [[nodiscard]] int heightForWidth(int width) const override { return width * 9 / 16; }
+  [[nodiscard]] QSize minimumSizeHint() const override { return {360, 203}; }
+};
+
+QPixmap roundedPixmap(const QPixmap &source, qreal radius) {
+  QPixmap out(source.size());
+  out.fill(Qt::transparent);
+  QPainter painter(&out);
+  painter.setRenderHint(QPainter::Antialiasing);
+  QPainterPath clip;
+  clip.addRoundedRect(QRectF(QPointF(0, 0), QSizeF(source.size())), radius, radius);
+  painter.setClipPath(clip);
+  painter.drawPixmap(0, 0, source);
+  return out;
+}
 
 // Repopulates `combo` from `devices`, keeping whichever device (identified
 // by its stable id()) was previously selected, if it is still present.
@@ -90,11 +113,13 @@ DeviceCheckWidget::DeviceCheckWidget(pcm::video::DeviceManager *deviceManager, Q
   // paints itself, and styles go only on leaf widgets that have no combo below them.
   auto *outer = new QVBoxLayout(this);
   auto *column = new QWidget(this);
-  column->setMaximumWidth(980);
+  column->setMaximumWidth(1180);
   auto *layout = new QVBoxLayout(column);
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(12);
-  outer->addWidget(column, 0, Qt::AlignHCenter | Qt::AlignTop);
+  outer->addStretch(1);
+  outer->addWidget(column, 0, Qt::AlignHCenter);
+  outer->addStretch(1);
 
   auto *title = new QLabel(tr("Check your devices"), column);
   QFont titleFont = title->font();
@@ -114,10 +139,11 @@ DeviceCheckWidget::DeviceCheckWidget(pcm::video::DeviceManager *deviceManager, Q
   layout->addWidget(body);
 
   // Left: the preview, with a privacy reminder underneath.
-  mPreviewLabel = new QLabel(body);
+  mPreviewLabel = new PreviewLabel(body);
   mPreviewLabel->setObjectName("devicePreviewLabel");
-  mPreviewLabel->setMinimumSize(360, 203); // 16:9, matching the camera feed
-  mPreviewLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+  QSizePolicy previewPolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+  previewPolicy.setHeightForWidth(true);
+  mPreviewLabel->setSizePolicy(previewPolicy);
   mPreviewLabel->setAlignment(Qt::AlignCenter);
   mPreviewLabel->setStyleSheet(
       "QLabel#devicePreviewLabel { background-color: rgba(255, 255, 255, 0.06); border-radius: 12px; }");
@@ -178,7 +204,10 @@ DeviceCheckWidget::DeviceCheckWidget(pcm::video::DeviceManager *deviceManager, Q
   auto *backButton = new QPushButton(tr("Back"), buttonRow);
   backButton->setObjectName("backFromDeviceCheckButton");
   backButton->setFixedHeight(40);
-  backButton->setStyleSheet("QPushButton { border-radius: 20px; padding: 0 22px; }");
+  backButton->setStyleSheet(
+      "QPushButton { background-color: rgba(255, 255, 255, 0.10); color: rgba(255, 255, 255, 0.90);"
+      " border: none; border-radius: 20px; padding: 0 24px; }"
+      "QPushButton:hover { background-color: rgba(255, 255, 255, 0.16); }");
   connect(backButton, &QPushButton::clicked, this, &DeviceCheckWidget::backRequested);
   buttonLayout->addWidget(backButton);
   auto *joinButton = new QPushButton(tr("Join"), buttonRow);
@@ -191,7 +220,6 @@ DeviceCheckWidget::DeviceCheckWidget(pcm::video::DeviceManager *deviceManager, Q
   connect(joinButton, &QPushButton::clicked, this, &DeviceCheckWidget::joinRequested);
   buttonLayout->addWidget(joinButton);
   layout->addWidget(buttonRow);
-  layout->addStretch();
 
   connect(mMicrophoneCombo, &QComboBox::currentIndexChanged, this, &DeviceCheckWidget::restartMicMeter);
   connect(mCameraCombo, &QComboBox::currentIndexChanged, this, &DeviceCheckWidget::restartPreview);
@@ -242,9 +270,11 @@ void DeviceCheckWidget::ensurePreviewAdapter() {
   connect(mPreviewAdapter->previewSink(), &QVideoSink::videoFrameChanged, this,
           [this](const QVideoFrame &frame) {
             if (frame.isValid()) {
-              mPreviewLabel->setPixmap(QPixmap::fromImage(frame.toImage())
-                                           .scaled(mPreviewLabel->size(), Qt::KeepAspectRatio,
-                                                   Qt::SmoothTransformation));
+              mPreviewLabel->setPixmap(roundedPixmap(
+                  QPixmap::fromImage(frame.toImage())
+                      .scaled(mPreviewLabel->size(), Qt::KeepAspectRatioByExpanding,
+                              Qt::SmoothTransformation),
+                  12.0));
             }
           });
 }
