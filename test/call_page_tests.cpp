@@ -428,6 +428,40 @@ TEST(CallPageTest, ReconnectFailureReasonIsShownOnEndedScreen) {
   EXPECT_EQ(reasonLabel->text(), QStringLiteral("Reconnection timed out."));
 }
 
+TEST(CallPageTest, ConnectionLostBeforeJoinedShowsEndedScreenAndPreservesReason) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  QSignalSpy stateSpy(&session, &VideoSession::stateChanged);
+  QSignalSpy endedSpy(&page, &CallPage::callEnded);
+
+  session.join("wss://x", "token");
+  waitForState(session, stateSpy, VideoSessionState::Joining);
+  auto *connectingLabel = page.findChild<QLabel *>("connectingLabel");
+  ASSERT_NE(connectingLabel, nullptr);
+  ASSERT_TRUE(connectingLabel->isVisibleTo(&page));
+  provider->simulateConnectionLost("room ended before join completed");
+  waitForState(session, stateSpy, VideoSessionState::Failed);
+  ASSERT_EQ(session.state(), VideoSessionState::Failed);
+
+  auto *reasonLabel = page.findChild<QLabel *>("endedReasonLabel");
+  ASSERT_NE(reasonLabel, nullptr);
+  EXPECT_TRUE(reasonLabel->isVisibleTo(&page));
+  EXPECT_EQ(reasonLabel->text(), QStringLiteral("room ended before join completed"));
+  EXPECT_FALSE(connectingLabel->isVisibleTo(&page));
+  EXPECT_EQ(endedSpy.count(), 1);
+
+  provider->simulateJoined();
+  provider->simulateLeft();
+  QCoreApplication::processEvents();
+  QCoreApplication::processEvents();
+  EXPECT_EQ(session.state(), VideoSessionState::Failed);
+  EXPECT_TRUE(reasonLabel->isVisibleTo(&page));
+  EXPECT_EQ(endedSpy.count(), 1);
+}
+
 TEST(CallPageTest, NormalLeaveAfterEarlierFailureShowsNoStaleReason) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);

@@ -11,6 +11,41 @@ namespace pcm::video {
 // Exercise the same copied-value handlers used by the SDK delegate without
 // borrowing SDK callback pointers or requiring devices/network participants.
 struct LiveKitVideoProviderTestAccess {
+  static bool terminalDisconnectCancelsQueuedJoined() {
+    LiveKitVideoProvider provider;
+    provider.mRoom = std::make_unique<livekit::Room>();
+    provider.applyParticipant({{"joining", {}, {}, false}, "P"}, true);
+    const auto generation = provider.mGeneration;
+    int joins = 0, losses = 0, leaves = 0;
+    QString reason;
+    QObject::connect(&provider, &VideoProvider::joined, &provider, [&] { ++joins; });
+    QObject::connect(&provider, &VideoProvider::connectionLost, &provider,
+                     [&](const QString &value) { ++losses; reason = value; });
+    QObject::connect(&provider, &VideoProvider::left, &provider, [&] { ++leaves; });
+    // Same copied terminal handler as onDisconnected, before the success
+    // queued by join after publication. No live room or device is required.
+    std::thread worker([&] {
+      provider.queueCallback(generation, [](LiveKitVideoProvider &target) {
+        target.teardown();
+        emit target.connectionLost(QStringLiteral("Room disconnected (reason code %1).").arg(1));
+      });
+      provider.queueCallback(generation, [](LiveKitVideoProvider &target) { emit target.joined(); });
+    });
+    worker.join();
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    const bool terminal = losses == 1 && joins == 0 && !provider.mRoom &&
+        provider.mPendingCallbacks.empty() && provider.participants()->rowCount() == 0 &&
+        !provider.frameSource("joining") && reason == QStringLiteral("Room disconnected (reason code 1).");
+    provider.leave(); // Failed entry performs another teardown after the callback.
+    provider.leave();
+    QCoreApplication::processEvents();
+    const bool ok = terminal && joins == 0 && losses == 1 && leaves == 2 &&
+        !provider.mRoom && provider.participants()->rowCount() == 0;
+    if (!ok) std::cerr << "terminal disconnect failed to cancel queued joined or repeated teardown" << std::endl;
+    return ok;
+  }
+
   static bool replacementParticipantSidResetsMedia() {
     LiveKitVideoProvider provider;
     ParticipantSnapshot participant{{"replace", {}, {}, false, true, true}, "P-old"};
@@ -196,6 +231,7 @@ int main(int argc, char *argv[]) {
     std::exit(1);
   });
   watchdog.start(25000);
+  if (!pcm::video::LiveKitVideoProviderTestAccess::terminalDisconnectCancelsQueuedJoined()) return 1;
   const bool participantReplacement =
       pcm::video::LiveKitVideoProviderTestAccess::replacementParticipantSidResetsMedia();
   const bool videoHistory =

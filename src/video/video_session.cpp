@@ -96,8 +96,8 @@ VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseco
   // reconnecting() is the SDK's own "actively retrying" signal — the only
   // thing that should drive the Reconnecting state. connectionLost() is
   // terminal (the SDK has given up, whether or not it ever reconnected
-  // first) and always goes straight to Failed, from Connected,
-  // WaitingForParticipants, or Reconnecting.
+  // first) and always goes straight to Failed, including a disconnect
+  // during track publication before the queued joined() is delivered.
   //
   // Resolve reconnect from current presence, including updates during retries.
   connected->addTransition(mProvider, &VideoProvider::reconnecting, reconnecting);
@@ -106,6 +106,7 @@ VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseco
   new PresenceTransition(mProvider, SIGNAL(reconnected()), participants(), false, reconnecting, waitingForClient);
   reconnecting->addTransition(mProvider, &VideoProvider::connectionLost, failed);
   reconnecting->addTransition(&mReconnectTimer, &QTimer::timeout, failed);
+  joining->addTransition(mProvider, &VideoProvider::connectionLost, failed);
   waitingForClient->addTransition(mProvider, &VideoProvider::connectionLost, failed);
   connected->addTransition(mProvider, &VideoProvider::connectionLost, failed);
   connect(reconnecting, &QState::entered, this, [this]() { mReconnectTimer.start(); });

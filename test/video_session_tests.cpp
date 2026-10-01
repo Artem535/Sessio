@@ -117,6 +117,36 @@ TEST_F(VideoSessionTest, TerminalFailureClearsLocalAndRemoteParticipants) {
   EXPECT_EQ(fake->mLeaveCallCount, 1);
 }
 
+TEST_F(VideoSessionTest, ConnectionLostBeforeJoinedFailsAndIgnoresLateSuccess) {
+  auto *fake = new pcm::video::test::FakeVideoProvider();
+  pcm::video::VideoSession session(fake);
+  QSignalSpy stateSpy(&session, &pcm::video::VideoSession::stateChanged);
+  QSignalSpy lostSpy(&session, &pcm::video::VideoSession::connectionLost);
+  session.join("wss://example.invalid", "token");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fake->simulateParticipantJoined({"local", {}, {}, true});
+  fake->simulateParticipantJoined({"remote"});
+
+  fake->simulateConnectionLost("room ended before join completed");
+  waitForState(session, stateSpy, pcm::video::VideoSessionState::Failed);
+  ASSERT_EQ(session.state(), pcm::video::VideoSessionState::Failed);
+  ASSERT_EQ(lostSpy.count(), 1);
+  EXPECT_EQ(lostSpy.first().at(0).toString(),
+            QStringLiteral("room ended before join completed"));
+  EXPECT_EQ(session.participants()->rowCount(), 0);
+  EXPECT_EQ(fake->mLeaveCallCount, 1);
+
+  stateSpy.clear();
+  fake->simulateJoined();
+  fake->simulateLeft();
+  session.leave();
+  QCoreApplication::processEvents();
+  QCoreApplication::processEvents();
+  EXPECT_EQ(session.state(), pcm::video::VideoSessionState::Failed);
+  EXPECT_TRUE(stateSpy.isEmpty());
+  EXPECT_EQ(fake->mLeaveCallCount, 1);
+}
+
 TEST_F(VideoSessionTest, ExplicitLeaveClearsParticipantsBeforeProviderAcknowledges) {
   auto *fake = new pcm::video::test::FakeVideoProvider();
   pcm::video::VideoSession session(fake);
