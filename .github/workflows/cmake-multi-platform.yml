@@ -331,6 +331,31 @@ jobs:
             "/DMyIconFile=${{ github.workspace }}\resources\icons\Sessio.ico" `
             "${{ github.workspace }}\packaging\Sessio.iss"
 
+      - name: Build RPM package
+        if: runner.os == 'Linux'
+        run: |
+          cpack --config build-release/CPackConfig.cmake --generator RPM --verbose
+          rpm -qip build-release/packages/*.rpm
+          rpm -qp --requires build-release/packages/*.rpm
+          rpm -qlp build-release/packages/*.rpm
+          # Only /usr/bin, /usr/share and the private /usr/lib/sessio may be owned
+          # by this package: anything else (Qt libs, plugins, headers) can
+          # overwrite system files.
+          unexpected_rpm_files="$(rpm -qlp build-release/packages/*.rpm |
+            grep -vE '^/usr/(bin|share)/|^/usr/lib(64)?/sessio/|^/usr/lib(64)?/\.build-id/' || true)"
+          if [ -n "$unexpected_rpm_files" ]; then
+            echo "$unexpected_rpm_files"
+            echo "::error::RPM must not install files outside bin, share and /usr/lib/sessio"
+            exit 1
+          fi
+          if rpm -qp --provides build-release/packages/*.rpm | grep -E '\.so'; then
+            echo "::error::RPM must not Provide shared-library sonames"
+            exit 1
+          fi
+          for dep in 'qt6-qtbase >= 6.8' qt6-qtbase-gui qt6-qtsvg qt6-qtwayland qt6-qtmultimedia qtkeychain-qt6; do
+            rpm -qp --requires build-release/packages/*.rpm | grep -Fx "$dep"
+          done
+
       - name: Download linuxdeployqt
         if: runner.os == 'Linux'
         run: |
@@ -344,6 +369,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           mkdir -p "${{ github.workspace }}/build-release/AppDir"
+          cmake -DSESSIO_BUNDLE_QT=ON build-release
+          cmake --build build-release --parallel
           cmake --install build-release --config MinSizeRel --prefix "${{ github.workspace }}/build-release/AppDir/usr"
           QT_PREFIX="${{ github.workspace }}/Qt/${{ matrix.qt_version }}/gcc_64"
           export PATH="$QT_PREFIX/bin:$PATH"
@@ -360,13 +387,6 @@ jobs:
             --output appimage
           mkdir -p build-release/packages
           find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' -exec mv {} build-release/packages/ \;
-
-      - name: Build RPM package
-        if: runner.os == 'Linux'
-        run: |
-          cpack --config build-release/CPackConfig.cmake --generator RPM --verbose
-          rpm -qip build-release/packages/*.rpm
-          rpm -qlp build-release/packages/*.rpm
 
       - name: Upload Linux package
         if: runner.os == 'Linux'

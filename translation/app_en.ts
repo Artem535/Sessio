@@ -106,16 +106,20 @@
         <translation>Your name</translation>
     </message>
     <message>
-        <source>Your meetings today</source>
-        <translation>Your meetings today</translation>
+        <source>Shown to other participants</source>
+        <translation>Shown to other participants</translation>
     </message>
     <message>
-        <source>Join another meeting</source>
-        <translation>Join another meeting</translation>
+        <source>Join a meeting</source>
+        <translation>Join a meeting</translation>
     </message>
     <message>
         <source>Invitation code or link</source>
         <translation>Invitation code or link</translation>
+    </message>
+    <message>
+        <source>Passcode</source>
+        <translation>Passcode</translation>
     </message>
     <message>
         <source>Passcode (6 digits)</source>
@@ -124,6 +128,14 @@
     <message>
         <source>Connect</source>
         <translation>Connect</translation>
+    </message>
+    <message>
+        <source>Your calls today</source>
+        <translation>Your calls today</translation>
+    </message>
+    <message>
+        <source>No calls today</source>
+        <translation>No calls today</translation>
     </message>
     <message>
         <source>Join</source>
@@ -143,6 +155,10 @@
     <message>
         <source>Call ended.</source>
         <translation>Call ended.</translation>
+    </message>
+    <message>
+        <source>Waiting for others to join</source>
+        <translation>Waiting for others to join</translation>
     </message>
     <message>
         <source>Mute microphone</source>
@@ -179,10 +195,6 @@
     <message>
         <source>Notes</source>
         <translation>Notes</translation>
-    </message>
-    <message>
-        <source>Waiting for the other participant to join...</source>
-        <translation>Waiting for the other participant to join...</translation>
     </message>
 </context>
 <context>
@@ -617,6 +629,34 @@
 </context>
 <context>
     <name>DeviceCheckWidget</name>
+    <message>
+        <source>Check your devices</source>
+        <translation>Check your devices</translation>
+    </message>
+    <message>
+        <source>Only you see this preview until you join</source>
+        <translation>Only you see this preview until you join</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Camera</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Microphone</translation>
+    </message>
+    <message>
+        <source>Speaker</source>
+        <translation>Speaker</translation>
+    </message>
+    <message>
+        <source>Test</source>
+        <translation>Test</translation>
+    </message>
+    <message>
+        <source>Play a short tone through the selected speaker</source>
+        <translation>Play a short tone through the selected speaker</translation>
+    </message>
     <message>
         <source>Back</source>
         <translation>Back</translation>
