@@ -340,9 +340,10 @@ jobs:
           rpm -qlp build-release/packages/*.rpm
           # Only /usr/bin, /usr/share and the private /usr/lib/sessio may be owned
           # by this package: anything else (Qt libs, plugins, headers) can
-          # overwrite system files.
+          # overwrite system files. Accept the directory entries themselves
+          # as well as their contents, including RPM's build-id metadata.
           unexpected_rpm_files="$(rpm -qlp build-release/packages/*.rpm |
-            grep -vE '^/usr/(bin|share)/|^/usr/lib(64)?/sessio/|^/usr/lib(64)?/\.build-id/' || true)"
+            grep -vE '^/usr/(bin|share)(/|$)|^/usr/lib(64)?/(sessio|\.build-id)(/|$)' || true)"
           if [ -n "$unexpected_rpm_files" ]; then
             echo "$unexpected_rpm_files"
             echo "::error::RPM must not install files outside bin, share and /usr/lib/sessio"
