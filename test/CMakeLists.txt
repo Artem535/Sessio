@@ -578,6 +578,13 @@ target_link_libraries(Sessio_group_call_runtime_smoke PRIVATE
     Sessio_calls_page Sessio_video Qt6::Widgets Qt6::OpenGLWidgets LiveKit::livekit
 )
 
+# Manual tool: joins a call as fake clients publishing an animation and a tone, so a
+# specialist can be tested from one device. Talks to a real token backend; not a CTest entry.
+add_executable(Sessio_fake_client fake_client.cpp)
+target_link_libraries(Sessio_fake_client PRIVATE
+    Qt6::Gui Qt6::Network Sessio_token_client LiveKit::livekit
+)
+
 # CallsPage tests
 #
 # Like Sessio_call_page_tests above, this links Sessio_calls_page (which
