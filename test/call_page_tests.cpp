@@ -567,6 +567,24 @@ TEST(CallPageTest, VideoStagePositionsControlBarCenteredAtBottom) {
   EXPECT_EQ(controlBar->geometry().bottom(), stage.height() - 12 - 1);
 }
 
+// The "waiting for others" pill floats centred just above the control bar, over the video, rather
+// than taking a strip of its own below it.
+TEST(CallPageTest, VideoStagePositionsWaitingBannerCenteredAboveTheControlBar) {
+  pcm::video::detail::VideoStage stage;
+  auto *controlBar = new QWidget;
+  controlBar->resize(200, 48);
+  stage.setControlBarWidget(controlBar);
+  auto *banner = new QWidget;
+  banner->setMinimumSize(180, 36);
+  stage.setWaitingBanner(banner);
+  resizeAndDeliverEvent(&stage, QSize(640, 360));
+
+  EXPECT_EQ(banner->parentWidget(), &stage);
+  EXPECT_EQ(banner->geometry().center().x(), stage.rect().center().x());
+  EXPECT_LT(banner->geometry().bottom(), controlBar->geometry().top());
+  EXPECT_GE(controlBar->geometry().top() - banner->geometry().bottom(), 8);
+}
+
 TEST(CallPageTest, VideoStagePositionsNotesToggleInTopRightCorner) {
   pcm::video::detail::VideoStage stage;
   auto *notesToggle = new QWidget(&stage);
@@ -732,7 +750,7 @@ TEST(CallPageTest, WaitingForParticipantsShowsDistinctMessageFromJoining) {
 
   provider->simulateJoined();
   waitForState(session, stateSpy, VideoSessionState::WaitingForParticipants);
-  EXPECT_EQ(page.findChild<QLabel *>("waitingLabel")->text(), QStringLiteral("Waiting for the other participant to join..."));
+  EXPECT_EQ(page.findChild<QLabel *>("waitingLabel")->text(), QStringLiteral("Waiting for others to join"));
   EXPECT_TRUE(page.findChild<QLabel *>("waitingLabel")->isVisibleTo(&page));
 }
 

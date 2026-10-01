@@ -31,6 +31,9 @@ public:
 
   void setTiles(const QVector<ParticipantTile *> &tiles);
   void setControlBarWidget(QWidget *widget);
+  // A small status pill floating just above the control bar ("Waiting for others to join");
+  // its visibility is the caller's to manage.
+  void setWaitingBanner(QWidget *widget);
   void setNotesToggleWidget(QWidget *widget);
 
 protected:
@@ -44,6 +47,7 @@ private:
   QVector<ParticipantTile *> mTiles;
   QPointer<QWidget> mControlBarWidget;
   QPointer<QWidget> mNotesToggleWidget;
+  QPointer<QWidget> mWaitingBanner;
 };
 
 } // namespace pcm::video::detail
@@ -121,6 +125,7 @@ private:
   QWidget *mConnectingScreen{nullptr};
   QLabel *mConnectingLabel{nullptr};
   QLabel *mWaitingLabel{nullptr};
+  QWidget *mWaitingBanner{nullptr};
   QWidget *mConnectedView{nullptr};
   // Video stage on the left, notes panel on the right; the user drags the handle between them
   // to make the notes panel narrower or wider.

@@ -63,6 +63,20 @@ void VideoStage::setControlBarWidget(QWidget *widget) {
   layoutChildren();
 }
 
+void VideoStage::setWaitingBanner(QWidget *widget) {
+  if (mWaitingBanner == widget) {
+    return;
+  }
+  if (mWaitingBanner) {
+    mWaitingBanner->setParent(nullptr);
+  }
+  mWaitingBanner = widget;
+  if (mWaitingBanner) {
+    mWaitingBanner->setParent(this);
+  }
+  layoutChildren();
+}
+
 void VideoStage::setNotesToggleWidget(QWidget *widget) {
   if (mNotesToggleWidget == widget) {
     return;
@@ -151,6 +165,13 @@ void VideoStage::layoutChildren() {
     const int y = height() - kControlBarBottomMargin - barHeight;
     mControlBarWidget->setGeometry(x, y, barWidth, barHeight);
     mControlBarWidget->raise();
+  }
+  if (mWaitingBanner) {
+    const QSize hint = mWaitingBanner->sizeHint();
+    const int barTop = height() - kControlBarBottomMargin - kControlBarHeight;
+    mWaitingBanner->setGeometry((width() - hint.width()) / 2, barTop - 12 - hint.height(),
+                                hint.width(), hint.height());
+    mWaitingBanner->raise();
   }
   if (mNotesToggleWidget) {
     constexpr int kSize = 40;
@@ -334,12 +355,25 @@ void CallPage::buildConnectedScreen() {
   mVideoSplitter->setStretchFactor(0, 1);
   mVideoSplitter->setStretchFactor(1, 0);
   layout->addWidget(mVideoSplitter, 1);
-  mWaitingLabel = new QLabel(tr("Waiting for the other participant to join..."), mConnectedView);
+  // "Waiting for others to join": an opaque status pill floating over the video stage, above the
+  // control bar (opaque because it overlays a QOpenGLWidget renderer), instead of a text line
+  // that took its own strip below the video.
+  mWaitingBanner = new QWidget(mVideoStage);
+  mWaitingBanner->setObjectName("waitingBanner");
+  mWaitingBanner->setStyleSheet(
+      QStringLiteral("#waitingBanner { background-color: rgb(20, 20, 20); border-radius: 18px; }"));
+  auto *waitingLayout = new QHBoxLayout(mWaitingBanner);
+  waitingLayout->setContentsMargins(16, 8, 18, 8);
+  waitingLayout->setSpacing(8);
+  auto *waitingDot = new QLabel(QStringLiteral("\u25CF"), mWaitingBanner);
+  waitingDot->setStyleSheet(QStringLiteral("color: #ffb020;"));
+  waitingLayout->addWidget(waitingDot);
+  mWaitingLabel = new QLabel(tr("Waiting for others to join"), mWaitingBanner);
   mWaitingLabel->setObjectName("waitingLabel");
-  mWaitingLabel->setAlignment(Qt::AlignCenter);
   mWaitingLabel->setTextFormat(Qt::PlainText);
-  mWaitingLabel->hide();
-  layout->addWidget(mWaitingLabel);
+  waitingLayout->addWidget(mWaitingLabel);
+  mWaitingBanner->hide();
+  mVideoStage->setWaitingBanner(mWaitingBanner);
 
   mMicrophoneToggleButton = new QToolButton(mConnectedView);
   mMicrophoneToggleButton->setObjectName("microphoneToggleButton");
@@ -714,7 +748,7 @@ void CallPage::setSidePanelExpandedByDefault(bool expanded) {
 
 void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) {
   using pcm::video::VideoSessionState;
-  mWaitingLabel->setVisible(state == VideoSessionState::WaitingForParticipants);
+  mWaitingBanner->setVisible(state == VideoSessionState::WaitingForParticipants);
   mReconnectingBanner->setVisible(state == VideoSessionState::Reconnecting);
 
   // Fullscreen belongs to the connected call screen only; never leave the app stuck in it
