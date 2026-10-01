@@ -1391,6 +1391,18 @@ See you!</source>
         <source>Entry not found</source>
         <translation>Запись не найдена</translation>
     </message>
+    <message>
+        <source>Unmute microphone</source>
+        <translation>Включить микрофон</translation>
+    </message>
+    <message>
+        <source>Turn on camera</source>
+        <translation>Включить камеру</translation>
+    </message>
+    <message>
+        <source>Exit fullscreen</source>
+        <translation>Выйти из полноэкранного режима</translation>
+    </message>
 </context>
 <context>
     <name>QShortcut</name>
@@ -2092,6 +2104,25 @@ Your previous data was kept.</source>
     <message>
         <source>Quit</source>
         <translation>Выйти</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::video::ParticipantTile</name>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+    <message>
+        <source>%1 (You)</source>
+        <translation>%1 (Вы)</translation>
+    </message>
+    <message>
+        <source>Waiting for video...</source>
+        <translation>Ожидание видео...</translation>
+    </message>
+    <message>
+        <source>Camera off</source>
+        <translation>Камера выключена</translation>
     </message>
 </context>
 </TS>

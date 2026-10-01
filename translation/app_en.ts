@@ -1390,6 +1390,18 @@ See you!</translation>
         <source>Entry not found</source>
         <translation>Entry not found</translation>
     </message>
+    <message>
+        <source>Unmute microphone</source>
+        <translation>Unmute microphone</translation>
+    </message>
+    <message>
+        <source>Turn on camera</source>
+        <translation>Turn on camera</translation>
+    </message>
+    <message>
+        <source>Exit fullscreen</source>
+        <translation>Exit fullscreen</translation>
+    </message>
 </context>
 <context>
     <name>QShortcut</name>
@@ -2091,6 +2103,25 @@ Your previous data was kept.</translation>
     <message>
         <source>Quit</source>
         <translation>Quit</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::video::ParticipantTile</name>
+    <message>
+        <source>Participant</source>
+        <translation>Participant</translation>
+    </message>
+    <message>
+        <source>%1 (You)</source>
+        <translation>%1 (You)</translation>
+    </message>
+    <message>
+        <source>Waiting for video...</source>
+        <translation>Waiting for video...</translation>
+    </message>
+    <message>
+        <source>Camera off</source>
+        <translation>Camera off</translation>
     </message>
 </context>
 </TS>

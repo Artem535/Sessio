@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.5] - 2026-10-01
+
+### Added
+
+- Calls display every participant in an adaptive grid, with a local preview,
+  camera-off placeholders and participant names. Two-person calls retain the
+  picture-in-picture layout; larger calls use equal tiles.
+- Each token issuance creates a distinct participant identity, so multiple
+  clients can join the same meeting independently.
+
+### Fixed
+
+- Remote video and audio are handled independently for every participant.
+  Leaving, rejoining, muting and changing the speaker retain the other
+  participants' media and release departed streams.
+- Participant names remain literal text in labels and tooltips.
+
 ## [0.2.4] - 2026-09-30
 
 ### Changed
