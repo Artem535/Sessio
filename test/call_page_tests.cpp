@@ -745,7 +745,7 @@ TEST(CallPageTest, MicrophoneToggleButtonHasAccessibleLabelThatUpdatesOnToggle) 
 
   micButton->setChecked(false);
   EXPECT_NE(micButton->toolTip(), mutedLabel);
-  EXPECT_EQ(micButton->toolTip(), QObject::tr("Unmute microphone"));
+  EXPECT_EQ(micButton->toolTip(), CallPage::tr("Unmute microphone"));
   EXPECT_EQ(micButton->accessibleName(), micButton->toolTip());
 }
 
@@ -780,7 +780,7 @@ TEST(CallPageTest, CameraToggleButtonHasAccessibleLabelThatUpdatesOnToggle) {
 
   cameraButton->setChecked(false);
   EXPECT_NE(cameraButton->toolTip(), onLabel);
-  EXPECT_EQ(cameraButton->toolTip(), QObject::tr("Turn on camera"));
+  EXPECT_EQ(cameraButton->toolTip(), CallPage::tr("Turn on camera"));
   EXPECT_EQ(cameraButton->accessibleName(), cameraButton->toolTip());
 }
 
@@ -823,7 +823,7 @@ TEST(CallPageTest, FullscreenToggleButtonHasAccessibleLabelThatUpdatesOnToggle) 
 
   fullscreenButton->setChecked(true);
   EXPECT_NE(fullscreenButton->toolTip(), windowedLabel);
-  EXPECT_EQ(fullscreenButton->toolTip(), QObject::tr("Exit fullscreen"));
+  EXPECT_EQ(fullscreenButton->toolTip(), CallPage::tr("Exit fullscreen"));
   EXPECT_EQ(fullscreenButton->accessibleName(), fullscreenButton->toolTip());
 
   // Leave fullscreen so later tests in the same process don't inherit a

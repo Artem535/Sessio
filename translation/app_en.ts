@@ -1390,18 +1390,6 @@ See you!</translation>
         <source>Entry not found</source>
         <translation>Entry not found</translation>
     </message>
-    <message>
-        <source>Unmute microphone</source>
-        <translation>Unmute microphone</translation>
-    </message>
-    <message>
-        <source>Turn on camera</source>
-        <translation>Turn on camera</translation>
-    </message>
-    <message>
-        <source>Exit fullscreen</source>
-        <translation>Exit fullscreen</translation>
-    </message>
 </context>
 <context>
     <name>QShortcut</name>

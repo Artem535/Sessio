@@ -15,9 +15,24 @@ No production deployment or real participant data was used.
   tests.
 - Full desktop `Sessio` target and backend targets built. Desktop version is
   **0.2.5** in both declarations. Translation update is idempotent; both locales
-  contain 496 finished entries and no unfinished entries.
+  contain 493 finished entries and no unfinished entries after the translation
+  follow-up below.
 - `git diff --check` passed. Independent whole-branch review and draft PR
   delivery are handled separately by the controller; PR94 remains a dependency.
+
+## Translation follow-up
+
+The first CI run removed three test-only `QObject` entries: Unmute microphone,
+Turn on camera and Exit fullscreen. Local translation generation included test
+targets (`PCM_BUILD_TESTS=ON`), while CI used the default OFF setting. The
+application's `CallPage` translations already existed; the extra entries came
+from the tests using `QObject::tr()` for expected CallPage labels.
+
+The tests now use `CallPage::tr()` and both catalogs contain the same 493
+finished entries with tests ON or OFF. The earlier 496-entry local result
+included those three duplicates. The OFF configuration reproduced exactly the
+CI deletion before the fix; subsequent ON/OFF updates preserve identical file
+hashes. The three existing button-label tests cover the corrected context.
 
 ## Real synthetic room
 

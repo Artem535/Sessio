@@ -1391,18 +1391,6 @@ See you!</source>
         <source>Entry not found</source>
         <translation>Запись не найдена</translation>
     </message>
-    <message>
-        <source>Unmute microphone</source>
-        <translation>Включить микрофон</translation>
-    </message>
-    <message>
-        <source>Turn on camera</source>
-        <translation>Включить камеру</translation>
-    </message>
-    <message>
-        <source>Exit fullscreen</source>
-        <translation>Выйти из полноэкранного режима</translation>
-    </message>
 </context>
 <context>
     <name>QShortcut</name>
