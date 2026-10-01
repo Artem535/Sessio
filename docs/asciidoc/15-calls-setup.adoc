@@ -1,5 +1,6 @@
 = Как настроить звонки в Sessio
 :lang: ru
+:icons: font
 :toc:
 :toc-title: Содержание
 
