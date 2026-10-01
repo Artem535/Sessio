@@ -1,12 +1,12 @@
 Failed to open VDPAU backend libvdpau_nvidia.so: cannot open shared object file: No such file or directory
-[2026-10-01T06:34:19Z WARN  livekit::room::participant] could not find publication to remove: TrackSid("TR_unknown")
-[2026-10-01T06:34:19Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 937
-[2026-10-01T06:34:19Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 193
-[2026-10-01T06:34:19Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 940
-[2026-10-01T06:34:19Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 60
-[2026-10-01T06:34:19Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 195
-[2026-10-01T06:34:19Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 62
-[2026-10-01T06:34:19Z ERROR livekit::rtc_engine::rtc_session] failed to negotiate the publisher: Rtc(RtcError { error_type: InvalidState, message: "CreateOffer called when PeerConnection is closed." })
+[2026-10-01T06:49:21Z WARN  livekit::room::participant] could not find publication to remove: TrackSid("TR_unknown")
+[2026-10-01T06:49:21Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 213
+[2026-10-01T06:49:21Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 925
+[2026-10-01T06:49:21Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 60
+[2026-10-01T06:49:21Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 58
+[2026-10-01T06:49:21Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 923
+[2026-10-01T06:49:21Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 210
+[2026-10-01T06:49:21Z ERROR livekit::rtc_engine::rtc_session] failed to negotiate the publisher: Rtc(RtcError { error_type: InvalidState, message: "Failed to set local offer sdp: Called in wrong state: closed" })
 remote patterns and decoded 440/660 Hz tones passed
 both production sinks advanced across 2 speaker reattachments
 join, mute/unmute, leave/rejoin, survivor identity and terminal teardown passed

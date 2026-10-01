@@ -22,8 +22,10 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <exception>
 #include <functional>
 #include <iostream>
+#include <mutex>
 #include <stdexcept>
 
 // Test access to real subscribed tracks and production audio sink telemetry.
@@ -98,9 +100,32 @@ struct Publisher {
   std::shared_ptr<livekit::LocalVideoTrack> videoTrack;
   std::shared_ptr<livekit::LocalAudioTrack> audioTrack;
   std::atomic<bool> running{false};
+  std::atomic<bool> injectCaptureFailure{false};
+  std::mutex failureMutex;
+  std::exception_ptr failure;
+  QString identity;
   std::thread producer;
   ~Publisher() { stop(); }
+  void checkHealth() {
+    std::exception_ptr captured;
+    {
+      std::lock_guard lock(failureMutex);
+      captured = failure;
+    }
+    if (!captured) return;
+    try { std::rethrow_exception(captured); }
+    catch (const std::exception &error) {
+      throw std::runtime_error("synthetic publisher " + identity.toStdString() +
+                               " media producer failed: " + error.what());
+    } catch (...) {
+      throw std::runtime_error("synthetic publisher " + identity.toStdString() +
+                               " media producer failed with a non-standard exception");
+    }
+  }
   void start(const QString &roomName, const QString &id, bool red, double frequency) {
+    checkHealth(); // A restart cannot erase an unreported predecessor failure.
+    identity = id;
+    injectCaptureFailure = false;
     livekit::RoomOptions options;
     options.auto_subscribe = false;
     options.join_retries = 0;
@@ -119,19 +144,27 @@ struct Publisher {
     room.localParticipant().lock()->publishTrack(audioTrack, audioOptions);
     running = true;
     producer = std::thread([this, red, frequency] {
-      auto frame = livekit::VideoFrame::create(320, 180, livekit::VideoBufferType::RGBA);
-      const auto image = pattern(red);
-      std::copy(image.constBits(), image.constBits() + image.sizeInBytes(), frame.data());
-      int64_t sample = 0;
-      int tick = 0;
-      while (running.load()) {
-        if (tick++ % 3 == 0) video->captureFrame(frame);
-        std::vector<int16_t> samples(480);
-        for (auto &value : samples)
-          value = static_cast<int16_t>(2000 * std::sin(2 * 3.141592653589793 * frequency * sample++ / 48000));
-        try { audio->captureFrame(livekit::AudioFrame(std::move(samples), 48000, 1, 480)); }
-        catch (const std::exception &) { running = false; }
-        QThread::msleep(10);
+      try {
+        auto frame = livekit::VideoFrame::create(320, 180, livekit::VideoBufferType::RGBA);
+        const auto image = pattern(red);
+        std::copy(image.constBits(), image.constBits() + image.sizeInBytes(), frame.data());
+        int64_t sample = 0;
+        int tick = 0;
+        while (running.load()) {
+          if (tick++ % 3 == 0) video->captureFrame(frame);
+          std::vector<int16_t> samples(480);
+          for (auto &value : samples)
+            value = static_cast<int16_t>(2000 * std::sin(2 * 3.141592653589793 * frequency * sample++ / 48000));
+          if (injectCaptureFailure.load()) throw std::runtime_error("injected audio capture failure");
+          audio->captureFrame(livekit::AudioFrame(std::move(samples), 48000, 1, 480));
+          QThread::msleep(10);
+        }
+      } catch (...) {
+        {
+          std::lock_guard lock(failureMutex);
+          failure = std::current_exception();
+        }
+        running = false;
       }
     });
   }
@@ -174,7 +207,7 @@ struct ToneProbe {
   ~ToneProbe() { stream->close(); reader.join(); }
 };
 
-void roomSmoke() {
+void roomSmoke(bool injectCaptureFailure = false) {
   LiveKitVideoProvider provider; // Initializes SDK; outlives every SDK object.
   provider.setCameraEnabled(false);
   provider.setMicrophoneEnabled(false);
@@ -186,60 +219,79 @@ void roomSmoke() {
   Publisher a, b;
   a.start(roomName, "synthetic-red", true, 440);
   b.start(roomName, "synthetic-blue", false, 660);
-  require(waitUntil([&] { return provider.participants()->remoteCount() == 2 &&
+  const auto checkPublishers = [&] { a.checkHealth(); b.checkHealth(); };
+  const auto waitForMedia = [&](const std::function<bool()> &predicate) {
+    const bool result = waitUntil([&] { checkPublishers(); return predicate(); });
+    checkPublishers(); // Also reject a failure concurrent with a successful predicate.
+    return result;
+  };
+  require(waitForMedia([&] { return provider.participants()->remoteCount() == 2 &&
       hasPattern(provider.frameSource("synthetic-red"), true) &&
       hasPattern(provider.frameSource("synthetic-blue"), false); }), "independent remote patterns missing");
-  require(waitUntil([&] { return LiveKitVideoProviderTestAccess::audio(provider, "synthetic-red") &&
+  require(waitForMedia([&] { return LiveKitVideoProviderTestAccess::audio(provider, "synthetic-red") &&
       LiveKitVideoProviderTestAccess::audio(provider, "synthetic-blue"); }), "remote audio subscriptions missing");
   {
     ToneProbe red(LiveKitVideoProviderTestAccess::audio(provider, "synthetic-red"));
     ToneProbe blue(LiveKitVideoProviderTestAccess::audio(provider, "synthetic-blue"));
-    require(waitUntil([&] { return std::abs(red.frequency.load() - 440) < 100 &&
+    require(waitForMedia([&] { return std::abs(red.frequency.load() - 440) < 100 &&
         std::abs(blue.frequency.load() - 660) < 100; }), "independent decoded remote tones missing");
     std::cout << "remote patterns and decoded 440/660 Hz tones passed\n";
   }
+  if (injectCaptureFailure) {
+    // Fail after real media has already arrived: cached frames and buffered
+    // PCM must not let the next otherwise-successful media gate pass.
+    a.injectCaptureFailure = true;
+    require(waitUntil([&] { return !a.running.load(); }), "failure injection did not stop producer");
+    require(waitForMedia([&] { return hasPattern(provider.frameSource("synthetic-red"), true); }),
+            "failure injection lost the previously received pattern");
+    throw std::runtime_error("capture-failure injection was silently accepted by cached-media gate");
+  }
+  checkPublishers();
   const auto outputs = QMediaDevices::audioOutputs();
   if (!outputs.isEmpty()) {
-    require(waitUntil([&] { return LiveKitVideoProviderTestAccess::processed(provider, "synthetic-red") > 20000 &&
+    require(waitForMedia([&] { return LiveKitVideoProviderTestAccess::processed(provider, "synthetic-red") > 20000 &&
         LiveKitVideoProviderTestAccess::processed(provider, "synthetic-blue") > 20000; }),
         "production audio sinks did not both advance");
     // Exercise every available speaker plus a same-device reattachment. This
     // covers reattachment of both tracks even on hosts with one output device.
     for (const auto &output : outputs) {
+      checkPublishers();
       provider.switchSpeaker(output);
-      require(waitUntil([&] { return LiveKitVideoProviderTestAccess::processed(provider, "synthetic-red") > 20000 &&
+      require(waitForMedia([&] { return LiveKitVideoProviderTestAccess::processed(provider, "synthetic-red") > 20000 &&
           LiveKitVideoProviderTestAccess::processed(provider, "synthetic-blue") > 20000; }),
           "speaker switch did not resume both production sinks");
     }
     std::cout << "both production sinks advanced across " << outputs.size() << " speaker reattachments\n";
   } else std::cout << "DEVICE GATE UNAVAILABLE: no audio output; decoded tones verified\n";
+  checkPublishers();
   auto *survivor = provider.frameSource("synthetic-blue");
   a.videoTrack->mute();
   a.audioTrack->mute();
-  require(waitUntil([&] { const auto row = provider.participants()->participant("synthetic-red");
+  require(waitForMedia([&] { const auto row = provider.participants()->participant("synthetic-red");
     return row && !row->cameraEnabled && !row->microphoneEnabled; }), "mute states not received");
   require(provider.participants()->remoteCount() == 2 && provider.frameSource("synthetic-blue") == survivor,
           "muting changed presence or survivor source");
   a.videoTrack->unmute();
   a.audioTrack->unmute();
-  require(waitUntil([&] { const auto row = provider.participants()->participant("synthetic-red");
+  require(waitForMedia([&] { const auto row = provider.participants()->participant("synthetic-red");
     return row && row->cameraEnabled && row->microphoneEnabled && hasPattern(provider.frameSource("synthetic-red"), true);
   }), "unmute did not recover media");
   QPointer<VideoFrameSource> departed = provider.frameSource("synthetic-red");
   a.stop();
-  require(waitUntil([&] { return provider.participants()->remoteCount() == 1 && !departed; }),
+  require(waitForMedia([&] { return provider.participants()->remoteCount() == 1 && !departed; }),
           "departure did not destroy its reader/source");
   require(provider.frameSource("synthetic-blue") == survivor && hasPattern(survivor, false),
           "departure disturbed survivor");
   a.start(roomName, "synthetic-red", true, 440);
-  require(waitUntil([&] { return provider.participants()->remoteCount() == 2 &&
+  require(waitForMedia([&] { return provider.participants()->remoteCount() == 2 &&
       hasPattern(provider.frameSource("synthetic-red"), true); }), "same-identity rejoin did not recover");
   a.stop();
   b.stop();
-  require(waitUntil([&] { return provider.participants()->remoteCount() == 0; }), "all departures not received");
+  require(waitForMedia([&] { return provider.participants()->remoteCount() == 0; }), "all departures not received");
   provider.leave();
   require(provider.participants()->rowCount() == 0 && !provider.frameSource("synthetic-blue"),
           "provider leave retained media");
+  checkPublishers();
   std::cout << "join, mute/unmute, leave/rejoin, survivor identity and terminal teardown passed\n"
                "MANUAL GATE: audible mixing and physical camera/microphone remain unverified\n";
 }
@@ -354,8 +406,9 @@ int main(int argc, char **argv) {
   QApplication app(argc, argv);
   try {
     if (app.arguments().contains("--room")) roomSmoke();
+    else if (app.arguments().contains("--room-inject-capture-failure")) roomSmoke(true);
     else if (app.arguments().contains("--native-ui") && app.arguments().size() == 3) nativeUi(app.arguments().last());
-    else throw std::runtime_error("usage: --room (disposable loopback server only) | --native-ui <capture-directory>");
+    else throw std::runtime_error("usage: --room | --room-inject-capture-failure (disposable loopback server only) | --native-ui <capture-directory>");
     return 0;
   } catch (const std::exception &error) {
     std::cerr << "synthetic runtime gate failed: " << error.what() << '\n';

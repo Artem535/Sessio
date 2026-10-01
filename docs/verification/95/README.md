@@ -34,6 +34,17 @@ of the two available speaker reattachments. Remote mute/unmute, same-identity
 leave/rejoin, survivor source retention, departed source destruction and final
 provider teardown passed. See [room-smoke.log](room-smoke.log).
 
+Publisher worker exceptions are retained and checked on the owner thread
+before and after every media gate. A stopped producer can no longer let cached
+frames or previously buffered PCM satisfy subsequent gates. The explicit
+`--room-inject-capture-failure` regression injects an audio capture failure
+after real patterns/tones arrive; it must exit **1** with the publisher identity
+and original failure. The verified run did so and never printed the final
+lifecycle success message; see [capture-failure.log](capture-failure.log).
+The amended healthy `--room` run then exited **0** with all media/lifecycle
+assertions passing. No desktop/backend suites were repeated for this harness
+error-propagation correction.
+
 The prepared rootless Podman server was reachable over WebSocket but the host
 client failed ICE with `wait_pc_connection timed out`. Running the executable
 in the **existing server network namespace** resolved the local transport issue;
