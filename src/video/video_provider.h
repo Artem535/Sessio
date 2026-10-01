@@ -7,8 +7,6 @@
 #include "participant_model.h"
 #include "video_frame_source.h"
 
-class QWidget;
-
 namespace pcm::video {
 
 // Abstraction over the actual in-call media session: connecting to the
@@ -43,22 +41,6 @@ public:
   // never successfully joined.
   virtual void leave() = 0;
 
-  // The widget this provider renders the remote participant's video into,
-  // or nullptr if it has none (e.g. a test double). The provider owns the
-  // widget's lifetime; a UI embedding it may reparent it into its own
-  // layout, but must hand it back (setParent(nullptr)) rather than delete
-  // it when swapping it out, and must tolerate it being destroyed along
-  // with the provider (hold it through a QPointer).
-  virtual QWidget *remoteVideoWidget() { return nullptr; }
-
-  // The widget this provider renders the LOCAL camera preview into (the
-  // same capture that is being published, not a second parallel camera
-  // session), or nullptr if it has none (e.g. a test double). Same
-  // ownership contract as remoteVideoWidget(): the provider owns it: a UI
-  // embedding it may reparent it, but must hand it back
-  // (setParent(nullptr)) rather than delete it when swapping it out.
-  virtual QWidget *localVideoWidget() { return nullptr; }
-
   // Mutes/unmutes the corresponding locally published track. Never stops
   // physically capturing the device (matches the LiveKit SDK's own
   // documented mute() contract) — only whether the track is transmitted.
@@ -80,9 +62,6 @@ signals:
   void left();
   void participantJoined(QString id);
   void participantLeft(QString id);
-  // Transitional compatibility until production/UI migration; presence is model-driven.
-  void remoteParticipantConnected();
-  void remoteParticipantDisconnected();
   void reconnecting();
   void reconnected();
   // Terminal: the SDK has given up on the connection (whether or not it

@@ -12,6 +12,10 @@ qt_add_library(${TARGET_NAME} STATIC
         device_check_widget.cpp
         call_page.h
         call_page.cpp
+        participant_tile.h
+        participant_tile.cpp
+        call_layout_strategy.h
+        call_layout_strategy.cpp
         calls_page.h
         calls_page.cpp
 )

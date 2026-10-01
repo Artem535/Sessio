@@ -57,8 +57,8 @@ void connectSession(VideoSession &session, FakeVideoProvider *provider) {
   session.join("wss://x", "token");
   waitForState(session, stateSpy, VideoSessionState::Joining);
   provider->simulateJoined();
-  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
-  provider->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, VideoSessionState::WaitingForParticipants);
+  provider->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, VideoSessionState::Connected);
 }
 
@@ -77,6 +77,232 @@ TEST(CallPageTest, StartsOnDeviceCheckScreen) {
   CallPage page(&deviceManager);
   EXPECT_NE(page.findChild<QWidget *>("deviceCheckWidget"), nullptr);
   EXPECT_EQ(page.findChild<QWidget *>("connectedView"), nullptr);
+}
+
+TEST(CallPageTest, GroupStageCreatesEveryIdentityAndRetainsSurvivorOnDeparture) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateParticipantJoined({"local", "Me", "client", true, true, false});
+  provider->simulateParticipantJoined({"first", "First"});
+  provider->simulateParticipantJoined({"second", "<b>Second</b>"});
+  QPointer<QWidget> survivor = page.findChild<QWidget *>("participantTile_second");
+  ASSERT_NE(survivor, nullptr);
+  EXPECT_NE(page.findChild<QWidget *>("participantTile_local"), nullptr);
+  EXPECT_NE(page.findChild<QWidget *>("participantTile_first"), nullptr);
+  resizeAndDeliverEvent(page.findChild<QWidget *>("videoStage"), QSize(1280, 720));
+  EXPECT_GT(page.findChild<QWidget *>("participantTile_local")->y(), survivor->y());
+  provider->simulateParticipantLeft("first");
+  EXPECT_EQ(page.findChild<QWidget *>("participantTile_second"), survivor.data());
+  EXPECT_EQ(page.findChild<QWidget *>("participantTile_first"), nullptr);
+}
+
+TEST(CallPageTest, WaitingStageKeepsLocalPreviewAndLeaveVisible) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateParticipantJoined({"local", "Me", "client", true});
+  page.onSessionStateChanged(VideoSessionState::WaitingForParticipants);
+  auto *tile = page.findChild<QWidget *>("participantTile_local");
+  ASSERT_NE(tile, nullptr);
+  EXPECT_TRUE(tile->isVisibleTo(&page));
+  EXPECT_TRUE(page.findChild<QPushButton *>("leaveButton")->isVisibleTo(&page));
+  auto *waiting = page.findChild<QLabel *>("waitingLabel");
+  ASSERT_NE(waiting, nullptr);
+  EXPECT_TRUE(waiting->isVisibleTo(&page));
+}
+
+TEST(CallPageTest, TwoRemotesAndLocalHaveEqualTilesAndCenteredLastRow) {
+  pcm::video::detail::VideoStage stage;
+  auto *local = new pcm::video::ParticipantTile({"local", "Me", "", true}, &stage);
+  auto *first = new pcm::video::ParticipantTile({"first"}, &stage);
+  auto *second = new pcm::video::ParticipantTile({"second"}, &stage);
+  stage.setTiles({local, first, second});
+  resizeAndDeliverEvent(&stage, QSize(1280, 720));
+  EXPECT_EQ(local->size(), first->size());
+  EXPECT_EQ(second->size(), first->size());
+  EXPECT_EQ(local->parentWidget(), first->parentWidget());
+  EXPECT_NEAR(second->geometry().center().x(), second->parentWidget()->rect().center().x(), 1);
+  EXPECT_GT(second->y(), first->y());
+}
+
+TEST(CallPageTest, OneRemoteAndLocalUsePipAboveControlBar) {
+  pcm::video::detail::VideoStage stage;
+  auto *local = new pcm::video::ParticipantTile({"local", "Me", "", true}, &stage);
+  auto *remote = new pcm::video::ParticipantTile({"remote"}, &stage);
+  auto *bar = new QWidget(&stage);
+  bar->resize(300, 48);
+  stage.setControlBarWidget(bar);
+  stage.setTiles({local, remote});
+  resizeAndDeliverEvent(&stage, QSize(1280, 720));
+  EXPECT_EQ(local->parentWidget(), &stage);
+  EXPECT_LT(local->width(), remote->width());
+  EXPECT_LT(local->geometry().bottom(), bar->geometry().top());
+}
+
+TEST(CallPageTest, ReturningFromGroupToPipCentersRemoteInItsHost) {
+  pcm::video::detail::VideoStage stage;
+  QVector<pcm::video::ParticipantTile *> tiles;
+  tiles.append(new pcm::video::ParticipantTile({"local", "Me", "", true}, &stage));
+  for (int i = 1; i < 10; ++i)
+    tiles.append(new pcm::video::ParticipantTile({QString::number(i)}, &stage));
+  stage.setTiles(tiles);
+  resizeAndDeliverEvent(&stage, QSize(1280, 720));
+  stage.setTiles({tiles[0], tiles[1]});
+  EXPECT_NEAR(tiles[1]->geometry().center().x(), tiles[1]->parentWidget()->rect().center().x(), 1);
+  EXPECT_NEAR(tiles[1]->geometry().center().y(), tiles[1]->parentWidget()->rect().center().y(), 1);
+}
+
+TEST(CallPageTest, SixAndTenTilesStayVisibleInsideStageAndClearOfControls) {
+  for (int count : {6, 10}) {
+    pcm::video::detail::VideoStage stage;
+    auto *bar = new QWidget(&stage);
+    bar->resize(360, 48);
+    stage.setControlBarWidget(bar);
+    auto *notes = new QWidget(&stage);
+    stage.setNotesToggleWidget(notes);
+    QVector<pcm::video::ParticipantTile *> tiles;
+    for (int i = 0; i < count; ++i)
+      tiles.append(new pcm::video::ParticipantTile({QString::number(i)}, &stage));
+    stage.setTiles(tiles);
+    for (const QSize size : {QSize(1280, 720), QSize(480, 900)}) {
+      resizeAndDeliverEvent(&stage, size);
+      for (auto *tile : tiles) {
+        const QRect geometry(tile->mapTo(&stage, QPoint()), tile->size());
+        EXPECT_TRUE(stage.rect().contains(geometry));
+        EXPECT_FALSE(geometry.intersects(bar->geometry()));
+        EXPECT_FALSE(geometry.intersects(notes->geometry()));
+        EXPECT_TRUE(tile->isVisibleTo(&stage));
+        EXPECT_EQ(tile->size(), tiles.first()->size());
+      }
+    }
+  }
+}
+
+TEST(CallPageTest, SessionSwapDeletionAndModelResetDestroyOldTiles) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *firstProvider = new FakeVideoProvider();
+  VideoSession first(firstProvider);
+  page.attachSession(&first);
+  firstProvider->simulateParticipantJoined({"first"});
+  QPointer<QWidget> old = page.findChild<QWidget *>("participantTile_first");
+  ASSERT_NE(old, nullptr);
+  auto *secondProvider = new FakeVideoProvider();
+  auto second = std::make_unique<VideoSession>(secondProvider);
+  page.attachSession(second.get());
+  EXPECT_TRUE(old.isNull());
+  firstProvider->simulateParticipantJoined({"stale"});
+  EXPECT_EQ(page.findChild<QWidget *>("participantTile_stale"), nullptr);
+  secondProvider->simulateParticipantJoined({"second"});
+  QPointer<QWidget> current = page.findChild<QWidget *>("participantTile_second");
+  ASSERT_NE(current, nullptr);
+  secondProvider->participants()->clear();
+  EXPECT_TRUE(current.isNull());
+  secondProvider->simulateParticipantJoined({"second"});
+  current = page.findChild<QWidget *>("participantTile_second");
+  second.reset();
+  EXPECT_TRUE(current.isNull());
+  page.attachSession(nullptr);
+}
+
+TEST(CallPageTest, DisplayNameIsPlainTextAndCameraOffSurvivesSourceDeletion) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateParticipantJoined({"remote", "<b>Remote</b>", "client", false, true, false});
+  auto *tile = page.findChild<QWidget *>("participantTile_remote");
+  ASSERT_NE(tile, nullptr);
+  auto *label = tile->findChild<QLabel *>("participantName");
+  EXPECT_EQ(label->textFormat(), Qt::PlainText);
+  EXPECT_EQ(label->text(), "<b>Remote</b>");
+  auto *placeholder = tile->findChild<QLabel *>("cameraOffPlaceholder");
+  EXPECT_FALSE(placeholder->isHidden());
+  delete provider->mSources.take("remote");
+  EXPECT_FALSE(placeholder->isHidden());
+  provider->simulateParticipantJoined({"remote", "Renamed", "practitioner", false, true, false});
+  EXPECT_EQ(page.findChild<QWidget *>("participantTile_remote"), tile);
+  EXPECT_EQ(label->text(), "Renamed");
+}
+
+TEST(CallPageTest, SourceFramesClearAndDestructionUpdatePlaceholderWithoutRecreatingTile) {
+  pcm::video::ParticipantTile tile({"remote"});
+  auto source = std::make_unique<pcm::video::VideoFrameSource>();
+  tile.attachSource(source.get());
+  auto *placeholder = tile.findChild<QLabel *>("cameraOffPlaceholder");
+  auto *renderer = tile.findChild<QWidget *>("participantRenderer");
+  ASSERT_NE(placeholder, nullptr);
+  EXPECT_FALSE(placeholder->isHidden());
+  QImage frame(16, 9, QImage::Format_RGBA8888);
+  frame.fill(Qt::red);
+  source->submitFrame(frame);
+  QApplication::processEvents();
+  EXPECT_TRUE(placeholder->isHidden());
+  EXPECT_FALSE(renderer->isHidden());
+  source->clear();
+  QApplication::processEvents();
+  EXPECT_FALSE(placeholder->isHidden());
+  source->submitFrame(frame);
+  QApplication::processEvents();
+  EXPECT_TRUE(placeholder->isHidden());
+  source.reset();
+  EXPECT_FALSE(placeholder->isHidden());
+  EXPECT_TRUE(renderer->isHidden());
+}
+
+TEST(CallPageTest, RefusedMediaChangeRestoresProviderStateAndLabels) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->mRejectMediaChanges = true;
+  auto *mic = page.findChild<QToolButton *>("microphoneToggleButton");
+  auto *camera = page.findChild<QToolButton *>("cameraToggleButton");
+  mic->setChecked(false);
+  camera->setChecked(false);
+  EXPECT_TRUE(mic->isChecked());
+  EXPECT_TRUE(camera->isChecked());
+  EXPECT_EQ(mic->toolTip(), "Mute microphone");
+  EXPECT_EQ(camera->toolTip(), "Turn off camera");
+  EXPECT_EQ(provider->mSetMicrophoneEnabledCallCount, 1);
+  EXPECT_EQ(provider->mSetCameraEnabledCallCount, 1);
+}
+
+TEST(CallPageTest, NotesPanelResizeRelayoutsEveryParticipantWithoutOverlap) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  connectSession(session, provider);
+  page.setSidePanelToggleVisible(true);
+  auto *panel = new QWidget;
+  panel->setFixedWidth(280);
+  page.setSidePanelWidget(panel);
+  for (int i = 0; i < 6; ++i)
+    provider->simulateParticipantJoined({QString::number(i)});
+  page.resize(1280, 720);
+  page.show();
+  QApplication::processEvents();
+  auto *stage = page.findChild<QWidget *>("videoStage");
+  const int oldWidth = stage->width();
+  page.setSidePanelExpandedByDefault(true);
+  QApplication::processEvents();
+  EXPECT_LT(stage->width(), oldWidth);
+  auto *bar = page.findChild<QWidget *>("controlBar");
+  for (int i = 0; i < 6; ++i) {
+    auto *tile = page.findChild<QWidget *>("participantTile_" + QString::number(i));
+    const QRect geometry(tile->mapTo(stage, QPoint()), tile->size());
+    EXPECT_TRUE(stage->rect().contains(geometry));
+    EXPECT_FALSE(geometry.intersects(bar->geometry()));
+  }
 }
 
 TEST(CallPageTest, ControlBarIsAChildOfVideoStageNotConnectedView) {
@@ -115,8 +341,8 @@ TEST(CallPageTest, ConnectedStateShowsConnectedViewWithLeaveButton) {
   session.join("wss://x", "token");
   waitForState(session, stateSpy, VideoSessionState::Joining);
   provider->simulateJoined();
-  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
-  provider->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, VideoSessionState::WaitingForParticipants);
+  provider->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, VideoSessionState::Connected);
 
   EXPECT_NE(page.findChild<QWidget *>("connectedView"), nullptr);
@@ -140,7 +366,7 @@ TEST(CallPageTest, EndedStateEmitsCallEnded) {
   session.join("wss://x", "token");
   waitForState(session, stateSpy, VideoSessionState::Joining);
   provider->simulateJoined();
-  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
+  waitForState(session, stateSpy, VideoSessionState::WaitingForParticipants);
   session.leave();
   waitForState(session, stateSpy, VideoSessionState::Leaving);
   provider->simulateLeft();
@@ -183,8 +409,8 @@ TEST(CallPageTest, ReconnectFailureReasonIsShownOnEndedScreen) {
   session.join("wss://x", "token");
   waitForState(session, stateSpy, VideoSessionState::Joining);
   provider->simulateJoined();
-  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
-  provider->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, VideoSessionState::WaitingForParticipants);
+  provider->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, VideoSessionState::Connected);
   provider->simulateReconnecting();
   waitForState(session, stateSpy, VideoSessionState::Reconnecting);
@@ -221,7 +447,7 @@ TEST(CallPageTest, NormalLeaveAfterEarlierFailureShowsNoStaleReason) {
   session.join("wss://x", "token");
   waitForState(session, stateSpy, VideoSessionState::Joining);
   provider->simulateJoined();
-  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
+  waitForState(session, stateSpy, VideoSessionState::WaitingForParticipants);
   session.leave();
   waitForState(session, stateSpy, VideoSessionState::Leaving);
   provider->simulateLeft();
@@ -229,121 +455,6 @@ TEST(CallPageTest, NormalLeaveAfterEarlierFailureShowsNoStaleReason) {
 
   EXPECT_TRUE(reasonLabel->isHidden());
   EXPECT_TRUE(reasonLabel->text().isEmpty());
-}
-
-// Fixwave group 1, bug 2: CallPage used to show only its own blank
-// renderer, while the provider attached the real remote track to a
-// different, never-embedded widget.
-TEST(CallPageTest, EmbedsProviderRemoteVideoWidgetInPlaceOfPlaceholder) {
-  pcm::video::DeviceManager deviceManager;
-  CallPage page(&deviceManager);
-  auto *placeholder = page.findChild<QWidget *>("remoteVideoPlaceholder");
-  ASSERT_NE(placeholder, nullptr);
-  EXPECT_TRUE(placeholder->isVisibleTo(placeholder->parentWidget()));
-
-  auto *provider = new FakeVideoProvider();
-  QPointer<QLabel> remoteVideo = new QLabel("remote video"); // unparented, like LiveKit's
-  provider->mRemoteVideoWidget = remoteVideo;
-  VideoSession session(provider);
-  page.attachSession(&session);
-
-  auto *videoStage = page.findChild<QWidget *>("videoStage");
-  ASSERT_NE(videoStage, nullptr);
-  // Widgets default to Qt's un-laid-out geometry (0,0,100,30) until
-  // actually resized; give VideoStage a real size so layoutChildren()'s
-  // setGeometry(rect()) call is the thing actually being verified below,
-  // not two widgets that both happen to still be at the same default.
-  resizeAndDeliverEvent(videoStage, QSize(800, 600));
-
-  EXPECT_TRUE(page.isAncestorOf(remoteVideo));
-  EXPECT_EQ(remoteVideo->parentWidget(), videoStage);
-  EXPECT_TRUE(remoteVideo->isVisibleTo(videoStage));
-  EXPECT_FALSE(placeholder->isVisibleTo(videoStage));
-  // It takes the placeholder's slot: VideoStage stretches exactly one
-  // remote widget to fill it at a time.
-  EXPECT_EQ(remoteVideo->geometry(), videoStage->rect());
-
-  // The widget is only borrowed: CallPage never deletes it. (Here the test
-  // plays the provider's role and releases it.)
-  delete remoteVideo.data();
-}
-
-TEST(CallPageTest, KeepsPlaceholderWhenProviderHasNoRemoteVideoWidget) {
-  pcm::video::DeviceManager deviceManager;
-  CallPage page(&deviceManager);
-  auto *provider = new FakeVideoProvider(); // remoteVideoWidget() == nullptr
-  VideoSession session(provider);
-  page.attachSession(&session);
-
-  auto *placeholder = page.findChild<QWidget *>("remoteVideoPlaceholder");
-  auto *videoStage = page.findChild<QWidget *>("videoStage");
-  ASSERT_NE(placeholder, nullptr);
-  ASSERT_NE(videoStage, nullptr);
-  // See EmbedsProviderRemoteVideoWidgetInPlaceOfPlaceholder for why this
-  // resize is needed before the geometry assertion below means anything.
-  resizeAndDeliverEvent(videoStage, QSize(800, 600));
-  EXPECT_TRUE(placeholder->isVisibleTo(videoStage));
-  EXPECT_EQ(placeholder->parentWidget(), videoStage);
-  EXPECT_EQ(placeholder->geometry(), videoStage->rect());
-}
-
-TEST(CallPageTest, ReattachingHandsBorrowedRemoteVideoWidgetBackToItsProvider) {
-  pcm::video::DeviceManager deviceManager;
-  CallPage page(&deviceManager);
-  auto *placeholder = page.findChild<QWidget *>("remoteVideoPlaceholder");
-  auto *videoStage = page.findChild<QWidget *>("videoStage");
-  ASSERT_NE(videoStage, nullptr);
-
-  auto *firstProvider = new FakeVideoProvider();
-  QPointer<QLabel> firstVideo = new QLabel("first");
-  firstProvider->mRemoteVideoWidget = firstVideo;
-  VideoSession firstSession(firstProvider);
-  page.attachSession(&firstSession);
-  ASSERT_TRUE(page.isAncestorOf(firstVideo));
-
-  auto *secondProvider = new FakeVideoProvider();
-  VideoSession secondSession(secondProvider);
-  page.attachSession(&secondSession);
-  ASSERT_FALSE(firstVideo.isNull());
-  EXPECT_EQ(firstVideo->parent(), nullptr);
-  EXPECT_TRUE(placeholder->isVisibleTo(videoStage));
-  EXPECT_EQ(placeholder->parentWidget(), videoStage);
-  delete firstVideo.data();
-}
-
-TEST(CallPageTest, ToleratesEmbeddedRemoteVideoWidgetDestroyedWithItsProvider) {
-  // Mirrors CallsPage::startJoin(): the old session (and with it the old
-  // provider and its remote-video widget) is destroyed while that widget is
-  // still embedded, and only then is the new session attached.
-  pcm::video::DeviceManager deviceManager;
-  CallPage page(&deviceManager);
-  auto *placeholder = page.findChild<QWidget *>("remoteVideoPlaceholder");
-  auto *videoStage = page.findChild<QWidget *>("videoStage");
-  ASSERT_NE(videoStage, nullptr);
-  // See EmbedsProviderRemoteVideoWidgetInPlaceOfPlaceholder for why this
-  // resize is needed before the geometry assertion below means anything.
-  resizeAndDeliverEvent(videoStage, QSize(800, 600));
-
-  auto *oldProvider = new FakeVideoProvider();
-  QPointer<QLabel> oldVideo = new QLabel("old");
-  oldProvider->mRemoteVideoWidget = oldVideo;
-  auto oldSession = std::make_unique<VideoSession>(oldProvider);
-  page.attachSession(oldSession.get());
-  ASSERT_TRUE(page.isAncestorOf(oldVideo));
-
-  // What LiveKitVideoProvider's destructor does to its embedded renderer.
-  delete oldVideo.data();
-  oldSession.reset();
-
-  auto *newProvider = new FakeVideoProvider();
-  QPointer<QLabel> newVideo = new QLabel("new");
-  newProvider->mRemoteVideoWidget = newVideo;
-  VideoSession newSession(newProvider);
-  page.attachSession(&newSession);
-  EXPECT_EQ(newVideo->parentWidget(), videoStage);
-  EXPECT_EQ(newVideo->geometry(), videoStage->rect());
-  EXPECT_FALSE(placeholder->isVisibleTo(videoStage));
-  delete newVideo.data();
 }
 
 TEST(CallPageTest, VideoStagePositionsControlBarCenteredAtBottom) {
@@ -441,41 +552,6 @@ TEST(CallPageTest, NotesToggleButtonPaintsAnOpaqueBackgroundThatDiffersWhenCheck
   EXPECT_NE(checked, unchecked);
 }
 
-// The design puts the control bar and notes toggle above the self-preview:
-// on a narrow stage the 160x90 preview would otherwise cover the bar's right
-// end (the Leave button). Qt stacks later children above earlier ones.
-TEST(CallPageTest, ControlBarAndNotesToggleStackAboveLocalPreviewOnNarrowStage) {
-  pcm::video::DeviceManager deviceManager;
-  CallPage page(&deviceManager);
-  auto *provider = new FakeVideoProvider();
-  QPointer<QLabel> localPreview = new QLabel("local");
-  provider->mLocalVideoWidget = localPreview;
-  VideoSession session(provider);
-  page.attachSession(&session);
-  page.setSidePanelToggleVisible(true);
-  connectSession(session, provider);
-
-  auto *videoStage = page.findChild<QWidget *>("videoStage");
-  ASSERT_NE(videoStage, nullptr);
-  resizeAndDeliverEvent(videoStage, QSize(640, 360));
-  auto *controlBar = page.findChild<QWidget *>("controlBar");
-  auto *notesToggle = page.findChild<QToolButton *>("notesToggleButton");
-  ASSERT_NE(controlBar, nullptr);
-  ASSERT_NE(notesToggle, nullptr);
-  ASSERT_EQ(localPreview->parentWidget(), videoStage);
-
-  const QObjectList children = videoStage->children();
-  const auto previewIndex = children.indexOf(localPreview.data());
-  EXPECT_GT(children.indexOf(controlBar), previewIndex);
-  EXPECT_GT(children.indexOf(notesToggle), previewIndex);
-  delete localPreview.data();
-}
-
-// Fixwave group 5, bug 1: a live call dropping (VideoProvider::connectionLost())
-// used to bounce the user straight to the ended screen with zero explanation
-// — the reason string was dropped on the floor. Reuses the exact same
-// onSessionFailureReason()/mEndedReasonLabel mechanism as joinFailed()/
-// reconnectFailed(), proven by the two tests above.
 TEST(CallPageTest, ConnectionLostReasonIsShownOnEndedScreen) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);
@@ -487,8 +563,8 @@ TEST(CallPageTest, ConnectionLostReasonIsShownOnEndedScreen) {
   session.join("wss://x", "token");
   waitForState(session, stateSpy, VideoSessionState::Joining);
   provider->simulateJoined();
-  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
-  provider->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, VideoSessionState::WaitingForParticipants);
+  provider->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, VideoSessionState::Connected);
 
   provider->simulateConnectionLost("room ended");
@@ -516,8 +592,8 @@ TEST(CallPageTest, MediaErrorShowsBannerWithoutEndingCallOrTouchingEndedReason) 
   session.join("wss://x", "token");
   waitForState(session, stateSpy, VideoSessionState::Joining);
   provider->simulateJoined();
-  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
-  provider->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, VideoSessionState::WaitingForParticipants);
+  provider->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, VideoSessionState::Connected);
 
   auto *banner = page.findChild<QLabel *>("mediaErrorBanner");
@@ -537,11 +613,11 @@ TEST(CallPageTest, MediaErrorShowsBannerWithoutEndingCallOrTouchingEndedReason) 
 }
 
 // Fixwave userfeedback group A, bug 2: VideoSessionState::Joining and
-// VideoSessionState::WaitingForClient both used to route to mConnectingScreen
+// VideoSessionState::WaitingForParticipants both used to route to mConnectingScreen
 // with the exact same static "Connecting..." text, leaving a user who had
 // already joined and was waiting on the other participant indistinguishable
 // from someone still connecting.
-TEST(CallPageTest, WaitingForClientShowsDistinctMessageFromJoining) {
+TEST(CallPageTest, WaitingForParticipantsShowsDistinctMessageFromJoining) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);
   auto *provider = new FakeVideoProvider();
@@ -557,8 +633,9 @@ TEST(CallPageTest, WaitingForClientShowsDistinctMessageFromJoining) {
   EXPECT_EQ(connectingLabel->text(), QStringLiteral("Connecting..."));
 
   provider->simulateJoined();
-  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
-  EXPECT_EQ(connectingLabel->text(), QStringLiteral("Waiting for the other participant to join..."));
+  waitForState(session, stateSpy, VideoSessionState::WaitingForParticipants);
+  EXPECT_EQ(page.findChild<QLabel *>("waitingLabel")->text(), QStringLiteral("Waiting for the other participant to join..."));
+  EXPECT_TRUE(page.findChild<QLabel *>("waitingLabel")->isVisibleTo(&page));
 }
 
 TEST(CallPageTest, SidePanelToggleHiddenByDefaultUntilMadeVisible) {
@@ -595,53 +672,6 @@ TEST(CallPageTest, ReconnectingBannerHasASpinner) {
   CallPage page(&deviceManager);
   auto *spinner = page.findChild<pcm::widgets::BusySpinner *>("reconnectingSpinner");
   ASSERT_NE(spinner, nullptr);
-}
-
-TEST(CallPageTest, ShowsLocalPreviewWhenProviderSuppliesOne) {
-  pcm::video::DeviceManager deviceManager;
-  CallPage page(&deviceManager);
-  auto *provider = new FakeVideoProvider();
-  QPointer<QLabel> localPreview = new QLabel("local");
-  provider->mLocalVideoWidget = localPreview;
-  VideoSession session(provider);
-  page.attachSession(&session);
-
-  EXPECT_TRUE(page.isAncestorOf(localPreview));
-  EXPECT_TRUE(localPreview->isVisibleTo(localPreview->parentWidget()));
-  delete localPreview.data();
-}
-
-TEST(CallPageTest, NoLocalPreviewWidgetWhenProviderHasNone) {
-  pcm::video::DeviceManager deviceManager;
-  CallPage page(&deviceManager);
-  auto *provider = new FakeVideoProvider(); // localVideoWidget() == nullptr
-  VideoSession session(provider);
-  page.attachSession(&session);
-
-  auto *videoStage = page.findChild<QWidget *>("videoStage");
-  ASSERT_NE(videoStage, nullptr);
-  // No crash and no orphaned preview child beyond the remote-video slot.
-  EXPECT_EQ(videoStage->findChildren<QLabel *>().size(), 0);
-}
-
-TEST(CallPageTest, SwappingProviderHandsLocalPreviewBackUnparented) {
-  pcm::video::DeviceManager deviceManager;
-  CallPage page(&deviceManager);
-
-  auto *firstProvider = new FakeVideoProvider();
-  QPointer<QLabel> firstPreview = new QLabel("first-local");
-  firstProvider->mLocalVideoWidget = firstPreview;
-  VideoSession firstSession(firstProvider);
-  page.attachSession(&firstSession);
-  ASSERT_TRUE(page.isAncestorOf(firstPreview));
-
-  auto *secondProvider = new FakeVideoProvider(); // no local preview
-  VideoSession secondSession(secondProvider);
-  page.attachSession(&secondSession);
-
-  ASSERT_FALSE(firstPreview.isNull());
-  EXPECT_EQ(firstPreview->parent(), nullptr);
-  delete firstPreview.data();
 }
 
 TEST(CallPageTest, MicrophoneToggleButtonCallsProviderAndStartsEnabled) {
@@ -741,8 +771,8 @@ TEST(CallPageTest, FullscreenToggleButtonHasAccessibleLabelThatUpdatesOnToggle) 
   session.join("wss://x", "token");
   waitForState(session, stateSpy, VideoSessionState::Joining);
   provider->simulateJoined();
-  waitForState(session, stateSpy, VideoSessionState::WaitingForClient);
-  provider->simulateRemoteParticipantConnected();
+  waitForState(session, stateSpy, VideoSessionState::WaitingForParticipants);
+  provider->simulateParticipantJoined({"remote"});
   waitForState(session, stateSpy, VideoSessionState::Connected);
 
   auto *fullscreenButton = page.findChild<QToolButton *>("fullscreenToggleButton");

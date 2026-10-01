@@ -1,6 +1,8 @@
 #pragma once
 
 #include "video_provider.h"
+#include <QHash>
+#include <QPointer>
 
 namespace pcm::video::test {
 
@@ -22,20 +24,16 @@ public:
     ++mLeaveCallCount;
   }
 
-  // nullptr unless a test sets mRemoteVideoWidget (the base default), so
-  // existing tests keep exercising CallPage's placeholder path.
-  QWidget *remoteVideoWidget() override { return mRemoteVideoWidget; }
-
-  // nullptr unless a test sets mLocalVideoWidget (the base default), same
-  // rationale as remoteVideoWidget() above.
-  QWidget *localVideoWidget() override { return mLocalVideoWidget; }
+  VideoFrameSource *frameSource(const QString &id) override { return mSources.value(id); }
 
   void setMicrophoneEnabled(bool enabled) override {
-    mMicrophoneEnabled = enabled;
+    if (!mRejectMediaChanges)
+      mMicrophoneEnabled = enabled;
     ++mSetMicrophoneEnabledCallCount;
   }
   void setCameraEnabled(bool enabled) override {
-    mCameraEnabled = enabled;
+    if (!mRejectMediaChanges)
+      mCameraEnabled = enabled;
     ++mSetCameraEnabledCallCount;
   }
   [[nodiscard]] bool isMicrophoneEnabled() const override { return mMicrophoneEnabled; }
@@ -59,9 +57,11 @@ public:
   // would once its own SDK callbacks fire.
   void simulateJoined() { emit joined(); }
   void simulateJoinFailed(const QString &reason) { emit joinFailed(reason); }
-  void simulateLeft() { emit left(); }
+  void simulateLeft() { participants()->clear(); qDeleteAll(mSources); mSources.clear(); emit left(); }
   void simulateParticipantJoined(const Participant &participant) {
     const bool exists = participants()->participant(participant.id).has_value();
+    if (!mSources.value(participant.id))
+      mSources.insert(participant.id, new VideoFrameSource(this));
     participants()->upsert(participant);
     if (!exists)
       emit participantJoined(participant.id);
@@ -70,15 +70,8 @@ public:
     if (!participants()->participant(id))
       return;
     participants()->remove(id);
+    delete mSources.take(id);
     emit participantLeft(id);
-  }
-  void simulateRemoteParticipantConnected() {
-    simulateParticipantJoined({QStringLiteral("remote")});
-    emit remoteParticipantConnected();
-  }
-  void simulateRemoteParticipantDisconnected() {
-    simulateParticipantLeft(QStringLiteral("remote"));
-    emit remoteParticipantDisconnected();
   }
   void simulateReconnecting() { emit reconnecting(); }
   void simulateReconnected() { emit reconnected(); }
@@ -89,9 +82,8 @@ public:
   QString mLastJoinToken;
   int mJoinCallCount{0};
   int mLeaveCallCount{0};
-  // Not owned: the test decides the widget's lifetime.
-  QWidget *mRemoteVideoWidget{nullptr};
-  QWidget *mLocalVideoWidget{nullptr};
+  QHash<QString, QPointer<VideoFrameSource>> mSources;
+  bool mRejectMediaChanges{false};
   bool mMicrophoneEnabled{true};
   bool mCameraEnabled{true};
   int mSetMicrophoneEnabledCallCount{0};

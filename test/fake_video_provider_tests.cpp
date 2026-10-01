@@ -12,7 +12,7 @@ TEST(FakeVideoProviderTest, DefaultsToMicrophoneAndCameraEnabled) {
   FakeVideoProvider provider;
   EXPECT_TRUE(provider.isMicrophoneEnabled());
   EXPECT_TRUE(provider.isCameraEnabled());
-  EXPECT_EQ(provider.localVideoWidget(), nullptr);
+  EXPECT_EQ(provider.frameSource("missing"), nullptr);
 }
 
 TEST(FakeVideoProviderTest, TracksMicrophoneAndCameraToggleCalls) {
@@ -41,18 +41,21 @@ TEST(FakeVideoProviderTest, TracksDeviceSwitchCalls) {
   EXPECT_EQ(provider.mSwitchSpeakerCallCount, 1);
 }
 
-TEST(FakeVideoProviderTest, ExposesTestSuppliedLocalVideoWidget) {
+TEST(FakeVideoProviderTest, ExposesStableIndependentParticipantSources) {
   FakeVideoProvider provider;
-  QLabel widget;
-  provider.mLocalVideoWidget = &widget;
-  EXPECT_EQ(provider.localVideoWidget(), &widget);
+  provider.simulateParticipantJoined({"local", "Me", "", true});
+  provider.simulateParticipantJoined({"remote"});
+  auto *first = provider.frameSource("remote");
+  ASSERT_NE(first, nullptr);
+  EXPECT_NE(first, provider.frameSource("local"));
+  provider.simulateParticipantJoined({"remote", "Updated"});
+  EXPECT_EQ(first, provider.frameSource("remote"));
+  QPointer<pcm::video::VideoFrameSource> source(first);
+  provider.simulateParticipantLeft("remote");
+  EXPECT_TRUE(source.isNull());
 }
 
 int main(int argc, char **argv) {
-  // QApplication is required here despite no widget ever being shown:
-  // ExposesTestSuppliedLocalVideoWidget constructs a QLabel, and Qt aborts
-  // ("Must construct a QApplication before a QWidget") on any QWidget
-  // construction without one — matches call_page_tests.cpp's own main().
   QApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

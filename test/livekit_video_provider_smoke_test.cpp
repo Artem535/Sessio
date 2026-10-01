@@ -207,7 +207,6 @@ int main(int argc, char *argv[]) {
   if (!participantReplacement || !videoHistory || !audioHistory) return 1;
   {
     pcm::video::LiveKitVideoProvider provider;
-    if (provider.remoteVideoWidget() || provider.localVideoWidget()) return 1;
     if (!pcm::video::LiveKitVideoProviderTestAccess::run(provider)) return 1;
     provider.setMicrophoneEnabled(false);
     provider.setCameraEnabled(false);

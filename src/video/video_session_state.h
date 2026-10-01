@@ -10,7 +10,6 @@ enum class VideoSessionState {
   PrejoinCheck,
   Joining,
   WaitingForParticipants,
-  WaitingForClient = WaitingForParticipants, // Compatibility until UI migration.
   Connected,
   Reconnecting,
   Leaving,

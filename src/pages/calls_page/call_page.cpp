@@ -1,6 +1,8 @@
 #include "call_page.h"
 
 #include "call_control_icons.h"
+#include "call_layout_strategy.h"
+#include <algorithm>
 
 #include <QAudioDevice>
 #include <QCameraDevice>
@@ -32,30 +34,18 @@ constexpr int kMediaErrorBannerAutoHideMs = 6000;
 
 namespace pcm::video::detail {
 
-namespace {
-constexpr int kLocalPreviewWidth = 160;
-constexpr int kLocalPreviewHeight = 90;
-constexpr int kLocalPreviewMargin = 12;
-} // namespace
+VideoStage::VideoStage(QWidget *parent) : QWidget(parent), mTileHost(new QWidget(this)),
+    mTileGrid(new QGridLayout(mTileHost)) {
+  mTileHost->setObjectName("participantTileHost");
+  mTileGrid->setContentsMargins(0, 0, 0, 0);
+  mTileGrid->setSpacing(8);
+}
 
-VideoStage::VideoStage(QWidget *parent) : QWidget(parent) {}
-
-void VideoStage::setRemoteWidget(QWidget *widget) {
-  mRemoteWidget = widget;
+void VideoStage::setTiles(const QVector<ParticipantTile *> &tiles) {
+  mTiles = tiles;
   layoutChildren();
 }
 
-void VideoStage::setLocalPreviewWidget(QWidget *widget) {
-  mLocalPreviewWidget = widget;
-  layoutChildren();
-}
-
-// Unlike setRemoteWidget()/setLocalPreviewWidget() above (whose callers in
-// CallPage reparent the borrowed provider widget themselves before handing
-// it over), the control-bar and notes-toggle widgets set here are owned and
-// constructed by CallPage/CallsPage as plain child widgets with no separate
-// reparenting step, so VideoStage does that reparenting itself and hands a
-// previous widget back unparented (rather than deleting it) when swapped.
 void VideoStage::setControlBarWidget(QWidget *widget) {
   if (mControlBarWidget == widget) {
     return;
@@ -92,21 +82,57 @@ void VideoStage::resizeEvent(QResizeEvent *event) {
 }
 
 void VideoStage::layoutChildren() {
-  if (mRemoteWidget) {
-    mRemoteWidget->setGeometry(rect());
+  while (auto *item = mTileGrid->takeAt(0))
+    delete item;
+  for (int column = 0; column < mTileGrid->columnCount(); ++column) {
+    mTileGrid->setColumnMinimumWidth(column, 0);
+    mTileGrid->setColumnStretch(column, 0);
   }
-  if (mLocalPreviewWidget) {
-    mLocalPreviewWidget->setGeometry(width() - kLocalPreviewWidth - kLocalPreviewMargin,
-                                      height() - kLocalPreviewHeight - kLocalPreviewMargin,
-                                      kLocalPreviewWidth, kLocalPreviewHeight);
-    mLocalPreviewWidget->raise();
+  for (int row = 0; row < mTileGrid->rowCount(); ++row) {
+    mTileGrid->setRowMinimumHeight(row, 0);
+    mTileGrid->setRowStretch(row, 0);
   }
-  // Raise order is remote, preview, bar, notes toggle: the bar and notes
-  // toggle stay above the self-preview (on a narrow stage the 160x90 preview
-  // would otherwise cover the bar's right end).
+  const int top = mNotesToggleWidget && !mNotesToggleWidget->isHidden() ? 64 : 12;
+  const QRect available(12, top, std::max(0, width() - 24), std::max(0, height() - top - 88));
+  ParticipantTile *local = nullptr;
+  for (auto *tile : mTiles)
+    if (tile->isLocal())
+      local = tile;
+  const auto strategy = CallLayoutStrategy::select(mTiles.size(), local != nullptr, available.size());
+  const int gridCount = mTiles.size() - (strategy.pictureInPicture ? 1 : 0);
+  const QSize gridSize(strategy.columns * strategy.tileSize.width() + std::max(0, strategy.columns - 1) * 8,
+                       strategy.rows * strategy.tileSize.height() + std::max(0, strategy.rows - 1) * 8);
+  mTileHost->setGeometry(QRect(available.center() - QPoint(gridSize.width() / 2, gridSize.height() / 2), gridSize));
+  int index = 0;
+  for (auto *tile : mTiles) {
+    if (strategy.pictureInPicture && tile == local) {
+      tile->setParent(this);
+      const int pipWidth = std::min(160, available.width() / 3);
+      const int pipHeight = pipWidth * 9 / 16;
+      tile->setFixedSize(pipWidth, pipHeight);
+      tile->setGeometry(available.right() - pipWidth + 1, available.bottom() - pipHeight + 1,
+                        pipWidth, pipHeight);
+      tile->show();
+      tile->raise();
+      continue;
+    }
+    tile->setParent(mTileHost);
+    tile->setFixedSize(strategy.tileSize);
+    if (strategy.columns > 0) {
+      const int row = index / strategy.columns;
+      const int rowCount = std::min(strategy.columns, gridCount - row * strategy.columns);
+      const int offset = strategy.columns - rowCount;
+      mTileGrid->addWidget(tile, row, offset + 2 * (index % strategy.columns), 1, 2);
+    }
+    tile->show();
+    ++index;
+  }
+  for (int column = 0; column < strategy.columns * 2; ++column)
+    mTileGrid->setColumnMinimumWidth(column, std::max(0, (strategy.tileSize.width() - 8) / 2));
+  mTileGrid->activate();
   if (mControlBarWidget) {
     const QSize hint = mControlBarWidget->sizeHint();
-    const int barWidth = hint.width() > 0 ? hint.width() : mControlBarWidget->width();
+    const int barWidth = std::min(width(), hint.width() > 0 ? hint.width() : mControlBarWidget->width());
     const int barHeight = 48;
     const int x = (width() - barWidth) / 2;
     const int y = height() - 20 - barHeight;
@@ -222,23 +248,21 @@ void CallPage::buildConnectedScreen() {
   mConnectedView = new QWidget(this);
   auto *layout = new QVBoxLayout(mConnectedView);
 
-  // Slot 0 of mVideoRow holds the remote video. It starts out as a blank
-  // CallPage-owned placeholder; updateRemoteVideoWidget() swaps in the
-  // attached provider's real remoteVideoWidget() (the one the provider
-  // actually attaches the subscribed remote track to) when it has one.
   mVideoRow = new QHBoxLayout();
   mVideoStage = new pcm::video::detail::VideoStage(mConnectedView);
   mVideoStage->setObjectName("videoStage");
-  mRemoteVideoPlaceholder = new pcm::video::RemoteVideoRenderer(mVideoStage);
-  mRemoteVideoPlaceholder->setObjectName("remoteVideoPlaceholder");
-  mVideoStage->setRemoteWidget(mRemoteVideoPlaceholder);
-  mActiveRemoteVideoWidget = mRemoteVideoPlaceholder;
   mVideoRow->addWidget(mVideoStage, 1);
   mSidePanelHost = new QWidget(mConnectedView);
   mSidePanelHost->setVisible(false);
   new QVBoxLayout(mSidePanelHost);
   mVideoRow->addWidget(mSidePanelHost);
   layout->addLayout(mVideoRow);
+  mWaitingLabel = new QLabel(tr("Waiting for the other participant to join..."), mConnectedView);
+  mWaitingLabel->setObjectName("waitingLabel");
+  mWaitingLabel->setAlignment(Qt::AlignCenter);
+  mWaitingLabel->setTextFormat(Qt::PlainText);
+  mWaitingLabel->hide();
+  layout->addWidget(mWaitingLabel);
 
   mMicrophoneToggleButton = new QToolButton(mConnectedView);
   mMicrophoneToggleButton->setObjectName("microphoneToggleButton");
@@ -254,6 +278,7 @@ void CallPage::buildConnectedScreen() {
     mMicrophoneToggleButton->setAccessibleName(label);
     if (mSession && mSession->provider()) {
       mSession->provider()->setMicrophoneEnabled(checked);
+      refreshMediaButtons();
     }
   });
 
@@ -271,6 +296,7 @@ void CallPage::buildConnectedScreen() {
     mCameraToggleButton->setAccessibleName(label);
     if (mSession && mSession->provider()) {
       mSession->provider()->setCameraEnabled(checked);
+      refreshMediaButtons();
     }
   });
 
@@ -346,7 +372,10 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
   if (mSession) {
     disconnect(mSession.data(), nullptr, this, nullptr);
   }
+  clearParticipants();
   mSession = session;
+  if (!session)
+    return;
   mLastFailureReason.clear();
   refreshEndedReason();
   connect(session, &pcm::video::VideoSession::stateChanged, this, &CallPage::onSessionStateChanged);
@@ -360,8 +389,25 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
           &CallPage::onSessionFailureReason);
   // mediaError() never ends the call — its own, separate, non-fatal banner.
   connect(session, &pcm::video::VideoSession::mediaError, this, &CallPage::onMediaError);
-  updateRemoteVideoWidget();
-  updateLocalPreviewWidget();
+  connect(session, &QObject::destroyed, this, [this] {
+    mSession = nullptr;
+    clearParticipants();
+  });
+  auto *model = session->provider()->participants();
+  mParticipantConnections = {
+    connect(model, &QAbstractItemModel::rowsInserted, this, &CallPage::syncParticipants),
+    connect(model, &QAbstractItemModel::rowsRemoved, this, &CallPage::syncParticipants),
+    connect(model, &QAbstractItemModel::modelReset, this, &CallPage::syncParticipants),
+    connect(model, &QAbstractItemModel::dataChanged, this, &CallPage::syncParticipants)
+  };
+  syncParticipants();
+  refreshMediaButtons();
+  onSessionStateChanged(session->state());
+}
+
+void CallPage::refreshMediaButtons() {
+  if (!mSession)
+    return;
   if (mMicrophoneToggleButton && mSession->provider()) {
     const QSignalBlocker blocker(mMicrophoneToggleButton);
     mMicrophoneToggleButton->setChecked(mSession->provider()->isMicrophoneEnabled());
@@ -382,60 +428,53 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
   }
 }
 
-void CallPage::updateRemoteVideoWidget() {
-  QWidget *provided = nullptr;
-  if (mSession && mSession->provider()) {
-    provided = mSession->provider()->remoteVideoWidget();
-  }
-  QWidget *target = provided ? provided : mRemoteVideoPlaceholder;
-  if (target == mActiveRemoteVideoWidget) {
-    return;
-  }
-
-  // mActiveRemoteVideoWidget may already be null here: a borrowed provider
-  // widget is destroyed together with its provider (e.g. CallsPage::
-  // startJoin() replacing its session before attaching the new one).
-  if (QWidget *previous = mActiveRemoteVideoWidget.data()) {
-    previous->hide();
-    if (previous != mRemoteVideoPlaceholder) {
-      // Borrowed from a provider: hand it back instead of deleting it —
-      // the provider still owns its lifetime.
-      previous->setParent(nullptr);
-    }
-  }
-
-  if (target->parentWidget() != mVideoStage) {
-    target->setParent(mVideoStage);
-  }
-  mVideoStage->setRemoteWidget(target);
-  // setParent() hides a widget, and a swapped-out placeholder was hidden
-  // explicitly above; either way it has to be shown again.
-  target->show();
-  mActiveRemoteVideoWidget = target;
+void CallPage::clearParticipants() {
+  for (const auto &connection : mParticipantConnections)
+    disconnect(connection);
+  mParticipantConnections.clear();
+  mVideoStage->setTiles({});
+  qDeleteAll(mTiles);
+  mTiles.clear();
 }
 
-void CallPage::updateLocalPreviewWidget() {
-  QWidget *provided = nullptr;
-  if (mSession && mSession->provider()) {
-    provided = mSession->provider()->localVideoWidget();
-  }
-  if (provided == mActiveLocalPreviewWidget) {
+void CallPage::syncParticipants() {
+  if (!mSession || !mSession->provider())
     return;
-  }
-
-  if (QWidget *previous = mActiveLocalPreviewWidget.data()) {
-    previous->hide();
-    previous->setParent(nullptr);
-  }
-
-  mActiveLocalPreviewWidget = provided;
-  if (provided) {
-    if (provided->parentWidget() != mVideoStage) {
-      provided->setParent(mVideoStage);
+  auto *provider = mSession->provider();
+  auto *model = provider->participants();
+  QVector<pcm::video::ParticipantTile *> ordered;
+  QSet<QString> present;
+  for (int row = 0; row < model->rowCount(); ++row) {
+    const QString id = model->data(model->index(row), pcm::video::ParticipantModel::IdRole).toString();
+    const auto participant = model->participant(id);
+    if (!participant)
+      continue;
+    present.insert(id);
+    auto *tile = mTiles.value(id);
+    if (!tile) {
+      tile = new pcm::video::ParticipantTile(*participant, mVideoStage);
+      mTiles.insert(id, tile);
+    } else {
+      tile->updateParticipant(*participant);
     }
-    provided->show();
+    tile->attachSource(provider->frameSource(id));
+    ordered.append(tile);
   }
-  mVideoStage->setLocalPreviewWidget(provided);
+  // Approved group layout places self-view after remote participants while
+  // preserving remote insertion order and every surviving tile's identity.
+  std::stable_partition(ordered.begin(), ordered.end(), [](const auto *tile) {
+    return !tile->isLocal();
+  });
+  // Remove layout references before deleting departed widgets.
+  mVideoStage->setTiles(ordered);
+  for (auto it = mTiles.begin(); it != mTiles.end();) {
+    if (!present.contains(it.key())) {
+      delete it.value();
+      it = mTiles.erase(it);
+    } else {
+      ++it;
+    }
+  }
 }
 
 void CallPage::onSessionFailureReason(const QString &reason) {
@@ -590,6 +629,7 @@ void CallPage::setSidePanelExpandedByDefault(bool expanded) {
 
 void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) {
   using pcm::video::VideoSessionState;
+  mWaitingLabel->setVisible(state == VideoSessionState::WaitingForParticipants);
   mReconnectingBanner->setVisible(state == VideoSessionState::Reconnecting);
 
   switch (state) {
@@ -602,10 +642,7 @@ void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) 
     mConnectingLabel->setText(tr("Connecting..."));
     mStack->setCurrentWidget(mConnectingScreen);
     break;
-  case VideoSessionState::WaitingForClient:
-    mConnectingLabel->setText(tr("Waiting for the other participant to join..."));
-    mStack->setCurrentWidget(mConnectingScreen);
-    break;
+  case VideoSessionState::WaitingForParticipants:
   case VideoSessionState::Connected:
   case VideoSessionState::Reconnecting:
     mConnectedView->setObjectName("connectedView");

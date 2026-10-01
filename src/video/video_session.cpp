@@ -97,7 +97,7 @@ VideoSession::VideoSession(VideoProvider *provider, const std::chrono::milliseco
   // thing that should drive the Reconnecting state. connectionLost() is
   // terminal (the SDK has given up, whether or not it ever reconnected
   // first) and always goes straight to Failed, from Connected,
-  // WaitingForClient, or Reconnecting.
+  // WaitingForParticipants, or Reconnecting.
   //
   // Resolve reconnect from current presence, including updates during retries.
   connected->addTransition(mProvider, &VideoProvider::reconnecting, reconnecting);

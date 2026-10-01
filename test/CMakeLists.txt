@@ -554,6 +554,7 @@ gtest_discover_tests(Sessio_device_check_widget_tests)
 find_package(Qt6 REQUIRED COMPONENTS StateMachine Test)
 add_executable(Sessio_call_page_tests
     call_page_tests.cpp
+    call_layout_strategy_tests.cpp
 )
 target_link_libraries(Sessio_call_page_tests PRIVATE
     GTest::gtest

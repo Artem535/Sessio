@@ -3,10 +3,12 @@
 #include "busy_spinner.h"
 #include "device_check_widget.h"
 #include "device_manager.h"
-#include "remote_video_renderer.h"
+#include "participant_tile.h"
 #include "video_session.h"
 #include "video_session_state.h"
 
+#include <QGridLayout>
+#include <QHash>
 #include <QPointer>
 #include <QResizeEvent>
 #include <QWidget>
@@ -21,20 +23,12 @@ class QToolButton;
 
 namespace pcm::video::detail {
 
-// Hosts the remote-video widget stretched to fill the available area, with
-// the local self-preview overlaid as a fixed-size tile in the bottom-right
-// corner, plus two floating overlay slots: a control bar centered near the
-// bottom and a notes-toggle in the top-right corner (both stacked above the
-// remote video and the self-preview). A plain QWidget with no layout
-// manager: QLayout has no way to express "fill entirely" and "float pinned
-// to a corner/edge" for several children at once, so all are positioned
-// directly in resizeEvent().
+// UI-owned participant grid with independent overlay controls.
 class VideoStage final : public QWidget {
 public:
   explicit VideoStage(QWidget *parent = nullptr);
 
-  void setRemoteWidget(QWidget *widget);
-  void setLocalPreviewWidget(QWidget *widget);
+  void setTiles(const QVector<ParticipantTile *> &tiles);
   void setControlBarWidget(QWidget *widget);
   void setNotesToggleWidget(QWidget *widget);
 
@@ -44,8 +38,9 @@ protected:
 private:
   void layoutChildren();
 
-  QPointer<QWidget> mRemoteWidget;
-  QPointer<QWidget> mLocalPreviewWidget;
+  QWidget *mTileHost;
+  QGridLayout *mTileGrid;
+  QVector<ParticipantTile *> mTiles;
   QPointer<QWidget> mControlBarWidget;
   QPointer<QWidget> mNotesToggleWidget;
 };
@@ -93,18 +88,9 @@ public slots:
 private:
   void buildDeviceCheckScreen(pcm::video::DeviceManager *deviceManager);
   void buildConnectedScreen();
-  // Puts the attached session's provider's remoteVideoWidget() (or, if it
-  // has none, mRemoteVideoPlaceholder) into mVideoStage's remote slot. The
-  // provider's widget is only borrowed: it is reparented into mVideoStage
-  // while shown, and handed back with setParent(nullptr) (never deleted)
-  // when swapped out — see LiveKitVideoProvider's destructor for the other
-  // half of this ownership contract.
-  void updateRemoteVideoWidget();
-  // Same borrowed-widget contract as updateRemoteVideoWidget(), but for the
-  // attached provider's localVideoWidget() (self-preview), shown in
-  // mVideoStage's picture-in-picture corner. Unlike the remote slot there is
-  // no CallPage-owned placeholder: nullptr just means no preview is shown.
-  void updateLocalPreviewWidget();
+  void syncParticipants();
+  void clearParticipants();
+  void refreshMediaButtons();
   void onSessionFailureReason(const QString &reason);
   void refreshEndedReason();
   // Shows mMediaErrorBanner with `reason` and starts its auto-hide timer.
@@ -121,12 +107,8 @@ private:
   QStackedWidget *mStack{nullptr};
   DeviceCheckWidget *mDeviceCheck{nullptr};
   QWidget *mConnectingScreen{nullptr};
-  // Text distinguishes VideoSessionState::Joining ("Connecting...") from
-  // VideoSessionState::WaitingForClient ("Waiting for the other
-  // participant..."), set in onSessionStateChanged() -- both states used to
-  // show the same static "Connecting..." text, leaving a user who had
-  // already joined with no way to tell that from still connecting.
   QLabel *mConnectingLabel{nullptr};
+  QLabel *mWaitingLabel{nullptr};
   QWidget *mConnectedView{nullptr};
   QHBoxLayout *mVideoRow{nullptr};
   pcm::video::detail::VideoStage *mVideoStage{nullptr};
@@ -134,15 +116,8 @@ private:
   // buttons. Owned by VideoStage once handed to setControlBarWidget() --
   // VideoStage reparents, positions, and shows/hides it internally.
   QWidget *mControlBar{nullptr};
-  // CallPage-owned blank renderer, shown whenever the attached provider
-  // offers no remote-video widget of its own (or before any session is
-  // attached). Never reparented away from mVideoStage.
-  QWidget *mRemoteVideoPlaceholder{nullptr};
-  // Whichever widget currently occupies mVideoStage's remote slot.
-  QPointer<QWidget> mActiveRemoteVideoWidget;
-  // Whichever widget currently occupies mVideoStage's local-preview slot
-  // (nullptr when the attached provider has none).
-  QPointer<QWidget> mActiveLocalPreviewWidget;
+  QHash<QString, pcm::video::ParticipantTile *> mTiles;
+  QVector<QMetaObject::Connection> mParticipantConnections;
   QWidget *mReconnectingBanner{nullptr};
   QLabel *mReconnectingLabel{nullptr};
   // Non-fatal, transient local-device notice (VideoSession::mediaError()) —

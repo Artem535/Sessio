@@ -245,8 +245,8 @@ pcm::video::VideoSession *joinAndConnect(CallsPage &page, FakeVideoProvider *&fa
   page.findChild<QPushButton *>("joinButton")->click();
   waitForState(*session, stateSpy, pcm::video::VideoSessionState::Joining);
   fakeProvider->simulateJoined();
-  waitForState(*session, stateSpy, pcm::video::VideoSessionState::WaitingForClient);
-  fakeProvider->simulateRemoteParticipantConnected();
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+  fakeProvider->simulateParticipantJoined({"remote"});
   waitForState(*session, stateSpy, pcm::video::VideoSessionState::Connected);
   return ::testing::Test::HasFatalFailure() ? nullptr : session;
 }
