@@ -15,6 +15,7 @@
 #include <QSignalSpy>
 #include <QStackedWidget>
 #include <QToolButton>
+#include <QTextDocument>
 #include <gtest/gtest.h>
 
 using pcm::video::test::FakeVideoProvider;
@@ -222,6 +223,9 @@ TEST(CallPageTest, DisplayNameIsPlainTextAndCameraOffSurvivesSourceDeletion) {
   auto *label = tile->findChild<QLabel *>("participantName");
   EXPECT_EQ(label->textFormat(), Qt::PlainText);
   EXPECT_EQ(label->text(), "<b>Remote</b>");
+  QTextDocument tooltip;
+  tooltip.setHtml(label->toolTip());
+  EXPECT_EQ(tooltip.toPlainText(), label->text());
   auto *placeholder = tile->findChild<QLabel *>("cameraOffPlaceholder");
   EXPECT_FALSE(placeholder->isHidden());
   delete provider->mSources.take("remote");
@@ -229,6 +233,8 @@ TEST(CallPageTest, DisplayNameIsPlainTextAndCameraOffSurvivesSourceDeletion) {
   provider->simulateParticipantJoined({"remote", "Renamed", "practitioner", false, true, false});
   EXPECT_EQ(page.findChild<QWidget *>("participantTile_remote"), tile);
   EXPECT_EQ(label->text(), "Renamed");
+  tooltip.setHtml(label->toolTip());
+  EXPECT_EQ(tooltip.toPlainText(), label->text());
 }
 
 TEST(CallPageTest, SourceFramesClearAndDestructionUpdatePlaceholderWithoutRecreatingTile) {

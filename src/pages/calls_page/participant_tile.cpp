@@ -3,6 +3,7 @@
 
 #include <QLabel>
 #include <QResizeEvent>
+#include <QTextDocument>
 #include <algorithm>
 
 namespace pcm::video {
@@ -27,7 +28,7 @@ void ParticipantTile::updateParticipant(const Participant &participant) {
   mParticipant = participant;
   const QString name = participant.displayName.isEmpty() ? tr("Participant") : participant.displayName;
   mName->setText(participant.isLocal ? tr("%1 (You)").arg(name) : name);
-  mName->setToolTip(mName->text());
+  mName->setToolTip(Qt::convertFromPlainText(mName->text()));
   setAccessibleName(mName->text());
   refreshMedia();
 }
