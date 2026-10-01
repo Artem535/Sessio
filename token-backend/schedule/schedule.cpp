@@ -238,7 +238,10 @@ Resolution occurrencesBetween(const Snapshot &s, int64_t from, int64_t to) {
   const auto deadline = steady_clock::now() + milliseconds{100};
   std::unique_lock lock(icalMutex, std::defer_lock);
   if (!lock.try_lock_until(deadline)) return failure(Status::BudgetExceeded, "resolution lock deadline exceeded");
-  return between(s, from, to, deadline);
+  auto result = between(s, from, to, deadline);
+  if (steady_clock::now() >= deadline)
+    return failure(Status::BudgetExceeded, "resolution deadline exceeded");
+  return result;
 }
 Resolution resolve(const Snapshot &s, int64_t now, int64_t prejoinSeconds, int64_t graceSeconds) {
   constexpr int64_t maxBufferSeconds = (maxMs - minMs) / 1000;
