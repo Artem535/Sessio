@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Draft a service contract for one persistent invitation per recurring LiveKit
   series, server-side schedules and offline synchronization. Runtime support
   is not implemented in this release.
+- Add the delivery stages, dependencies and acceptance gates for this contract.
 
 ## [0.1.34] - 2026-09-26
 
