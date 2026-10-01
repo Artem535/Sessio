@@ -65,3 +65,28 @@ TEST(DeviceManagerTest, DevicesChangedFiresWhenUnderlyingMediaDeviceSignalsFire)
   emit mediaDevices.audioOutputsChanged();
   EXPECT_EQ(spy.count(), 3);
 }
+
+// A call must open the device the operating system treats as the default,
+// not whichever device happens to be listed first: with a headset connected
+// the first listed output is often the built-in analog one, so the user heard
+// the call on the wrong device. Hardware-dependent like the tests above, so it
+// only asserts when the platform reports a default at all.
+TEST(DeviceManagerTest, DefaultDevicesFollowTheSystemDefaultsNotListOrder) {
+  int argc = 0;
+  QCoreApplication app(argc, nullptr);
+
+  pcm::video::DeviceManager manager;
+
+  if (const auto systemOutput = QMediaDevices::defaultAudioOutput(); !systemOutput.isNull()) {
+    ASSERT_TRUE(manager.defaultSpeaker().has_value());
+    EXPECT_EQ(manager.defaultSpeaker()->id(), systemOutput.id());
+  }
+  if (const auto systemInput = QMediaDevices::defaultAudioInput(); !systemInput.isNull()) {
+    ASSERT_TRUE(manager.defaultMicrophone().has_value());
+    EXPECT_EQ(manager.defaultMicrophone()->id(), systemInput.id());
+  }
+  if (const auto systemCamera = QMediaDevices::defaultVideoInput(); !systemCamera.isNull()) {
+    ASSERT_TRUE(manager.defaultCamera().has_value());
+    EXPECT_EQ(manager.defaultCamera()->id(), systemCamera.id());
+  }
+}
