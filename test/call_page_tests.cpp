@@ -13,6 +13,7 @@
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QSignalSpy>
+#include <QSplitter>
 #include <QStackedWidget>
 #include <QToolButton>
 #include <QTextDocument>
@@ -733,6 +734,24 @@ TEST(CallPageTest, WaitingForParticipantsShowsDistinctMessageFromJoining) {
   waitForState(session, stateSpy, VideoSessionState::WaitingForParticipants);
   EXPECT_EQ(page.findChild<QLabel *>("waitingLabel")->text(), QStringLiteral("Waiting for the other participant to join..."));
   EXPECT_TRUE(page.findChild<QLabel *>("waitingLabel")->isVisibleTo(&page));
+}
+
+// The notes panel sits next to the video in a splitter, so the user can drag it narrower (or
+// wider) during a call; it can't be collapsed to nothing or squeezed below a usable width.
+TEST(CallPageTest, NotesPanelIsResizableViaASplitterWithAUsableMinimumWidth) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *splitter = page.findChild<QSplitter *>("videoSplitter");
+  auto *stage = page.findChild<QWidget *>("videoStage");
+  auto *host = page.findChild<QWidget *>("sidePanelHost");
+  ASSERT_NE(splitter, nullptr);
+  ASSERT_NE(stage, nullptr);
+  ASSERT_NE(host, nullptr);
+  EXPECT_EQ(splitter->orientation(), Qt::Horizontal);
+  EXPECT_EQ(splitter->indexOf(stage), 0);
+  EXPECT_EQ(splitter->indexOf(host), 1);
+  EXPECT_FALSE(splitter->childrenCollapsible());
+  EXPECT_GE(host->minimumWidth(), 160);
 }
 
 TEST(CallPageTest, SidePanelToggleHiddenByDefaultUntilMadeVisible) {

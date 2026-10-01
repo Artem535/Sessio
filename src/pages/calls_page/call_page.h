@@ -15,6 +15,7 @@
 
 class QComboBox;
 class QHBoxLayout;
+class QSplitter;
 class QLabel;
 class QMenu;
 class QPushButton;
@@ -95,6 +96,9 @@ private:
   // Notes panel and its toggle are hidden in fullscreen; restored on exit.
   void setFullscreen(bool fullscreen);
   void leaveFullscreenIfActive();
+  // Shows/hides the notes panel; the first time it opens it gets a sensible default width,
+  // afterwards it keeps whatever width the user dragged it to.
+  void setSidePanelOpen(bool open);
   void buildConnectedScreen();
   void syncParticipants();
   void clearParticipants();
@@ -118,7 +122,10 @@ private:
   QLabel *mConnectingLabel{nullptr};
   QLabel *mWaitingLabel{nullptr};
   QWidget *mConnectedView{nullptr};
-  QHBoxLayout *mVideoRow{nullptr};
+  // Video stage on the left, notes panel on the right; the user drags the handle between them
+  // to make the notes panel narrower or wider.
+  QSplitter *mVideoSplitter{nullptr};
+  bool mSidePanelSized{false};
   pcm::video::detail::VideoStage *mVideoStage{nullptr};
   // Floating, opaque overlay carrying the mic/camera/devices/fullscreen/leave
   // buttons. Owned by VideoStage once handed to setControlBarWidget() --

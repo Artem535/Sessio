@@ -16,6 +16,7 @@
 #include <QPushButton>
 #include <QShortcut>
 #include <QSignalBlocker>
+#include <QSplitter>
 #include <QStackedWidget>
 #include <QTimer>
 #include <QToolButton>
@@ -161,6 +162,11 @@ void VideoStage::layoutChildren() {
 
 } // namespace pcm::video::detail
 
+namespace {
+constexpr int kSidePanelMinWidth = 200;
+constexpr int kSidePanelDefaultWidth = 320;
+} // namespace
+
 CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : QWidget(parent) {
   mDeviceManager = deviceManager;
   auto *outer = new QVBoxLayout(this);
@@ -226,12 +232,23 @@ CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : 
   mStack->setCurrentWidget(mDeviceCheck);
 }
 
+void CallPage::setSidePanelOpen(bool open) {
+  mSidePanelHost->setVisible(open);
+  if (open && !mSidePanelSized) {
+    // Default to a comfortable notes width the first time; after that, the splitter keeps the
+    // width the user chose, even across hiding and showing the panel.
+    mSidePanelSized = true;
+    const int total = std::max(mVideoSplitter->width(), kSidePanelDefaultWidth * 3);
+    mVideoSplitter->setSizes({total - kSidePanelDefaultWidth, kSidePanelDefaultWidth});
+  }
+}
+
 void CallPage::setFullscreen(bool fullscreen) {
   // Only the participants and the control bar stay: the notes panel and its toggle go too.
   if (mNotesToggleButton) {
     mNotesToggleButton->setVisible(!fullscreen);
   }
-  mSidePanelHost->setVisible(!fullscreen && mNotesToggleButton && mNotesToggleButton->isChecked());
+  setSidePanelOpen(!fullscreen && mNotesToggleButton && mNotesToggleButton->isChecked());
   mVideoStage->update();
   if (auto *topLevel = window()) {
     if (fullscreen) {
@@ -300,15 +317,23 @@ void CallPage::buildConnectedScreen() {
   auto *layout = new QVBoxLayout(mConnectedView);
   layout->setContentsMargins(0, 0, 0, 0);
 
-  mVideoRow = new QHBoxLayout();
-  mVideoStage = new pcm::video::detail::VideoStage(mConnectedView);
+  mVideoSplitter = new QSplitter(Qt::Horizontal, mConnectedView);
+  mVideoSplitter->setObjectName("videoSplitter");
+  mVideoSplitter->setChildrenCollapsible(false);
+  mVideoSplitter->setHandleWidth(8);
+  mVideoStage = new pcm::video::detail::VideoStage(mVideoSplitter);
   mVideoStage->setObjectName("videoStage");
-  mVideoRow->addWidget(mVideoStage, 1);
-  mSidePanelHost = new QWidget(mConnectedView);
+  mSidePanelHost = new QWidget(mVideoSplitter);
+  mSidePanelHost->setObjectName("sidePanelHost");
+  // The notes panel can be dragged narrower, but never so narrow it becomes unusable.
+  mSidePanelHost->setMinimumWidth(kSidePanelMinWidth);
   mSidePanelHost->setVisible(false);
   new QVBoxLayout(mSidePanelHost);
-  mVideoRow->addWidget(mSidePanelHost);
-  layout->addLayout(mVideoRow);
+  mVideoSplitter->addWidget(mVideoStage);
+  mVideoSplitter->addWidget(mSidePanelHost);
+  mVideoSplitter->setStretchFactor(0, 1);
+  mVideoSplitter->setStretchFactor(1, 0);
+  layout->addWidget(mVideoSplitter, 1);
   mWaitingLabel = new QLabel(tr("Waiting for the other participant to join..."), mConnectedView);
   mWaitingLabel->setObjectName("waitingLabel");
   mWaitingLabel->setAlignment(Qt::AlignCenter);
@@ -673,7 +698,7 @@ void CallPage::setSidePanelToggleVisible(bool visible) {
         "#notesToggleButton:hover { background-color: rgb(45, 45, 45); }"
         "#notesToggleButton:checked { background-color: rgb(70, 70, 70); }"));
     connect(mNotesToggleButton, &QToolButton::toggled, this,
-            [this](bool checked) { mSidePanelHost->setVisible(checked); });
+            [this](bool checked) { setSidePanelOpen(checked); });
     mVideoStage->setNotesToggleWidget(mNotesToggleButton);
   } else if (!visible && mNotesToggleButton) {
     delete mNotesToggleButton;
