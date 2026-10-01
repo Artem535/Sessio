@@ -22,8 +22,10 @@ public:
   void setBaseUrl(const QString &baseUrl);
   [[nodiscard]] QString baseUrl() const { return mBaseUrl; }
 
-  void requestSpecialistToken(const QString &bearerCredential, const QString &meetingRef);
-  void requestClientToken(const QString &invitationCode, const QString &passcode);
+  void requestSpecialistToken(const QString &bearerCredential, const QString &meetingRef,
+                              const QString &displayName = {});
+  void requestClientToken(const QString &invitationCode, const QString &passcode,
+                          const QString &displayName = {});
   void requestCreateMeeting(const QString &bearerCredential, const QString &scheduledStartIso,
                             const QString &scheduledEndIso);
   void requestInvalidateMeeting(const QString &bearerCredential, const QString &meetingRef);

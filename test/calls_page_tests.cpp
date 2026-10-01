@@ -6,6 +6,8 @@
 #include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QStackedWidget>
@@ -59,6 +61,7 @@ TEST(CallsPageTest, JoiningByCodeSwitchesToCallPageOnceTokenArrives) {
   ASSERT_NE(connectButton, nullptr);
   codeEdit->setText("code-1");
   passcodeEdit->setText("123456");
+  page.findChild<QLineEdit *>("callDisplayNameEdit")->setText("Анна на встрече");
   connectButton->click();
 
   // Token request is asynchronous; pump the event loop until CallsPage's
@@ -66,6 +69,7 @@ TEST(CallsPageTest, JoiningByCodeSwitchesToCallPageOnceTokenArrives) {
   // constructed), at which point CallPage is showing and its device-check
   // screen is present.
   ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider != nullptr; }, 2000));
+  EXPECT_EQ(QJsonDocument::fromJson(server.lastBody).object().value("displayName").toString(), "Анна на встрече");
   EXPECT_NE(page.findChild<QWidget *>("deviceCheckWidget"), nullptr);
   // Fix round 1: arriving at the device-check screen must not by itself
   // start the real call — see RealJoinIsGatedBehindDeviceCheckConfirmation

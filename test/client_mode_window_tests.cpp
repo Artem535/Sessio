@@ -103,6 +103,9 @@ TEST(ClientModeSettingsDialogTest, PrefillsFromConfigAndKeepsOtherFields) {
   auto *urlEdit = dialog.findChild<QLineEdit *>("tokenBackendUrlEdit");
   ASSERT_NE(urlEdit, nullptr);
   EXPECT_EQ(urlEdit->text(), QStringLiteral("https://saved.example.test"));
+  auto *nameEdit = dialog.findChild<QLineEdit *>("callDisplayNameEdit");
+  ASSERT_NE(nameEdit, nullptr);
+  nameEdit->setText(" Анна ");
 
   urlEdit->setText("http://127.0.0.1:8080");
   dialog.accept();
@@ -112,6 +115,8 @@ TEST(ClientModeSettingsDialogTest, PrefillsFromConfigAndKeepsOtherFields) {
   const auto saved = pcm::config::Config::read_config();
   EXPECT_EQ(saved.token_backend_base_url, "http://127.0.0.1:8080");
   EXPECT_EQ(saved.app_role, "Client");
+  ClientModeSettingsDialog reopened(&tokenClient);
+  EXPECT_EQ(reopened.findChild<QLineEdit *>("callDisplayNameEdit")->text(), "Анна");
   removeConfig();
 }
 

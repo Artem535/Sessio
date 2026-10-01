@@ -98,6 +98,14 @@
 <context>
     <name>CallEntryWidget</name>
     <message>
+        <source>Name in calls</source>
+        <translation>Имя в звонках</translation>
+    </message>
+    <message>
+        <source>Your name</source>
+        <translation>Ваше имя</translation>
+    </message>
+    <message>
         <source>Your meetings today</source>
         <translation>Ваши встречи сегодня</translation>
     </message>
@@ -355,6 +363,10 @@
     <message>
         <source>Settings</source>
         <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>Name in calls</source>
+        <translation>Имя в звонках</translation>
     </message>
     <message>
         <source>Token backend URL</source>
@@ -1840,6 +1852,14 @@ See you!</source>
     <message>
         <source>Event colors</source>
         <translation>Цвета событий</translation>
+    </message>
+    <message>
+        <source>Calls</source>
+        <translation>Звонки</translation>
+    </message>
+    <message>
+        <source>Name in calls</source>
+        <translation>Имя в звонках</translation>
     </message>
     <message>
         <source>Backup Encryption</source>

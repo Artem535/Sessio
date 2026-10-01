@@ -26,6 +26,8 @@ inline oatpp::web::protocol::http::Status statusForError(ServiceError err) {
     return oatpp::web::protocol::http::Status::CODE_429;
   case ServiceError::MeetingWindowClosed:
     return oatpp::web::protocol::http::Status::CODE_410;
+  case ServiceError::InvalidDisplayName:
+    return oatpp::web::protocol::http::Status::CODE_400;
   }
   return oatpp::web::protocol::http::Status::CODE_500;
 }
@@ -110,8 +112,19 @@ public:
   ENDPOINT("POST", "/v1/meetings/{meetingRef}/specialist-token", specialistToken,
             PATH(String, meetingRef), REQUEST(std::shared_ptr<IncomingRequest>, request)) {
     static constexpr const char *kRoute = "/v1/meetings/{meetingRef}/specialist-token";
+    std::string displayName;
+    const auto rawBody = request->readBodyToString();
+    if (rawBody && !rawBody->empty()) {
+      try {
+        const auto body = getDefaultObjectMapper()->readFromString<oatpp::Object<SpecialistTokenRequestDto>>(rawBody);
+        OATPP_ASSERT_HTTP(body, Status::CODE_400, "invalid_request");
+        displayName = toStdString(body->displayName);
+      } catch (...) {
+        return createResponse(Status::CODE_400, "invalid_request");
+      }
+    }
     auto result =
-        service_.issueSpecialistToken(authCredentialOf(request), toStdString(meetingRef));
+        service_.issueSpecialistToken(authCredentialOf(request), toStdString(meetingRef), displayName);
     if (!result.ok()) {
       auto status = statusForError(*result.error);
       logServiceFailure("POST", kRoute, toStdString(meetingRef), status.code, *result.error);

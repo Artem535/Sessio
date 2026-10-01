@@ -74,7 +74,10 @@ QString token(const QString &room, const QString &id) {
                           {"nbf", now - 10}, {"exp", now + 600},
                           {"metadata", "{\"role\":\"client\"}"},
                           {"video", QJsonObject{{"room", room}, {"roomJoin", true},
-                                                {"canPublish", true}, {"canSubscribe", true}}}};
+                                                {"canPublish", true}, {"canSubscribe", true},
+                                                // Only synthetic publishers exercise in-call rename.
+                                                // Production grants remain unchanged.
+                                                {"canUpdateOwnMetadata", true}}}};
   const auto payload = base64("{\"alg\":\"HS256\",\"typ\":\"JWT\"}") + "." +
                        base64(QJsonDocument(claims).toJson(QJsonDocument::Compact));
   return QString::fromLatin1(payload + "." + base64(QMessageAuthenticationCode::hash(
@@ -231,6 +234,34 @@ void roomSmoke(bool injectCaptureFailure = false) {
   require(waitForMedia([&] { return LiveKitVideoProviderTestAccess::audio(provider, "synthetic-red") &&
       LiveKitVideoProviderTestAccess::audio(provider, "synthetic-blue"); }), "remote audio subscriptions missing");
   {
+    LiveKitVideoProvider late;
+    late.setCameraEnabled(false);
+    late.setMicrophoneEnabled(false);
+    late.join("ws://127.0.0.1:17980", token(roomName, "synthetic-late"));
+    require(waitForMedia([&] {
+      const auto red = late.participants()->participant("synthetic-red");
+      const auto blue = late.participants()->participant("synthetic-blue");
+      const auto self = late.participants()->participant("synthetic-late");
+      return red && blue && self && red->displayName == "synthetic-red" &&
+             blue->displayName == "synthetic-blue" && self->displayName == "synthetic-late";
+    }), "late join lost signed participant names");
+    const auto audio = LiveKitVideoProviderTestAccess::audio(provider, "synthetic-red");
+    const auto publisher = a.room.localParticipant().lock();
+    require(bool(publisher), "publisher participant disappeared before rename");
+    publisher->setName("Synthetic speaker");
+    require(waitForMedia([&] {
+      const auto red = provider.participants()->participant("synthetic-red");
+      const auto lateRed = late.participants()->participant("synthetic-red");
+      return red && lateRed && red->displayName == "Synthetic speaker" &&
+             lateRed->displayName == "Synthetic speaker";
+    }), "participant rename did not reach both observers");
+    require(LiveKitVideoProviderTestAccess::audio(provider, "synthetic-red") == audio,
+            "rename changed participant audio association");
+    late.leave();
+  }
+  require(waitForMedia([&] { return provider.participants()->remoteCount() == 2; }), "late observer did not leave");
+  std::cout << "late-join names and rename with stable audio association passed\n";
+  {
     ToneProbe red(LiveKitVideoProviderTestAccess::audio(provider, "synthetic-red"));
     ToneProbe blue(LiveKitVideoProviderTestAccess::audio(provider, "synthetic-blue"));
     require(waitForMedia([&] { return std::abs(red.frequency.load() - 440) < 100 &&
@@ -354,7 +385,10 @@ void nativeUi(const QString &directory) {
                 << stageGeometry.width() << ',' << stageGeometry.height() << " renderer="
                 << renderer->x() << ',' << renderer->y() << ',' << renderer->width() << ',' << renderer->height() << '\n';
       require(stage->rect().contains(stageGeometry), "tile escaped full stage bounds");
-      require(!stageGeometry.intersects(controls->geometry()), "tile covered controls");
+      if (count > 2 || tile->isLocal())
+        require(!stageGeometry.intersects(controls->geometry()), "tile covered controls");
+      else
+        require(stageGeometry == stage->rect(), "main participant did not fill stage");
       require(renderer->geometry() == tile->rect(), "renderer did not resize with its tile");
       require(tile->parentWidget()->rect().contains(tile->geometry()), "tile escaped stage");
       for (auto *other : tiles)

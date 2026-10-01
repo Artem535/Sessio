@@ -38,7 +38,7 @@ public:
     }
 
     auto result =
-        service_.issueClientToken(toStdString(code), toStdString(body->passcode));
+        service_.issueClientToken(toStdString(code), toStdString(body->passcode), toStdString(body->displayName));
     if (!result.ok()) {
       auto status = statusForError(*result.error);
       logServiceFailure("POST", kRoute, "", status.code, *result.error);

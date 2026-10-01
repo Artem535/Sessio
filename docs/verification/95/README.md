@@ -15,8 +15,8 @@ No production deployment or real participant data was used.
   tests.
 - Full desktop `Sessio` target and backend targets built. Desktop version is
   **0.2.5** in both declarations. Translation update is idempotent; both locales
-  contain 493 finished entries and no unfinished entries after the translation
-  follow-up below.
+  contained 493 finished entries after the translation follow-up; the later
+  scene/name follow-up below raises this to 498, with no unfinished entries.
 - `git diff --check` passed. Independent whole-branch review and draft PR
   delivery are handled separately by the controller; PR94 remains a dependency.
 
@@ -28,11 +28,48 @@ targets (`PCM_BUILD_TESTS=ON`), while CI used the default OFF setting. The
 application's `CallPage` translations already existed; the extra entries came
 from the tests using `QObject::tr()` for expected CallPage labels.
 
-The tests now use `CallPage::tr()` and both catalogs contain the same 493
+The tests now use `CallPage::tr()` and at that revision both catalogs contained the same 493
 finished entries with tests ON or OFF. The earlier 496-entry local result
 included those three duplicates. The OFF configuration reproduced exactly the
 CI deletion before the fix; subsequent ON/OFF updates preserve identical file
 hashes. The three existing button-label tests cover the corrected context.
+
+## Scene and display-name follow-up
+
+The user approved preserving the whole camera frame while enlarging the 1:1
+stage. Its main tile now fills the stage, with self-preview and controls as
+overlays. The renderer retains aspect-fit scaling. Group layout retains equal
+tiles and clear control space. Labels are compact plain-text badges; controls
+have larger hit areas and a red leave button. Hardware OpenGL checks passed
+for 2, 3 and 10 participants; the 1:1 main tile is exactly 1280x800 and the
+self-preview is 256x144 in that probe. These are framebuffer/geometry results,
+not compositor screenshots or human visual acceptance.
+
+Both settings dialogs save `calls/displayName` using the existing QSettings
+store. The join form reloads the saved default and accepts a per-call override,
+which does not overwrite that default. The field permits 64 UTF-16 units;
+the backend accepts at most 256 UTF-8 bytes and rejects ASCII control characters.
+Empty names retain the existing Participant fallback. The optional HTTP
+`displayName` field is accepted by both token endpoints; old body-less
+specialist requests and passcode-only client requests remain supported.
+The JWT `name` claim is signed, with unique `sub` identities and grants retained.
+Names are presentation data, not authenticated real-world identities.
+
+The subscribed audio track remains associated with participant identity.
+Synthetic room verification passed late-join name delivery, a name update
+received by two production providers, and retention of the same audio track
+after that update, followed by tone, output-switch and lifecycle checks.
+Only the synthetic tokens permit in-call metadata updates for this probe;
+production permissions are unchanged. The app edits names before token issuance.
+Future recording/transcription must retain participant identity and publication
+SID with a display-name snapshot; file recording/transcription is not added here.
+
+Backend tests passed 119/119; scoped desktop scene/name/token tests and settings
+round-trip checks passed. Both translation catalogs have 498 finished entries.
+The release application and backend built. The deployed token backend has not
+been updated: new clients talking to an older backend can join, but that backend
+ignores the new name field. Name transmission requires deploying this backend
+version as well as distributing the desktop build.
 
 ## Remote audio crash follow-up
 

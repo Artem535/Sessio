@@ -108,6 +108,13 @@ QString defaultAutoBackupDestinationValue() {
 } // namespace
 
 namespace pcm::app_settings {
+QString callDisplayName() {
+  return QSettings().value("calls/displayName").toString().trimmed().left(64);
+}
+
+void setCallDisplayName(const QString &name) {
+  QSettings().setValue("calls/displayName", name.trimmed().left(64));
+}
 
 bool confirmEventDeletion() {
   QSettings settings;

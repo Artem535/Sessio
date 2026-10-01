@@ -1,5 +1,6 @@
 #include "client_mode_settings_dialog.h"
 #include "config.h"
+#include "app_settings.h"
 #include "token_backend_client.h"
 #include "../widgets/meeting_utils.h"
 
@@ -17,6 +18,13 @@ ClientModeSettingsDialog::ClientModeSettingsDialog(
   setModal(true);
 
   auto *layout = new QVBoxLayout(this);
+  layout->addWidget(new QLabel(tr("Name in calls"), this));
+  mDisplayNameEdit = new QLineEdit(this);
+  mDisplayNameEdit->setObjectName("callDisplayNameEdit");
+  mDisplayNameEdit->setMaxLength(64);
+  mDisplayNameEdit->setAccessibleName(tr("Name in calls"));
+  mDisplayNameEdit->setText(pcm::app_settings::callDisplayName());
+  layout->addWidget(mDisplayNameEdit);
   auto *title = new QLabel(tr("Token backend URL"), this);
   auto *description = new QLabel(
       tr("Address of the service that issued your invitation. Your specialist can tell you "
@@ -66,6 +74,7 @@ void ClientModeSettingsDialog::accept() {
 
   // Takes effect for the next join without a restart, even if saving fails.
   mTokenClient->setBaseUrl(url);
+  pcm::app_settings::setCallDisplayName(mDisplayNameEdit->text());
 
   // A failed read skips the save: writing a default-constructed Config over
   // an unreadable file would reset the stored app role to "Unset".

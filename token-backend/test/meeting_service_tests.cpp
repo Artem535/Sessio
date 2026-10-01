@@ -216,6 +216,34 @@ TEST_F(MeetingServiceTest, RepeatedTokensHaveUniqueSignedIdentitiesAndDisplayRol
   EXPECT_EQ(identities.size(), 8u);
 }
 
+TEST_F(MeetingServiceTest, DisplayNamesAreSignedEscapedAndDoNotBecomeIdentity) {
+  const auto created = service->createMeeting(credential, windowStart, windowEnd);
+  ASSERT_TRUE(created.ok());
+  const std::string name = "Анна \"A\"";
+  const auto a = service->issueClientToken(created.value->invitationCode, created.value->passcode, name);
+  const auto b = service->issueSpecialistToken(credential, created.value->meetingRef, name);
+  ASSERT_TRUE(a.ok());
+  ASSERT_TRUE(b.ok());
+  const auto pa = verifiedPayload(a.value->jwt, config.liveKitApiSecret);
+  const auto pb = verifiedPayload(b.value->jwt, config.liveKitApiSecret);
+  for (const auto &payload : {pa, pb}) {
+    EXPECT_NE(payload.find("\"name\":\"Анна \\\"A\\\"\""), std::string::npos);
+    EXPECT_NE(subject(payload), name);
+  }
+  EXPECT_NE(subject(pa), subject(pb));
+  EXPECT_EQ(a.value->roomName, b.value->roomName);
+}
+
+TEST_F(MeetingServiceTest, InvalidDisplayNamesAreRejected) {
+  const auto created = service->createMeeting(credential, windowStart, windowEnd);
+  ASSERT_TRUE(created.ok());
+  for (const auto &name : {std::string(257, 'a'), std::string("name\nother")}) {
+    const auto result = service->issueClientToken(created.value->invitationCode, created.value->passcode, name);
+    EXPECT_EQ(result.error, pcm::tokenbackend::ServiceError::InvalidDisplayName);
+    EXPECT_FALSE(result.ok());
+  }
+}
+
 TEST_F(MeetingServiceTest, ConcurrentClientTokensHaveDistinctSignedIdentitiesInTheSameRoom) {
   const auto created = service->createMeeting(credential, windowStart, windowEnd);
   ASSERT_TRUE(created.ok());

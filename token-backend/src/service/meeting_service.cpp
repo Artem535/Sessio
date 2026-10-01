@@ -12,6 +12,12 @@
 namespace pcm::tokenbackend {
 
 namespace {
+bool validDisplayName(const std::string &name) {
+  if (name.size() > 256) return false;
+  for (const unsigned char c : name)
+    if (c < 32 || c == 127) return false;
+  return true;
+}
 
 // ADR-12: the invitation's lifetime is the meeting's scheduled window — start
 // minus a short pre-join buffer, through end plus a short grace period — not
@@ -124,7 +130,7 @@ MeetingService::reissueInvitation(const std::string &bearerCredential,
 }
 
 Result<TokenResult> MeetingService::issueSpecialistToken(const std::string &bearerCredential,
-                                                           const std::string &meetingRef) {
+                                                           const std::string &meetingRef, const std::string &displayName) {
   auto accountId = authorizer_.authorize(bearerCredential);
   if (!accountId) {
     return {std::nullopt, ServiceError::Unauthorized};
@@ -140,9 +146,10 @@ Result<TokenResult> MeetingService::issueSpecialistToken(const std::string &bear
 
   VideoGrants grants;
   grants.room = meeting->roomName;
+  if (!validDisplayName(displayName)) return {std::nullopt, ServiceError::InvalidDisplayName};
   std::string identity = "practitioner-" + meeting->meetingRef + "-" + generateUrlSafeToken(16);
   auto jwt = mintLiveKitJwt(config_.liveKitApiKey, config_.liveKitApiSecret, identity, grants,
-                             config_.tokenTtlSeconds, R"({"role":"practitioner"})");
+                             config_.tokenTtlSeconds, R"({"role":"practitioner"})", displayName);
 
   auto now = std::chrono::system_clock::now();
   auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
@@ -156,7 +163,7 @@ Result<TokenResult> MeetingService::issueSpecialistToken(const std::string &bear
 }
 
 Result<TokenResult> MeetingService::issueClientToken(const std::string &invitationCode,
-                                                       const std::string &passcode) {
+                                                       const std::string &passcode, const std::string &displayName) {
   auto invitation = invitations_.findByCode(invitationCode);
   if (!invitation) {
     return {std::nullopt, ServiceError::NotFound};
@@ -195,9 +202,10 @@ Result<TokenResult> MeetingService::issueClientToken(const std::string &invitati
 
   VideoGrants grants;
   grants.room = meeting->roomName;
+  if (!validDisplayName(displayName)) return {std::nullopt, ServiceError::InvalidDisplayName};
   std::string identity = "client-" + meeting->meetingRef + "-" + generateUrlSafeToken(16);
   auto jwt = mintLiveKitJwt(config_.liveKitApiKey, config_.liveKitApiSecret, identity, grants,
-                             config_.tokenTtlSeconds, R"({"role":"client"})");
+                             config_.tokenTtlSeconds, R"({"role":"client"})", displayName);
 
   auto now = std::chrono::system_clock::now();
   auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();

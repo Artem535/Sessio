@@ -2,6 +2,8 @@
 #include "fake_token_backend_server.h"
 
 #include <QCoreApplication>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSignalSpy>
 #include <QTest>
 #include <gtest/gtest.h>
@@ -22,13 +24,14 @@ TEST(TokenBackendClientTest, SpecialistTokenSendsBearerHeaderAndParsesResponse) 
   QSignalSpy receivedSpy(&client, &TokenBackendClient::tokenReceived);
   QSignalSpy failedSpy(&client, &TokenBackendClient::tokenRequestFailed);
 
-  client.requestSpecialistToken("secret-credential", "meeting-ref-1");
+  client.requestSpecialistToken("secret-credential", "meeting-ref-1", " Анна \"A\" ");
 
   ASSERT_TRUE(receivedSpy.wait(2000));
   EXPECT_EQ(failedSpy.count(), 0);
   EXPECT_EQ(server.lastMethod, QStringLiteral("POST"));
   EXPECT_EQ(server.lastPath, QStringLiteral("/v1/meetings/meeting-ref-1/specialist-token"));
   EXPECT_EQ(server.lastAuthorizationHeader, QStringLiteral("Bearer secret-credential"));
+  EXPECT_EQ(QJsonDocument::fromJson(server.lastBody).object().value("displayName").toString(), "Анна \"A\"");
 
   const auto result = receivedSpy.at(0).at(0).value<TokenResult>();
   EXPECT_EQ(result.roomName, QStringLiteral("room-1"));
@@ -46,12 +49,13 @@ TEST(TokenBackendClientTest, ClientTokenSendsPasscodeBodyWithNoAuthHeader) {
   TokenBackendClient client(server.baseUrl().toString());
   QSignalSpy receivedSpy(&client, &TokenBackendClient::tokenReceived);
 
-  client.requestClientToken("code-abc", "123456");
+  client.requestClientToken("code-abc", "123456", "Иван");
 
   ASSERT_TRUE(receivedSpy.wait(2000));
   EXPECT_EQ(server.lastPath, QStringLiteral("/v1/invitations/code-abc/client-token"));
   EXPECT_TRUE(server.lastAuthorizationHeader.isEmpty());
   EXPECT_TRUE(server.lastBody.contains("123456"));
+  EXPECT_EQ(QJsonDocument::fromJson(server.lastBody).object().value("displayName").toString(), "Иван");
 }
 
 TEST(TokenBackendClientTest, ErrorStatusEmitsTokenRequestFailedWithServerMessage) {

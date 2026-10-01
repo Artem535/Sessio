@@ -1,4 +1,5 @@
 #include "call_entry_widget.h"
+#include "app_settings.h"
 
 #include <QApplication>
 #include <QLabel>
@@ -6,6 +7,8 @@
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QTest>
+#include <QSettings>
+#include <QTemporaryDir>
 #include <gtest/gtest.h>
 
 TEST(CallEntryWidgetTest, SpecialistModeShowsOwnMeetingsListAndEmitsJoinRequest) {
@@ -26,6 +29,21 @@ TEST(CallEntryWidgetTest, ClientModeHasNoOwnMeetingsList) {
   CallEntryWidget widget(/*showOwnMeetings=*/false);
   auto *list = widget.findChild<QWidget *>("ownMeetingsList");
   EXPECT_EQ(list, nullptr);
+}
+
+TEST(CallEntryWidgetTest, PerCallNameOverridesSavedDefaultWithoutChangingIt) {
+  pcm::app_settings::setCallDisplayName(" Анна ");
+  for (bool specialist : {false, true}) {
+    CallEntryWidget widget(specialist);
+    widget.show();
+    EXPECT_EQ(widget.displayName(), "Анна");
+    widget.findChild<QLineEdit *>("callDisplayNameEdit")->setText(" Анна на встрече ");
+    EXPECT_EQ(widget.displayName(), "Анна на встрече");
+    EXPECT_EQ(pcm::app_settings::callDisplayName(), "Анна");
+    widget.hide();
+    widget.show();
+    EXPECT_EQ(widget.displayName(), "Анна");
+  }
 }
 
 TEST(CallEntryWidgetTest, SubmittingCodeFormEmitsJoinByCodeRequested) {
@@ -71,7 +89,12 @@ TEST(CallEntryWidgetTest, ShowErrorDisplaysMessageAndClearErrorHidesIt) {
 }
 
 int main(int argc, char **argv) {
+  QTemporaryDir settingsDir;
+  QSettings::setDefaultFormat(QSettings::IniFormat);
+  QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir.path());
   QApplication app(argc, argv);
+  app.setOrganizationName("SessioTests");
+  app.setApplicationName("CallEntryWidget");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

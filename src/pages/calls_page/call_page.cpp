@@ -93,24 +93,27 @@ void VideoStage::layoutChildren() {
     mTileGrid->setRowStretch(row, 0);
   }
   const int top = mNotesToggleWidget && !mNotesToggleWidget->isHidden() ? 64 : 12;
-  const QRect available(12, top, std::max(0, width() - 24), std::max(0, height() - top - 88));
   ParticipantTile *local = nullptr;
   for (auto *tile : mTiles)
     if (tile->isLocal())
       local = tile;
-  const auto strategy = CallLayoutStrategy::select(mTiles.size(), local != nullptr, available.size());
+  const bool solo = mTiles.size() == 1 || (mTiles.size() == 2 && local);
+  const QRect available = solo ? rect() :
+      QRect(12, top, std::max(0, width() - 24), std::max(0, height() - top - 88));
+  auto strategy = CallLayoutStrategy::select(mTiles.size(), local != nullptr, available.size());
+  if (solo) strategy.tileSize = available.size();
   const int gridCount = mTiles.size() - (strategy.pictureInPicture ? 1 : 0);
   const QSize gridSize(strategy.columns * strategy.tileSize.width() + std::max(0, strategy.columns - 1) * 8,
                        strategy.rows * strategy.tileSize.height() + std::max(0, strategy.rows - 1) * 8);
-  mTileHost->setGeometry(QRect(available.center() - QPoint(gridSize.width() / 2, gridSize.height() / 2), gridSize));
+  mTileHost->setGeometry(solo ? available : QRect(available.center() - QPoint(gridSize.width() / 2, gridSize.height() / 2), gridSize));
   int index = 0;
   for (auto *tile : mTiles) {
     if (strategy.pictureInPicture && tile == local) {
       tile->setParent(this);
-      const int pipWidth = std::min(160, available.width() / 3);
+      const int pipWidth = std::min(std::max(0, width() / 3), std::clamp(width() / 5, 200, 280));
       const int pipHeight = pipWidth * 9 / 16;
       tile->setFixedSize(pipWidth, pipHeight);
-      tile->setGeometry(available.right() - pipWidth + 1, available.bottom() - pipHeight + 1,
+      tile->setGeometry(std::max(0, width() - pipWidth - 20), std::max(0, height() - pipHeight - 88),
                         pipWidth, pipHeight);
       tile->show();
       tile->raise();
@@ -152,6 +155,7 @@ void VideoStage::layoutChildren() {
 CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : QWidget(parent) {
   mDeviceManager = deviceManager;
   auto *outer = new QVBoxLayout(this);
+  outer->setContentsMargins(0, 0, 0, 0);
   mStack = new QStackedWidget(this);
   outer->addWidget(mStack);
 
@@ -247,6 +251,7 @@ void CallPage::buildConnectedScreen() {
   // actually shown.
   mConnectedView = new QWidget(this);
   auto *layout = new QVBoxLayout(mConnectedView);
+  layout->setContentsMargins(0, 0, 0, 0);
 
   mVideoRow = new QHBoxLayout();
   mVideoStage = new pcm::video::detail::VideoStage(mConnectedView);
@@ -330,6 +335,8 @@ void CallPage::buildConnectedScreen() {
 
   auto *leaveButton = new QPushButton(tr("Leave"), mConnectedView);
   leaveButton->setObjectName("leaveButton");
+  leaveButton->setMinimumHeight(40);
+  leaveButton->setStyleSheet("QPushButton { background: #b52b3a; color: white; border: none; border-radius: 8px; padding: 0 16px; } QPushButton:hover { background: #d33547; }");
   connect(leaveButton, &QPushButton::clicked, this, &CallPage::leaveRequested);
 
   mControlBar = new QWidget(mVideoStage);
@@ -341,8 +348,12 @@ void CallPage::buildConnectedScreen() {
   mControlBar->setStyleSheet(
       QStringLiteral("#controlBar { background-color: rgb(20, 20, 20); border-radius: 24px; }"));
   auto *controlBarLayout = new QHBoxLayout(mControlBar);
-  controlBarLayout->setContentsMargins(12, 6, 12, 6);
+  controlBarLayout->setContentsMargins(12, 4, 12, 4);
   controlBarLayout->setSpacing(8);
+  for (auto *button : {mMicrophoneToggleButton, mCameraToggleButton, mDevicesButton, mFullscreenToggleButton}) {
+    button->setFixedSize(40, 40);
+    button->setIconSize(QSize(20, 20));
+  }
   controlBarLayout->addWidget(mMicrophoneToggleButton);
   controlBarLayout->addWidget(mCameraToggleButton);
   controlBarLayout->addWidget(mDevicesButton);

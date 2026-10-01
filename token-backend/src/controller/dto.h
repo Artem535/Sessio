@@ -44,6 +44,12 @@ class TokenResponseDto : public oatpp::DTO {
 class ClientTokenRequestDto : public oatpp::DTO {
   DTO_INIT(ClientTokenRequestDto, DTO)
   DTO_FIELD(String, passcode);
+  DTO_FIELD(String, displayName);
+};
+
+class SpecialistTokenRequestDto : public oatpp::DTO {
+  DTO_INIT(SpecialistTokenRequestDto, DTO)
+  DTO_FIELD(String, displayName);
 };
 
 class ErrorResponseDto : public oatpp::DTO {

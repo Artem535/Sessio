@@ -25,6 +25,7 @@ enum class ServiceError {
   WrongPasscode,
   TooManyAttempts,
   MeetingWindowClosed,
+  InvalidDisplayName,
 };
 
 template <typename T> struct Result {
@@ -67,10 +68,10 @@ public:
                                                       const std::string &meetingRef);
 
   Result<TokenResult> issueSpecialistToken(const std::string &bearerCredential,
-                                            const std::string &meetingRef);
+                                            const std::string &meetingRef, const std::string &displayName = {});
 
   Result<TokenResult> issueClientToken(const std::string &invitationCode,
-                                        const std::string &passcode);
+                                        const std::string &passcode, const std::string &displayName = {});
 
   Result<std::monostate> invalidateMeeting(const std::string &bearerCredential,
                                             const std::string &meetingRef);

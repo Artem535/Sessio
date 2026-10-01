@@ -20,7 +20,7 @@ ParticipantTile::ParticipantTile(const Participant &participant, QWidget *parent
   mPlaceholder->setStyleSheet("background: #20242c; color: #c8d0dc;");
   mName->setObjectName("participantName");
   mName->setTextFormat(Qt::PlainText);
-  mName->setStyleSheet("background: #141414; color: white; padding: 4px 8px;");
+  mName->setStyleSheet("background: #141414; color: white; padding: 4px 8px; border-radius: 6px;");
   updateParticipant(participant);
 }
 
@@ -28,6 +28,7 @@ void ParticipantTile::updateParticipant(const Participant &participant) {
   mParticipant = participant;
   const QString name = participant.displayName.isEmpty() ? tr("Participant") : participant.displayName;
   mName->setText(participant.isLocal ? tr("%1 (You)").arg(name) : name);
+  mName->setGeometry(8, 8, std::min({std::max(0, width() - 72), mName->sizeHint().width(), 320}), std::min(30, height()));
   mName->setToolTip(Qt::convertFromPlainText(mName->text()));
   setAccessibleName(mName->text());
   refreshMedia();
@@ -64,7 +65,7 @@ void ParticipantTile::resizeEvent(QResizeEvent *event) {
   QWidget::resizeEvent(event);
   mRenderer->setGeometry(rect());
   mPlaceholder->setGeometry(rect());
-  mName->setGeometry(0, std::max(0, height() - 30), width(), std::min(30, height()));
+  mName->setGeometry(8, 8, std::min({std::max(0, width() - 72), mName->sizeHint().width(), 320}), std::min(30, height()));
   mName->raise();
 }
 

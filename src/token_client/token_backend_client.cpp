@@ -17,15 +17,18 @@ TokenBackendClient::TokenBackendClient(QString baseUrl, QObject *parent)
 void TokenBackendClient::setBaseUrl(const QString &baseUrl) { mBaseUrl = baseUrl; }
 
 void TokenBackendClient::requestSpecialistToken(const QString &bearerCredential,
-                                                const QString &meetingRef) {
-  post(QStringLiteral("/v1/meetings/%1/specialist-token").arg(meetingRef), QByteArray(),
+                                                const QString &meetingRef, const QString &displayName) {
+  const auto body = displayName.trimmed().isEmpty() ? QByteArray() :
+      QJsonDocument(QJsonObject{{"displayName", displayName.trimmed()}}).toJson(QJsonDocument::Compact);
+  post(QStringLiteral("/v1/meetings/%1/specialist-token").arg(meetingRef), body,
        bearerCredential);
 }
 
 void TokenBackendClient::requestClientToken(const QString &invitationCode,
-                                            const QString &passcode) {
+                                            const QString &passcode, const QString &displayName) {
   QJsonObject bodyObject;
   bodyObject["passcode"] = passcode;
+  if (!displayName.trimmed().isEmpty()) bodyObject["displayName"] = displayName.trimmed();
   const QByteArray body = QJsonDocument(bodyObject).toJson(QJsonDocument::Compact);
   post(QStringLiteral("/v1/invitations/%1/client-token").arg(invitationCode), body, QString());
 }

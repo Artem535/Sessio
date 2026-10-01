@@ -29,6 +29,10 @@ public:
   // clearError() hides it again, e.g. before each new join attempt.
   void showError(const QString &message);
   void clearError();
+  QString displayName() const;
+
+protected:
+  void showEvent(QShowEvent *event) override;
 
 signals:
   void ownMeetingJoinRequested(QString meetingRef);
@@ -40,5 +44,6 @@ private:
   QVBoxLayout *mOwnMeetingsLayout{nullptr};
   QLineEdit *mCodeEdit{nullptr};
   QLineEdit *mPasscodeEdit{nullptr};
+  QLineEdit *mDisplayNameEdit{nullptr};
   QLabel *mErrorLabel{nullptr};
 };

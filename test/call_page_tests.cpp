@@ -134,15 +134,30 @@ TEST(CallPageTest, TwoRemotesAndLocalHaveEqualTilesAndCenteredLastRow) {
 TEST(CallPageTest, OneRemoteAndLocalUsePipAboveControlBar) {
   pcm::video::detail::VideoStage stage;
   auto *local = new pcm::video::ParticipantTile({"local", "Me", "", true}, &stage);
-  auto *remote = new pcm::video::ParticipantTile({"remote"}, &stage);
+  auto *remote = new pcm::video::ParticipantTile({"remote", QString(64, 'W')}, &stage);
   auto *bar = new QWidget(&stage);
   bar->resize(300, 48);
   stage.setControlBarWidget(bar);
   stage.setTiles({local, remote});
   resizeAndDeliverEvent(&stage, QSize(1280, 720));
+  stage.show();
+  QApplication::processEvents();
   EXPECT_EQ(local->parentWidget(), &stage);
   EXPECT_LT(local->width(), remote->width());
   EXPECT_LT(local->geometry().bottom(), bar->geometry().top());
+  EXPECT_EQ(QRect(remote->mapTo(&stage, QPoint()), remote->size()), stage.rect());
+  EXPECT_GE(local->width(), 200);
+  auto *name = remote->findChild<QLabel *>("participantName");
+  ASSERT_NE(name, nullptr);
+  EXPECT_FALSE(QRect(name->mapTo(&stage, QPoint()), name->size()).intersects(bar->geometry()));
+  auto *notes = new QWidget(&stage);
+  stage.setNotesToggleWidget(notes);
+  resizeAndDeliverEvent(&stage, QSize(480, 720));
+  QApplication::processEvents();
+  const QRect nameGeometry(name->mapTo(&stage, QPoint()), name->size());
+  EXPECT_TRUE(stage.rect().contains(nameGeometry));
+  EXPECT_FALSE(nameGeometry.intersects(bar->geometry()));
+  EXPECT_FALSE(nameGeometry.intersects(notes->geometry()));
 }
 
 TEST(CallPageTest, ReturningFromGroupToPipCentersRemoteInItsHost) {

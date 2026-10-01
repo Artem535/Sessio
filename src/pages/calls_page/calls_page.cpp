@@ -65,7 +65,7 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
             mEntryWidget->clearError();
             const auto [invitationCode, invitationPasscode] =
                 joinCredentialsFromInput(code, passcode);
-            mTokenClient->requestClientToken(invitationCode, invitationPasscode);
+            mTokenClient->requestClientToken(invitationCode, invitationPasscode, mEntryWidget->displayName());
           });
 
   connect(mEntryWidget, &CallEntryWidget::ownMeetingJoinRequested, this,
@@ -81,7 +81,7 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
               }
             }
             mEntryWidget->clearError();
-            mTokenClient->requestSpecialistToken(mBearerCredentialProvider(), meetingRef);
+            mTokenClient->requestSpecialistToken(mBearerCredentialProvider(), meetingRef, mEntryWidget->displayName());
           });
 
   connect(mCallPage, &CallPage::callEnded, this, [this]() { mStack->setCurrentWidget(mEntryWidget); });

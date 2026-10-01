@@ -444,6 +444,20 @@ TEST_F(HttpIntegrationTest, SpecialistTokenForAnUnknownMeetingIs404) {
             404);
 }
 
+TEST_F(HttpIntegrationTest, TokenEndpointsAcceptDisplayNamesAndRejectControlCharacters) {
+  auto meeting = createMeeting();
+  const auto specialist = request("POST", "/v1/meetings/" + meeting.meetingRef + "/specialist-token",
+                                 bearer(), R"({"displayName":"Анна"})");
+  ASSERT_EQ(specialist.status, 200);
+  const auto client = request("POST", clientTokenPath(meeting.invitationCode), {},
+                             "{\"passcode\":\"" + meeting.passcode + "\",\"displayName\":\"Иван\"}");
+  ASSERT_EQ(client.status, 200);
+  EXPECT_EQ(request("POST", "/v1/meetings/" + meeting.meetingRef + "/specialist-token",
+                    bearer(), R"({"displayName":"bad\nname"})").status, 400);
+  EXPECT_EQ(request("POST", clientTokenPath(meeting.invitationCode), {},
+                    "{\"passcode\":\"" + meeting.passcode + "\",\"displayName\":\"bad\\nname\"}").status, 400);
+}
+
 TEST_F(HttpIntegrationTest, SpecialistTokenWithoutCredentialIs401) {
   auto meeting = createMeeting();
   EXPECT_EQ(request("POST", "/v1/meetings/" + meeting.meetingRef + "/specialist-token").status,

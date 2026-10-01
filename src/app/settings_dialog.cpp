@@ -627,6 +627,19 @@ void SettingsDialog::setupLiveKitSection() {
   auto *liveKitPageLayout = new QVBoxLayout(liveKitPage);
   liveKitPageLayout->setContentsMargins(0, 0, 8, 0);
   liveKitPageLayout->setSpacing(16);
+  auto *nameBox = new QGroupBox(tr("Calls"), liveKitPage);
+  auto *nameLayout = new QVBoxLayout(nameBox);
+  auto *nameEdit = new QLineEdit(nameBox);
+  nameEdit->setObjectName("callDisplayNameEdit");
+  nameEdit->setMaxLength(64);
+  nameEdit->setAccessibleName(tr("Name in calls"));
+  nameEdit->setText(pcm::app_settings::callDisplayName());
+  nameLayout->addWidget(new QLabel(tr("Name in calls"), nameBox));
+  nameLayout->addWidget(nameEdit);
+  connect(nameEdit, &QLineEdit::editingFinished, this, [nameEdit] {
+    pcm::app_settings::setCallDisplayName(nameEdit->text());
+  });
+  liveKitPageLayout->addWidget(nameBox);
 
   auto *liveKitBox = new QGroupBox(tr("Token backend"), liveKitPage);
   auto *liveKitLayout = new QVBoxLayout(liveKitBox);

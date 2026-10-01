@@ -9,7 +9,7 @@ namespace pcm::tokenclient {
 class TokenBackendClient;
 }
 
-// Client mode's only settings: the token backend URL, for a client who got a
+// Client mode settings include the call display name and token backend URL, for a client who got a
 // code and passcode without a sessio:// link naming the backend. Accepting
 // retargets the token client immediately and persists the URL to Config.
 // Deliberately not the specialist SettingsDialog (backups, encryption,
@@ -27,5 +27,6 @@ public:
 private:
   pcm::tokenclient::TokenBackendClient *mTokenClient;
   QLineEdit *mUrlEdit{nullptr};
+  QLineEdit *mDisplayNameEdit{nullptr};
   QLabel *mErrorLabel{nullptr};
 };

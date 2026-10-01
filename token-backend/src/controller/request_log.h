@@ -36,6 +36,8 @@ inline const char *serviceErrorName(ServiceError err) {
     return "too_many_attempts";
   case ServiceError::MeetingWindowClosed:
     return "meeting_window_closed";
+  case ServiceError::InvalidDisplayName:
+    return "invalid_display_name";
   }
   return "unknown_error";
 }
@@ -50,6 +52,7 @@ inline bool isSecurityEvent(ServiceError err) {
     return true;
   case ServiceError::NotFound:
   case ServiceError::MeetingWindowClosed:
+  case ServiceError::InvalidDisplayName:
     return false;
   }
   return false;

@@ -273,6 +273,7 @@ void LiveKitVideoProvider::join(const QString &url, const QString &token) {
   const auto payload = QJsonDocument::fromJson(QByteArray::fromBase64(
       token.section('.', 1, 1).toLatin1(), QByteArray::Base64UrlEncoding)).object();
   if (auto local = participants()->participant(mLocalIdentity)) {
+    local->displayName = payload.value("name").toString();
     local->role = metadataRole(payload.value("metadata").toString());
     participants()->upsert(*local);
   }

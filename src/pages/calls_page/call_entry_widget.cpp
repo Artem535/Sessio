@@ -1,6 +1,8 @@
 #include "call_entry_widget.h"
+#include "app_settings.h"
 
 #include <QLabel>
+#include <QApplication>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -8,6 +10,20 @@
 CallEntryWidget::CallEntryWidget(const bool showOwnMeetings, QWidget *parent)
     : QWidget(parent), mShowOwnMeetings(showOwnMeetings) {
   auto *layout = new QVBoxLayout(this);
+  layout->addWidget(new QLabel(tr("Name in calls"), this));
+  mDisplayNameEdit = new QLineEdit(this);
+  mDisplayNameEdit->setObjectName("callDisplayNameEdit");
+  mDisplayNameEdit->setMaxLength(64);
+  mDisplayNameEdit->setPlaceholderText(tr("Your name"));
+  mDisplayNameEdit->setText(pcm::app_settings::callDisplayName());
+  layout->addWidget(mDisplayNameEdit);
+  connect(qApp, &QApplication::focusChanged, this, [this](QWidget *, QWidget *focused) {
+    // Re-read a changed settings default when returning from its dialog,
+    // while keeping an explicitly edited name for the pending call.
+    if (focused && focused->window() == window() && !mDisplayNameEdit->isModified())
+      mDisplayNameEdit->setText(pcm::app_settings::callDisplayName());
+  });
+  mDisplayNameEdit->setAccessibleName(tr("Name in calls"));
 
   if (mShowOwnMeetings) {
     layout->addWidget(new QLabel(tr("Your meetings today"), this));
@@ -90,4 +106,13 @@ void CallEntryWidget::showError(const QString &message) {
 void CallEntryWidget::clearError() {
   mErrorLabel->clear();
   mErrorLabel->setVisible(false);
+}
+
+QString CallEntryWidget::displayName() const {
+  return mDisplayNameEdit->text().trimmed();
+}
+
+void CallEntryWidget::showEvent(QShowEvent *event) {
+  QWidget::showEvent(event);
+  mDisplayNameEdit->setText(pcm::app_settings::callDisplayName());
 }

@@ -38,6 +38,18 @@ TEST(SettingsDialogLiveKitSectionTest, SavingWritesBaseUrlToConfigAndCredentialT
   EXPECT_EQ(credentialStore->mCredential, QStringLiteral("bearer-secret"));
 }
 
+TEST(SettingsDialogLiveKitSectionTest, CallNameIsSavedAndPrefilledWhenReopened) {
+  {
+    SettingsDialog dialog(nullptr, new FakeTokenBackendCredentialStore());
+    auto *name = dialog.findChild<QLineEdit *>("callDisplayNameEdit");
+    ASSERT_NE(name, nullptr);
+    name->setText(" Анна ");
+    QMetaObject::invokeMethod(name, "editingFinished", Qt::DirectConnection);
+  }
+  SettingsDialog reopened(nullptr, new FakeTokenBackendCredentialStore());
+  EXPECT_EQ(reopened.findChild<QLineEdit *>("callDisplayNameEdit")->text(), "Анна");
+}
+
 // Fixwave userfeedback group A, bug 1: the bearer-credential field is
 // deliberately write-only (typing a new value and reopening Settings never
 // shows dots back), which used to give a false "not saved" impression -- an

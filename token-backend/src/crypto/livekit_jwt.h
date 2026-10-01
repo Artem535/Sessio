@@ -14,6 +14,7 @@ struct VideoGrants {
 
 std::string mintLiveKitJwt(const std::string &apiKey, const std::string &apiSecret,
                             const std::string &identity, const VideoGrants &grants,
-                            int ttlSeconds, const std::string &metadata = {});
+                            int ttlSeconds, const std::string &metadata = {},
+                            const std::string &displayName = {});
 
 } // namespace pcm::tokenbackend
