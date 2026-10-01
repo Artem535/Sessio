@@ -16,6 +16,7 @@
 #include "controller/health_controller.h"
 #include "controller/invitations_controller.h"
 #include "controller/meetings_controller.h"
+#include "controller/schedule_controller.h"
 #include "db/accounts_repository.h"
 #include "db/invitations_repository.h"
 #include "db/meetings_repository.h"
@@ -36,6 +37,8 @@
 #include <sodium.h>
 
 #include <algorithm>
+#include <atomic>
+#include <cstring>
 #include <chrono>
 #include <ctime>
 #include <latch>
@@ -187,6 +190,8 @@ protected:
     authorizer_ = new pcm::tokenbackend::StaticTokenAuthorizer(*accounts_);
     meetings_ = new pcm::tokenbackend::MeetingsRepository(*conn_);
     invitations_ = new pcm::tokenbackend::InvitationsRepository(*conn_);
+    schedules_ = new pcm::tokenbackend::ScheduleRepository(*conn_);
+    scheduleService_ = new pcm::tokenbackend::ScheduleService(*authorizer_, *schedules_);
 
     config_ = new pcm::tokenbackend::Config{};
     config_->liveKitApiKey = "test-key";
@@ -210,6 +215,8 @@ protected:
     router->route(healthController_->getEndpoints());
     router->route(meetingsController_->getEndpoints());
     router->route(invitationsController_->getEndpoints());
+    scheduleController_ = std::make_shared<pcm::tokenbackend::ScheduleController>(objectMapper, *scheduleService_);
+    router->route(scheduleController_->getEndpoints());
 
     connectionHandler_ = oatpp::web::server::HttpConnectionHandler::createShared(router);
     serverProvider_ = oatpp::network::tcp::server::ConnectionProvider::createShared(
@@ -252,6 +259,9 @@ protected:
     delete serverThread_;
     delete server_;
     delete service_;
+    scheduleController_.reset();
+    delete scheduleService_;
+    delete schedules_;
     delete config_;
     delete invitations_;
     delete meetings_;
@@ -320,6 +330,9 @@ protected:
   static pcm::tokenbackend::InvitationsRepository *invitations_;
   static pcm::tokenbackend::Config *config_;
   static pcm::tokenbackend::MeetingService *service_;
+  static inline pcm::tokenbackend::ScheduleRepository *schedules_;
+  static inline pcm::tokenbackend::ScheduleService *scheduleService_;
+  static inline std::shared_ptr<pcm::tokenbackend::ScheduleController> scheduleController_;
   static std::string *credential_;
 
   static std::shared_ptr<pcm::tokenbackend::HealthController> healthController_;
@@ -364,6 +377,100 @@ TEST_F(HttpIntegrationTest, HealthEndpointIsRouted) {
 
 TEST_F(HttpIntegrationTest, UnknownPathIs404) {
   EXPECT_EQ(request("GET", "/v1/nope").status, 404);
+}
+
+namespace {
+const std::string schedulePayload = R"({"schema_version":1,"revision":1,"base_revision":0,"timezone":"Europe/Moscow","dtstart_local":"2026-10-06T18:00:00","duration_seconds":3600,"rrule":"FREQ=WEEKLY;INTERVAL=1;BYDAY=TU","until_utc":null,"active":true,"join_enabled":true,"overrides":[{"original_start_utc":"2026-10-13T15:00:00Z","start_utc":"2026-10-14T15:00:00Z","end_utc":"2026-10-14T16:00:00Z","join_enabled":false}],"exceptions":["2026-10-13T15:00:00Z"]})";
+}
+TEST_F(HttpIntegrationTest, ScheduleCapabilitiesAreAuthenticatedAndAdditive) {
+  EXPECT_EQ(request("GET", "/v1/capabilities").status, 401);
+  auto response = request("GET", "/v1/capabilities", bearer());
+  EXPECT_EQ(response.status, 200);
+  EXPECT_EQ(response.body, R"({"scheduleSeries":true})");
+}
+TEST_F(HttpIntegrationTest, ScheduleSnapshotRoutesRoundTripAndRetryWithoutCreatingMeeting) {
+  const std::string path = "/v1/schedule-series/45f9c587-94c8-4d45-9f21-422a8df32591";
+  EXPECT_EQ(request("PUT", path, {}, schedulePayload).status, 401);
+  auto put = request("PUT", path, bearer(), schedulePayload);
+  ASSERT_EQ(put.status, 200) << put.body;
+  auto hash = jsonString(put.body, "content_hash"); EXPECT_EQ(hash.size(), 64);
+  EXPECT_EQ(jsonString(put.body, "series_uid"), "45f9c587-94c8-4d45-9f21-422a8df32591");
+  auto retry = request("PUT", path, bearer(), schedulePayload);
+  EXPECT_EQ(retry.status, 200); EXPECT_EQ(retry.body, put.body);
+  auto get = request("GET", path, bearer());
+  ASSERT_EQ(get.status, 200) << get.body;
+  EXPECT_EQ(jsonString(get.body, "content_hash"), hash);
+  EXPECT_TRUE(bodyHas(get.body, "\"snapshot\":{\"schema_version\":1"));
+  EXPECT_TRUE(bodyHas(get.body, "\"original_start_utc\":\"2026-10-13T15:00:00Z\""));
+  EXPECT_TRUE(bodyHas(get.body, "\"join_enabled\":false"));
+  EXPECT_FALSE(bodyHas(put.body, "meetingRef"));
+  auto changed = schedulePayload;
+  changed.replace(changed.find("\"active\":true"), 13, "\"active\":false");
+  auto conflict = request("PUT", path, bearer(), changed);
+  EXPECT_EQ(conflict.status, 409); EXPECT_TRUE(bodyHas(conflict.body, "revision_conflict"));
+  auto other = authHeaders("Bearer " + accounts_->createAccount());
+  EXPECT_EQ(request("GET", path, other).status, 404);
+  EXPECT_EQ(request("PUT", path, other, schedulePayload).status, 404);
+}
+TEST_F(HttpIntegrationTest, ScheduleRawByteAndSchemaFailuresHaveContractErrors) {
+  const std::string path = "/v1/schedule-series/45f9c587-94c8-4d45-9f21-422a8df32592";
+  auto invalid = request("PUT", path, bearer(), R"({"client_name":"sensitive"})");
+  EXPECT_EQ(invalid.status, 422); EXPECT_TRUE(bodyHas(invalid.body, "invalid_schedule"));
+  EXPECT_FALSE(bodyHas(invalid.body, "sensitive"));
+  auto huge = request("PUT", path, bearer(), std::string(1024 * 1024 + 1, ' '));
+  EXPECT_EQ(huge.status, 413); EXPECT_TRUE(bodyHas(huge.body, "invalid_schedule"));
+  EXPECT_EQ(request("GET", path, bearer()).status, 404);
+  EXPECT_EQ(request("PUT", "/v1/schedule-series/not-a-uuid", bearer(), schedulePayload).status, 422);
+}
+namespace {
+class UnknownSizeScheduleBody : public oatpp::web::protocol::http::outgoing::Body {
+public:
+  explicit UnknownSizeScheduleBody(std::string text) : text_(std::move(text)) {}
+  void declareHeaders(Headers &headers) override { headers.put("Content-Type", "application/json"); }
+  p_char8 getKnownData() override { return nullptr; }
+  v_int64 getKnownSize() override { return -1; }
+  oatpp::v_io_size read(void *buffer, v_buff_size count, oatpp::async::Action &) override {
+    auto size = std::min<size_t>(count, text_.size() - pos_);
+    std::memcpy(buffer, text_.data() + pos_, size); pos_ += size; return size;
+  }
+private:
+  std::string text_; size_t pos_ = 0;
+};
+}
+TEST_F(HttpIntegrationTest, ScheduleChunkedTransferAlsoEnforcesRawByteLimit) {
+  const char *path = "/v1/schedule-series/45f9c587-94c8-4d45-9f21-422a8df32594";
+  auto chunked = std::make_shared<UnknownSizeScheduleBody>(schedulePayload);
+  auto response = executor_->execute("PUT", path, bearer(), chunked, nullptr);
+  ASSERT_EQ(response->getStatusCode(), 200) << *response->readBodyToString();
+  response->readBodyToString();
+  chunked = std::make_shared<UnknownSizeScheduleBody>(std::string(1024 * 1024 + 1, ' '));
+  response = executor_->execute("PUT", path, bearer(), chunked, nullptr);
+  EXPECT_EQ(response->getStatusCode(), 413);
+  EXPECT_TRUE(bodyHas(*response->readBodyToString(), "invalid_schedule"));
+  EXPECT_EQ(request("GET", path, bearer()).status, 200);
+}
+TEST_F(HttpIntegrationTest, ScheduleConcurrentCasRequestsHaveOneWinnerAndOneConflict) {
+  const char *path = "/v1/schedule-series/45f9c587-94c8-4d45-9f21-422a8df32595";
+  ASSERT_EQ(request("PUT", path, bearer(), schedulePayload).status, 200);
+  auto payload = schedulePayload;
+  payload.replace(payload.find("\"revision\":1"), 12, "\"revision\":2");
+  payload.replace(payload.find("\"base_revision\":0"), 17, "\"base_revision\":1");
+  std::latch start(1); std::atomic<int> successes{0}, conflicts{0}, failures{0};
+  auto write = [&](bool active) {
+    auto own = payload;
+    if (!active) own.replace(own.find("\"active\":true"), 13, "\"active\":false");
+    auto provider = oatpp::network::tcp::client::ConnectionProvider::createShared({"127.0.0.1", kTestPort});
+    auto executor = oatpp::web::client::HttpRequestExecutor::createShared(provider);
+    auto body = oatpp::web::protocol::http::outgoing::BufferBody::createShared(oatpp::String(own.c_str()), "application/json");
+    start.wait();
+    try {
+      auto response = executor->execute("PUT", path, bearer(), body, nullptr);
+      auto status = response->getStatusCode(); response->readBodyToString();
+      if (status == 200) ++successes; else if (status == 409) ++conflicts; else ++failures;
+    } catch (...) { ++failures; }
+  };
+  std::thread a(write, true), b(write, false); start.count_down(); a.join(); b.join();
+  EXPECT_EQ(successes, 1); EXPECT_EQ(conflicts, 1); EXPECT_EQ(failures, 0);
 }
 
 // --- POST /v1/meetings ------------------------------------------------------
