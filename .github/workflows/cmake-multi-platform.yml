@@ -357,6 +357,14 @@ jobs:
             rpm -qp --requires build-release/packages/*.rpm | grep -Fx "$dep"
           done
 
+      - name: Upload Linux RPM
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sessio-linux-rpm
+          path: build-release/packages/*.rpm
+          if-no-files-found: error
+
       - name: Download linuxdeployqt
         if: runner.os == 'Linux'
         run: |
@@ -389,12 +397,12 @@ jobs:
           mkdir -p build-release/packages
           find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' -exec mv {} build-release/packages/ \;
 
-      - name: Upload Linux package
+      - name: Upload Linux AppImage
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: build-release/packages/*
+          path: build-release/packages/*.AppImage
           if-no-files-found: error
 
       - name: Build macOS DMG
@@ -463,10 +471,16 @@ jobs:
           echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=v$APP_VERSION" >> "$GITHUB_ENV"
 
-      - name: Download Linux artifact
+      - name: Download Linux AppImage artifact
         uses: actions/download-artifact@v4
         with:
           name: Sessio-linux-appimage
+          path: release/linux
+
+      - name: Download Linux RPM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Sessio-linux-rpm
           path: release/linux
 
       - name: Download macOS artifact
