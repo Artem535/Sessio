@@ -10,6 +10,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QImage>
+#include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
 #include <QSignalBlocker>
@@ -18,6 +19,21 @@
 #include <optional>
 
 namespace {
+// A softly tinted, bordered rounded panel that paints itself (see the QSS note in the constructor).
+class CardFrame final : public QFrame {
+public:
+  using QFrame::QFrame;
+
+protected:
+  void paintEvent(QPaintEvent *) override {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setPen(QColor(255, 255, 255, 26));
+    painter.setBrush(QColor(255, 255, 255, 10));
+    painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 12.0, 12.0);
+  }
+};
+
 // Repopulates `combo` from `devices`, keeping whichever device (identified
 // by its stable id()) was previously selected, if it is still present.
 // Falls back to `defaultId` (the operating system's default device) when the
@@ -68,15 +84,10 @@ DeviceCheckWidget::DeviceCheckWidget(pcm::video::DeviceManager *deviceManager, Q
   // showEvent().
   // Two columns, capped to a comfortable width and centred: the camera preview on the left, a
   // card with the device selectors on the right, Back/Join underneath.
-  setStyleSheet(QStringLiteral(
-      "QFrame#deviceCard { background-color: rgba(255, 255, 255, 0.04);"
-      " border: 1px solid rgba(255, 255, 255, 0.10); border-radius: 12px; }"
-      "QFrame#deviceCard QLabel { border: none; background: transparent; }"
-      "QLabel#devicePreviewLabel { background-color: rgba(255, 255, 255, 0.06); border-radius: 12px; }"
-      "QPushButton#joinButton { background-color: rgb(76, 132, 255); color: white;"
-      " border: none; border-radius: 20px; padding: 0 28px; font-weight: bold; }"
-      "QPushButton#joinButton:hover { background-color: rgb(98, 148, 255); }"
-      "QPushButton#backFromDeviceCheckButton { border-radius: 20px; padding: 0 22px; }"));
+  // No style sheet on this widget or on any ancestor of the combo boxes: with QSS on an ancestor,
+  // Qt keeps re-polishing the combos and Qlementine's ComboboxItemViewFilter then recurses
+  // (view() -> container ChildAdded -> filter -> view() ...) until the stack overflows. The card
+  // paints itself, and styles go only on leaf widgets that have no combo below them.
   auto *outer = new QVBoxLayout(this);
   auto *column = new QWidget(this);
   column->setMaximumWidth(980);
@@ -108,13 +119,15 @@ DeviceCheckWidget::DeviceCheckWidget(pcm::video::DeviceManager *deviceManager, Q
   mPreviewLabel->setMinimumSize(360, 203); // 16:9, matching the camera feed
   mPreviewLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
   mPreviewLabel->setAlignment(Qt::AlignCenter);
+  mPreviewLabel->setStyleSheet(
+      "QLabel#devicePreviewLabel { background-color: rgba(255, 255, 255, 0.06); border-radius: 12px; }");
   bodyLayout->addWidget(mPreviewLabel, 0, 0);
   auto *privacyHint = new QLabel(tr("Only you see this preview until you join"), body);
   privacyHint->setStyleSheet("color: rgba(255, 255, 255, 0.55);");
   bodyLayout->addWidget(privacyHint, 1, 0);
 
   // Right: the selector card.
-  auto *card = new QFrame(body);
+  auto *card = new CardFrame(body);
   card->setObjectName("deviceCard");
   auto *cardLayout = new QVBoxLayout(card);
   cardLayout->setContentsMargins(16, 14, 16, 14);
@@ -165,11 +178,16 @@ DeviceCheckWidget::DeviceCheckWidget(pcm::video::DeviceManager *deviceManager, Q
   auto *backButton = new QPushButton(tr("Back"), buttonRow);
   backButton->setObjectName("backFromDeviceCheckButton");
   backButton->setFixedHeight(40);
+  backButton->setStyleSheet("QPushButton { border-radius: 20px; padding: 0 22px; }");
   connect(backButton, &QPushButton::clicked, this, &DeviceCheckWidget::backRequested);
   buttonLayout->addWidget(backButton);
   auto *joinButton = new QPushButton(tr("Join"), buttonRow);
   joinButton->setObjectName("joinButton");
   joinButton->setFixedHeight(40);
+  joinButton->setStyleSheet(
+      "QPushButton { background-color: rgb(76, 132, 255); color: white; border: none;"
+      " border-radius: 20px; padding: 0 28px; font-weight: bold; }"
+      "QPushButton:hover { background-color: rgb(98, 148, 255); }");
   connect(joinButton, &QPushButton::clicked, this, &DeviceCheckWidget::joinRequested);
   buttonLayout->addWidget(joinButton);
   layout->addWidget(buttonRow);

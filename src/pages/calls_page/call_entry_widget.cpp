@@ -155,7 +155,8 @@ void CallEntryWidget::setUpcomingMeetings(const QList<UpcomingMeeting> &meetings
   mNoCallsLabel->setVisible(meetings.isEmpty());
   for (const auto &meeting : meetings) {
     auto *row = new QWidget(mOwnMeetingsList);
-    row->setStyleSheet("QWidget#callRow { border-top: 1px solid rgba(255, 255, 255, 0.08); }");
+    row->setStyleSheet(
+        "QWidget#callRow { background: transparent; border-top: 1px solid rgba(255, 255, 255, 0.08); }");
     row->setObjectName("callRow");
     auto *rowLayout = new QHBoxLayout(row);
     rowLayout->setContentsMargins(0, 8, 0, 8);

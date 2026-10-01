@@ -81,6 +81,23 @@ TEST(DeviceCheckWidgetTest, PutsThePreviewBesideASelectorCardWithMeterAndSpeaker
   EXPECT_LT(back->parentWidget()->layout()->indexOf(back), back->parentWidget()->layout()->indexOf(join));
 }
 
+// Crash regression: a style sheet on this screen (or on any ancestor of its combo boxes) makes Qt
+// re-polish the combos, and Qlementine's combo-box event filter then recurses until the stack
+// overflows. Keep every ancestor of a combo free of style sheets.
+TEST(DeviceCheckWidgetTest, NoAncestorOfAComboBoxCarriesAStyleSheet) {
+  pcm::video::DeviceManager deviceManager;
+  DeviceCheckWidget widget(&deviceManager);
+  EXPECT_TRUE(widget.styleSheet().isEmpty());
+  for (const char *name : {"cameraCombo", "microphoneCombo", "speakerCombo"}) {
+    auto *combo = widget.findChild<QComboBox *>(name);
+    ASSERT_NE(combo, nullptr) << name;
+    for (QWidget *ancestor = combo->parentWidget(); ancestor; ancestor = ancestor->parentWidget()) {
+      EXPECT_TRUE(ancestor->styleSheet().isEmpty())
+          << name << " has a styled ancestor: " << ancestor->objectName().toStdString();
+    }
+  }
+}
+
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
