@@ -87,6 +87,8 @@ public slots:
 
 private:
   void buildDeviceCheckScreen(pcm::video::DeviceManager *deviceManager);
+  // Passes the device-check screen's camera/microphone/speaker choice to the provider.
+  void applyDeviceCheckSelection();
   void buildConnectedScreen();
   void syncParticipants();
   void clearParticipants();

@@ -3,6 +3,7 @@
 
 #include <QApplication>
 #include <QComboBox>
+#include <QMediaDevices>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QTest>
@@ -27,6 +28,20 @@ TEST(DeviceCheckWidgetTest, ClickingJoinEmitsJoinRequested) {
   QTest::mouseClick(joinButton, Qt::LeftButton);
 
   EXPECT_EQ(joinSpy.count(), 1);
+}
+
+// The screen must start on what the OS treats as the default device, not on the
+// first listed one (often a built-in analog output while a headset is connected).
+TEST(DeviceCheckWidgetTest, PreselectsTheSystemDefaultDevices) {
+  pcm::video::DeviceManager deviceManager;
+  DeviceCheckWidget widget(&deviceManager);
+
+  if (const auto output = QMediaDevices::defaultAudioOutput(); !output.isNull()) {
+    EXPECT_EQ(widget.findChild<QComboBox *>("speakerCombo")->currentData().toByteArray(), output.id());
+  }
+  if (const auto input = QMediaDevices::defaultAudioInput(); !input.isNull()) {
+    EXPECT_EQ(widget.findChild<QComboBox *>("microphoneCombo")->currentData().toByteArray(), input.id());
+  }
 }
 
 int main(int argc, char **argv) {

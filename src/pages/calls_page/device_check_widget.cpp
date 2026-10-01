@@ -7,30 +7,38 @@
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 #include <QVideoFrame>
+#include <optional>
 
 namespace {
 // Repopulates `combo` from `devices`, keeping whichever device (identified
 // by its stable id()) was previously selected, if it is still present.
-// Falls back to the first device when the previous selection is gone (or
-// there was none yet), rather than leaving the combo on a stale/invalid
+// Falls back to `defaultId` (the operating system's default device) when the
+// previous selection is gone or there was none yet, and to the first device
+// when even that is unknown, rather than leaving the combo on a stale/invalid
 // index. Wrapped in a QSignalBlocker so intermediate clear()/addItem() calls
 // don't each trigger currentIndexChanged (e.g. DeviceCheckWidget's own
 // restartPreview() connection) -- the caller re-syncs once after all three
 // combos are refreshed.
 template <typename DeviceList>
-void refreshDeviceCombo(QComboBox *combo, const DeviceList &devices) {
+void refreshDeviceCombo(QComboBox *combo, const DeviceList &devices, const QByteArray &defaultId) {
   const QByteArray previousId = combo->currentData().toByteArray();
   const QSignalBlocker blocker(combo);
   combo->clear();
   int matchIndex = -1;
+  int defaultIndex = -1;
   for (const auto &device : devices) {
     combo->addItem(device.description(), device.id());
     if (!previousId.isEmpty() && device.id() == previousId) {
       matchIndex = combo->count() - 1;
     }
+    if (!defaultId.isEmpty() && device.id() == defaultId) {
+      defaultIndex = combo->count() - 1;
+    }
   }
   if (matchIndex >= 0) {
     combo->setCurrentIndex(matchIndex);
+  } else if (defaultIndex >= 0) {
+    combo->setCurrentIndex(defaultIndex);
   } else if (combo->count() > 0) {
     combo->setCurrentIndex(0);
   }
@@ -58,19 +66,13 @@ DeviceCheckWidget::DeviceCheckWidget(pcm::video::DeviceManager *deviceManager, Q
 
   mCameraCombo = new QComboBox(this);
   mCameraCombo->setObjectName("cameraCombo");
-  for (const auto &camera : mDeviceManager->cameras()) {
-    mCameraCombo->addItem(camera.description(), camera.id());
-  }
   mMicrophoneCombo = new QComboBox(this);
   mMicrophoneCombo->setObjectName("microphoneCombo");
-  for (const auto &mic : mDeviceManager->microphones()) {
-    mMicrophoneCombo->addItem(mic.description(), mic.id());
-  }
   mSpeakerCombo = new QComboBox(this);
   mSpeakerCombo->setObjectName("speakerCombo");
-  for (const auto &speaker : mDeviceManager->speakers()) {
-    mSpeakerCombo->addItem(speaker.description(), speaker.id());
-  }
+  // Populated up front (and not just in showEvent) so the screen already reflects the
+  // system default devices, and selected*() are meaningful, before it is first shown.
+  refreshDeviceLists();
   layout->addWidget(mCameraCombo);
   layout->addWidget(mMicrophoneCombo);
   layout->addWidget(mSpeakerCombo);
@@ -146,11 +148,47 @@ void DeviceCheckWidget::restartPreview() {
 }
 
 void DeviceCheckWidget::refreshDeviceLists() {
-  refreshDeviceCombo(mCameraCombo, mDeviceManager->cameras());
-  refreshDeviceCombo(mMicrophoneCombo, mDeviceManager->microphones());
-  refreshDeviceCombo(mSpeakerCombo, mDeviceManager->speakers());
+  const auto defaultCamera = mDeviceManager->defaultCamera();
+  const auto defaultMicrophone = mDeviceManager->defaultMicrophone();
+  const auto defaultSpeaker = mDeviceManager->defaultSpeaker();
+  refreshDeviceCombo(mCameraCombo, mDeviceManager->cameras(),
+                     defaultCamera ? defaultCamera->id() : QByteArray());
+  refreshDeviceCombo(mMicrophoneCombo, mDeviceManager->microphones(),
+                     defaultMicrophone ? defaultMicrophone->id() : QByteArray());
+  refreshDeviceCombo(mSpeakerCombo, mDeviceManager->speakers(),
+                     defaultSpeaker ? defaultSpeaker->id() : QByteArray());
   // The camera selection may have changed (a new default index, or the
   // previously selected camera vanishing) -- restart the preview against
   // whatever mCameraCombo now points at. No-op if no preview is running yet.
   restartPreview();
+}
+
+namespace {
+// The device in `devices` whose stable id() is the combo's current selection.
+template <typename DeviceList>
+auto selectedDevice(const QComboBox *combo, const DeviceList &devices)
+    -> std::optional<typename DeviceList::value_type> {
+  const QByteArray id = combo->currentData().toByteArray();
+  if (id.isEmpty()) {
+    return std::nullopt;
+  }
+  for (const auto &device : devices) {
+    if (device.id() == id) {
+      return device;
+    }
+  }
+  return std::nullopt;
+}
+} // namespace
+
+std::optional<QCameraDevice> DeviceCheckWidget::selectedCamera() const {
+  return selectedDevice(mCameraCombo, mDeviceManager->cameras());
+}
+
+std::optional<QAudioDevice> DeviceCheckWidget::selectedMicrophone() const {
+  return selectedDevice(mMicrophoneCombo, mDeviceManager->microphones());
+}
+
+std::optional<QAudioDevice> DeviceCheckWidget::selectedSpeaker() const {
+  return selectedDevice(mSpeakerCombo, mDeviceManager->speakers());
 }

@@ -241,8 +241,10 @@ VideoFrameSource *LiveKitVideoProvider::frameSource(const QString &id) {
 void LiveKitVideoProvider::join(const QString &url, const QString &token) {
   teardown();
   const auto generation = mGeneration;
-  if (const auto camera = mDeviceManager->defaultCamera()) mVideoCapture->start(*camera);
-  if (const auto microphone = mDeviceManager->defaultMicrophone()) mAudioCapture->start(*microphone);
+  const auto camera = mSelectedCamera ? mSelectedCamera : mDeviceManager->defaultCamera();
+  if (camera) mVideoCapture->start(*camera);
+  const auto microphone = mSelectedMicrophone ? mSelectedMicrophone : mDeviceManager->defaultMicrophone();
+  if (microphone) mAudioCapture->start(*microphone);
 
   mRoom = std::make_unique<livekit::Room>();
   mDelegate = std::make_unique<CallbackDelegate>(*this, *mRoom, generation);
@@ -486,12 +488,15 @@ void LiveKitVideoProvider::setCameraEnabled(bool enabled) {
 void LiveKitVideoProvider::switchCamera(const QCameraDevice &device) {
   // Same livekit::VideoSource the whole call publishes from — start()
   // only restarts the Qt-side QCamera/capture worker, so no republish is
-  // needed.
-  mVideoCapture->start(device);
+  // needed. Before join() there is no call to capture for yet: only remember the choice, so
+  // the camera light does not come on until the call actually starts.
+  mSelectedCamera = device;
+  if (mRoom) mVideoCapture->start(device);
 }
 
 void LiveKitVideoProvider::switchMicrophone(const QAudioDevice &device) {
-  mAudioCapture->start(device);
+  mSelectedMicrophone = device;
+  if (mRoom) mAudioCapture->start(device);
 }
 
 void LiveKitVideoProvider::switchSpeaker(const QAudioDevice &device) {

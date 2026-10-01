@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QWidget>
 #include <memory>
+#include <optional>
 
 class QComboBox;
 class QPushButton;
@@ -21,6 +22,12 @@ class DeviceCheckWidget final : public QWidget {
 public:
   explicit DeviceCheckWidget(pcm::video::DeviceManager *deviceManager, QWidget *parent = nullptr);
   ~DeviceCheckWidget() override;
+
+  // What the user has picked, or nullopt when there is nothing to pick. Applied to the
+  // provider before joining, so the call opens exactly these devices.
+  [[nodiscard]] std::optional<QCameraDevice> selectedCamera() const;
+  [[nodiscard]] std::optional<QAudioDevice> selectedMicrophone() const;
+  [[nodiscard]] std::optional<QAudioDevice> selectedSpeaker() const;
 
 signals:
   void joinRequested();

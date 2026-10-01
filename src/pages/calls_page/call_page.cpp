@@ -217,6 +217,16 @@ CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : 
   mStack->setCurrentWidget(mDeviceCheck);
 }
 
+void CallPage::applyDeviceCheckSelection() {
+  auto *provider = mSession ? mSession->provider() : nullptr;
+  if (!provider || !mDeviceCheck) {
+    return;
+  }
+  if (const auto camera = mDeviceCheck->selectedCamera()) provider->switchCamera(*camera);
+  if (const auto microphone = mDeviceCheck->selectedMicrophone()) provider->switchMicrophone(*microphone);
+  if (const auto speaker = mDeviceCheck->selectedSpeaker()) provider->switchSpeaker(*speaker);
+}
+
 void CallPage::buildDeviceCheckScreen(pcm::video::DeviceManager *deviceManager) {
   mDeviceCheck = new DeviceCheckWidget(deviceManager, this);
   mDeviceCheck->setObjectName("deviceCheckWidget");
@@ -234,7 +244,12 @@ void CallPage::buildDeviceCheckScreen(pcm::video::DeviceManager *deviceManager) 
   // url/token of its own, so it cannot call join() itself — it just forwards
   // "the user confirmed" to whoever attached the session (CallsPage), which
   // does hold the pending url/token and performs the actual join() call.
-  connect(mDeviceCheck, &DeviceCheckWidget::joinRequested, this, &CallPage::joinConfirmed);
+  // The devices picked on this screen must be the ones the call opens, so hand them to the
+  // provider before CallsPage performs the join.
+  connect(mDeviceCheck, &DeviceCheckWidget::joinRequested, this, [this]() {
+    applyDeviceCheckSelection();
+    emit joinConfirmed();
+  });
   connect(mDeviceCheck, &DeviceCheckWidget::backRequested, this, &CallPage::deviceCheckCanceled);
   mStack->addWidget(mDeviceCheck);
 }

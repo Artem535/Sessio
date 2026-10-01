@@ -4,6 +4,7 @@
 #include "fake_video_provider.h"
 
 #include <QApplication>
+#include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QJsonDocument>
@@ -152,6 +153,56 @@ TEST(CallsPageTest, RealJoinIsGatedBehindDeviceCheckConfirmation) {
   ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider->mJoinCallCount == 1; }, 2000));
   EXPECT_EQ(fakeProvider->mLastJoinUrl, QStringLiteral("wss://livekit.example.test"));
   EXPECT_EQ(fakeProvider->mLastJoinToken, QStringLiteral("jwt-1"));
+}
+
+// The device the user picks on the device-check screen must be the one the call
+// actually uses. Previously the combo boxes only drove the preview and join() fell
+// back to the default devices, so choosing a different speaker "didn't work".
+TEST(CallsPageTest, DevicesChosenOnDeviceCheckAreAppliedBeforeJoining) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, R"({
+    "endpointUrl": "wss://livekit.example.test", "roomName": "room-1",
+    "token": "jwt-1", "expiresAt": 999
+  })");
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  if (deviceManager.speakers().isEmpty() && deviceManager.microphones().isEmpty()) {
+    GTEST_SKIP() << "no audio devices available to choose between";
+  }
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+
+  FakeVideoProvider *fakeProvider = nullptr;
+  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+    fakeProvider = new FakeVideoProvider();
+    return fakeProvider;
+  });
+
+  page.findChild<QLineEdit *>("joinCodeEdit")->setText("code-1");
+  page.findChild<QLineEdit *>("joinPasscodeEdit")->setText("123456");
+  page.findChild<QPushButton *>("joinByCodeButton")->click();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider != nullptr; }, 2000));
+
+  // Deliberately pick the LAST entry, never the first/default one.
+  auto *speakerCombo = page.findChild<QComboBox *>("speakerCombo");
+  auto *microphoneCombo = page.findChild<QComboBox *>("microphoneCombo");
+  ASSERT_NE(speakerCombo, nullptr);
+  ASSERT_NE(microphoneCombo, nullptr);
+  if (speakerCombo->count() > 0) speakerCombo->setCurrentIndex(speakerCombo->count() - 1);
+  if (microphoneCombo->count() > 0) microphoneCombo->setCurrentIndex(microphoneCombo->count() - 1);
+  const auto chosenSpeaker = speakerCombo->currentData().toByteArray();
+  const auto chosenMicrophone = microphoneCombo->currentData().toByteArray();
+
+  page.findChild<QPushButton *>("joinButton")->click();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider->mJoinCallCount == 1; }, 2000));
+
+  if (!chosenSpeaker.isEmpty()) {
+    EXPECT_EQ(fakeProvider->mLastSwitchedSpeaker.id(), chosenSpeaker);
+  }
+  if (!chosenMicrophone.isEmpty()) {
+    EXPECT_EQ(fakeProvider->mLastSwitchedMicrophone.id(), chosenMicrophone);
+  }
+  // Applied BEFORE join(), so the provider opens the chosen devices from the start.
+  EXPECT_GT(fakeProvider->mSwitchCountsAtJoin, 0);
 }
 
 TEST(CallsPageTest, BackFromDeviceCheckReturnsToTheJoinFormWithoutJoining) {

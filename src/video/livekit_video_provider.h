@@ -96,6 +96,9 @@ private:
   bool mMicrophoneEnabled{true};
   bool mCameraEnabled{true};
   std::optional<QAudioDevice> mSelectedSpeaker;
+  // Chosen before joining (device-check screen); join() opens these instead of the defaults.
+  std::optional<QCameraDevice> mSelectedCamera;
+  std::optional<QAudioDevice> mSelectedMicrophone;
   uint64_t mGeneration{0};
   std::mutex mCallbackMutex;
   uint64_t mNextCallback{0};

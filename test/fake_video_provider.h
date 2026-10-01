@@ -17,6 +17,7 @@ public:
   void join(const QString &url, const QString &token) override {
     mLastJoinUrl = url;
     mLastJoinToken = token;
+    mSwitchCountsAtJoin = mSwitchCameraCallCount + mSwitchMicrophoneCallCount + mSwitchSpeakerCallCount;
     ++mJoinCallCount;
   }
 
@@ -81,6 +82,8 @@ public:
   QString mLastJoinUrl;
   QString mLastJoinToken;
   int mJoinCallCount{0};
+  // Total switchCamera/Microphone/Speaker calls that had already happened when join() ran.
+  int mSwitchCountsAtJoin{0};
   int mLeaveCallCount{0};
   QHash<QString, QPointer<VideoFrameSource>> mSources;
   bool mRejectMediaChanges{false};
