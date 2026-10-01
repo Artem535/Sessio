@@ -379,8 +379,8 @@ void CallPage::buildConnectedScreen() {
 
   auto *leaveButton = new QPushButton(tr("Leave"), mConnectedView);
   leaveButton->setObjectName("leaveButton");
-  leaveButton->setMinimumHeight(40);
-  leaveButton->setStyleSheet("QPushButton { background: #b52b3a; color: white; border: none; border-radius: 8px; padding: 0 16px; } QPushButton:hover { background: #d33547; }");
+  leaveButton->setFixedHeight(40);
+  leaveButton->setStyleSheet("QPushButton { background: #b52b3a; color: white; border: none; border-radius: 20px; padding: 0 20px; } QPushButton:hover { background: #d33547; }");
   connect(leaveButton, &QPushButton::clicked, this, &CallPage::leaveRequested);
 
   mControlBar = new QWidget(mVideoStage);
@@ -389,8 +389,13 @@ void CallPage::buildConnectedScreen() {
   // QStyleSheetStyle owns background painting and an autoFillBackground/
   // QPalette fill is never painted. Fully opaque (no alpha) because the bar
   // overlays a QOpenGLWidget video renderer.
-  mControlBar->setStyleSheet(
-      QStringLiteral("#controlBar { background-color: rgb(20, 20, 20); border-radius: 24px; }"));
+  // Round 40x40 buttons: dark when off, blue when on (checked), a touch lighter on hover.
+  mControlBar->setStyleSheet(QStringLiteral(
+      "#controlBar { background-color: rgb(20, 20, 20); border-radius: 24px; }"
+      "#controlBar QToolButton { background-color: rgb(50, 54, 65); border: none; border-radius: 20px; }"
+      "#controlBar QToolButton:hover { background-color: rgb(68, 73, 87); }"
+      "#controlBar QToolButton:checked { background-color: rgb(76, 132, 255); }"
+      "#controlBar QToolButton:checked:hover { background-color: rgb(98, 148, 255); }"));
   auto *controlBarLayout = new QHBoxLayout(mControlBar);
   controlBarLayout->setContentsMargins(12, 4, 12, 4);
   controlBarLayout->setSpacing(8);
