@@ -8,6 +8,8 @@ find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia MultimediaWidgets)
 qt_add_library(${TARGET_NAME} STATIC
         call_entry_widget.h
         call_entry_widget.cpp
+        audio_check.h
+        audio_check.cpp
         device_check_widget.h
         device_check_widget.cpp
         call_page.h

@@ -527,6 +527,16 @@ target_link_libraries(Sessio_call_entry_widget_tests PRIVATE
 set_target_properties(Sessio_call_entry_widget_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_call_entry_widget_tests)
 
+# Audio-check helpers (mic level, test tone)
+add_executable(Sessio_audio_check_tests audio_check_tests.cpp)
+target_link_libraries(Sessio_audio_check_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Qt6::Multimedia
+    Sessio_calls_page
+)
+gtest_discover_tests(Sessio_audio_check_tests)
+
 # DeviceCheckWidget tests
 add_executable(Sessio_device_check_widget_tests device_check_widget_tests.cpp)
 target_link_libraries(Sessio_device_check_widget_tests PRIVATE

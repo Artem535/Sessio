@@ -1,13 +1,18 @@
 #pragma once
 
 #include "device_manager.h"
+#include "audio_check.h"
 #include "video_capture_adapter.h"
 
+#include <QBuffer>
+#include <QByteArray>
 #include <QLabel>
 #include <QWidget>
 #include <memory>
 #include <optional>
 
+class QAudioSink;
+class QAudioSource;
 class QComboBox;
 class QPushButton;
 
@@ -38,6 +43,12 @@ protected:
   void hideEvent(QHideEvent *event) override;
 
 private:
+  // Microphone level meter: listens to the selected microphone only while the screen is shown.
+  void restartMicMeter();
+  void stopMicMeter();
+  // The "Test" button: a short tone through the selected speaker.
+  void playSpeakerTest();
+  void stopSpeakerTest();
   void ensurePreviewAdapter();
   void restartPreview();
   // Repopulates all three combo boxes from a fresh DeviceManager query,
@@ -56,4 +67,10 @@ private:
   QComboBox *mMicrophoneCombo{nullptr};
   QComboBox *mSpeakerCombo{nullptr};
   QLabel *mPreviewLabel{nullptr};
+  pcm::calls::MicLevelMeter *mMicMeter{nullptr};
+  std::unique_ptr<QAudioSource> mMicSource;
+  QIODevice *mMicDevice{nullptr};
+  std::unique_ptr<QAudioSink> mToneSink;
+  QByteArray mToneData;
+  QBuffer mToneBuffer;
 };
