@@ -14,6 +14,7 @@
 #include <QMenu>
 #include <QPoint>
 #include <QPushButton>
+#include <QShortcut>
 #include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QTimer>
@@ -81,6 +82,14 @@ void VideoStage::resizeEvent(QResizeEvent *event) {
   layoutChildren();
 }
 
+namespace {
+// The control bar floats this far above the bottom edge, and the tiles keep clear of the bar
+// plus a small gap -- tight enough that no dead band is left below the video.
+constexpr int kControlBarHeight = 48;
+constexpr int kControlBarBottomMargin = 12;
+constexpr int kBottomReserved = kControlBarBottomMargin + kControlBarHeight + 8;
+} // namespace
+
 void VideoStage::layoutChildren() {
   while (auto *item = mTileGrid->takeAt(0))
     delete item;
@@ -99,7 +108,7 @@ void VideoStage::layoutChildren() {
       local = tile;
   const bool solo = mTiles.size() == 1 || (mTiles.size() == 2 && local);
   const QRect available = solo ? rect() :
-      QRect(12, top, std::max(0, width() - 24), std::max(0, height() - top - 88));
+      QRect(12, top, std::max(0, width() - 24), std::max(0, height() - top - kBottomReserved));
   auto strategy = CallLayoutStrategy::select(mTiles.size(), local != nullptr, available.size());
   if (solo) strategy.tileSize = available.size();
   const int gridCount = mTiles.size() - (strategy.pictureInPicture ? 1 : 0);
@@ -113,7 +122,7 @@ void VideoStage::layoutChildren() {
       const int pipWidth = std::min(std::max(0, width() / 3), std::clamp(width() / 5, 200, 280));
       const int pipHeight = pipWidth * 9 / 16;
       tile->setFixedSize(pipWidth, pipHeight);
-      tile->setGeometry(std::max(0, width() - pipWidth - 20), std::max(0, height() - pipHeight - 88),
+      tile->setGeometry(std::max(0, width() - pipWidth - 20), std::max(0, height() - pipHeight - kBottomReserved),
                         pipWidth, pipHeight);
       tile->show();
       tile->raise();
@@ -136,9 +145,9 @@ void VideoStage::layoutChildren() {
   if (mControlBarWidget) {
     const QSize hint = mControlBarWidget->sizeHint();
     const int barWidth = std::min(width(), hint.width() > 0 ? hint.width() : mControlBarWidget->width());
-    const int barHeight = 48;
+    const int barHeight = kControlBarHeight;
     const int x = (width() - barWidth) / 2;
-    const int y = height() - 20 - barHeight;
+    const int y = height() - kControlBarBottomMargin - barHeight;
     mControlBarWidget->setGeometry(x, y, barWidth, barHeight);
     mControlBarWidget->raise();
   }
@@ -215,6 +224,29 @@ CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : 
   mStack->addWidget(mEndedScreen);
 
   mStack->setCurrentWidget(mDeviceCheck);
+}
+
+void CallPage::setFullscreen(bool fullscreen) {
+  // Only the participants and the control bar stay: the notes panel and its toggle go too.
+  if (mNotesToggleButton) {
+    mNotesToggleButton->setVisible(!fullscreen);
+  }
+  mSidePanelHost->setVisible(!fullscreen && mNotesToggleButton && mNotesToggleButton->isChecked());
+  mVideoStage->update();
+  if (auto *topLevel = window()) {
+    if (fullscreen) {
+      topLevel->showFullScreen();
+    } else {
+      topLevel->showNormal();
+    }
+  }
+  emit fullscreenChanged(fullscreen);
+}
+
+void CallPage::leaveFullscreenIfActive() {
+  if (mFullscreenToggleButton && mFullscreenToggleButton->isChecked()) {
+    mFullscreenToggleButton->setChecked(false);
+  }
 }
 
 void CallPage::applyDeviceCheckSelection() {
@@ -331,15 +363,12 @@ void CallPage::buildConnectedScreen() {
     const QString label = checked ? tr("Exit fullscreen") : tr("Enter fullscreen");
     mFullscreenToggleButton->setToolTip(label);
     mFullscreenToggleButton->setAccessibleName(label);
-    if (!window()) {
-      return;
-    }
-    if (checked) {
-      window()->showFullScreen();
-    } else {
-      window()->showNormal();
-    }
+    setFullscreen(checked);
   });
+  // Esc leaves fullscreen, the usual way out when the control bar is hidden behind the video.
+  auto *escapeShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), mConnectedView);
+  escapeShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+  connect(escapeShortcut, &QShortcut::activated, this, [this]() { leaveFullscreenIfActive(); });
 
   mDevicesButton = new QToolButton(mConnectedView);
   mDevicesButton->setObjectName("devicesButton");
@@ -657,6 +686,13 @@ void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) 
   using pcm::video::VideoSessionState;
   mWaitingLabel->setVisible(state == VideoSessionState::WaitingForParticipants);
   mReconnectingBanner->setVisible(state == VideoSessionState::Reconnecting);
+
+  // Fullscreen belongs to the connected call screen only; never leave the app stuck in it
+  // behind the ended/failed/prejoin screens.
+  if (state != VideoSessionState::WaitingForParticipants && state != VideoSessionState::Connected &&
+      state != VideoSessionState::Reconnecting) {
+    leaveFullscreenIfActive();
+  }
 
   switch (state) {
   case VideoSessionState::NoMeeting:

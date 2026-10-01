@@ -68,6 +68,9 @@ public:
   void setSidePanelExpandedByDefault(bool expanded);
 
 signals:
+  // The call screen entered/left fullscreen: whoever hosts this page hides its surrounding
+  // chrome (navigation, headers) so only the participants and the control bar remain.
+  void fullscreenChanged(bool fullscreen);
   void leaveRequested();
   void deviceCheckCanceled();
   void callEnded();
@@ -89,6 +92,9 @@ private:
   void buildDeviceCheckScreen(pcm::video::DeviceManager *deviceManager);
   // Passes the device-check screen's camera/microphone/speaker choice to the provider.
   void applyDeviceCheckSelection();
+  // Notes panel and its toggle are hidden in fullscreen; restored on exit.
+  void setFullscreen(bool fullscreen);
+  void leaveFullscreenIfActive();
   void buildConnectedScreen();
   void syncParticipants();
   void clearParticipants();

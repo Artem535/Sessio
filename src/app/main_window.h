@@ -139,6 +139,10 @@ signals:
   void settingsSaved();
 
 private:
+  // Hides (or restores) everything around the page content: navigation, utility buttons,
+  // title and page header, so a fullscreen call shows only the call screen.
+  void setCallFullscreen(bool fullscreen);
+
   // Map of pages by type
   QHash<Pages, QWidget*> mPages;
   QHash<Pages, int> mPagesIndex;
@@ -164,6 +168,11 @@ private:
   QPushButton *mBtnSettings{nullptr};
   QPushButton *mBtnAbout{nullptr};
   QHBoxLayout *mPageCustomWidgetLayout{nullptr};
+  QWidget *mTitleWidget{nullptr};
+  // Chrome hidden while a call is fullscreen, with the visibility to restore on exit.
+  QHash<QWidget *, bool> mChromeVisibility;
+  QMargins mGridMargins;
+  bool mCallFullscreen{false};
   QHash<Pages, QWidget*> mPageCustomWidgets;
   Pages mCurrentPage{Pages::eventInfo};
 

@@ -40,6 +40,7 @@ MainWindow::MainWindow(QWidget *parent)
   titleLayout->addWidget(titleIconLabel);
   titleLayout->addWidget(titleTextLabel);
   titleLayout->addStretch();
+  mTitleWidget = titleWidget;
   mUi->gridLayout->replaceWidget(mUi->label, titleWidget);
   mUi->label->hide();
   mUi->label->deleteLater();
@@ -162,9 +163,39 @@ void MainWindow::addCallsPage(pcm::video::DeviceManager *deviceManager,
   const auto page = new CallsPage(/*specialistMode=*/true, deviceManager, tokenClient, this);
   page->setBearerCredentialProvider(std::move(bearerCredentialProvider));
   mPages.insertOrAssign(Pages::calls, page);
+  connect(page, &CallsPage::fullscreenChanged, this, &MainWindow::setCallFullscreen);
 
   const int index = mUi->stackedWidget->addWidget(page);
   mPagesIndex.insertOrAssign(Pages::calls, index);
+}
+
+void MainWindow::setCallFullscreen(bool fullscreen) {
+  if (fullscreen == mCallFullscreen) {
+    return;
+  }
+  mCallFullscreen = fullscreen;
+  if (fullscreen) {
+    mChromeVisibility.clear();
+    const auto hide = [this](QWidget *widget) {
+      if (!widget) return;
+      mChromeVisibility.insert(widget, widget->isVisibleTo(this));
+      widget->hide();
+    };
+    hide(mTitleWidget);
+    hide(mUi->pageCustomWidgetHost);
+    hide(statusBar());
+    for (int i = 0; i < mUi->verticalLayout->count(); ++i) {
+      hide(mUi->verticalLayout->itemAt(i)->widget());
+    }
+    mGridMargins = mUi->gridLayout->contentsMargins();
+    mUi->gridLayout->setContentsMargins(0, 0, 0, 0);
+  } else {
+    for (auto it = mChromeVisibility.cbegin(); it != mChromeVisibility.cend(); ++it) {
+      it.key()->setVisible(it.value());
+    }
+    mChromeVisibility.clear();
+    mUi->gridLayout->setContentsMargins(mGridMargins);
+  }
 }
 
 void MainWindow::setDatabase(std::shared_ptr<pcm::database::Database> db) {

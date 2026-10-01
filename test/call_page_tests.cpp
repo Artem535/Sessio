@@ -512,6 +512,48 @@ TEST(CallPageTest, NormalLeaveAfterEarlierFailureShowsNoStaleReason) {
   EXPECT_TRUE(reasonLabel->text().isEmpty());
 }
 
+// Fullscreen is for the call alone: CallPage tells its host to drop the surrounding chrome and
+// hides the notes panel itself; leaving fullscreen puts the panel back as the user had it.
+TEST(CallPageTest, FullscreenHidesNotesPanelAndAnnouncesTheChange) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  page.setSidePanelToggleVisible(true);
+  auto *panel = new QWidget;
+  page.setSidePanelWidget(panel);
+  page.setSidePanelExpandedByDefault(true);
+  // Toggling fullscreen shows the top-level window; drive the session to Connected first so the
+  // connected view (not the real-camera device check) is the current page. See the sibling
+  // FullscreenToggleButtonHasAccessibleLabelThatUpdatesOnToggle test.
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  QSignalSpy stateSpy(&session, &VideoSession::stateChanged);
+  session.join("wss://x", "token");
+  waitForState(session, stateSpy, VideoSessionState::Joining);
+  provider->simulateJoined();
+  waitForState(session, stateSpy, VideoSessionState::WaitingForParticipants);
+  provider->simulateParticipantJoined({"remote"});
+  waitForState(session, stateSpy, VideoSessionState::Connected);
+  auto *notesToggle = page.findChild<QToolButton *>("notesToggleButton");
+  auto *fullscreenButton = page.findChild<QToolButton *>("fullscreenToggleButton");
+  ASSERT_NE(notesToggle, nullptr);
+  ASSERT_NE(fullscreenButton, nullptr);
+  ASSERT_TRUE(notesToggle->isChecked());
+
+  QSignalSpy spy(&page, &CallPage::fullscreenChanged);
+  fullscreenButton->setChecked(true);
+  ASSERT_EQ(spy.count(), 1);
+  EXPECT_TRUE(spy.takeFirst().at(0).toBool());
+  EXPECT_TRUE(notesToggle->isHidden());
+  EXPECT_FALSE(panel->isVisibleTo(&page));
+
+  fullscreenButton->setChecked(false);
+  ASSERT_EQ(spy.count(), 1);
+  EXPECT_FALSE(spy.takeFirst().at(0).toBool());
+  EXPECT_FALSE(notesToggle->isHidden());
+  EXPECT_TRUE(panel->isVisibleTo(&page)); // the user had it open
+}
+
 TEST(CallPageTest, VideoStagePositionsControlBarCenteredAtBottom) {
   pcm::video::detail::VideoStage stage;
   auto *controlBar = new QWidget(&stage);
@@ -521,7 +563,7 @@ TEST(CallPageTest, VideoStagePositionsControlBarCenteredAtBottom) {
 
   EXPECT_EQ(controlBar->parentWidget(), &stage);
   EXPECT_EQ(controlBar->geometry().center().x(), stage.rect().center().x());
-  EXPECT_EQ(controlBar->geometry().bottom(), stage.height() - 20 - 1);
+  EXPECT_EQ(controlBar->geometry().bottom(), stage.height() - 12 - 1);
 }
 
 TEST(CallPageTest, VideoStagePositionsNotesToggleInTopRightCorner) {

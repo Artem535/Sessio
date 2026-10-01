@@ -53,6 +53,8 @@ public:
 
 signals:
   void eventKnownForCurrentCall(int64_t eventId);
+  // Relayed from CallPage: hide/show the surrounding application chrome.
+  void fullscreenChanged(bool fullscreen);
 
 private:
   // Constructs the VideoSession/provider and shows CallPage once a token

@@ -39,6 +39,7 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
 
   mEntryWidget = new CallEntryWidget(specialistMode, this);
   mCallPage = new CallPage(mDeviceManager, this);
+  connect(mCallPage, &CallPage::fullscreenChanged, this, &CallsPage::fullscreenChanged);
   mCallPage->setSidePanelToggleVisible(specialistMode);
   mStack->addWidget(mEntryWidget);
   mStack->addWidget(mCallPage);
