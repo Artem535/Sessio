@@ -20,6 +20,9 @@ include::12-invitation-security-model-adr.adoc[]
 
 == Roadmap
 
+Проект контракта серверного расписания и постоянных приглашений серии:
+link:../../conflunce/docs/recurring-call-service-spec.md[Service Spec (Draft)].
+
 Полная дорожная карта проекта с целями, версиями, задачами и критериями готовности
 находится в link:../roadmap.md[docs/roadmap.md].
 
