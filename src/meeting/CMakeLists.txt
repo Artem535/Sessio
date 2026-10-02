@@ -17,11 +17,18 @@ qt_add_library(${TARGET_NAME} STATIC
         livekit_meeting_provider.cpp
         meeting_coordinator.h
         meeting_coordinator.cpp
+        schedule_snapshot.h
+        schedule_snapshot.cpp
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC
         Qt6::Core
         ${PROJECT_NAME}_token_client
+        ${PROJECT_NAME}_database
 )
 
-target_include_directories(${TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+# Header-only use of the shared schedule DTOs (pcm_schedule); the libical-backed
+# resolver stays a backend concern.
+target_include_directories(${TARGET_NAME}
+  PUBLIC ${CMAKE_SOURCE_DIR}/token-backend
+  INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})

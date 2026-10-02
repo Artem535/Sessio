@@ -39,6 +39,16 @@ target_link_libraries(Sessio_schedule_outbox_tests PRIVATE
 )
 gtest_discover_tests(Sessio_schedule_outbox_tests)
 
+# Schedule snapshot export / wire tests
+add_executable(Sessio_schedule_snapshot_tests schedule_snapshot_tests.cpp)
+target_link_libraries(Sessio_schedule_snapshot_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_meeting
+    Sessio_database
+)
+gtest_discover_tests(Sessio_schedule_snapshot_tests)
+
 # Schedule conflict tests
 add_executable(Sessio_schedule_conflict_tests
     schedule_conflict_service_tests.cpp
