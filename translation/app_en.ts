@@ -824,6 +824,13 @@
     </message>
 </context>
 <context>
+    <name>MonthCalendarWidget</name>
+    <message>
+        <source>+%1 more</source>
+        <translation>+%1 more</translation>
+    </message>
+</context>
+<context>
     <name>Notifications</name>
     <message>
         <source>Sessio</source>

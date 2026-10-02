@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QTimeZone>
 #include <algorithm>
+#include <limits>
 #include <set>
 
 QTimelineModel::QTimelineModel(
@@ -121,18 +122,37 @@ QHash<int, QByteArray> QTimelineModel::roleNames() const {
 
 void QTimelineModel::loadEventsForDay(const QDate &date) {
   beginResetModel();
-  mEvents.clear();
   mCurrentDate = date;
+  mEvents = projectEvents(date, date, false);
+  qDebug() << "QTimelineModel::loadEventsForDay date=" << date
+           << "loaded events=" << mEvents.size();
+  endResetModel();
+  emit eventsLoaded();
+}
+
+QVector<DuckEvent> QTimelineModel::eventsForRange(const QDate &first,
+                                                const QDate &last) const {
+  return projectEvents(first, last, true);
+}
+
+QVector<DuckEvent> QTimelineModel::projectEvents(
+    const QDate &first, const QDate &last, const bool includeOverlappingOccurrences) const {
+  if (!mDb || !first.isValid() || !last.isValid() || first > last) {
+    return {};
+  }
 
   const auto localTz = QTimeZone::systemTimeZone();
-  const auto dayStartMs =
-      QDateTime(date, QTime(0, 0), localTz).toMSecsSinceEpoch();
-  const auto dayEndMs =
-      QDateTime(date.addDays(1), QTime(0, 0), localTz).toMSecsSinceEpoch() - 1;
+  const auto rangeStart = QDateTime(first, QTime(0, 0), localTz);
+  const auto exclusiveEnd = QDateTime(last.addDays(1), QTime(0, 0), localTz);
+  if (!rangeStart.isValid() || !exclusiveEnd.isValid()) {
+    return {};
+  }
+  const auto startMs = rangeStart.toMSecsSinceEpoch();
+  const auto endMs = exclusiveEnd.toMSecsSinceEpoch();
 
-  const auto events = mDb->get_day_events(dayStartMs, dayEndMs);
-  mEvents = std::move(QVector<DuckEvent>(events.begin(), events.end()));
-  for (auto &event : mEvents) {
+  const auto stored = mDb->get_day_events(startMs, endMs - 1);
+  QVector<DuckEvent> events(stored.begin(), stored.end());
+  for (auto &event : events) {
     if (!event.is_work_event) {
       continue;
     }
@@ -148,20 +168,35 @@ void QTimelineModel::loadEventsForDay(const QDate &date) {
     }
   }
 
-  const auto rangeStart = QDateTime(date, QTime(0, 0), localTz);
-  const auto rangeEnd = QDateTime(date.addDays(1), QTime(0, 0), localTz).addMSecs(-1);
-  for (auto &occurrence : pcm::recurrence::virtualOccurrencesInRange(*mDb, rangeStart, rangeEnd)) {
-    mEvents.append(std::move(occurrence));
+  auto occurrenceStart = rangeStart;
+  if (includeOverlappingOccurrences) {
+    // A series can have ended before this range while its last occurrence still
+    // overlaps the first midnight. Inspect all active series starting before the
+    // end, then bound lookback by their actual maximum duration (not one day).
+    // Duration is stored as SQL INTEGER, so no earlier series can overlap than
+    // this bound. Avoid extreme timestamp sentinels in DuckDB range predicates.
+    constexpr int64_t maximumDurationMs = std::numeric_limits<int32_t>::max() * 1000LL;
+    int64_t lookbackSeconds = 0;
+    for (const auto &series : mDb->get_event_series_for_range(startMs - maximumDurationMs, endMs - 1)) {
+      lookbackSeconds = std::max(lookbackSeconds, series.duration.value_or(3600));
+    }
+    occurrenceStart = rangeStart.addSecs(-lookbackSeconds);
+  }
+  for (auto &occurrence : pcm::recurrence::virtualOccurrencesInRange(
+           *mDb, occurrenceStart, exclusiveEnd.addMSecs(-1))) {
+    events.append(std::move(occurrence));
+  }
+  if (includeOverlappingOccurrences) {
+    events.removeIf([startMs, endMs](const DuckEvent &event) {
+      return !event.start_date || !event.end_date ||
+             *event.start_date >= endMs || *event.end_date <= startMs;
+    });
   }
 
-  std::sort(mEvents.begin(), mEvents.end(), [](const DuckEvent &left, const DuckEvent &right) {
+  std::stable_sort(events.begin(), events.end(), [](const DuckEvent &left, const DuckEvent &right) {
     return left.start_date.value_or(0) < right.start_date.value_or(0);
   });
-  qDebug() << "QTimelineModel::loadEventsForDay date=" << date
-           << "loaded events=" << mEvents.size();
-
-  endResetModel();
-  emit eventsLoaded();
+  return events;
 }
 
 void QTimelineModel::setScheduleCommitter(pcm::meeting::SeriesScheduleCommitter *committer) {

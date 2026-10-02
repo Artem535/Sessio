@@ -139,6 +139,21 @@ target_link_libraries(Sessio_timeline_series_tests PRIVATE
 set_target_properties(Sessio_timeline_series_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_timeline_series_tests)
 
+# Month projection and the actual calendar widget, with a real isolated DB.
+add_executable(Sessio_month_calendar_tests
+    month_calendar_tests.cpp
+    ../src/pages/event_info_page/month_calendar_widget.cpp
+    ../src/pages/event_info_page/month_calendar_widget.h
+)
+target_include_directories(Sessio_month_calendar_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/pages/event_info_page
+)
+target_link_libraries(Sessio_month_calendar_tests PRIVATE
+    GTest::gtest Qt6::Widgets Qt6::Test Sessio_event_view
+)
+set_target_properties(Sessio_month_calendar_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_month_calendar_tests)
+
 # Recurring-call facade: publication, invitation, join targets, migration
 add_executable(Sessio_series_call_tests
     fake_schedule_backend.h
