@@ -5,6 +5,7 @@
 #include "series_call_service.h"
 
 #include <QComboBox>
+#include <QBoxLayout>
 #include <QDate>
 #include <QDateEdit>
 #include <QDateTime>
@@ -233,6 +234,7 @@ private:
   std::unique_ptr<Ui::EventDetails> mUI;
   QWidget *mEditorFields = nullptr;
   QWidget *mInspectorSummary = nullptr;
+  QBoxLayout *mSeriesActionsLayout = nullptr;
   QLabel *mInspectorTitle = nullptr;
   QLabel *mInspectorFacts = nullptr;
   QLabel *mInspectorRecurrence = nullptr;

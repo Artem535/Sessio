@@ -79,7 +79,8 @@ private:
   void initDefaultStates();
   void refreshCalendar();
   void selectMonthEvent(DuckEvent event);
-  void showInspector(const std::optional<DuckEvent> &event);
+  void showInspector(const std::optional<DuckEvent> &event, bool force = false);
+  void syncInspector(const QVector<DuckEvent> &events);
   void editSelectedEvent();
   void openEventDialog(const std::optional<DuckEvent> &event = std::nullopt,
                        std::optional<int64_t> clientId = std::nullopt);
@@ -99,6 +100,7 @@ private:
   QLabel *mEmptyInspector = nullptr;
   QPointer<QEventDetailsWidget> mInspector;
   std::optional<DuckEvent> mSelectedEvent;
+  bool mNavigating = false;
   QTimelineWidget *mTimelineWidget = nullptr;
   QPointer<pcm::meeting::MeetingCoordinator> mMeetingCoordinator;
   QPointer<QTimelineModel> mModel;

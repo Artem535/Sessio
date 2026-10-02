@@ -531,14 +531,15 @@ target_link_libraries(Sessio_meeting_coordinator_tests PRIVATE
 set_target_properties(Sessio_meeting_coordinator_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_meeting_coordinator_tests)
 
-# QEventDetailsWidget meeting tests (real MeetingCoordinator against the fake
-# token-backend HTTP server, same double as Sessio_livekit_meeting_provider_tests)
+# Calendar page layout tests (Day/Month switch, shared inspector)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Network Test)
 add_executable(Sessio_calendar_layout_tests calendar_layout_tests.cpp)
 target_link_libraries(Sessio_calendar_layout_tests PRIVATE
     GTest::gtest Qt6::Widgets Qt6::Test Sessio_event_page)
 gtest_discover_tests(Sessio_calendar_layout_tests)
 
+# QEventDetailsWidget meeting tests (real MeetingCoordinator against the fake
+# token-backend HTTP server, same double as Sessio_livekit_meeting_provider_tests)
 add_executable(Sessio_qevent_details_widget_tests
     fake_token_backend_server.h
     qevent_details_widget_tests.cpp

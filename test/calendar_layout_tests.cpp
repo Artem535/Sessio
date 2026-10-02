@@ -3,7 +3,11 @@
 #include <oclero/qlementine/widgets/Switch.hpp>
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 #include <QApplication>
+#include <QAbstractButton>
+#include <QFormLayout>
 #include <QLineEdit>
+#include <QSettings>
+#include <QPointer>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -11,6 +15,8 @@
 #include <QTimer>
 #include <QDialog>
 #include <QScrollBar>
+#include <array>
+#include <cmath>
 #include <gtest/gtest.h>
 
 namespace {
@@ -214,6 +220,7 @@ TEST_F(CalendarLayoutTest, SmallPageKeepsCalendarAndScrollingInspectorAccessible
   page.resize(900, 640); // 1100x720 main window after navigation/header
   page.show();
   page.findChild<MonthCalendarWidget *>()->eventSelected(model->events().first());
+  std::array<QColor, 2> calendarBase;
   for (bool dark : {false, true}) {
     auto palette = QApplication::palette();
     palette.setColor(QPalette::Window, dark ? QColor("#202428") : QColor("#ffffff"));
@@ -235,9 +242,114 @@ TEST_F(CalendarLayoutTest, SmallPageKeepsCalendarAndScrollingInspectorAccessible
       EXPECT_TRUE(scroll->isVisible());
       EXPECT_EQ(scroll->horizontalScrollBar()->maximum(), 0);
       EXPECT_TRUE(page.findChild<QuickSlotsWidget *>()->isVisibleTo(page.findChild<QScrollArea *>("calendarDayScroll")));
+      // The page palette (not the application one) must reach the calendar and
+      // the inspector, and text must stay readable against the background.
       EXPECT_EQ(calendar->palette().color(QPalette::Base), palette.color(QPalette::Base));
+      auto *inspector = page.findChild<QEventDetailsWidget *>("calendarInspector");
+      ASSERT_NE(inspector, nullptr);
+      const auto inspectorPalette = inspector->palette();
+      EXPECT_EQ(inspectorPalette.color(QPalette::Window), palette.color(QPalette::Window));
+      EXPECT_GT(std::abs(inspectorPalette.color(QPalette::WindowText).lightness() -
+                         inspectorPalette.color(QPalette::Window).lightness()), 150);
+      EXPECT_GT(std::abs(calendar->palette().color(QPalette::Text).lightness() -
+                         calendar->palette().color(QPalette::Base).lightness()), 150);
+      calendarBase[dark] = calendar->palette().color(QPalette::Base);
     }
   }
+  EXPECT_LT(calendarBase[1].lightness(), calendarBase[0].lightness() - 100);
+}
+TEST_F(CalendarLayoutTest, NoOpRefreshKeepsTheInspectorWidgetAndChangedEventUpdatesIt) {
+  const auto id = model->addEvent(appointment(QDate::currentDate()));
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.setMonthView(true);
+  page.findChild<MonthCalendarWidget *>()->eventSelected(model->events().first());
+  QPointer<QEventDetailsWidget> first = page.findChild<QEventDetailsWidget *>("calendarInspector");
+  ASSERT_NE(first, nullptr);
+  model->loadEventsForDay(QDate::currentDate());
+  page.refreshAppearance();
+  EXPECT_EQ(page.findChild<QEventDetailsWidget *>("calendarInspector"), first.data());
+  page.setMonthView(false); // day mode: refreshes keep it as well
+  model->loadEventsForDay(QDate::currentDate());
+  page.refreshAppearance();
+  EXPECT_EQ(page.findChild<QEventDetailsWidget *>("calendarInspector"), first.data());
+  page.setMonthView(true);
+  EXPECT_EQ(page.findChild<QEventDetailsWidget *>("calendarInspector"), first.data());
+  auto changed = model->events().first();
+  changed.name = "Moved on";
+  changed.start_date = *changed.start_date + 1800000;
+  changed.end_date = *changed.end_date + 1800000;
+  model->updateEvent(changed);
+  auto *second = page.findChild<QEventDetailsWidget *>("calendarInspector");
+  ASSERT_NE(second, nullptr);
+  EXPECT_EQ(second->currentEvent()->getId(), id);
+  EXPECT_EQ(second->currentEvent()->getTitle(), "Moved on");
+  EXPECT_EQ(second->currentEvent()->toEvent().start_date, changed.start_date);
+}
+TEST_F(CalendarLayoutTest, EventsAddedInDayModeAppearWhenSwitchingToMonth) {
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.setMonthView(true);
+  auto *month = page.findChild<MonthCalendarWidget *>();
+  const auto before = month->findChildren<QAbstractButton *>().size();
+  page.setMonthView(false);
+  model->addEvent(appointment(QDate::currentDate()));
+  page.setMonthView(true);
+  EXPECT_GT(month->findChildren<QAbstractButton *>().size(), before);
+}
+TEST_F(CalendarLayoutTest, TogglingViewModeWritesNoSettingsOrData) {
+  model->addEvent(appointment(QDate::currentDate()));
+  QSettings settings;
+  settings.sync();
+  const auto keys = settings.allKeys();
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  const auto events = model->events().size();
+  page.setMonthView(true);
+  page.setMonthView(false);
+  settings.sync();
+  EXPECT_EQ(settings.allKeys(), keys);
+  EXPECT_EQ(model->events().size(), events);
+  EXPECT_EQ(model->eventsForRange(QDate::currentDate(), QDate::currentDate()).size(), events);
+}
+TEST_F(CalendarLayoutTest, LeavingInspectorModeRestoresTheFormLayout) {
+  QEventDetailsWidget details;
+  auto *actions = details.findChild<QPushButton *>("openMeetingButton")->parentWidget();
+  auto *series = details.findChild<QWidget *>("seriesCallPanel");
+  ASSERT_NE(series, nullptr);
+  auto *form = details.findChild<QFormLayout *>();
+  ASSERT_NE(form, nullptr);
+  const auto seriesActions = [series] {
+    return static_cast<QBoxLayout *>(series->layout()->itemAt(1)->layout());
+  };
+  const auto actionsLayout = [actions] { return static_cast<QBoxLayout *>(actions->layout()); };
+  const auto position = [form](QWidget *widget) {
+    int row = -1;
+    QFormLayout::ItemRole role;
+    form->getWidgetPosition(widget, &row, &role);
+    return std::pair(row, role);
+  };
+  const auto actionsPosition = position(actions);
+  const auto seriesPosition = position(series);
+  ASSERT_GE(actionsPosition.first, 0);
+  ASSERT_GE(seriesPosition.first, 0);
+  EXPECT_EQ(actionsLayout()->direction(), QBoxLayout::LeftToRight);
+  details.setInspectorMode(true);
+  EXPECT_EQ(position(actions).first, -1);
+  EXPECT_EQ(position(series).first, -1);
+  EXPECT_EQ(actionsLayout()->direction(), QBoxLayout::TopToBottom);
+  EXPECT_EQ(seriesActions()->direction(), QBoxLayout::TopToBottom);
+  details.setInspectorMode(false);
+  EXPECT_EQ(position(actions), actionsPosition);
+  EXPECT_EQ(position(series), seriesPosition);
+  EXPECT_EQ(actionsLayout()->direction(), QBoxLayout::LeftToRight);
+  EXPECT_EQ(seriesActions()->direction(), QBoxLayout::LeftToRight);
+  EXPECT_EQ(actions->parentWidget(), form->parentWidget());
+}
+TEST_F(CalendarLayoutTest, NullLoadEventKeepsDialogModeUntouched) {
+  QEventDetailsWidget dialog; // not an inspector
+  QEventItem item(appointment(QDate::currentDate()));
+  dialog.loadEvent(&item);
+  ASSERT_EQ(dialog.currentEvent(), &item);
+  dialog.loadEvent(nullptr);
+  EXPECT_EQ(dialog.currentEvent(), &item);
 }
 } // namespace
 int main(int argc, char **argv) {
@@ -245,6 +357,7 @@ int main(int argc, char **argv) {
   qputenv("XDG_CONFIG_HOME", home.path().toUtf8());
   qputenv("HOME", home.path().toUtf8());
   QApplication app(argc, argv);
+  QCoreApplication::setOrganizationName("SessioCalendarLayoutTests");
   app.setStyle(new oclero::qlementine::QlementineStyle(&app));
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

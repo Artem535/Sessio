@@ -25,6 +25,11 @@
 Q_LOGGING_CATEGORY(logEventDetails, "pcm.EventDetails")
 
 namespace {
+// Form rows of the online/meeting section; the inspector moves two of these
+// widgets out of the form and puts them back on the same rows.
+constexpr int onlineSectionRow = 10;
+constexpr int meetingActionsRow = onlineSectionRow + 6;
+constexpr int seriesCallRow = onlineSectionRow + 7;
 constexpr int64_t kPaymentPendingId = 1;
 constexpr int64_t kPaymentPaidId = 2;
 constexpr int64_t kPaymentCanceledId = 3;
@@ -222,7 +227,6 @@ void QEventDetailsWidget::initUi() {
   mUI->mCancellationReasonEdit->setVisible(false);
   mUI->mCanceledByLabel->setVisible(false);
   mUI->mCanceledByComboBox->setVisible(false);
-  constexpr int onlineSectionRow = 10;
   mUI->formLayout->insertRow(onlineSectionRow, tr("Repeat"), mRepeatTypeControl);
   mRecurringOptionsWidget = new QWidget(this);
   auto *recurringOptionsLayout = new QHBoxLayout(mRecurringOptionsWidget);
@@ -316,7 +320,7 @@ void QEventDetailsWidget::initUi() {
   meetingActionsLayout->addWidget(mCopyMeetingInviteButton);
   meetingActionsLayout->addWidget(mCopyMeetingPasscodeButton);
   meetingActionsLayout->addStretch();
-  mUI->formLayout->insertRow(onlineSectionRow + 6, QString(),
+  mUI->formLayout->insertRow(meetingActionsRow, QString(),
                              mMeetingActionsWidget);
 
   mSeriesCallWidget = new QWidget(this);
@@ -330,6 +334,7 @@ void QEventDetailsWidget::initUi() {
   mSeriesStatusLabel->setTextFormat(Qt::PlainText);
   seriesCallLayout->addWidget(mSeriesStatusLabel);
   auto *seriesActionsLayout = new QHBoxLayout();
+  mSeriesActionsLayout = seriesActionsLayout;
   seriesActionsLayout->setContentsMargins(0, 0, 0, 0);
   seriesActionsLayout->setSpacing(8);
   mSeriesRetryButton = new QPushButton(tr("Retry"), mSeriesCallWidget);
@@ -347,7 +352,7 @@ void QEventDetailsWidget::initUi() {
   seriesActionsLayout->addStretch();
   seriesCallLayout->addLayout(seriesActionsLayout);
   mSeriesCallWidget->setVisible(false);
-  mUI->formLayout->insertRow(onlineSectionRow + 7, QString(), mSeriesCallWidget);
+  mUI->formLayout->insertRow(seriesCallRow, QString(), mSeriesCallWidget);
 
   mBuffersWidget = new QWidget(this);
   auto *buffersLayout = new QHBoxLayout(mBuffersWidget);
@@ -440,16 +445,14 @@ void QEventDetailsWidget::setInspectorMode(bool enabled) {
     static_cast<QBoxLayout *>(mMeetingActionsWidget->layout())->setDirection(QBoxLayout::TopToBottom);
     // Series actions can have long translated labels. Stacking keeps all of
     // them accessible inside the narrow scrollable panel.
-    static_cast<QBoxLayout *>(mSeriesCallWidget->layout()->itemAt(1)->layout())
-        ->setDirection(QBoxLayout::TopToBottom);
+    mSeriesActionsLayout->setDirection(QBoxLayout::TopToBottom);
   } else {
     summary->removeWidget(mMeetingActionsWidget);
     summary->removeWidget(mSeriesCallWidget);
-    mUI->formLayout->setWidget(16, QFormLayout::FieldRole, mMeetingActionsWidget);
-    mUI->formLayout->setWidget(17, QFormLayout::FieldRole, mSeriesCallWidget);
+    mUI->formLayout->setWidget(meetingActionsRow, QFormLayout::FieldRole, mMeetingActionsWidget);
+    mUI->formLayout->setWidget(seriesCallRow, QFormLayout::FieldRole, mSeriesCallWidget);
     static_cast<QBoxLayout *>(mMeetingActionsWidget->layout())->setDirection(QBoxLayout::LeftToRight);
-    static_cast<QBoxLayout *>(mSeriesCallWidget->layout()->itemAt(1)->layout())
-        ->setDirection(QBoxLayout::LeftToRight);
+    mSeriesActionsLayout->setDirection(QBoxLayout::LeftToRight);
   }
   mEditorFields->setVisible(!enabled);
   mInspectorSummary->setVisible(enabled);
@@ -649,12 +652,20 @@ void QEventDetailsWidget::setClientList(const QHash<int64_t, QString> &clients) 
 
 void QEventDetailsWidget::loadEvent(QEventItem *event,
                                     const std::optional<int64_t> clientId) {
-  ++mSelectionRevision;
-  setSeriesCall(nullptr, 0, {});
-  if (!event) {
-    mCurrentEvent.clear();
-    mInspectorEvent.reset();
-    refreshInspector();
+  if (mInspectorMode) {
+    // Inspector selections are re-targeted in place: drop the previous
+    // selection's series-call state and invalidate its pending callbacks.
+    // Dialog modes keep their original contract (null is a no-op and the
+    // series-call setup done before loadEvent survives it).
+    ++mSelectionRevision;
+    setSeriesCall(nullptr, 0, {});
+    if (!event) {
+      mCurrentEvent.clear();
+      mInspectorEvent.reset();
+      refreshInspector();
+      return;
+    }
+  } else if (!event) {
     return;
   }
 
@@ -1634,7 +1645,9 @@ void QEventDetailsWidget::withSeriesInvitation(
 
 void QEventDetailsWidget::setSeriesCall(pcm::meeting::SeriesCallService *service,
                                         const int64_t seriesId, const QString &joinTarget) {
-  ++mSelectionRevision;
+  if (mInspectorMode) {
+    ++mSelectionRevision;
+  }
   if (mSeriesCalls) {
     disconnect(mSeriesCalls, &pcm::meeting::SeriesCallService::statusChanged, this, nullptr);
   }

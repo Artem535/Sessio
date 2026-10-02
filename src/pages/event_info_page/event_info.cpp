@@ -9,9 +9,9 @@
 #include <QIcon>
 #include <QMessageBox>
 #include <QSize>
-#include <QTextCharFormat>
 #include <QTimeZone>
 #include <QVBoxLayout>
+#include <QScopedValueRollback>
 #include <QSignalBlocker>
 #include <oclero/qlementine/widgets/Switch.hpp>
 
@@ -24,6 +24,21 @@ bool sameOccurrence(const DuckEvent &a, const DuckEvent &b) {
            a.original_occurrence_start == b.original_occurrence_start;
   }
   return a.id > 0 && a.id == b.id;
+}
+bool sameEventData(const DuckEvent &a, const DuckEvent &b) {
+  return a.id == b.id && a.name == b.name && a.description == b.description &&
+         a.client_name == b.client_name && a.is_work_event == b.is_work_event &&
+         a.event_stat_id == b.event_stat_id && a.payment_stat_id == b.payment_stat_id &&
+         a.start_date == b.start_date && a.end_date == b.end_date &&
+         a.duration == b.duration && a.cost == b.cost && a.is_online == b.is_online &&
+         a.meeting_url == b.meeting_url && a.series_id == b.series_id &&
+         a.original_occurrence_start == b.original_occurrence_start &&
+         a.cancellation_reason == b.cancellation_reason && a.canceled_by == b.canceled_by &&
+         a.buffer_before_minutes == b.buffer_before_minutes &&
+         a.buffer_after_minutes == b.buffer_after_minutes &&
+         a.is_virtual_occurrence == b.is_virtual_occurrence &&
+         a.provider_kind == b.provider_kind && a.meeting_ref == b.meeting_ref &&
+         a.invitation_state == b.invitation_state;
 }
 enum class RecurringEditScope {
   Cancel,
@@ -266,10 +281,12 @@ void QEventInfoPage::onCalendarClicked(const QDate &date) {
     showInspector(std::nullopt);
   }
   mSelectedDate = date;
-  mTimelineWidget->onSelectedDayChanged(date);
-  refreshCalendar();
-  refreshQuickSlots();
-  refreshDaySummary();
+  {
+    // The model announces the loaded day; one explicit refresh below is enough.
+    const QScopedValueRollback<bool> navigating(mNavigating, true);
+    mTimelineWidget->onSelectedDayChanged(date);
+  }
+  refreshCalendar(); // also refreshes quick slots and the day summary
 }
 
 void QEventInfoPage::openEventOnDay(const int64_t eventId, const qint64 dayMs) {
@@ -289,21 +306,35 @@ void QEventInfoPage::setMonthView(bool enabled) {
 bool QEventInfoPage::isMonthView() const { return mViewSwitch->isChecked(); }
 
 void QEventInfoPage::refreshCalendar() {
+  if (mNavigating) {
+    return;
+  }
   mPeriodLabel->setText(locale().toString(mSelectedDate,
       isMonthView() ? QStringLiteral("MMMM yyyy") : QStringLiteral("d MMMM yyyy")));
-  mMonthCalendar->setMonth(mSelectedDate);
-  mMonthCalendar->setSelectedDate(mSelectedDate);
-  const auto events = mModel ? mModel->eventsForRange(mMonthCalendar->firstVisibleDate(),
-                                                     mMonthCalendar->lastVisibleDate())
-                             : QVector<DuckEvent>{};
-  mMonthCalendar->setEvents(events);
-  if (mSelectedEvent) {
-    const auto selected = std::find_if(events.cbegin(), events.cend(),
-        [this](const DuckEvent &event) { return sameOccurrence(*mSelectedEvent, event); });
-    showInspector(selected != events.cend() ? std::optional<DuckEvent>(*selected) : std::nullopt);
+  if (isMonthView()) {
+    mMonthCalendar->setMonth(mSelectedDate);
+    mMonthCalendar->setSelectedDate(mSelectedDate);
+    const auto events = mModel ? mModel->eventsForRange(mMonthCalendar->firstVisibleDate(),
+                                                       mMonthCalendar->lastVisibleDate())
+                               : QVector<DuckEvent>{};
+    mMonthCalendar->setEvents(events);
+    syncInspector(events);
+  } else if (mSelectedEvent && mModel) {
+    // The hidden month grid is rebuilt when the view switches back to it; only
+    // the selected day is projected to keep the inspector in sync.
+    syncInspector(mModel->eventsForRange(mSelectedDate, mSelectedDate));
   }
   refreshQuickSlots();
   refreshDaySummary();
+}
+
+void QEventInfoPage::syncInspector(const QVector<DuckEvent> &events) {
+  if (!mSelectedEvent) {
+    return;
+  }
+  const auto selected = std::find_if(events.cbegin(), events.cend(),
+      [this](const DuckEvent &event) { return sameOccurrence(*mSelectedEvent, event); });
+  showInspector(selected != events.cend() ? std::optional<DuckEvent>(*selected) : std::nullopt);
 }
 
 void QEventInfoPage::selectMonthEvent(DuckEvent event) {
@@ -319,7 +350,11 @@ void QEventInfoPage::selectMonthEvent(DuckEvent event) {
   showInspector(selected != day.cend() ? std::optional<DuckEvent>(*selected) : std::nullopt);
 }
 
-void QEventInfoPage::showInspector(const std::optional<DuckEvent> &event) {
+void QEventInfoPage::showInspector(const std::optional<DuckEvent> &event, bool force) {
+  if (!force && mInspector && event && mSelectedEvent &&
+      sameOccurrence(*mSelectedEvent, *event) && sameEventData(*mSelectedEvent, *event)) {
+    return; // nothing changed: keep the widget (scroll position, focus, call state)
+  }
   if (mInspector) {
     mInspectorLayout->removeWidget(mInspector);
     mInspector->loadEvent(nullptr); // invalidate pending secure-storage callbacks
@@ -366,6 +401,9 @@ void QEventInfoPage::editSelectedEvent() {
 void QEventInfoPage::setSeriesCallService(pcm::meeting::SeriesCallService *service) {
   mSeriesCallService = service;
   refreshCalendar();
+  if (mSelectedEvent) {
+    showInspector(mSelectedEvent, true); // call state comes from the service
+  }
 }
 
 bool QEventInfoPage::canDeleteFutureOccurrences(const int64_t seriesId) const {
