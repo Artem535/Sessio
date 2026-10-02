@@ -5,6 +5,7 @@
 #include <charconv>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -18,13 +19,15 @@ constexpr int64_t minMs = -62135596800000; // 0001-01-01
 constexpr int64_t maxMs = 253402300799000; // 9999-12-31T23:59:59
 std::timed_mutex icalMutex; // libical builtin timezone caches are process global.
 
+std::string zoneDirectory = PCM_SCHEDULE_ZONEINFO_DIR; // guarded by icalMutex
+bool zoneDataInitialized = false;                        // guarded by icalMutex
+
+// Caller holds icalMutex.
 void initializeTimezoneData() {
-  static const bool initialized = [] {
-    icaltimezone_set_builtin_tzdata(1);
-    set_zone_directory(PCM_SCHEDULE_ZONEINFO_DIR);
-    return true;
-  }();
-  (void)initialized;
+  if (zoneDataInitialized) return;
+  icaltimezone_set_builtin_tzdata(1);
+  set_zone_directory(zoneDirectory.c_str());
+  zoneDataInitialized = true;
 }
 
 bool instant(int64_t value) { return value >= minMs && value <= maxMs && value % 1000 == 0; }
@@ -229,6 +232,23 @@ Resolution between(const Snapshot &s, int64_t from, int64_t to,
 }
 
 namespace pcm::schedule {
+bool zoneinfoDirectoryHasData(const std::string &directory) {
+  std::error_code ec;
+  return std::filesystem::exists(std::filesystem::path{directory} / "America" / "New_York.ics", ec);
+}
+bool setZoneinfoDirectory(const std::string &directory) {
+  std::lock_guard lock(icalMutex);
+  zoneDirectory = directory;
+  if (zoneDataInitialized) {
+    icaltimezone_free_builtin_timezones(); // drop zones cached from the old directory
+    set_zone_directory(zoneDirectory.c_str());
+  }
+  return zoneinfoDirectoryHasData(directory);
+}
+std::string zoneinfoDirectory() {
+  std::lock_guard lock(icalMutex);
+  return zoneDirectory;
+}
 Validation validate(const Snapshot &s) {
   std::lock_guard lock(icalMutex);
   Parsed parsed;

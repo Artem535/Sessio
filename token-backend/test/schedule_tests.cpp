@@ -210,4 +210,29 @@ TEST(Schedule, LongMovedOverrideIsFoundEvenWhenStartPrecedesBaseLookbackWindow) 
   ASSERT_EQ(r.status, Status::Available);
   EXPECT_EQ(r.occurrence->originalStartMs, utc(2026, 10, 6, 15));
 }
+
+// A missing or empty zoneinfo directory must make named zones fail validation,
+// never succeed with other data. Packaged desktop builds depend on this: the
+// shipped data directory is the only source of zones.
+TEST(Schedule, MissingZoneinfoDirectoryRejectsNamedZonesAndRestoreWorks) {
+  const auto original = zoneinfoDirectory();
+  ASSERT_TRUE(zoneinfoDirectoryHasData(original));
+  ASSERT_TRUE(validate(weekly()).valid);
+
+  EXPECT_FALSE(setZoneinfoDirectory("/nonexistent/pcm-zoneinfo"));
+  const auto broken = validate(weekly());
+  EXPECT_FALSE(broken.valid);
+  EXPECT_EQ(broken.error, "unknown timezone");
+  auto utcSnapshot = weekly();
+  utcSnapshot.timezone = "UTC"; // the built-in UTC zone needs no data files
+  EXPECT_TRUE(validate(utcSnapshot).valid);
+
+  EXPECT_TRUE(setZoneinfoDirectory(original));
+  EXPECT_TRUE(validate(weekly()).valid);
+}
+
+TEST(Schedule, ZoneinfoDirectoryWithoutDataIsNotReportedAsData) {
+  EXPECT_FALSE(zoneinfoDirectoryHasData("/nonexistent/pcm-zoneinfo"));
+  EXPECT_FALSE(zoneinfoDirectoryHasData(""));
+}
 }

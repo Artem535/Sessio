@@ -49,6 +49,16 @@ struct Resolution {
   std::string error;
 };
 
+// Directory of libical's builtin timezone files (*.ics per zone). Defaults to
+// the path compiled in at build time (backend); the desktop app points it at the
+// data it installs. True when the directory contains timezone data. A directory
+// without data is still applied: every named zone then fails validation (it
+// never silently falls back to something else). Call before first use.
+bool setZoneinfoDirectory(const std::string &directory);
+std::string zoneinfoDirectory();
+// True when `directory` looks like libical timezone data.
+bool zoneinfoDirectoryHasData(const std::string &directory);
+
 Validation validate(const Snapshot &snapshot);
 // Inclusive range of effective starts. Disabled occurrences remain visible so
 // calendar consumers can display canceled slots; inactive series return none.

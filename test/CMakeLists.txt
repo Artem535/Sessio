@@ -68,6 +68,14 @@ target_link_libraries(Sessio_schedule_sync_tests PRIVATE
 set_target_properties(Sessio_schedule_sync_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_schedule_sync_tests)
 
+# Zoneinfo resolution for packaged builds (and the schedule engine's use of it)
+add_executable(Sessio_schedule_zoneinfo_tests schedule_zoneinfo_tests.cpp)
+target_link_libraries(Sessio_schedule_zoneinfo_tests PRIVATE
+    GTest::gtest
+    Sessio_meeting
+)
+gtest_discover_tests(Sessio_schedule_zoneinfo_tests)
+
 # Series invitation service / join target tests (real DB + fake backend model)
 add_executable(Sessio_series_invitation_tests
     fake_schedule_backend.h

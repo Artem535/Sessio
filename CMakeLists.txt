@@ -252,6 +252,22 @@ else()
   )
 endif()
 
+# libical's timezone data for the recurring-schedule engine. Resolved at run
+# time relative to the executable (src/meeting/schedule_zoneinfo.h): RPM and
+# AppImage get <prefix>/share/sessio/zoneinfo, the macOS bundle gets
+# Contents/Resources/zoneinfo. The Windows installer copies the same directory
+# next to Sessio.exe (see the workflow's Windows deploy step).
+if(NOT EXISTS "${PCM_SCHEDULE_ZONEINFO_SOURCE_DIR}/America/New_York.ics")
+  message(FATAL_ERROR "libical timezone data missing: ${PCM_SCHEDULE_ZONEINFO_SOURCE_DIR}")
+endif()
+if(APPLE)
+  install(DIRECTORY ${PCM_SCHEDULE_ZONEINFO_SOURCE_DIR}/
+      DESTINATION Sessio.app/Contents/Resources/zoneinfo)
+else()
+  install(DIRECTORY ${PCM_SCHEDULE_ZONEINFO_SOURCE_DIR}/
+      DESTINATION ${CMAKE_INSTALL_DATADIR}/sessio/zoneinfo)
+endif()
+
 if(UNIX AND NOT APPLE)
   install(FILES
       ${CMAKE_SOURCE_DIR}/packaging/Sessio.desktop

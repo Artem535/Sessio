@@ -19,6 +19,8 @@ qt_add_library(${TARGET_NAME} STATIC
         meeting_coordinator.cpp
         schedule_snapshot.h
         schedule_snapshot.cpp
+        schedule_zoneinfo.h
+        schedule_zoneinfo.cpp
         schedule_sync.h
         schedule_sync.cpp
         series_call_service.h
