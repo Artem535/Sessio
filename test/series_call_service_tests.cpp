@@ -8,6 +8,7 @@
 #include "series_join_target.h"
 #include "token_backend_client.h"
 
+#include <QSignalSpy>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <QCoreApplication>
@@ -141,6 +142,21 @@ TEST_F(SeriesCallTest, MigrationInvalidatesTheOldMeetingOnlyAfterAckAndStoredInv
   EXPECT_FALSE(after->invitation_state.has_value());
   EXPECT_TRUE(mService->isSeriesBacked(*after));
   EXPECT_EQ(mDb->get_schedule_identity(seriesId)->timezone, "Europe/Berlin");
+}
+
+TEST_F(SeriesCallTest, FailedInvalidationOfTheOldMeetingIsReportedButMigrationStaysCompleted) {
+  mSync->start();
+  mModel.invalidateStatusOverride = 500;
+  const auto seriesId = createLegacyLiveKitSeries();
+  ASSERT_GT(seriesId, 0);
+  QSignalSpy failed(mService.get(), &SeriesCallService::legacyInvalidationFailed);
+
+  mService->migrateLegacySeries(seriesId, "Europe/Berlin");
+
+  ASSERT_TRUE(waitFor([&] { return failed.count() == 1; }, 5000));
+  EXPECT_EQ(failed.at(0).at(0).toLongLong(), seriesId);
+  EXPECT_EQ(mService->status(seriesId).migration.state, MigrationState::Completed);
+  EXPECT_FALSE(mDb->get_event_series(seriesId)->meeting_ref.has_value());
 }
 
 TEST_F(SeriesCallTest, MigrationFailurePreservesTheOldLocalRelationship) {

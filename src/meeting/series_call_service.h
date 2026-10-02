@@ -6,6 +6,7 @@
 #include "series_schedule_committer.h"
 
 #include <QHash>
+#include <QList>
 #include <QObject>
 #include <QPointer>
 #include <QString>
@@ -83,6 +84,10 @@ public:
 
 signals:
   void statusChanged(qint64 seriesId);
+  // The old single meeting of a migrated series could not be invalidated on the
+  // server. The migration itself is complete (the series no longer references
+  // it) but the old shared link may keep working until it expires.
+  void legacyInvalidationFailed(qint64 seriesId);
 
 private:
   void onInvitationStatus(int64_t seriesId);
@@ -96,6 +101,9 @@ private:
   SeriesScheduleCommitter &mCommitter;
   QPointer<MeetingCoordinator> mCoordinator;
   QHash<qint64, MigrationStatus> mMigrations;
+  // Series whose old meeting invalidation is in flight (FIFO, matched to the
+  // coordinator's meetingCanceled / meetingCancelFailed answers).
+  QList<qint64> mPendingInvalidations;
 };
 
 } // namespace pcm::meeting

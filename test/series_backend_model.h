@@ -33,6 +33,7 @@ struct SeriesBackendModel {
   int invitations = 0;                  // number of invitations really created
   int invitationStatusOverride = 0;
   int putStatusOverride = 0;          // answer every PUT with this status
+  int invalidateStatusOverride = 0;   // answer every meeting invalidate with this status
   QStringList invalidatedMeetings;    // refs of POST /v1/meetings/{ref}/invalidate
 
   using R = FakeScheduleBackend::Response;
@@ -49,6 +50,9 @@ struct SeriesBackendModel {
     }
     if (request.path.startsWith("/v1/meetings/") && request.path.endsWith("/invalidate")) {
       invalidatedMeetings.append(request.path.section('/', 3, 3));
+      if (invalidateStatusOverride != 0) {
+        return {.status = invalidateStatusOverride, .body = R"({"error":"boom"})"};
+      }
       return {.status = 204, .body = ""};
     }
     const auto uid = request.path.section('/', 3, 3);

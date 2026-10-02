@@ -2,6 +2,8 @@
 
 #include "series_join_target.h"
 
+#include <QDebug>
+
 namespace pcm::meeting {
 
 SeriesCallService::SeriesCallService(pcm::database::Database &db, ScheduleSync &sync,
@@ -16,6 +18,23 @@ SeriesCallService::SeriesCallService(pcm::database::Database &db, ScheduleSync &
       emit statusChanged(*id);
     }
   });
+  if (mCoordinator) {
+    connect(mCoordinator, &MeetingCoordinator::meetingCanceled, this, [this] {
+      if (!mPendingInvalidations.isEmpty()) {
+        mPendingInvalidations.removeFirst();
+      }
+    });
+    connect(mCoordinator, &MeetingCoordinator::meetingCancelFailed, this, [this](const QString &) {
+      if (mPendingInvalidations.isEmpty()) {
+        return; // a cancel from some other flow
+      }
+      const auto seriesId = mPendingInvalidations.takeFirst();
+      // No meeting reference, link or server text is logged.
+      qWarning() << "Could not invalidate the old meeting of migrated series" << seriesId
+                 << "- the previous shared link may keep working until it expires";
+      emit legacyInvalidationFailed(seriesId);
+    });
+  }
   connect(&mInvitations, &SeriesInvitationService::statusChanged, this,
           [this](qint64 seriesId, const InvitationStatus &) {
             onInvitationStatus(seriesId);
@@ -186,8 +205,11 @@ void SeriesCallService::finishMigration(const int64_t seriesId) {
   }
   if (mCoordinator) {
     for (const auto &ref : *refs) {
-      // Fire-and-forget: the series no longer references these meetings, and a
-      // failed invalidate leaves nothing the UI must react to.
+      // Not retried: the series no longer references these meetings, so there is
+      // nothing left to retry from. A failure is logged and reported through
+      // legacyInvalidationFailed(); the old link then stays valid until it
+      // expires (documented in docs/verification/98/README.md).
+      mPendingInvalidations.append(seriesId);
       mCoordinator->cancelMeeting(ProviderKind::LiveKit, QString::fromStdString(ref));
     }
   }
