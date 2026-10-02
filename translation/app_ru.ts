@@ -825,6 +825,17 @@
     </message>
 </context>
 <context>
+    <name>MonthPickerWidget</name>
+    <message>
+        <source>Previous year</source>
+        <translation>Предыдущий год</translation>
+    </message>
+    <message>
+        <source>Next year</source>
+        <translation>Следующий год</translation>
+    </message>
+</context>
+<context>
     <name>Notifications</name>
     <message>
         <source>Sessio</source>
@@ -1015,6 +1026,10 @@
         <translation>Копировать код доступа</translation>
     </message>
     <message>
+        <source>Use one link for all meetings of this series.</source>
+        <translation>Используйте одну ссылку для всех встреч этой серии.</translation>
+    </message>
+    <message>
         <source>Retry</source>
         <translation>Повторить</translation>
     </message>
@@ -1033,6 +1048,26 @@
     <message>
         <source>Meeting</source>
         <translation>Встреча</translation>
+    </message>
+    <message>
+        <source>Back to day</source>
+        <translation>К дню</translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>Дата</translation>
+    </message>
+    <message>
+        <source>Time</source>
+        <translation>Время</translation>
+    </message>
+    <message>
+        <source>Delivery format</source>
+        <translation>Способ проведения</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Статус</translation>
     </message>
     <message>
         <source>In person</source>
@@ -1262,10 +1297,6 @@
         <translation>Повторяющееся событие</translation>
     </message>
     <message>
-        <source>Calendar</source>
-        <translation>Календарь</translation>
-    </message>
-    <message>
         <source>Day</source>
         <translation>День</translation>
     </message>
@@ -1280,22 +1311,6 @@
     <message>
         <source>New meeting</source>
         <translation>Новая встреча</translation>
-    </message>
-    <message>
-        <source>Previous period</source>
-        <translation>Предыдущий период</translation>
-    </message>
-    <message>
-        <source>Next period</source>
-        <translation>Следующий период</translation>
-    </message>
-    <message>
-        <source>Today</source>
-        <translation>Сегодня</translation>
-    </message>
-    <message>
-        <source>Select a meeting</source>
-        <translation>Выберите встречу</translation>
     </message>
     <message>
         <source>: EVENT_ADD_BUTTON</source>

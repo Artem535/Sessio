@@ -6,9 +6,11 @@
 #include "ui/pages/ui_eventinfo.h"
 
 #include <QDialog>
+#include <algorithm>
 #include <QIcon>
 #include <QMessageBox>
 #include <QSize>
+#include <QTextCharFormat>
 #include <QTimeZone>
 #include <QVBoxLayout>
 #include <QScopedValueRollback>
@@ -134,100 +136,104 @@ QEventInfoPage::QEventInfoPage(QTimelineModel *model,
             });
   }
   mSelectedDate = QDate::currentDate();
-  auto *header = new QHBoxLayout;
-  auto *title = new QLabel(tr("Calendar"), this);
-  auto titleFont = title->font();
-  titleFont.setPointSize(24);
-  titleFont.setBold(true);
-  title->setFont(titleFont);
-  header->addWidget(title);
-  header->addStretch();
-  header->addWidget(new QLabel(tr("Day"), this));
-  mViewSwitch = new oclero::qlementine::Switch(this);
+  // Header controls live in the main window's top row (see headerControls());
+  // standalone they sit in a collapsible row above the page body.
+  mHeaderControls = new QWidget(this);
+  mHeaderControls->setObjectName(QStringLiteral("calendarHeaderControls"));
+  auto *header = new QHBoxLayout(mHeaderControls);
+  header->setContentsMargins(0, 0, 0, 0);
+  header->setSpacing(10);
+  header->addWidget(new QLabel(tr("Day"), mHeaderControls));
+  mViewSwitch = new oclero::qlementine::Switch(mHeaderControls);
   mViewSwitch->setObjectName(QStringLiteral("calendarViewSwitch"));
   mViewSwitch->setAccessibleName(tr("Calendar view"));
   // Qlementine's Switch is horizontally expanding; keep it hugging its labels.
   mViewSwitch->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   header->addWidget(mViewSwitch);
-  header->addWidget(new QLabel(tr("Month"), this));
-  header->addSpacing(16);
-  mCreateEventButton = new QPushButton(tr("New meeting"), this);
+  header->addWidget(new QLabel(tr("Month"), mHeaderControls));
+  header->addStretch(1);
+  mCreateEventButton = new QPushButton(tr("New meeting"), mHeaderControls);
   mCreateEventButton->setObjectName(QStringLiteral("newCalendarEvent"));
   mCreateEventButton->setIcon(QIcon(":/icons/calendar-plus-solid-full.svg"));
   mCreateEventButton->setIconSize(QSize(18, 18));
+  mCreateEventButton->setToolTip(tr(": EVENT_ADD_BUTTON"));
+  mCreateEventButton->setCursor(Qt::PointingHandCursor);
   header->addWidget(mCreateEventButton);
-  mUi->pageLayout->addLayout(header);
+  auto *standaloneHeader = new QWidget(this);
+  standaloneHeader->setObjectName(QStringLiteral("calendarStandaloneHeader"));
+  auto *standaloneLayout = new QHBoxLayout(standaloneHeader);
+  standaloneLayout->setContentsMargins(0, 0, 0, 0);
+  standaloneLayout->addWidget(mHeaderControls);
+  mUi->pageLayout->addWidget(standaloneHeader);
+  mUi->pageLayout->setSpacing(0);
 
   auto *body = new QHBoxLayout;
-  body->setSpacing(24);
-  auto *workingArea = new QVBoxLayout;
-  workingArea->setSpacing(16);
-  auto *period = new QHBoxLayout;
-  auto *previous = new QPushButton(QStringLiteral("‹"), this);
-  previous->setObjectName(QStringLiteral("previousCalendarPeriod"));
-  previous->setAccessibleName(tr("Previous period"));
-  auto *next = new QPushButton(QStringLiteral("›"), this);
-  next->setObjectName(QStringLiteral("nextCalendarPeriod"));
-  next->setAccessibleName(tr("Next period"));
-  previous->setFixedWidth(40);
-  next->setFixedWidth(40);
-  period->addWidget(previous);
-  period->addWidget(next);
-  mPeriodLabel = new QLabel(this);
-  mPeriodLabel->setObjectName(QStringLiteral("calendarPeriod"));
-  auto periodFont = mPeriodLabel->font();
-  periodFont.setPointSize(16);
-  periodFont.setBold(true);
-  mPeriodLabel->setFont(periodFont);
-  period->addWidget(mPeriodLabel, 1);
-  auto *today = new QPushButton(tr("Today"), this);
-  today->setObjectName(QStringLiteral("calendarToday"));
-  period->addWidget(today);
-  workingArea->addLayout(period);
-  mCalendarStack = new QStackedWidget(this);
-  auto *dayScroll = new QScrollArea(this);
-  dayScroll->setObjectName(QStringLiteral("calendarDayScroll"));
-  dayScroll->setWidgetResizable(true);
-  dayScroll->setFrameShape(QFrame::NoFrame);
-  auto *dayContent = new QWidget;
-  auto *dayLayout = new QVBoxLayout(dayContent);
-  dayLayout->setContentsMargins(0, 0, 0, 0);
-  dayLayout->setSpacing(16);
-  mTimelineWidget = new QTimelineWidget(model, dayContent);
-  mTimelineWidget->setMinimumHeight(440);
-  dayLayout->addWidget(mTimelineWidget, 1);
-  mDaySummaryWidget = new DaySummaryWidget(dayContent);
-  dayLayout->addWidget(mDaySummaryWidget);
-  mQuickSlotsWidget = new QuickSlotsWidget(dayContent);
-  dayLayout->addWidget(mQuickSlotsWidget);
-  dayScroll->setWidget(dayContent);
-  mCalendarStack->addWidget(dayScroll);
-  mMonthCalendar = new MonthCalendarWidget(this);
-  mCalendarStack->addWidget(mMonthCalendar);
-  workingArea->addWidget(mCalendarStack, 1);
-  body->addLayout(workingArea, 1);
-  auto *inspectorScroll = new QScrollArea(this);
-  inspectorScroll->setObjectName(QStringLiteral("calendarInspectorScroll"));
-  inspectorScroll->setWidgetResizable(true);
-  inspectorScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  inspectorScroll->setFixedWidth(300);
-  auto *inspectorContent = new QWidget;
-  mInspectorLayout = new QVBoxLayout(inspectorContent);
-  mInspectorLayout->setContentsMargins(16, 16, 16, 16);
-  mEmptyInspector = new QLabel(tr("Select a meeting"), inspectorContent);
-  mEmptyInspector->setWordWrap(true);
-  mInspectorLayout->addWidget(mEmptyInspector);
-  mInspectorLayout->addStretch();
-  inspectorScroll->setWidget(inspectorContent);
-  body->addWidget(inspectorScroll);
+  body->setSpacing(20);
   mUi->pageLayout->addLayout(body, 1);
-  connect(previous, &QPushButton::clicked, this, [this] {
-    onCalendarClicked(isMonthView() ? mSelectedDate.addMonths(-1) : mSelectedDate.addDays(-1));
-  });
-  connect(next, &QPushButton::clicked, this, [this] {
-    onCalendarClicked(isMonthView() ? mSelectedDate.addMonths(1) : mSelectedDate.addDays(1));
-  });
-  connect(today, &QPushButton::clicked, this, [this] { onCalendarClicked(QDate::currentDate()); });
+
+  // Left column: calendar card (day calendar / month picker), one swappable
+  // info panel (day summary / meeting inspector) and the quick slots.
+  auto *left = new QWidget(this);
+  left->setObjectName(QStringLiteral("calendarLeftColumn"));
+  left->setFixedWidth(400);
+  mLeftColumn = left;
+  auto *leftLayout = new QVBoxLayout(left);
+  leftLayout->setContentsMargins(0, 0, 0, 0);
+  leftLayout->setSpacing(12);
+  mCalendarCardStack = new QStackedWidget(left);
+  mCalendarCardStack->setObjectName(QStringLiteral("calendarCardStack"));
+  mCalendarWidget = new RoundedCalendarWidget(mCalendarCardStack);
+  mCalendarWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  mMonthPicker = new MonthPickerWidget(mCalendarCardStack);
+  mCalendarCardStack->addWidget(mCalendarWidget);
+  mCalendarCardStack->addWidget(mMonthPicker);
+  mCalendarCardStack->setFixedHeight(std::max(mCalendarWidget->minimumHeight(),
+                                              mMonthPicker->minimumHeight()));
+  leftLayout->addWidget(mCalendarCardStack);
+
+  mInfoStack = new QStackedWidget(left);
+  mInfoStack->setObjectName(QStringLiteral("calendarInfoStack"));
+  auto *summaryPage = new QWidget(mInfoStack);
+  auto *summaryLayout = new QVBoxLayout(summaryPage);
+  summaryLayout->setContentsMargins(0, 0, 0, 0);
+  mDaySummaryWidget = new DaySummaryWidget(summaryPage);
+  summaryLayout->addWidget(mDaySummaryWidget);
+  summaryLayout->addStretch(1);
+  mInfoStack->addWidget(summaryPage);
+  mInspectorScroll = new QScrollArea(mInfoStack);
+  mInspectorScroll->setObjectName(QStringLiteral("calendarInspectorScroll"));
+  mInspectorScroll->setWidgetResizable(true);
+  mInspectorScroll->setFrameShape(QFrame::NoFrame);
+  mInspectorScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  auto *inspectorContent = new QWidget;
+  inspectorContent->setObjectName(QStringLiteral("calendarInspectorContent"));
+  mInspectorLayout = new QVBoxLayout(inspectorContent);
+  mInspectorLayout->setContentsMargins(0, 0, 0, 0);
+  mInspectorLayout->setSpacing(8);
+  mInspectorLayout->addStretch(1);
+  mInspectorScroll->setWidget(inspectorContent);
+  mInfoStack->addWidget(mInspectorScroll);
+  leftLayout->addWidget(mInfoStack, 1);
+  mQuickSlotsWidget = new QuickSlotsWidget(left);
+  leftLayout->addWidget(mQuickSlotsWidget);
+  body->addWidget(left);
+
+  // Centre: the original day timeline, or the month grid.
+  mCalendarStack = new QStackedWidget(this);
+  mCalendarStack->setObjectName(QStringLiteral("calendarCenterStack"));
+  mTimelineWidget = new QTimelineWidget(model, mCalendarStack);
+  mCalendarStack->addWidget(mTimelineWidget);
+  // The month grid caps its row height; when the window is too short it
+  // scrolls, when too tall the grid stays top-aligned with empty space below.
+  auto *monthScroll = new QScrollArea(mCalendarStack);
+  monthScroll->setObjectName(QStringLiteral("calendarMonthScroll"));
+  monthScroll->setWidgetResizable(true);
+  monthScroll->setFrameShape(QFrame::NoFrame);
+  monthScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  mMonthCalendar = new MonthCalendarWidget(monthScroll);
+  monthScroll->setWidget(mMonthCalendar);
+  mCalendarStack->addWidget(monthScroll);
+  body->addWidget(mCalendarStack, 1);
 
   connectSignals();
   initDefaultStates();
@@ -235,8 +241,21 @@ QEventInfoPage::QEventInfoPage(QTimelineModel *model,
 
 QEventInfoPage::~QEventInfoPage() = default;
 
+void QEventInfoPage::resizeEvent(QResizeEvent *event) {
+  QWidget::resizeEvent(event);
+  // ~400px like the original layout, narrower on small windows so the
+  // timeline / month grid keep a usable width.
+  mLeftColumn->setFixedWidth(std::clamp(width() * 38 / 100, 320, 400));
+}
+
 void QEventInfoPage::connectSignals() {
   connect(mViewSwitch, &QAbstractButton::toggled, this, &QEventInfoPage::setMonthView);
+  connect(mCalendarWidget, &RoundedCalendarWidget::clicked, this, &QEventInfoPage::onCalendarClicked);
+  connect(mMonthPicker, &MonthPickerWidget::monthSelected, this, [this](const QDate month) {
+    // Keep the day of month where it exists; the month grid follows the date.
+    const auto day = std::min(mSelectedDate.day(), month.daysInMonth());
+    onCalendarClicked(QDate(month.year(), month.month(), day));
+  });
   connect(mMonthCalendar, &MonthCalendarWidget::dateSelected, this, &QEventInfoPage::onCalendarClicked);
   connect(mMonthCalendar, &MonthCalendarWidget::eventSelected, this, &QEventInfoPage::selectMonthEvent);
   if (mModel) {
@@ -269,6 +288,7 @@ void QEventInfoPage::connectSignals() {
 
 void QEventInfoPage::initDefaultStates() {
   mSelectedDate = QDate::currentDate();
+  updateCalendarHighlights();
   mTimelineWidget->onSelectedDayChanged(mSelectedDate);
   refreshCalendar();
   refreshQuickSlots();
@@ -302,6 +322,7 @@ void QEventInfoPage::setMonthView(bool enabled) {
   const QSignalBlocker blocker(mViewSwitch);
   mViewSwitch->setChecked(enabled);
   mCalendarStack->setCurrentIndex(enabled ? 1 : 0);
+  mCalendarCardStack->setCurrentIndex(enabled ? 1 : 0);
   refreshCalendar();
 }
 
@@ -311,8 +332,11 @@ void QEventInfoPage::refreshCalendar() {
   if (mNavigating) {
     return;
   }
-  mPeriodLabel->setText(locale().toString(mSelectedDate,
-      isMonthView() ? QStringLiteral("MMMM yyyy") : QStringLiteral("d MMMM yyyy")));
+  mCalendarWidget->setSelectedDate(mSelectedDate);
+  if (mMonthPicker->displayedMonth().year() != mSelectedDate.year() ||
+      mMonthPicker->displayedMonth().month() != mSelectedDate.month()) {
+    mMonthPicker->setDisplayedMonth(mSelectedDate);
+  }
   if (isMonthView()) {
     mMonthCalendar->setSelectedDate(mSelectedDate);
     const auto [first, last] = MonthCalendarWidget::visibleRange(mSelectedDate);
@@ -378,7 +402,7 @@ void QEventInfoPage::showInspector(const std::optional<DuckEvent> &event, bool f
   }
   mSelectedEvent = event;
   mShownSeriesRule = shownSeriesRule(event);
-  mEmptyInspector->setVisible(!event.has_value());
+  mInfoStack->setCurrentIndex(event.has_value() ? 1 : 0);
   if (!event) {
     return;
   }
@@ -395,6 +419,8 @@ void QEventInfoPage::showInspector(const std::optional<DuckEvent> &event, bool f
     }
   }
   setupSeriesCall(mInspector, *event);
+  connect(mInspector, &QEventDetailsWidget::backRequested, this,
+          [this] { showInspector(std::nullopt); });
   connect(mInspector, &QEventDetailsWidget::editRequested, this, &QEventInfoPage::editSelectedEvent);
   connect(mInspector, &QEventDetailsWidget::openLiveKitMeetingRequested,
           this, &QEventInfoPage::openLiveKitMeetingRequested);
@@ -413,6 +439,17 @@ void QEventInfoPage::editSelectedEvent() {
     editEventWithDialog(mSelectedEvent->id);
   }
 }
+
+void QEventInfoPage::updateCalendarHighlights() const {
+  QTextCharFormat currentDayFormat;
+  currentDayFormat.setFontWeight(QFont::DemiBold);
+  currentDayFormat.setUnderlineStyle(QTextCharFormat::SingleUnderline);
+  currentDayFormat.setUnderlineColor(pcm::widgets::constants::kCalendarCurrentDayUnderlineColor);
+  currentDayFormat.setForeground(pcm::widgets::constants::kCalendarCurrentDayForegroundColor);
+  mCalendarWidget->setDateTextFormat(QDate::currentDate(), currentDayFormat);
+}
+
+QWidget *QEventInfoPage::headerControls() const { return mHeaderControls; }
 
 void QEventInfoPage::setSeriesCallService(pcm::meeting::SeriesCallService *service) {
   mSeriesCallService = service;

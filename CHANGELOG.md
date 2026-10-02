@@ -6,23 +6,28 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Month view for the calendar: a month grid with neighbouring days, the week
-  starting according to the system locale, and a "+N more" link in days that
-  have more meetings than fit in the cell. Meetings crossing midnight and
-  occurrences of recurring series are shown in every affected day.
-- A Day / Month switch on the calendar page.
-- A shared meeting inspector in the right panel: selecting a meeting in the day
-  timeline or in the month grid shows the same details, call actions and
-  recurring series state there.
+- Month view for the calendar: a month grid with rounded meeting chips (time and
+  title; accent colour for work meetings, neutral for personal ones), dimmed
+  neighbouring days, a filled badge with the day number for the selected day, a
+  ring for today, the week starting according to the system locale, and a
+  "+N more" link in days that have more meetings than fit in the cell. Rows keep
+  a moderate height in tall windows. Meetings crossing midnight and occurrences
+  of recurring series are shown in every affected day.
+- A Day / Month switch and the "New meeting" button in the top row of the
+  Calendar page.
+- In Month mode the calendar card becomes a month picker (year arrows and
+  twelve month tiles).
+- One info panel under the calendar card: the day summary, replaced by the
+  meeting inspector (labelled Date / Time / Repeat / Delivery format / Status
+  fields, full-width actions, recurring series state) when a meeting is
+  selected in the timeline or the month grid; "Back to day" returns to the
+  day summary.
+- The day timeline scrolls to the first meeting of the day (or 08:00).
 
 ### Changed
 
-- The calendar page layout is reorganised: navigation on the left, the day
-  timeline or month grid in the centre and the meeting inspector on the right.
-
-### Removed
-
-- The old standalone calendar widget, replaced by the new month grid.
+- Month mode uses the same layout as Day mode: calendar card, info panel and
+  quick session slots on the left, the month grid in the centre.
 
 ## [0.2.8] - 2026-10-02
 

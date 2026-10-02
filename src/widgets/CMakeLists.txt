@@ -17,6 +17,7 @@ qt_add_library(${TARGET_NAME} STATIC
         sensitive_clipboard.cpp
         sensitive_clipboard.h
         tab_button.cpp
+        rounded_calendar_widget.cpp
         quick_slots_widget.cpp
         busy_spinner.cpp
         busy_spinner.h

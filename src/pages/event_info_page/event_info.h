@@ -8,6 +8,8 @@
 #include "timeline_widget.h"
 #include "../../widgets/quick_slots_widget.h"
 #include "month_calendar_widget.h"
+#include "month_picker_widget.h"
+#include "../../widgets/rounded_calendar_widget.h"
 #include <QScrollArea>
 #include <QStackedWidget>
 #include <QVBoxLayout>
@@ -37,6 +39,9 @@ public:
   // legacy local-only behavior.
   void setSeriesCallService(pcm::meeting::SeriesCallService *service);
   void setMonthView(bool enabled);
+  // Day|Month switch and the "New meeting" button. MainWindow hosts them in the
+  // top row; standalone they stay in a row above the page body.
+  [[nodiscard]] QWidget *headerControls() const;
   [[nodiscard]] bool isMonthView() const;
   // Whether "This and future events" may be offered for this series (it may
   // not for a published series: the permanent invitation cannot be split).
@@ -70,7 +75,11 @@ private slots:
   void onEditingCanceled();
   void onDaySummaryEventHighlightRequested(int64_t eventId);
 
+protected:
+  void resizeEvent(QResizeEvent *event) override;
+
 private:
+  QWidget *mLeftColumn = nullptr;
   void connectSignals();
   void setupSeriesCall(QEventDetailsWidget *widget, const DuckEvent &event);
   // IANA timezone to pin a series to: the machine's, or one the specialist
@@ -78,6 +87,7 @@ private:
   [[nodiscard]] QString confirmNewSeriesTimezone();
   void initDefaultStates();
   void refreshCalendar();
+  void updateCalendarHighlights() const;
   void selectMonthEvent(DuckEvent event);
   // Series data the inspector shows besides the occurrence itself.
   struct ShownSeriesRule {
@@ -103,9 +113,13 @@ private:
   MonthCalendarWidget *mMonthCalendar = nullptr;
   oclero::qlementine::Switch *mViewSwitch = nullptr;
   QStackedWidget *mCalendarStack = nullptr;
-  QLabel *mPeriodLabel = nullptr;
+  QWidget *mHeaderControls = nullptr;
+  RoundedCalendarWidget *mCalendarWidget = nullptr;
+  MonthPickerWidget *mMonthPicker = nullptr;
+  QStackedWidget *mCalendarCardStack = nullptr;
+  QStackedWidget *mInfoStack = nullptr;
+  QScrollArea *mInspectorScroll = nullptr;
   QVBoxLayout *mInspectorLayout = nullptr;
-  QLabel *mEmptyInspector = nullptr;
   QPointer<QEventDetailsWidget> mInspector;
   std::optional<DuckEvent> mSelectedEvent;
   std::optional<ShownSeriesRule> mShownSeriesRule;

@@ -128,6 +128,8 @@ public:
   void setClientList(const QHash<int64_t, QString> &clients);
 
 signals:
+  // Inspector mode: "Back to day" was pressed.
+  void backRequested();
   void editRequested();
   /**
    * @brief Signal emitted when user requests to save the event.
@@ -181,6 +183,9 @@ private slots:
   void onTimeToChanged(const QTime &timeTo);
   void onSuggestFreeSlotClicked();
   void onCopyMeetingPasscodeClicked();
+
+protected:
+  void paintEvent(QPaintEvent *event) override;
 
 private:
   void refreshInspector();
@@ -236,8 +241,14 @@ private:
   QWidget *mInspectorSummary = nullptr;
   QBoxLayout *mSeriesActionsLayout = nullptr;
   QLabel *mInspectorTitle = nullptr;
-  QLabel *mInspectorFacts = nullptr;
-  QLabel *mInspectorRecurrence = nullptr;
+  // Labelled read-only fields: small muted caption above the value.
+  struct InspectorField {
+    QLabel *caption = nullptr;
+    QLabel *value = nullptr;
+  };
+  InspectorField mFieldClient, mFieldDate, mFieldTime, mFieldRepeat, mFieldFormat, mFieldStatus;
+  QLabel *mInspectorDuration = nullptr;
+  QLabel *mSeriesHint = nullptr;
   std::unique_ptr<QEventItem> mInspectorEvent;
   bool mInspectorMode = false;
   quint64 mSelectionRevision = 0;

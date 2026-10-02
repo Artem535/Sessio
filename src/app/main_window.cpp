@@ -128,6 +128,8 @@ void MainWindow::addEventInfoPage(QTimelineModel *model,
 
   const int index = mUi->stackedWidget->addWidget(page);
   mPagesIndex.insertOrAssign(Pages::eventInfo, index);
+  // Day|Month switch and "New meeting" live in the top row next to the title.
+  setPageCustomWidget(Pages::eventInfo, page->headerControls());
 }
 
 void MainWindow::addAnalyticsPage(std::shared_ptr<pcm::database::Database> db) {

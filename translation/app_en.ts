@@ -824,6 +824,17 @@
     </message>
 </context>
 <context>
+    <name>MonthPickerWidget</name>
+    <message>
+        <source>Previous year</source>
+        <translation>Previous year</translation>
+    </message>
+    <message>
+        <source>Next year</source>
+        <translation>Next year</translation>
+    </message>
+</context>
+<context>
     <name>Notifications</name>
     <message>
         <source>Sessio</source>
@@ -1014,6 +1025,10 @@
         <translation>Copy passcode</translation>
     </message>
     <message>
+        <source>Use one link for all meetings of this series.</source>
+        <translation>Use one link for all meetings of this series.</translation>
+    </message>
+    <message>
         <source>Retry</source>
         <translation>Retry</translation>
     </message>
@@ -1032,6 +1047,26 @@
     <message>
         <source>Meeting</source>
         <translation>Meeting</translation>
+    </message>
+    <message>
+        <source>Back to day</source>
+        <translation>Back to day</translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>Date</translation>
+    </message>
+    <message>
+        <source>Time</source>
+        <translation>Time</translation>
+    </message>
+    <message>
+        <source>Delivery format</source>
+        <translation>Delivery format</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Status</translation>
     </message>
     <message>
         <source>In person</source>
@@ -1261,10 +1296,6 @@
         <translation>Recurring event</translation>
     </message>
     <message>
-        <source>Calendar</source>
-        <translation>Calendar</translation>
-    </message>
-    <message>
         <source>Day</source>
         <translation>Day</translation>
     </message>
@@ -1279,22 +1310,6 @@
     <message>
         <source>New meeting</source>
         <translation>New meeting</translation>
-    </message>
-    <message>
-        <source>Previous period</source>
-        <translation>Previous period</translation>
-    </message>
-    <message>
-        <source>Next period</source>
-        <translation>Next period</translation>
-    </message>
-    <message>
-        <source>Today</source>
-        <translation>Today</translation>
-    </message>
-    <message>
-        <source>Select a meeting</source>
-        <translation>Select a meeting</translation>
     </message>
     <message>
         <source>: EVENT_ADD_BUTTON</source>

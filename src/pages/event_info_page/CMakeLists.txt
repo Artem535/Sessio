@@ -17,6 +17,8 @@ qt_add_library(${TARGET_NAME} STATIC
         day_summary_widget.h
         month_calendar_widget.cpp
         month_calendar_widget.h
+        month_picker_widget.cpp
+        month_picker_widget.h
         series_call_status_text.cpp
         series_call_status_text.h
         series_timezone_dialog.cpp

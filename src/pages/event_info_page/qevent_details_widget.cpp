@@ -12,6 +12,7 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
+#include <QPainter>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
@@ -25,6 +26,29 @@
 Q_LOGGING_CATEGORY(logEventDetails, "pcm.EventDetails")
 
 namespace {
+// Small muted caption/secondary text painted from the live palette (no style
+// sheets on ancestors of Qlementine widgets).
+class MutedLabel final : public QLabel {
+public:
+  explicit MutedLabel(QWidget *parent) : QLabel(parent) {
+    auto f = font();
+    f.setPointSizeF(std::max(7.0, f.pointSizeF() - 1.0));
+    setFont(f);
+    setTextFormat(Qt::PlainText);
+    setWordWrap(true);
+  }
+
+protected:
+  void paintEvent(QPaintEvent *) override {
+    QPainter painter(this);
+    auto color = palette().color(QPalette::Text);
+    color.setAlpha(150);
+    painter.setPen(color);
+    painter.setFont(font());
+    painter.drawText(contentsRect(), Qt::AlignLeft | Qt::AlignTop | Qt::TextWordWrap, text());
+  }
+};
+
 // Form rows of the online/meeting section; the inspector moves two of these
 // widgets out of the form and puts them back on the same rows.
 constexpr int onlineSectionRow = 10;
@@ -315,10 +339,10 @@ void QEventDetailsWidget::initUi() {
   mOpenMeetingButton->setObjectName(QStringLiteral("openMeetingButton"));
   mCopyMeetingUrlButton->setObjectName(QStringLiteral("copyMeetingUrlButton"));
   mCopyMeetingInviteButton->setObjectName(QStringLiteral("copyMeetingInviteButton"));
-  meetingActionsLayout->addWidget(mOpenMeetingButton);
-  meetingActionsLayout->addWidget(mCopyMeetingUrlButton);
   meetingActionsLayout->addWidget(mCopyMeetingInviteButton);
+  meetingActionsLayout->addWidget(mCopyMeetingUrlButton);
   meetingActionsLayout->addWidget(mCopyMeetingPasscodeButton);
+  meetingActionsLayout->addWidget(mOpenMeetingButton);
   meetingActionsLayout->addStretch();
   mUI->formLayout->insertRow(meetingActionsRow, QString(),
                              mMeetingActionsWidget);
@@ -333,6 +357,11 @@ void QEventDetailsWidget::initUi() {
   mSeriesStatusLabel->setWordWrap(true);
   mSeriesStatusLabel->setTextFormat(Qt::PlainText);
   seriesCallLayout->addWidget(mSeriesStatusLabel);
+  mSeriesHint = new MutedLabel(mSeriesCallWidget);
+  mSeriesHint->setObjectName(QStringLiteral("seriesCallHint"));
+  mSeriesHint->setText(tr("Use one link for all meetings of this series."));
+  mSeriesHint->hide();
+  seriesCallLayout->addWidget(mSeriesHint);
   auto *seriesActionsLayout = new QHBoxLayout();
   mSeriesActionsLayout = seriesActionsLayout;
   seriesActionsLayout->setContentsMargins(0, 0, 0, 0);
@@ -402,28 +431,52 @@ void QEventDetailsWidget::initUi() {
   mInspectorSummary = new QWidget(this);
   auto *summary = new QVBoxLayout(mInspectorSummary);
   summary->setContentsMargins(0, 0, 0, 0);
-  summary->setSpacing(20);
+  summary->setSpacing(4);
   auto *heading = new QLabel(tr("Meeting"), mInspectorSummary);
   auto headingFont = heading->font();
   headingFont.setPointSize(18);
   headingFont.setBold(true);
   heading->setFont(headingFont);
-  summary->addWidget(heading);
+  auto *headingRow = new QHBoxLayout;
+  headingRow->setContentsMargins(0, 0, 0, 0);
+  headingRow->addWidget(heading, 1);
+  auto *back = new QPushButton(tr("Back to day"), mInspectorSummary);
+  back->setObjectName(QStringLiteral("inspectorBackToDay"));
+  back->setFlat(true);
+  back->setCursor(Qt::PointingHandCursor);
+  connect(back, &QPushButton::clicked, this, &QEventDetailsWidget::backRequested);
+  headingRow->addWidget(back, 0, Qt::AlignTop);
+  summary->addLayout(headingRow);
   mInspectorTitle = new QLabel(mInspectorSummary);
   mInspectorTitle->setObjectName(QStringLiteral("inspectorTitle"));
   mInspectorTitle->setWordWrap(true);
   mInspectorTitle->setTextFormat(Qt::PlainText);
   mInspectorTitle->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
   summary->addWidget(mInspectorTitle);
-  mInspectorFacts = new QLabel(mInspectorSummary);
-  mInspectorFacts->setObjectName(QStringLiteral("inspectorFacts"));
-  mInspectorFacts->setWordWrap(true);
-  mInspectorFacts->setTextFormat(Qt::PlainText);
-  summary->addWidget(mInspectorFacts);
-  mInspectorRecurrence = new QLabel(mInspectorSummary);
-  mInspectorRecurrence->setWordWrap(true);
-  mInspectorRecurrence->setTextFormat(Qt::PlainText);
-  summary->addWidget(mInspectorRecurrence);
+  const auto addField = [this, summary](InspectorField &field, const QString &name,
+                                        const QString &caption) {
+    field.caption = new MutedLabel(mInspectorSummary);
+    field.caption->setObjectName(name + QStringLiteral("Caption"));
+    field.caption->setText(caption);
+    field.value = new QLabel(mInspectorSummary);
+    field.value->setObjectName(name);
+    field.value->setWordWrap(true);
+    field.value->setTextFormat(Qt::PlainText);
+    field.value->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    summary->addSpacing(6);
+    summary->addWidget(field.caption);
+    summary->addWidget(field.value);
+  };
+  addField(mFieldClient, QStringLiteral("inspectorClient"), tr("Client"));
+  addField(mFieldDate, QStringLiteral("inspectorDate"), tr("Date"));
+  addField(mFieldTime, QStringLiteral("inspectorTime"), tr("Time"));
+  mInspectorDuration = new MutedLabel(mInspectorSummary);
+  mInspectorDuration->setObjectName(QStringLiteral("inspectorDuration"));
+  summary->addWidget(mInspectorDuration);
+  addField(mFieldRepeat, QStringLiteral("inspectorRepeat"), tr("Repeat"));
+  addField(mFieldFormat, QStringLiteral("inspectorFormat"), tr("Delivery format"));
+  addField(mFieldStatus, QStringLiteral("inspectorStatus"), tr("Status"));
+  summary->addSpacing(12);
   mUI->verticalLayout->insertWidget(0, mInspectorSummary);
   mInspectorSummary->hide();
 }
@@ -442,6 +495,17 @@ void QEventDetailsWidget::setInspectorMode(bool enabled) {
     mUI->formLayout->removeWidget(mSeriesCallWidget);
     summary->addWidget(mSeriesCallWidget);
     summary->addWidget(mMeetingActionsWidget);
+    mUI->verticalLayout->removeWidget(mUI->mChangeButton);
+    summary->addWidget(mUI->mChangeButton);
+    // Full-width stacked actions.
+    for (auto *button : {mOpenMeetingButton, mCopyMeetingUrlButton, mCopyMeetingInviteButton,
+                         mCopyMeetingPasscodeButton, mSeriesRetryButton, mSeriesReissueButton,
+                         mSeriesPublishButton, mMigrateButton, mUI->mChangeButton}) {
+      button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+      button->setMinimumHeight(32);
+    }
+    mUI->verticalLayout->setContentsMargins(16, 16, 16, 16);
+    summary->setSpacing(4);
     static_cast<QBoxLayout *>(mMeetingActionsWidget->layout())->setDirection(QBoxLayout::TopToBottom);
     // Series actions can have long translated labels. Stacking keeps all of
     // them accessible inside the narrow scrollable panel.
@@ -449,6 +513,9 @@ void QEventDetailsWidget::setInspectorMode(bool enabled) {
   } else {
     summary->removeWidget(mMeetingActionsWidget);
     summary->removeWidget(mSeriesCallWidget);
+    summary->removeWidget(mUI->mChangeButton);
+    mUI->verticalLayout->addWidget(mUI->mChangeButton);
+    mUI->verticalLayout->setContentsMargins(9, 9, 9, 9);
     mUI->formLayout->setWidget(meetingActionsRow, QFormLayout::FieldRole, mMeetingActionsWidget);
     mUI->formLayout->setWidget(seriesCallRow, QFormLayout::FieldRole, mSeriesCallWidget);
     static_cast<QBoxLayout *>(mMeetingActionsWidget->layout())->setDirection(QBoxLayout::LeftToRight);
@@ -469,8 +536,11 @@ void QEventDetailsWidget::refreshInspector() {
   mUI->mChangeButton->setVisible(mCurrentEvent != nullptr);
   if (!mCurrentEvent) {
     mInspectorTitle->clear();
-    mInspectorFacts->clear();
-    mInspectorRecurrence->clear();
+    for (auto *field : {&mFieldClient, &mFieldDate, &mFieldTime, &mFieldRepeat, &mFieldFormat,
+                        &mFieldStatus}) {
+      field->value->clear();
+    }
+    mInspectorDuration->clear();
     mMeetingActionsWidget->hide();
     return;
   }
@@ -482,24 +552,42 @@ void QEventDetailsWidget::refreshInspector() {
   const QString format = !event.is_online ? tr("In person")
       : mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit
           ? tr("Online (LiveKit)") : tr("Online (external link)");
-  QStringList facts{locale().toString(start.date(), QLocale::LongFormat),
-      start.toString(QStringLiteral("HH:mm")) + QStringLiteral(" – ") +
-          (start.date() == end.date() ? end.toString(QStringLiteral("HH:mm"))
-                                    : locale().toString(end, QLocale::ShortFormat)),
-      tr("%1 minutes").arg(start.secsTo(end) / 60), format,
-      mUI->mEventStatusComboBox->currentText()};
-  if (event.client_name && !event.client_name->empty()) {
-    facts.prepend(QString::fromStdString(*event.client_name));
-  }
-  mInspectorFacts->setText(facts.join(QStringLiteral("\n\n")));
+  const QString client = event.client_name ? QString::fromStdString(*event.client_name) : QString{};
+  mFieldClient.value->setText(client);
+  mFieldClient.caption->setVisible(!client.isEmpty());
+  mFieldClient.value->setVisible(!client.isEmpty());
+  mFieldDate.value->setText(locale().toString(start.date(), QLocale::LongFormat));
+  mFieldTime.value->setText(start.toString(QStringLiteral("HH:mm")) + QStringLiteral(" – ") +
+      (start.date() == end.date() ? end.toString(QStringLiteral("HH:mm"))
+                                  : locale().toString(end, QLocale::ShortFormat)));
+  mInspectorDuration->setText(tr("%1 minutes").arg(start.secsTo(end) / 60));
+  mFieldFormat.value->setText(format);
+  mFieldStatus.value->setText(mUI->mEventStatusComboBox->currentText());
   const auto repeat = mRepeatTypeControl->currentData().toString();
   QString repetition = tr("Does not repeat");
   if (repeat == QLatin1String("daily")) repetition = tr("Repeats daily");
   if (repeat == QLatin1String("weekly")) repetition = tr("Repeats every %1 week(s)").arg(mRepeatIntervalSpinBox->value());
   if (repeat == QLatin1String("monthly")) repetition = tr("Repeats monthly");
   if (repeat == QLatin1String("yearly")) repetition = tr("Repeats yearly");
-  mInspectorRecurrence->setText(repetition);
+  mFieldRepeat.value->setText(repetition);
   mMeetingActionsWidget->setVisible(event.is_online);
+  // The main action gets the primary look.
+  mCopyMeetingInviteButton->setDefault(event.is_online);
+  mUI->mChangeButton->setDefault(!event.is_online);
+}
+
+void QEventDetailsWidget::paintEvent(QPaintEvent *event) {
+  QWidget::paintEvent(event);
+  if (!mInspectorMode) {
+    return;
+  }
+  QPainter painter(this);
+  painter.setRenderHint(QPainter::Antialiasing);
+  auto border = palette().color(QPalette::Text);
+  border.setAlpha(46);
+  painter.setPen(QPen(border, 1));
+  painter.setBrush(QColor(255, 255, 255, 8));
+  painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 14, 14);
 }
 
 void QEventDetailsWidget::initConnections() {
@@ -1724,5 +1812,6 @@ void QEventDetailsWidget::refreshSeriesCallPanel() {
                              mSeriesCalls->status(mSeriesId).migration.state !=
                                  pcm::meeting::MigrationState::CreatingInvitation);
   mSeriesLinkReady = relevant && view.linkReady;
+  mSeriesHint->setVisible(mInspectorMode && mSeriesLinkReady);
   updateButtonState();
 }

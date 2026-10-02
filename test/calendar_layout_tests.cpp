@@ -17,6 +17,12 @@
 #include <QTimer>
 #include <QDialog>
 #include <QScrollBar>
+#include <QScrollArea>
+#include <QStackedWidget>
+#include <QLabel>
+#include <QImage>
+#include "rounded_calendar_widget.h"
+#include "month_picker_widget.h"
 #include <array>
 #include <cmath>
 #include <gtest/gtest.h>
@@ -176,10 +182,12 @@ TEST_F(CalendarLayoutTest, DaySelectionAndPeriodNavigationUseTheSharedInspector)
   auto *details = page.findChild<QEventDetailsWidget *>("calendarInspector");
   ASSERT_NE(details, nullptr);
   EXPECT_EQ(details->currentEvent()->getId(), id);
-  page.findChild<QPushButton *>("nextCalendarPeriod")->click();
+  auto *card = page.findChild<RoundedCalendarWidget *>();
+  ASSERT_NE(card, nullptr);
+  emit card->clicked(QDate::currentDate().addDays(1));
   EXPECT_EQ(page.findChild<QEventDetailsWidget *>("calendarInspector"), nullptr);
   EXPECT_TRUE(model->events().isEmpty());
-  page.findChild<QPushButton *>("previousCalendarPeriod")->click();
+  emit card->clicked(QDate::currentDate());
   ASSERT_EQ(model->events().size(), 1);
   EXPECT_EQ(model->events().first().id, id);
 }
@@ -258,14 +266,14 @@ TEST_F(CalendarLayoutTest, SmallPageKeepsCalendarAndScrollingInspectorAccessible
       EXPECT_LE(page.width(), 900);
       EXPECT_LE(page.height(), 640);
       auto *calendar = monthMode ? static_cast<QWidget *>(page.findChild<MonthCalendarWidget *>())
-                                 : page.findChild<QWidget *>("calendarDayScroll");
+                                 : page.findChild<QStackedWidget *>("calendarCenterStack")->currentWidget();
       EXPECT_TRUE(calendar->isVisible());
       EXPECT_GT(calendar->width(), 350);
       EXPECT_GT(calendar->height(), 350);
       auto *scroll = page.findChild<QScrollArea *>("calendarInspectorScroll");
       EXPECT_TRUE(scroll->isVisible());
       EXPECT_EQ(scroll->horizontalScrollBar()->maximum(), 0);
-      EXPECT_TRUE(page.findChild<QuickSlotsWidget *>()->isVisibleTo(page.findChild<QScrollArea *>("calendarDayScroll")));
+      EXPECT_TRUE(page.findChild<QuickSlotsWidget *>()->isVisibleTo(&page));
       // The page palette (not the application one) must reach the calendar and
       // the inspector, and text must stay readable against the background.
       EXPECT_EQ(calendar->palette().color(QPalette::Base), palette.color(QPalette::Base));
@@ -474,7 +482,7 @@ TEST_F(CalendarLayoutTest, LeavingInspectorModeRestoresTheFormLayout) {
   auto *form = details.findChild<QFormLayout *>();
   ASSERT_NE(form, nullptr);
   const auto seriesActions = [series] {
-    return static_cast<QBoxLayout *>(series->layout()->itemAt(1)->layout());
+    return static_cast<QBoxLayout *>(series->layout()->itemAt(2)->layout());
   };
   const auto actionsLayout = [actions] { return static_cast<QBoxLayout *>(actions->layout()); };
   const auto position = [form](QWidget *widget) {
@@ -507,6 +515,118 @@ TEST_F(CalendarLayoutTest, NullLoadEventKeepsDialogModeUntouched) {
   ASSERT_EQ(dialog.currentEvent(), &item);
   dialog.loadEvent(nullptr);
   EXPECT_EQ(dialog.currentEvent(), &item);
+}
+TEST_F(CalendarLayoutTest, SwitchSwapsTheCalendarCardAndTheCentrePage) {
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.resize(1100, 720);
+  page.show();
+  QApplication::processEvents();
+  auto *card = page.findChild<QStackedWidget *>("calendarCardStack");
+  auto *centre = page.findChild<QStackedWidget *>("calendarCenterStack");
+  ASSERT_NE(card, nullptr);
+  ASSERT_NE(centre, nullptr);
+  EXPECT_EQ(card->currentWidget(), page.findChild<RoundedCalendarWidget *>());
+  EXPECT_EQ(centre->currentWidget(), page.findChild<QTimelineWidget *>());
+  const auto cardGeometry = card->geometry();
+  page.setMonthView(true);
+  QApplication::processEvents();
+  EXPECT_EQ(card->currentWidget(), page.findChild<MonthPickerWidget *>());
+  EXPECT_TRUE(page.findChild<MonthCalendarWidget *>()->isVisible());
+  EXPECT_EQ(card->geometry(), cardGeometry); // the card keeps its size and place
+  EXPECT_TRUE(page.findChild<QuickSlotsWidget *>()->isVisible());
+  EXPECT_TRUE(page.headerControls()->isAncestorOf(page.findChild<QWidget *>("calendarViewSwitch")));
+  EXPECT_TRUE(page.headerControls()->isAncestorOf(page.findChild<QWidget *>("newCalendarEvent")));
+}
+TEST_F(CalendarLayoutTest, MonthPickerTileChangesTheDisplayedMonthAndYearArrowsBrowse) {
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.setMonthView(true);
+  auto *picker = page.findChild<MonthPickerWidget *>();
+  auto *month = page.findChild<MonthCalendarWidget *>();
+  ASSERT_NE(picker, nullptr);
+  const auto year = QDate::currentDate().year();
+  page.findChild<QToolButton *>("monthPickerNextYear")->click();
+  EXPECT_EQ(picker->shownYear(), year + 1);
+  EXPECT_EQ(picker->displayedMonth().year(), year); // browsing does not move the grid
+  QToolButton *march = nullptr;
+  for (auto *tile : picker->findChildren<QToolButton *>("monthPickerTile")) {
+    if (tile->property("calendarMonth").toInt() == 3) march = tile;
+  }
+  ASSERT_NE(march, nullptr);
+  EXPECT_FALSE(march->text().isEmpty());
+  march->click();
+  EXPECT_EQ(picker->displayedMonth(), QDate(year + 1, 3, 1));
+  EXPECT_EQ(month->firstVisibleDate(), MonthCalendarWidget::visibleRange(QDate(year + 1, 3, 1)).first);
+}
+TEST_F(CalendarLayoutTest, InfoPanelSwapsBetweenDaySummaryAndInspector) {
+  const auto id = model->addEvent(appointment(QDate::currentDate()));
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  auto *info = page.findChild<QStackedWidget *>("calendarInfoStack");
+  ASSERT_NE(info, nullptr);
+  EXPECT_EQ(info->currentIndex(), 0);
+  EXPECT_TRUE(info->widget(0)->findChild<DaySummaryWidget *>() != nullptr);
+  page.findChild<QTimelineWidget *>()->eventSelected(id);
+  EXPECT_EQ(info->currentIndex(), 1);
+  EXPECT_NE(page.findChild<QEventDetailsWidget *>("calendarInspector"), nullptr);
+  page.findChild<QPushButton *>("inspectorBackToDay")->click();
+  EXPECT_EQ(info->currentIndex(), 0);
+  EXPECT_EQ(page.findChild<QEventDetailsWidget *>("calendarInspector"), nullptr);
+  page.findChild<QTimelineWidget *>()->eventSelected(id);
+  ASSERT_EQ(info->currentIndex(), 1);
+  model->removeEvent(id); // deleting the selected meeting returns to the day
+  EXPECT_EQ(info->currentIndex(), 0);
+  const auto other = model->addEvent(appointment(QDate::currentDate()));
+  page.findChild<MonthCalendarWidget *>()->eventSelected(model->events().first());
+  EXPECT_EQ(info->currentIndex(), 1);
+  emit page.findChild<RoundedCalendarWidget *>()->clicked(QDate::currentDate().addDays(1));
+  EXPECT_EQ(info->currentIndex(), 0); // choosing a day shows the day again
+  Q_UNUSED(other);
+}
+TEST_F(CalendarLayoutTest, InspectorShowsLabelledFieldsAndFullWidthButtons) {
+  auto event = appointment(QDate::currentDate());
+  event.is_online = true;
+  event.provider_kind = "ExternalUrl";
+  event.meeting_url = "https://example.test/meeting";
+  model->addEvent(event);
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.resize(1500, 900);
+  page.show();
+  page.findChild<QTimelineWidget *>()->eventSelected(model->events().first().id);
+  QApplication::processEvents();
+  auto *details = page.findChild<QEventDetailsWidget *>("calendarInspector");
+  ASSERT_NE(details, nullptr);
+  for (const char *name : {"inspectorDate", "inspectorTime", "inspectorRepeat", "inspectorFormat"}) {
+    auto *caption = details->findChild<QLabel *>(QString(name) + "Caption");
+    auto *value = details->findChild<QLabel *>(name);
+    ASSERT_NE(caption, nullptr) << name;
+    ASSERT_NE(value, nullptr) << name;
+    EXPECT_FALSE(caption->text().isEmpty()) << name;
+    EXPECT_FALSE(value->text().isEmpty()) << name;
+    EXPECT_LT(caption->geometry().bottom(), value->geometry().top() + 1) << name; // caption above value
+  }
+  const auto open = details->findChild<QPushButton *>("openMeetingButton");
+  const auto copy = details->findChild<QPushButton *>("copyMeetingInviteButton");
+  const auto edit = details->findChild<QPushButton *>("mChangeButton");
+  ASSERT_TRUE(open->isVisibleTo(details));
+  EXPECT_EQ(open->width(), edit->width());
+  EXPECT_EQ(copy->width(), edit->width());
+  EXPECT_GT(edit->width(), details->width() - 60); // full width of the card
+  EXPECT_TRUE(copy->isDefault());                  // primary action of an online meeting
+}
+TEST_F(CalendarLayoutTest, FirstMeetingOfTheDayIsScrolledIntoView) {
+  auto event = appointment(QDate::currentDate());
+  event.start_date = QDateTime(QDate::currentDate(), QTime(16, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+  event.end_date = *event.start_date + 3600000;
+  model->addEvent(event);
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.resize(1100, 520);
+  page.show();
+  QTest::qWait(50);
+  auto *view = page.findChild<QEventView *>();
+  ASSERT_NE(view, nullptr);
+  const auto bar = view->verticalScrollBar();
+  ASSERT_GT(bar->maximum(), 0);
+  EXPECT_LE(bar->value(), 16 * 60);
+  EXPECT_GE(bar->value() + view->viewport()->height(), 16 * 60);
 }
 } // namespace
 int main(int argc, char **argv) {
