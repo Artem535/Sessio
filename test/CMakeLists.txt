@@ -131,6 +131,27 @@ target_link_libraries(Sessio_timeline_series_tests PRIVATE
 set_target_properties(Sessio_timeline_series_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_timeline_series_tests)
 
+# Recurring-call facade: publication, invitation, join targets, migration
+add_executable(Sessio_series_call_tests
+    fake_schedule_backend.h
+    series_backend_model.h
+    fake_series_invitation_store.h
+    series_call_service_tests.cpp
+)
+target_link_libraries(Sessio_series_call_tests PRIVATE
+    GTest::gtest
+    Qt6::Network
+    Qt6::Test
+    Sessio_config
+    Sessio_database
+    Sessio_event_view
+    Sessio_meeting
+    Sessio_token_client
+    Poco::Foundation
+)
+set_target_properties(Sessio_series_call_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_series_call_tests)
+
 # Schedule conflict tests
 add_executable(Sessio_schedule_conflict_tests
     schedule_conflict_service_tests.cpp

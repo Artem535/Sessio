@@ -32,6 +32,8 @@ struct SeriesBackendModel {
   bool dropNextInvitationReply = false; // create, then close without answering
   int invitations = 0;                  // number of invitations really created
   int invitationStatusOverride = 0;
+  int putStatusOverride = 0;          // answer every PUT with this status
+  QStringList invalidatedMeetings;    // refs of POST /v1/meetings/{ref}/invalidate
 
   using R = FakeScheduleBackend::Response;
 
@@ -40,6 +42,10 @@ struct SeriesBackendModel {
     if (request.path == "/v1/capabilities") {
       return capabilities ? R{.status = 200, .body = R"({"scheduleSeries":true})"}
                           : R{.status = 404, .body = R"({"error":"not_found"})"};
+    }
+    if (request.path.startsWith("/v1/meetings/") && request.path.endsWith("/invalidate")) {
+      invalidatedMeetings.append(request.path.section('/', 3, 3));
+      return {.status = 204, .body = ""};
     }
     const auto uid = request.path.section('/', 3, 3);
     if (request.path.endsWith("/invitation")) {
@@ -57,6 +63,9 @@ struct SeriesBackendModel {
       return {.status = 200, .body = QByteArray("{}")};
     }
     putBodies.append(request.body);
+    if (putStatusOverride != 0) {
+      return {.status = putStatusOverride, .body = R"({"error":"invalid_schedule","reason":"unsupported RRULE field"})"};
+    }
     if (neverRespondToPut) {
       return {.neverRespond = true};
     }

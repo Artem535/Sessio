@@ -21,6 +21,8 @@ qt_add_library(${TARGET_NAME} STATIC
         schedule_snapshot.cpp
         schedule_sync.h
         schedule_sync.cpp
+        series_call_service.h
+        series_call_service.cpp
         series_schedule_committer.h
         series_schedule_committer.cpp
         series_join_target.h
