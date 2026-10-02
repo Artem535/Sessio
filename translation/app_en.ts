@@ -1218,7 +1218,7 @@
     </message>
     <message>
         <source>Recurring event</source>
-        <translation type="unfinished">Recurring event</translation>
+        <translation>Recurring event</translation>
     </message>
     <message>
         <source>: EVENT_ADD_BUTTON</source>

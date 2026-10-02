@@ -1219,7 +1219,7 @@
     </message>
     <message>
         <source>Recurring event</source>
-        <translation type="unfinished">Повторяющееся событие</translation>
+        <translation>Повторяющееся событие</translation>
     </message>
     <message>
         <source>: EVENT_ADD_BUTTON</source>
