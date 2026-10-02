@@ -7,6 +7,8 @@
 #include "notification_text.h"
 
 namespace pcm::app_settings {
+QString callDisplayName();
+void setCallDisplayName(const QString &name);
 
 bool confirmEventDeletion();
 void setConfirmEventDeletion(bool enabled);

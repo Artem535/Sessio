@@ -150,6 +150,23 @@ TEST_F(ConfigTest, ThrowsWhenInvitationBaseUrlIsEmpty) {
   EXPECT_THROW(pcm::tokenbackend::Config::fromEnv(), std::runtime_error);
 }
 
+TEST_F(ConfigTest, RejectsNamedInvitationFormatFieldsAtStartup) {
+  setAllRequired();
+  setenv("INVITATION_BASE_URL", "sessio://join?code={code}&passcode={passcode}", 1);
+
+  EXPECT_THROW(
+      {
+        try {
+          pcm::tokenbackend::Config::fromEnv();
+          FAIL() << "Expected std::runtime_error";
+        } catch (const std::runtime_error &e) {
+          EXPECT_THAT(std::string(e.what()), ::testing::HasSubstr("positional '{}'"));
+          throw;
+        }
+      },
+      std::runtime_error);
+}
+
 TEST_F(ConfigTest, SucceedsWithRequiredVarsAndAppliesDefaults) {
   setAllRequired();
 

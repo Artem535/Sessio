@@ -16,10 +16,18 @@ class MeetingCoordinator final : public QObject {
   Q_OBJECT
 
 public:
-  explicit MeetingCoordinator(QObject *parent = nullptr);
+  MeetingCoordinator(QString tokenBackendBaseUrl, QString bearerCredential,
+                     QObject *parent = nullptr);
 
   void createMeeting(ProviderKind kind, const MeetingCreateRequest &request);
   void cancelMeeting(ProviderKind kind, const QString &meetingRef);
+
+  // Live settings propagation: applies to every provider that cares (today,
+  // only LiveKitMeetingProvider — ExternalUrlMeetingProvider's override is a
+  // no-op), so the event editor's LiveKit meeting create/cancel flow picks up
+  // a Settings-dialog change without an app restart.
+  void setTokenBackendBaseUrl(const QString &baseUrl);
+  void setBearerCredential(const QString &credential);
 
 signals:
   void meetingCreated(pcm::meeting::MeetingDescriptor descriptor);

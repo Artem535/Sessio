@@ -96,6 +96,108 @@
     </message>
 </context>
 <context>
+    <name>CallEntryWidget</name>
+    <message>
+        <source>Name in calls</source>
+        <translation>Имя в звонках</translation>
+    </message>
+    <message>
+        <source>Your name</source>
+        <translation>Ваше имя</translation>
+    </message>
+    <message>
+        <source>Shown to other participants</source>
+        <translation>Видно другим участникам</translation>
+    </message>
+    <message>
+        <source>Join a meeting</source>
+        <translation>Подключиться к встрече</translation>
+    </message>
+    <message>
+        <source>Invitation code or link</source>
+        <translation>Код приглашения или ссылка</translation>
+    </message>
+    <message>
+        <source>Passcode</source>
+        <translation>Код доступа</translation>
+    </message>
+    <message>
+        <source>Passcode (6 digits)</source>
+        <translation>Код доступа (6 цифр)</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Подключиться</translation>
+    </message>
+    <message>
+        <source>Your calls today</source>
+        <translation>Ваши звонки на сегодня</translation>
+    </message>
+    <message>
+        <source>No calls today</source>
+        <translation>Сегодня звонков нет</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Войти</translation>
+    </message>
+</context>
+<context>
+    <name>CallPage</name>
+    <message>
+        <source>Connecting...</source>
+        <translation>Подключение...</translation>
+    </message>
+    <message>
+        <source>Reconnecting...</source>
+        <translation>Переподключение...</translation>
+    </message>
+    <message>
+        <source>Call ended.</source>
+        <translation>Звонок завершён.</translation>
+    </message>
+    <message>
+        <source>Waiting for others to join</source>
+        <translation>Ожидание других участников</translation>
+    </message>
+    <message>
+        <source>Mute microphone</source>
+        <translation>Выключить микрофон</translation>
+    </message>
+    <message>
+        <source>Unmute microphone</source>
+        <translation>Включить микрофон</translation>
+    </message>
+    <message>
+        <source>Turn off camera</source>
+        <translation>Выключить камеру</translation>
+    </message>
+    <message>
+        <source>Turn on camera</source>
+        <translation>Включить камеру</translation>
+    </message>
+    <message>
+        <source>Enter fullscreen</source>
+        <translation>Развернуть на весь экран</translation>
+    </message>
+    <message>
+        <source>Exit fullscreen</source>
+        <translation>Выйти из полноэкранного режима</translation>
+    </message>
+    <message>
+        <source>Switch camera, microphone, or speaker</source>
+        <translation>Переключить камеру, микрофон или динамик</translation>
+    </message>
+    <message>
+        <source>Leave</source>
+        <translation>Завершить</translation>
+    </message>
+    <message>
+        <source>Notes</source>
+        <translation>Заметки</translation>
+    </message>
+</context>
+<context>
     <name>ClientChartsWidget</name>
     <message>
         <source>Months</source>
@@ -266,6 +368,54 @@
     <message>
         <source>: CHARTS_PLACEHOLDER</source>
         <translation>В следующем обновлении будут графики</translation>
+    </message>
+</context>
+<context>
+    <name>ClientModeSettingsDialog</name>
+    <message>
+        <source>Settings</source>
+        <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>Name in calls</source>
+        <translation>Имя в звонках</translation>
+    </message>
+    <message>
+        <source>Token backend URL</source>
+        <translation>URL токен-бэкенда</translation>
+    </message>
+    <message>
+        <source>Address of the service that issued your invitation. Your specialist can tell you this if joining by code fails.</source>
+        <translation>Адрес сервиса, который выдал ваше приглашение. Ваш специалист может сообщить его, если не удаётся присоединиться по коду.</translation>
+    </message>
+    <message>
+        <source>https://token-backend.example.com</source>
+        <translation>https://token-backend.example.com</translation>
+    </message>
+    <message>
+        <source>Enter a valid http or https address.</source>
+        <translation>Введите корректный адрес http или https.</translation>
+    </message>
+    <message>
+        <source>Token backend</source>
+        <translation>Токен-бэкенд</translation>
+    </message>
+    <message>
+        <source>The token backend URL applies until Sessio is closed, but could not be saved:
+%1</source>
+        <translation>URL токен-бэкенда будет использоваться до закрытия Sessio, но не удалось сохранить его:
+%1</translation>
+    </message>
+</context>
+<context>
+    <name>ClientModeWindow</name>
+    <message>
+        <source>Sessio</source>
+        <translation>Sessio</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>Настройки</translation>
     </message>
 </context>
 <context>
@@ -479,6 +629,45 @@
     </message>
 </context>
 <context>
+    <name>DeviceCheckWidget</name>
+    <message>
+        <source>Check your devices</source>
+        <translation>Проверьте устройства</translation>
+    </message>
+    <message>
+        <source>Only you see this preview until you join</source>
+        <translation>Пока вы не подключились, это превью видите только вы</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Камера</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Микрофон</translation>
+    </message>
+    <message>
+        <source>Speaker</source>
+        <translation>Динамик</translation>
+    </message>
+    <message>
+        <source>Test</source>
+        <translation>Проверить</translation>
+    </message>
+    <message>
+        <source>Play a short tone through the selected speaker</source>
+        <translation>Воспроизвести короткий сигнал через выбранный динамик</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>Назад</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Присоединиться</translation>
+    </message>
+</context>
+<context>
     <name>EventDetails</name>
     <message>
         <source>: EVENT_DETAILS_TITLE</source>
@@ -589,6 +778,10 @@
     <message>
         <source>Notes</source>
         <translation>Заметки</translation>
+    </message>
+    <message>
+        <source>Calls</source>
+        <translation>Звонки</translation>
     </message>
     <message>
         <source>Back to clients</source>
@@ -770,6 +963,14 @@
         <translation>Онлайн-сессия</translation>
     </message>
     <message>
+        <source>External link</source>
+        <translation>Внешняя ссылка</translation>
+    </message>
+    <message>
+        <source>LiveKit</source>
+        <translation>LiveKit</translation>
+    </message>
+    <message>
         <source>Scheduled</source>
         <translation>Запланирована</translation>
     </message>
@@ -806,12 +1007,64 @@
         <translation>Формат сессии</translation>
     </message>
     <message>
+        <source>Provider</source>
+        <translation>Провайдер</translation>
+    </message>
+    <message>
+        <source>Copy passcode</source>
+        <translation>Копировать код доступа</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Повторить</translation>
+    </message>
+    <message>
+        <source>Create new link</source>
+        <translation>Создать новую ссылку</translation>
+    </message>
+    <message>
+        <source>Publish this device&apos;s schedule</source>
+        <translation>Опубликовать расписание с этого устройства</translation>
+    </message>
+    <message>
+        <source>Move to a permanent link...</source>
+        <translation>Перейти на постоянную ссылку...</translation>
+    </message>
+    <message>
+        <source>Create a new link</source>
+        <translation>Создать новую ссылку</translation>
+    </message>
+    <message>
+        <source>The current link stops working immediately. Anyone who has it will need the new link. Continue?</source>
+        <translation>Текущая ссылка сразу перестанет работать. Всем, у кого она есть, потребуется новая. Продолжить?</translation>
+    </message>
+    <message>
+        <source>The server holds a different version of this schedule. Publishing replaces it with the schedule on this device. Continue?</source>
+        <translation>На сервере другая версия этого расписания. Публикация заменит её расписанием с этого устройства. Продолжить?</translation>
+    </message>
+    <message>
+        <source>Failed to create the LiveKit meeting: %1</source>
+        <translation>Не удалось создать встречу LiveKit: %1</translation>
+    </message>
+    <message>
         <source>Overlaps with an existing event, %1.</source>
         <translation>Пересекается с другим событием, %1.</translation>
     </message>
     <message>
         <source>Overlaps with &quot;%1&quot;, %2.</source>
         <translation>Пересекается с «%1», %2.</translation>
+    </message>
+    <message>
+        <source>The system keychain is not available, so the link cannot be read.</source>
+        <translation>Системная связка ключей недоступна, поэтому ссылку не удаётся прочитать.</translation>
+    </message>
+    <message>
+        <source>The permanent link is not stored on this device. Create a new link.</source>
+        <translation>Постоянная ссылка не сохранена на этом устройстве. Создайте новую ссылку.</translation>
+    </message>
+    <message>
+        <source>The permanent link is stored securely. Use Copy link.</source>
+        <translation>Постоянная ссылка надёжно сохранена. Используйте «Копировать ссылку».</translation>
     </message>
     <message>
         <source>Repeat</source>
@@ -948,6 +1201,26 @@
 </context>
 <context>
     <name>QEventInfoPage</name>
+    <message>
+        <source>The change was not saved.</source>
+        <translation>Изменение не сохранено.</translation>
+    </message>
+    <message>
+        <source>This series has a permanent call link, so it cannot be split into &quot;this and future&quot; events. Nothing was changed.</source>
+        <translation>У этой серии есть постоянная ссылка на звонок, поэтому её нельзя разделить на «это и последующие» события. Ничего не изменено.</translation>
+    </message>
+    <message>
+        <source>The schedule cannot be published: %1. Nothing was changed.</source>
+        <translation>Расписание нельзя опубликовать: %1. Ничего не изменено.</translation>
+    </message>
+    <message>
+        <source>The change was not saved: %1</source>
+        <translation>Изменение не сохранено: %1</translation>
+    </message>
+    <message>
+        <source>Recurring event</source>
+        <translation>Повторяющееся событие</translation>
+    </message>
     <message>
         <source>: EVENT_ADD_BUTTON</source>
         <translation>Добавить</translation>
@@ -1191,6 +1464,10 @@ See you!</source>
         <translation>Это и все последующие события</translation>
     </message>
     <message>
+        <source>&quot;This and future events&quot; is not available for a series with a permanent call link. Delete only this event or the whole series.</source>
+        <translation>Вариант «Это и последующие события» недоступен для серии с постоянной ссылкой на звонок. Удалите только это событие или всю серию.</translation>
+    </message>
+    <message>
         <source>Access to keychain denied</source>
         <translation>Доступ к хранилищу ключей запрещён</translation>
     </message>
@@ -1270,6 +1547,136 @@ See you!</source>
     </message>
 </context>
 <context>
+    <name>RoleSelectionDialog</name>
+    <message>
+        <source>Welcome to Sessio</source>
+        <translation>Добро пожаловать в Sessio</translation>
+    </message>
+    <message>
+        <source>Who are you?</source>
+        <translation>Кто вы?</translation>
+    </message>
+    <message>
+        <source>I&apos;m a specialist</source>
+        <translation>Я специалист</translation>
+    </message>
+    <message>
+        <source>I&apos;m a client</source>
+        <translation>Я клиент</translation>
+    </message>
+</context>
+<context>
+    <name>SeriesCallStatus</name>
+    <message>
+        <source>the system keychain is not available</source>
+        <translation>системная связка ключей недоступна</translation>
+    </message>
+    <message>
+        <source>the access key could not be read</source>
+        <translation>не удалось прочитать ключ доступа</translation>
+    </message>
+    <message>
+        <source>the server rejected the access key</source>
+        <translation>сервер отклонил ключ доступа</translation>
+    </message>
+    <message>
+        <source>the server refused the schedule</source>
+        <translation>сервер отклонил расписание</translation>
+    </message>
+    <message>
+        <source>the server has a different version of the schedule</source>
+        <translation>на сервере другая версия расписания</translation>
+    </message>
+    <message>
+        <source>the server does not support recurring calls</source>
+        <translation>сервер не поддерживает повторяющиеся звонки</translation>
+    </message>
+    <message>
+        <source>the local database could not be updated</source>
+        <translation>не удалось обновить локальную базу данных</translation>
+    </message>
+    <message>
+        <source>Moving this series to a permanent link: sending the schedule to the server...</source>
+        <translation>Переход на постоянную ссылку: отправка расписания на сервер...</translation>
+    </message>
+    <message>
+        <source>Moving this series to a permanent link: creating the link...</source>
+        <translation>Переход на постоянную ссылку: создание ссылки...</translation>
+    </message>
+    <message>
+        <source>Could not move this series to a permanent link (%1). The previous link stays valid.</source>
+        <translation>Не удалось перевести серию на постоянную ссылку (%1). Прежняя ссылка остаётся действительной.</translation>
+    </message>
+    <message>
+        <source>Schedule synchronized with the server.</source>
+        <translation>Расписание синхронизировано с сервером.</translation>
+    </message>
+    <message>
+        <source>Schedule saved on this device, waiting to be sent.</source>
+        <translation>Расписание сохранено на этом устройстве и ожидает отправки.</translation>
+    </message>
+    <message>
+        <source>Sending the schedule...</source>
+        <translation>Отправка расписания...</translation>
+    </message>
+    <message>
+        <source>Waiting for the network. The schedule will be sent automatically.</source>
+        <translation>Ожидание сети. Расписание будет отправлено автоматически.</translation>
+    </message>
+    <message>
+        <source>The server has a different version of this schedule. Nothing was overwritten.</source>
+        <translation>На сервере другая версия этого расписания. Ничего не перезаписано.</translation>
+    </message>
+    <message>
+        <source>The server refused this schedule (%1). Your changes are kept on this device.</source>
+        <translation>Сервер отклонил это расписание (%1). Ваши изменения сохранены на этом устройстве.</translation>
+    </message>
+    <message>
+        <source>This server does not support recurring calls yet. The schedule stays on this device and no call link can be created.</source>
+        <translation>Этот сервер пока не поддерживает повторяющиеся звонки. Расписание остаётся на этом устройстве, ссылку на звонок создать нельзя.</translation>
+    </message>
+    <message>
+        <source>The server rejected the saved access key. Check it in Settings.</source>
+        <translation>Сервер отклонил сохранённый ключ доступа. Проверьте его в настройках.</translation>
+    </message>
+    <message>
+        <source>The access key could not be read from the system keychain.</source>
+        <translation>Не удалось прочитать ключ доступа из системной связки ключей.</translation>
+    </message>
+    <message>
+        <source>The server may still allow entry under the previous schedule until this is sent.</source>
+        <translation>Пока это не отправлено, сервер может по-прежнему пускать на звонок по прежнему расписанию.</translation>
+    </message>
+    <message>
+        <source>Permanent link ready.</source>
+        <translation>Постоянная ссылка готова.</translation>
+    </message>
+    <message>
+        <source>The permanent link has not been created yet.</source>
+        <translation>Постоянная ссылка ещё не создана.</translation>
+    </message>
+    <message>
+        <source>The link will be created once the server has the schedule.</source>
+        <translation>Ссылка будет создана, когда расписание появится на сервере.</translation>
+    </message>
+    <message>
+        <source>Creating the permanent link...</source>
+        <translation>Создание постоянной ссылки...</translation>
+    </message>
+    <message>
+        <source>Waiting for the network to create the link.</source>
+        <translation>Ожидание сети для создания ссылки.</translation>
+    </message>
+    <message>
+        <source>The link is not available on this device. Create a new link; the old one will stop working.</source>
+        <translation>Ссылка недоступна на этом устройстве. Создайте новую; старая перестанет работать.</translation>
+    </message>
+    <message>
+        <source>Could not create the link (%1).</source>
+        <translation>Не удалось создать ссылку (%1).</translation>
+    </message>
+</context>
+<context>
     <name>SettingsDialog</name>
     <message>
         <source>Default buffer before</source>
@@ -1340,6 +1747,10 @@ See you!</source>
         <translation>Язык</translation>
     </message>
     <message>
+        <source>LiveKit</source>
+        <translation>LiveKit</translation>
+    </message>
+    <message>
         <source>System default</source>
         <translation>Системный</translation>
     </message>
@@ -1373,7 +1784,11 @@ See you!</source>
     </message>
     <message>
         <source>Backup</source>
-        <translation>Резервное копирование</translation>
+        <translation>Резервные копии</translation>
+    </message>
+    <message>
+        <source>Privacy &amp; Security</source>
+        <translation>Безопасность</translation>
     </message>
     <message>
         <source>Create a full backup (database and attachments) as a single .psybackup file, or validate an existing one.</source>
@@ -1512,10 +1927,6 @@ See you!</source>
         <translation>Сколько напоминание показывает на общем или заблокированном экране. Имя клиента и тема сеанса не отображаются нигде, кроме режима «Полная информация».</translation>
     </message>
     <message>
-        <source>Privacy</source>
-        <translation>Конфиденциальность</translation>
-    </message>
-    <message>
         <source>Change PIN or password</source>
         <translation>Изменить PIN-код или пароль</translation>
     </message>
@@ -1556,8 +1967,32 @@ See you!</source>
         <translation>Задержка перед удалением скопированных данных встречи.</translation>
     </message>
     <message>
-        <source>Timeline colors</source>
-        <translation>Цвета таймлайна</translation>
+        <source>Token backend</source>
+        <translation>Токен-бэкенд</translation>
+    </message>
+    <message>
+        <source>Token backend URL</source>
+        <translation>URL токен-бэкенда</translation>
+    </message>
+    <message>
+        <source>Base URL of the LiveKit token-issuing backend.</source>
+        <translation>Базовый адрес бэкенда, выдающего токены LiveKit.</translation>
+    </message>
+    <message>
+        <source>https://token-backend.example.com</source>
+        <translation>https://token-backend.example.com</translation>
+    </message>
+    <message>
+        <source>Bearer credential</source>
+        <translation>Bearer-токен</translation>
+    </message>
+    <message>
+        <source>Stored in the system keychain. Leave blank to keep the current credential.</source>
+        <translation>Хранится в системном хранилище ключей. Оставьте поле пустым, чтобы сохранить текущие учётные данные.</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Сохранить</translation>
     </message>
     <message>
         <source>Set application lock</source>
@@ -1618,6 +2053,34 @@ See you!</source>
         <translation>Не удалось создать резервную копию</translation>
     </message>
     <message>
+        <source>App lock</source>
+        <translation>Блокировка приложения</translation>
+    </message>
+    <message>
+        <source>Clipboard</source>
+        <translation>Буфер обмена</translation>
+    </message>
+    <message>
+        <source>Scheduling defaults</source>
+        <translation>Параметры планирования по умолчанию</translation>
+    </message>
+    <message>
+        <source>Billing</source>
+        <translation>Оплата</translation>
+    </message>
+    <message>
+        <source>Event colors</source>
+        <translation>Цвета событий</translation>
+    </message>
+    <message>
+        <source>Calls</source>
+        <translation>Звонки</translation>
+    </message>
+    <message>
+        <source>Name in calls</source>
+        <translation>Имя в звонках</translation>
+    </message>
+    <message>
         <source>Backup Encryption</source>
         <translation>Шифрование резервных копий</translation>
     </message>
@@ -1640,6 +2103,20 @@ See you!</source>
     <message>
         <source>Select Automatic Backup Folder</source>
         <translation>Выбор папки для автоматических резервных копий</translation>
+    </message>
+    <message>
+        <source>The token backend URL could not be saved:
+%1</source>
+        <translation>Не удалось сохранить URL токен-бэкенда:
+%1</translation>
+    </message>
+    <message>
+        <source>Credentials are saved</source>
+        <translation>Учётные данные сохранены</translation>
+    </message>
+    <message>
+        <source>No credentials saved yet</source>
+        <translation>Учётные данные пока не сохранены</translation>
     </message>
     <message>
         <source>Validate Backup</source>
@@ -1854,6 +2331,68 @@ Your previous data was kept.</source>
     <message>
         <source>Quit</source>
         <translation>Выйти</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::eventpage::SeriesTimezoneDialog</name>
+    <message>
+        <source>Confirm the series timezone</source>
+        <translation>Подтвердите часовой пояс серии</translation>
+    </message>
+    <message>
+        <source>A permanent link needs a fixed timezone for this series. From now on the meeting times follow this timezone, not the timezone of this computer. Check that the dates below stay the same.</source>
+        <translation>Для постоянной ссылки у серии должен быть фиксированный часовой пояс. Теперь время встреч определяется им, а не часовым поясом этого компьютера. Убедитесь, что даты ниже не изменились.</translation>
+    </message>
+    <message>
+        <source>Choose a timezone</source>
+        <translation>Выберите часовой пояс</translation>
+    </message>
+    <message>
+        <source>not available</source>
+        <translation>недоступно</translation>
+    </message>
+    <message>
+        <source>no upcoming dates</source>
+        <translation>нет ближайших дат</translation>
+    </message>
+    <message>
+        <source>Dates today: %1</source>
+        <translation>Даты сейчас: %1</translation>
+    </message>
+    <message>
+        <source>Choose the timezone this series is scheduled in.</source>
+        <translation>Выберите часовой пояс, в котором назначена серия.</translation>
+    </message>
+    <message>
+        <source>Dates in %1: %2</source>
+        <translation>Даты в %1: %2</translation>
+    </message>
+    <message>
+        <source>This timezone cannot be used for the series.</source>
+        <translation>Этот часовой пояс нельзя использовать для серии.</translation>
+    </message>
+    <message>
+        <source>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</source>
+        <translation>Некоторые встречи сместятся на другие даты или время. Выберите другой часовой пояс или отмените и оставьте серию как есть.</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::video::ParticipantTile</name>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+    <message>
+        <source>%1 (You)</source>
+        <translation>%1 (Вы)</translation>
+    </message>
+    <message>
+        <source>Waiting for video...</source>
+        <translation>Ожидание видео...</translation>
+    </message>
+    <message>
+        <source>Camera off</source>
+        <translation>Камера выключена</translation>
     </message>
 </context>
 </TS>

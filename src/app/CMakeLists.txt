@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 set(TARGET_NAME ${PROJECT_NAME}_app)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network)
 find_package(unofficial-sodium CONFIG REQUIRED)
 
 # Add the library for the app module
@@ -17,9 +17,17 @@ qt_add_library(${TARGET_NAME} STATIC
         auto_backup_scheduler.cpp
         backup_encryption_policy.cpp
         credential_store.cpp
+        token_backend_credential_store.cpp
+        store_credential_reader.cpp
+        keychain_series_invitation_store.cpp
         app_lock_service.cpp
         app_lock_controller.cpp
         app_lock_dialog.cpp
+        role_selection_dialog.cpp
+        client_mode_window.cpp
+        client_mode_settings_dialog.cpp
+        sessio_url.cpp
+        single_instance_guard.cpp
 )
 
 target_include_directories(${TARGET_NAME} PRIVATE
@@ -44,6 +52,8 @@ add_dependencies(${TARGET_NAME}
         ${PROJECT_NAME}_event_page
         ${PROJECT_NAME}_meeting
         ${PROJECT_NAME}_widgets
+        ${PROJECT_NAME}_calls_page
+        ${PROJECT_NAME}_token_client
 
 )
 
@@ -59,8 +69,11 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         ${PROJECT_NAME}_event_page
         ${PROJECT_NAME}_meeting
         ${PROJECT_NAME}_widgets
+        ${PROJECT_NAME}_calls_page
+        ${PROJECT_NAME}_token_client
         qlementine
         Qt6::Widgets
+        Qt6::Network
         qt6keychain
         unofficial-sodium::sodium
 )

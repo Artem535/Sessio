@@ -96,6 +96,108 @@
     </message>
 </context>
 <context>
+    <name>CallEntryWidget</name>
+    <message>
+        <source>Name in calls</source>
+        <translation>Name in calls</translation>
+    </message>
+    <message>
+        <source>Your name</source>
+        <translation>Your name</translation>
+    </message>
+    <message>
+        <source>Shown to other participants</source>
+        <translation>Shown to other participants</translation>
+    </message>
+    <message>
+        <source>Join a meeting</source>
+        <translation>Join a meeting</translation>
+    </message>
+    <message>
+        <source>Invitation code or link</source>
+        <translation>Invitation code or link</translation>
+    </message>
+    <message>
+        <source>Passcode</source>
+        <translation>Passcode</translation>
+    </message>
+    <message>
+        <source>Passcode (6 digits)</source>
+        <translation>Passcode (6 digits)</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Connect</translation>
+    </message>
+    <message>
+        <source>Your calls today</source>
+        <translation>Your calls today</translation>
+    </message>
+    <message>
+        <source>No calls today</source>
+        <translation>No calls today</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Join</translation>
+    </message>
+</context>
+<context>
+    <name>CallPage</name>
+    <message>
+        <source>Connecting...</source>
+        <translation>Connecting...</translation>
+    </message>
+    <message>
+        <source>Reconnecting...</source>
+        <translation>Reconnecting...</translation>
+    </message>
+    <message>
+        <source>Call ended.</source>
+        <translation>Call ended.</translation>
+    </message>
+    <message>
+        <source>Waiting for others to join</source>
+        <translation>Waiting for others to join</translation>
+    </message>
+    <message>
+        <source>Mute microphone</source>
+        <translation>Mute microphone</translation>
+    </message>
+    <message>
+        <source>Unmute microphone</source>
+        <translation>Unmute microphone</translation>
+    </message>
+    <message>
+        <source>Turn off camera</source>
+        <translation>Turn off camera</translation>
+    </message>
+    <message>
+        <source>Turn on camera</source>
+        <translation>Turn on camera</translation>
+    </message>
+    <message>
+        <source>Enter fullscreen</source>
+        <translation>Enter fullscreen</translation>
+    </message>
+    <message>
+        <source>Exit fullscreen</source>
+        <translation>Exit fullscreen</translation>
+    </message>
+    <message>
+        <source>Switch camera, microphone, or speaker</source>
+        <translation>Switch camera, microphone, or speaker</translation>
+    </message>
+    <message>
+        <source>Leave</source>
+        <translation>Leave</translation>
+    </message>
+    <message>
+        <source>Notes</source>
+        <translation>Notes</translation>
+    </message>
+</context>
+<context>
     <name>ClientChartsWidget</name>
     <message>
         <source>Months</source>
@@ -266,6 +368,54 @@
     <message>
         <source>: CHARTS_PLACEHOLDER</source>
         <translation>Charts will be available in the next update</translation>
+    </message>
+</context>
+<context>
+    <name>ClientModeSettingsDialog</name>
+    <message>
+        <source>Settings</source>
+        <translation>Settings</translation>
+    </message>
+    <message>
+        <source>Name in calls</source>
+        <translation>Name in calls</translation>
+    </message>
+    <message>
+        <source>Token backend URL</source>
+        <translation>Token backend URL</translation>
+    </message>
+    <message>
+        <source>Address of the service that issued your invitation. Your specialist can tell you this if joining by code fails.</source>
+        <translation>Address of the service that issued your invitation. Your specialist can tell you this if joining by code fails.</translation>
+    </message>
+    <message>
+        <source>https://token-backend.example.com</source>
+        <translation>https://token-backend.example.com</translation>
+    </message>
+    <message>
+        <source>Enter a valid http or https address.</source>
+        <translation>Enter a valid http or https address.</translation>
+    </message>
+    <message>
+        <source>Token backend</source>
+        <translation>Token backend</translation>
+    </message>
+    <message>
+        <source>The token backend URL applies until Sessio is closed, but could not be saved:
+%1</source>
+        <translation>The token backend URL applies until Sessio is closed, but could not be saved:
+%1</translation>
+    </message>
+</context>
+<context>
+    <name>ClientModeWindow</name>
+    <message>
+        <source>Sessio</source>
+        <translation>Sessio</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>Settings</translation>
     </message>
 </context>
 <context>
@@ -478,6 +628,45 @@
     </message>
 </context>
 <context>
+    <name>DeviceCheckWidget</name>
+    <message>
+        <source>Check your devices</source>
+        <translation>Check your devices</translation>
+    </message>
+    <message>
+        <source>Only you see this preview until you join</source>
+        <translation>Only you see this preview until you join</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Camera</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Microphone</translation>
+    </message>
+    <message>
+        <source>Speaker</source>
+        <translation>Speaker</translation>
+    </message>
+    <message>
+        <source>Test</source>
+        <translation>Test</translation>
+    </message>
+    <message>
+        <source>Play a short tone through the selected speaker</source>
+        <translation>Play a short tone through the selected speaker</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Join</translation>
+    </message>
+</context>
+<context>
     <name>EventDetails</name>
     <message>
         <source>: EVENT_DETAILS_TITLE</source>
@@ -588,6 +777,10 @@
     <message>
         <source>Show inactive</source>
         <translation>Show inactive</translation>
+    </message>
+    <message>
+        <source>Calls</source>
+        <translation>Calls</translation>
     </message>
     <message>
         <source>Back to clients</source>
@@ -769,6 +962,14 @@
         <translation>Online session</translation>
     </message>
     <message>
+        <source>External link</source>
+        <translation>External link</translation>
+    </message>
+    <message>
+        <source>LiveKit</source>
+        <translation>LiveKit</translation>
+    </message>
+    <message>
         <source>Scheduled</source>
         <translation>Scheduled</translation>
     </message>
@@ -805,12 +1006,64 @@
         <translation>Session format</translation>
     </message>
     <message>
+        <source>Provider</source>
+        <translation>Provider</translation>
+    </message>
+    <message>
+        <source>Copy passcode</source>
+        <translation>Copy passcode</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Retry</translation>
+    </message>
+    <message>
+        <source>Create new link</source>
+        <translation>Create new link</translation>
+    </message>
+    <message>
+        <source>Publish this device&apos;s schedule</source>
+        <translation>Publish this device&apos;s schedule</translation>
+    </message>
+    <message>
+        <source>Move to a permanent link...</source>
+        <translation>Move to a permanent link...</translation>
+    </message>
+    <message>
+        <source>Create a new link</source>
+        <translation>Create a new link</translation>
+    </message>
+    <message>
+        <source>The current link stops working immediately. Anyone who has it will need the new link. Continue?</source>
+        <translation>The current link stops working immediately. Anyone who has it will need the new link. Continue?</translation>
+    </message>
+    <message>
+        <source>The server holds a different version of this schedule. Publishing replaces it with the schedule on this device. Continue?</source>
+        <translation>The server holds a different version of this schedule. Publishing replaces it with the schedule on this device. Continue?</translation>
+    </message>
+    <message>
+        <source>Failed to create the LiveKit meeting: %1</source>
+        <translation>Failed to create the LiveKit meeting: %1</translation>
+    </message>
+    <message>
         <source>Overlaps with an existing event, %1.</source>
         <translation>Overlaps with an existing event, %1.</translation>
     </message>
     <message>
         <source>Overlaps with &quot;%1&quot;, %2.</source>
         <translation>Overlaps with &quot;%1&quot;, %2.</translation>
+    </message>
+    <message>
+        <source>The system keychain is not available, so the link cannot be read.</source>
+        <translation>The system keychain is not available, so the link cannot be read.</translation>
+    </message>
+    <message>
+        <source>The permanent link is not stored on this device. Create a new link.</source>
+        <translation>The permanent link is not stored on this device. Create a new link.</translation>
+    </message>
+    <message>
+        <source>The permanent link is stored securely. Use Copy link.</source>
+        <translation>The permanent link is stored securely. Use Copy link.</translation>
     </message>
     <message>
         <source>Repeat</source>
@@ -947,6 +1200,26 @@
 </context>
 <context>
     <name>QEventInfoPage</name>
+    <message>
+        <source>The change was not saved.</source>
+        <translation>The change was not saved.</translation>
+    </message>
+    <message>
+        <source>This series has a permanent call link, so it cannot be split into &quot;this and future&quot; events. Nothing was changed.</source>
+        <translation>This series has a permanent call link, so it cannot be split into &quot;this and future&quot; events. Nothing was changed.</translation>
+    </message>
+    <message>
+        <source>The schedule cannot be published: %1. Nothing was changed.</source>
+        <translation>The schedule cannot be published: %1. Nothing was changed.</translation>
+    </message>
+    <message>
+        <source>The change was not saved: %1</source>
+        <translation>The change was not saved: %1</translation>
+    </message>
+    <message>
+        <source>Recurring event</source>
+        <translation>Recurring event</translation>
+    </message>
     <message>
         <source>: EVENT_ADD_BUTTON</source>
         <translation>Add</translation>
@@ -1190,6 +1463,10 @@ See you!</translation>
         <translation>This and future events</translation>
     </message>
     <message>
+        <source>&quot;This and future events&quot; is not available for a series with a permanent call link. Delete only this event or the whole series.</source>
+        <translation>&quot;This and future events&quot; is not available for a series with a permanent call link. Delete only this event or the whole series.</translation>
+    </message>
+    <message>
         <source>Access to keychain denied</source>
         <translation>Access to keychain denied</translation>
     </message>
@@ -1269,6 +1546,136 @@ See you!</translation>
     </message>
 </context>
 <context>
+    <name>RoleSelectionDialog</name>
+    <message>
+        <source>Welcome to Sessio</source>
+        <translation>Welcome to Sessio</translation>
+    </message>
+    <message>
+        <source>Who are you?</source>
+        <translation>Who are you?</translation>
+    </message>
+    <message>
+        <source>I&apos;m a specialist</source>
+        <translation>I&apos;m a specialist</translation>
+    </message>
+    <message>
+        <source>I&apos;m a client</source>
+        <translation>I&apos;m a client</translation>
+    </message>
+</context>
+<context>
+    <name>SeriesCallStatus</name>
+    <message>
+        <source>the system keychain is not available</source>
+        <translation>the system keychain is not available</translation>
+    </message>
+    <message>
+        <source>the access key could not be read</source>
+        <translation>the access key could not be read</translation>
+    </message>
+    <message>
+        <source>the server rejected the access key</source>
+        <translation>the server rejected the access key</translation>
+    </message>
+    <message>
+        <source>the server refused the schedule</source>
+        <translation>the server refused the schedule</translation>
+    </message>
+    <message>
+        <source>the server has a different version of the schedule</source>
+        <translation>the server has a different version of the schedule</translation>
+    </message>
+    <message>
+        <source>the server does not support recurring calls</source>
+        <translation>the server does not support recurring calls</translation>
+    </message>
+    <message>
+        <source>the local database could not be updated</source>
+        <translation>the local database could not be updated</translation>
+    </message>
+    <message>
+        <source>Moving this series to a permanent link: sending the schedule to the server...</source>
+        <translation>Moving this series to a permanent link: sending the schedule to the server...</translation>
+    </message>
+    <message>
+        <source>Moving this series to a permanent link: creating the link...</source>
+        <translation>Moving this series to a permanent link: creating the link...</translation>
+    </message>
+    <message>
+        <source>Could not move this series to a permanent link (%1). The previous link stays valid.</source>
+        <translation>Could not move this series to a permanent link (%1). The previous link stays valid.</translation>
+    </message>
+    <message>
+        <source>Schedule synchronized with the server.</source>
+        <translation>Schedule synchronized with the server.</translation>
+    </message>
+    <message>
+        <source>Schedule saved on this device, waiting to be sent.</source>
+        <translation>Schedule saved on this device, waiting to be sent.</translation>
+    </message>
+    <message>
+        <source>Sending the schedule...</source>
+        <translation>Sending the schedule...</translation>
+    </message>
+    <message>
+        <source>Waiting for the network. The schedule will be sent automatically.</source>
+        <translation>Waiting for the network. The schedule will be sent automatically.</translation>
+    </message>
+    <message>
+        <source>The server has a different version of this schedule. Nothing was overwritten.</source>
+        <translation>The server has a different version of this schedule. Nothing was overwritten.</translation>
+    </message>
+    <message>
+        <source>The server refused this schedule (%1). Your changes are kept on this device.</source>
+        <translation>The server refused this schedule (%1). Your changes are kept on this device.</translation>
+    </message>
+    <message>
+        <source>This server does not support recurring calls yet. The schedule stays on this device and no call link can be created.</source>
+        <translation>This server does not support recurring calls yet. The schedule stays on this device and no call link can be created.</translation>
+    </message>
+    <message>
+        <source>The server rejected the saved access key. Check it in Settings.</source>
+        <translation>The server rejected the saved access key. Check it in Settings.</translation>
+    </message>
+    <message>
+        <source>The access key could not be read from the system keychain.</source>
+        <translation>The access key could not be read from the system keychain.</translation>
+    </message>
+    <message>
+        <source>The server may still allow entry under the previous schedule until this is sent.</source>
+        <translation>The server may still allow entry under the previous schedule until this is sent.</translation>
+    </message>
+    <message>
+        <source>Permanent link ready.</source>
+        <translation>Permanent link ready.</translation>
+    </message>
+    <message>
+        <source>The permanent link has not been created yet.</source>
+        <translation>The permanent link has not been created yet.</translation>
+    </message>
+    <message>
+        <source>The link will be created once the server has the schedule.</source>
+        <translation>The link will be created once the server has the schedule.</translation>
+    </message>
+    <message>
+        <source>Creating the permanent link...</source>
+        <translation>Creating the permanent link...</translation>
+    </message>
+    <message>
+        <source>Waiting for the network to create the link.</source>
+        <translation>Waiting for the network to create the link.</translation>
+    </message>
+    <message>
+        <source>The link is not available on this device. Create a new link; the old one will stop working.</source>
+        <translation>The link is not available on this device. Create a new link; the old one will stop working.</translation>
+    </message>
+    <message>
+        <source>Could not create the link (%1).</source>
+        <translation>Could not create the link (%1).</translation>
+    </message>
+</context>
+<context>
     <name>SettingsDialog</name>
     <message>
         <source>Default buffer before</source>
@@ -1339,6 +1746,10 @@ See you!</translation>
         <translation>Language</translation>
     </message>
     <message>
+        <source>LiveKit</source>
+        <translation>LiveKit</translation>
+    </message>
+    <message>
         <source>System default</source>
         <translation>System default</translation>
     </message>
@@ -1373,6 +1784,10 @@ See you!</translation>
     <message>
         <source>Backup</source>
         <translation>Backup</translation>
+    </message>
+    <message>
+        <source>Privacy &amp; Security</source>
+        <translation>Privacy &amp; Security</translation>
     </message>
     <message>
         <source>Create a full backup (database and attachments) as a single .psybackup file, or validate an existing one.</source>
@@ -1511,10 +1926,6 @@ See you!</translation>
         <translation>How much a reminder reveals on a shared or locked screen. Client name and session title are never shown outside Full details.</translation>
     </message>
     <message>
-        <source>Privacy</source>
-        <translation>Privacy</translation>
-    </message>
-    <message>
         <source>Change PIN or password</source>
         <translation>Change PIN or password</translation>
     </message>
@@ -1555,8 +1966,32 @@ See you!</translation>
         <translation>Delay before copied meeting details are removed.</translation>
     </message>
     <message>
-        <source>Timeline colors</source>
-        <translation>Timeline colors</translation>
+        <source>Token backend</source>
+        <translation>Token backend</translation>
+    </message>
+    <message>
+        <source>Token backend URL</source>
+        <translation>Token backend URL</translation>
+    </message>
+    <message>
+        <source>Base URL of the LiveKit token-issuing backend.</source>
+        <translation>Base URL of the LiveKit token-issuing backend.</translation>
+    </message>
+    <message>
+        <source>https://token-backend.example.com</source>
+        <translation>https://token-backend.example.com</translation>
+    </message>
+    <message>
+        <source>Bearer credential</source>
+        <translation>Bearer credential</translation>
+    </message>
+    <message>
+        <source>Stored in the system keychain. Leave blank to keep the current credential.</source>
+        <translation>Stored in the system keychain. Leave blank to keep the current credential.</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Save</translation>
     </message>
     <message>
         <source>Set application lock</source>
@@ -1617,6 +2052,34 @@ See you!</translation>
         <translation>Backup Failed</translation>
     </message>
     <message>
+        <source>App lock</source>
+        <translation>App lock</translation>
+    </message>
+    <message>
+        <source>Clipboard</source>
+        <translation>Clipboard</translation>
+    </message>
+    <message>
+        <source>Scheduling defaults</source>
+        <translation>Scheduling defaults</translation>
+    </message>
+    <message>
+        <source>Billing</source>
+        <translation>Billing</translation>
+    </message>
+    <message>
+        <source>Event colors</source>
+        <translation>Event colors</translation>
+    </message>
+    <message>
+        <source>Calls</source>
+        <translation>Calls</translation>
+    </message>
+    <message>
+        <source>Name in calls</source>
+        <translation>Name in calls</translation>
+    </message>
+    <message>
         <source>Backup Encryption</source>
         <translation>Backup Encryption</translation>
     </message>
@@ -1639,6 +2102,20 @@ See you!</translation>
     <message>
         <source>Select Automatic Backup Folder</source>
         <translation>Select Automatic Backup Folder</translation>
+    </message>
+    <message>
+        <source>The token backend URL could not be saved:
+%1</source>
+        <translation>The token backend URL could not be saved:
+%1</translation>
+    </message>
+    <message>
+        <source>Credentials are saved</source>
+        <translation>Credentials are saved</translation>
+    </message>
+    <message>
+        <source>No credentials saved yet</source>
+        <translation>No credentials saved yet</translation>
     </message>
     <message>
         <source>Validate Backup</source>
@@ -1853,6 +2330,68 @@ Your previous data was kept.</translation>
     <message>
         <source>Quit</source>
         <translation>Quit</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::eventpage::SeriesTimezoneDialog</name>
+    <message>
+        <source>Confirm the series timezone</source>
+        <translation>Confirm the series timezone</translation>
+    </message>
+    <message>
+        <source>A permanent link needs a fixed timezone for this series. From now on the meeting times follow this timezone, not the timezone of this computer. Check that the dates below stay the same.</source>
+        <translation>A permanent link needs a fixed timezone for this series. From now on the meeting times follow this timezone, not the timezone of this computer. Check that the dates below stay the same.</translation>
+    </message>
+    <message>
+        <source>Choose a timezone</source>
+        <translation>Choose a timezone</translation>
+    </message>
+    <message>
+        <source>not available</source>
+        <translation>not available</translation>
+    </message>
+    <message>
+        <source>no upcoming dates</source>
+        <translation>no upcoming dates</translation>
+    </message>
+    <message>
+        <source>Dates today: %1</source>
+        <translation>Dates today: %1</translation>
+    </message>
+    <message>
+        <source>Choose the timezone this series is scheduled in.</source>
+        <translation>Choose the timezone this series is scheduled in.</translation>
+    </message>
+    <message>
+        <source>Dates in %1: %2</source>
+        <translation>Dates in %1: %2</translation>
+    </message>
+    <message>
+        <source>This timezone cannot be used for the series.</source>
+        <translation>This timezone cannot be used for the series.</translation>
+    </message>
+    <message>
+        <source>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</source>
+        <translation>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::video::ParticipantTile</name>
+    <message>
+        <source>Participant</source>
+        <translation>Participant</translation>
+    </message>
+    <message>
+        <source>%1 (You)</source>
+        <translation>%1 (You)</translation>
+    </message>
+    <message>
+        <source>Waiting for video...</source>
+        <translation>Waiting for video...</translation>
+    </message>
+    <message>
+        <source>Camera off</source>
+        <translation>Camera off</translation>
     </message>
 </context>
 </TS>

@@ -41,7 +41,10 @@ void applySeriesFieldsFromEvent(DuckEventSeries &series, const DuckEvent &event,
 
 void cancelMeetingIfNeeded(pcm::meeting::MeetingCoordinator *coordinator,
                            const DuckEvent &event) {
-  if (!event.provider_kind.has_value() || !coordinator) {
+  // A published-series occurrence is a LiveKit event with no meeting reference
+  // of its own (the series owns the room logic); there is nothing to invalidate.
+  if (!event.provider_kind.has_value() || !coordinator || !event.meeting_ref.has_value() ||
+      event.meeting_ref->empty()) {
     return;
   }
   const auto kind = pcm::meeting::providerKindFromString(*event.provider_kind);
@@ -147,24 +150,8 @@ void QTimelineModel::loadEventsForDay(const QDate &date) {
 
   const auto rangeStart = QDateTime(date, QTime(0, 0), localTz);
   const auto rangeEnd = QDateTime(date.addDays(1), QTime(0, 0), localTz).addMSecs(-1);
-  const auto exceptions = mDb->get_event_series_exceptions_for_range(dayStartMs, dayEndMs);
-  auto seriesList = mDb->get_event_series_for_range(dayStartMs, dayEndMs);
-  for (auto &series : seriesList) {
-    pcm::recurrence::resolveSeriesClientName(*mDb, series);
-
-    const auto materializedStarts =
-        mDb->get_materialized_occurrence_starts_for_series(series.id);
-    const auto occurrences = pcm::recurrence::occurrences(series, rangeStart, rangeEnd);
-    for (const auto &occurrence : occurrences) {
-      const auto occurrenceStartMs = occurrence.toUTC().toMSecsSinceEpoch();
-      if (exceptions.contains({series.id, occurrenceStartMs}) ||
-          materializedStarts.contains(occurrenceStartMs)) {
-        continue;
-      }
-      const auto virtualId =
-          -(series.id * 1'000'000LL + static_cast<int64_t>(occurrence.date().toJulianDay()));
-      mEvents.append(pcm::recurrence::buildVirtualOccurrence(series, occurrence, virtualId));
-    }
+  for (auto &occurrence : pcm::recurrence::virtualOccurrencesInRange(*mDb, rangeStart, rangeEnd)) {
+    mEvents.append(std::move(occurrence));
   }
 
   std::sort(mEvents.begin(), mEvents.end(), [](const DuckEvent &left, const DuckEvent &right) {
@@ -177,9 +164,83 @@ void QTimelineModel::loadEventsForDay(const QDate &date) {
   emit eventsLoaded();
 }
 
+void QTimelineModel::setScheduleCommitter(pcm::meeting::SeriesScheduleCommitter *committer) {
+  mCommitter = committer;
+}
+
+bool QTimelineModel::isSeriesPublished(const int64_t seriesId) const {
+  return mDb && seriesId > 0 && mDb->get_schedule_identity(seriesId).has_value();
+}
+
+bool QTimelineModel::isSeriesSplitBlocked(const int64_t seriesId) const {
+  return isSeriesPublished(seriesId);
+}
+
+QString QTimelineModel::lastScheduleError() const {
+  if (mLastErrorCode.isEmpty()) {
+    return {};
+  }
+  return mLastErrorDetail.isEmpty() ? mLastErrorCode : mLastErrorCode + QLatin1String(": ") + mLastErrorDetail;
+}
+
+void QTimelineModel::reportScheduleFailure(const QString &error, const QString &detail) {
+  mLastErrorCode = error;
+  mLastErrorDetail = detail;
+  emit scheduleCommitFailed(error, detail);
+}
+
+std::optional<int64_t>
+QTimelineModel::commitSeriesWrite(const std::optional<int64_t> seriesId,
+                                  const QString &publishTimezone,
+                                  const pcm::database::ScheduleMutation &mutation) {
+  const bool published = seriesId.has_value() && isSeriesPublished(*seriesId);
+  if (!mCommitter || (!published && publishTimezone.isEmpty())) {
+    return mutation(); // legacy series: local change only, nothing to publish
+  }
+  const auto result = mCommitter->commit(mutation, publishTimezone.toStdString());
+  if (!result.ok) {
+    reportScheduleFailure(result.error, result.detail);
+    return std::nullopt;
+  }
+  return result.seriesId;
+}
+
+namespace {
+
+// What the server's copy of a series depends on. Titles, notes and prices do
+// not: editing only those must not publish a new revision.
+bool seriesScheduleChanged(const DuckEventSeries &before, const DuckEventSeries &after) {
+  return before.start_date != after.start_date || before.end_date != after.end_date ||
+         before.recurrence_rule != after.recurrence_rule ||
+         before.recurrence_until != after.recurrence_until || before.active != after.active ||
+         before.event_stat_id != after.event_stat_id;
+}
+
+bool occurrenceScheduleChanged(const DuckEvent &before, const DuckEvent &after) {
+  return before.start_date != after.start_date || before.end_date != after.end_date ||
+         before.event_stat_id != after.event_stat_id;
+}
+
+} // namespace
+
 int64_t QTimelineModel::addEvent(const DuckEvent &event, const bool allowOverlap) {
   DuckEvent newEvent = event;
-  newEvent.id = mDb->add_event(event, allowOverlap); // save to DB
+  int64_t newId = 0;
+  if (event.series_id.has_value()) {
+    // Materializing one occurrence of a series (a move, a cancellation, a
+    // single edit): for a published series this is a schedule change.
+    const auto committed = commitSeriesWrite(
+        event.series_id, {}, [&]() -> std::optional<int64_t> {
+          newId = mDb->add_event(event, allowOverlap);
+          return newId > 0 ? event.series_id : std::nullopt;
+        });
+    if (!committed.has_value()) {
+      return 0;
+    }
+    newEvent.id = newId;
+  } else {
+    newEvent.id = mDb->add_event(event, allowOverlap); // save to DB
+  }
   if (newEvent.id <= 0) {
     return 0;
   }
@@ -193,13 +254,24 @@ int64_t QTimelineModel::addEvent(const DuckEvent &event, const bool allowOverlap
 
 int64_t QTimelineModel::addEventSeries(const DuckEvent &event, const int64_t clientId,
                                        const QString &recurrenceRule,
-                                       const std::optional<int64_t> recurrenceUntilMs) {
+                                       const std::optional<int64_t> recurrenceUntilMs,
+                                       const QString &publishTimezone) {
   DuckEventSeries series;
   applySeriesFieldsFromEvent(series, event, clientId, recurrenceRule, recurrenceUntilMs);
   series.start_date = event.start_date;
   series.end_date = event.end_date;
 
-  return mDb ? mDb->add_event_series(series) : 0;
+  if (!mDb) {
+    return 0;
+  }
+  int64_t newId = 0;
+  const auto committed = commitSeriesWrite(std::nullopt, publishTimezone,
+                                           [&]() -> std::optional<int64_t> {
+                                             newId = mDb->add_event_series(series);
+                                             return newId > 0 ? std::optional<int64_t>(newId)
+                                                              : std::nullopt;
+                                           });
+  return committed.has_value() ? newId : 0;
 }
 
 bool QTimelineModel::updateEventSeries(const DuckEvent &event, const int64_t seriesId,
@@ -219,14 +291,24 @@ bool QTimelineModel::updateEventSeries(const DuckEvent &event, const int64_t ser
   series.id = seriesId;
   applySeriesFieldsFromEvent(series, event, clientId, recurrenceRule, recurrenceUntilMs);
 
+  // A published series keeps the wall clock of its own timezone, not of the
+  // machine it is edited on.
+  auto zone = QTimeZone::systemTimeZone();
+  const auto identity = mDb->get_schedule_identity(seriesId);
+  if (identity.has_value() && !identity->timezone.empty()) {
+    const QTimeZone pinned(QByteArray::fromStdString(identity->timezone));
+    if (pinned.isValid()) {
+      zone = pinned;
+    }
+  }
+
   if (existingSeriesValue.has_value() && existingSeriesValue->start_date.has_value() &&
       event.start_date.has_value() && event.end_date.has_value()) {
-    const auto localTz = QTimeZone::systemTimeZone();
     const auto originalStart =
-        QDateTime::fromMSecsSinceEpoch(*existingSeriesValue->start_date, localTz);
-    const auto editedStart = QDateTime::fromMSecsSinceEpoch(*event.start_date, localTz);
+        QDateTime::fromMSecsSinceEpoch(*existingSeriesValue->start_date, zone);
+    const auto editedStart = QDateTime::fromMSecsSinceEpoch(*event.start_date, zone);
     const auto updatedStart =
-        QDateTime(originalStart.date(), editedStart.time(), localTz).toMSecsSinceEpoch();
+        QDateTime(originalStart.date(), editedStart.time(), zone).toMSecsSinceEpoch();
     const auto durationMs = *event.end_date - *event.start_date;
     series.start_date = updatedStart;
     series.end_date = updatedStart + durationMs;
@@ -235,16 +317,33 @@ bool QTimelineModel::updateEventSeries(const DuckEvent &event, const int64_t ser
     series.end_date = event.end_date;
   }
 
-  return mDb->update_event_series(series);
+  const bool publishes = identity.has_value() && existingSeriesValue.has_value() &&
+                         seriesScheduleChanged(*existingSeriesValue, series);
+  if (identity.has_value() && !publishes) {
+    return mDb->update_event_series(series); // title, notes, price...: nothing to publish
+  }
+  return commitSeriesWrite(seriesId, {}, [&]() -> std::optional<int64_t> {
+           return mDb->update_event_series(series) ? std::optional<int64_t>(seriesId) : std::nullopt;
+         }).has_value();
 }
 
 bool QTimelineModel::deactivateEventSeries(const int64_t seriesId) {
-  return mDb && mDb->deactivate_event_series(seriesId);
+  if (!mDb) {
+    return false;
+  }
+  return commitSeriesWrite(seriesId, {}, [&]() -> std::optional<int64_t> {
+           return mDb->deactivate_event_series(seriesId) ? std::optional<int64_t>(seriesId)
+                                                         : std::nullopt;
+         }).has_value();
 }
 
 bool QTimelineModel::removeFutureEventSeriesOccurrences(
     const int64_t seriesId, const int64_t occurrenceStartMs) {
   if (!mDb || seriesId <= 0 || occurrenceStartMs <= 0) {
+    return false;
+  }
+  if (isSeriesSplitBlocked(seriesId)) {
+    reportScheduleFailure(QStringLiteral("split_unsupported"), {});
     return false;
   }
 
@@ -279,19 +378,26 @@ void QTimelineModel::removeEvent(int64_t id) {
     if (mEvents[i].id == id) {
       if (mEvents[i].series_id.has_value() &&
           mEvents[i].original_occurrence_start.has_value()) {
-        if (!mDb->add_event_series_exception(*mEvents[i].series_id,
-                                             *mEvents[i].original_occurrence_start,
-                                             "deleted")) {
-          qWarning() << "QTimelineModel::removeEvent failed to add series exception for id="
-                     << id;
+        const auto &occurrence = mEvents[i];
+        // The exception and the removal of a materialized occurrence are one
+        // change; for a published series they commit with the outbox snapshot.
+        const auto committed = commitSeriesWrite(
+            occurrence.series_id, {}, [&]() -> std::optional<int64_t> {
+              if (!mDb->add_event_series_exception(*occurrence.series_id,
+                                                   *occurrence.original_occurrence_start,
+                                                   "deleted")) {
+                return std::nullopt;
+              }
+              if (!occurrence.is_virtual_occurrence && !mDb->remove_event(id)) {
+                return std::nullopt;
+              }
+              return occurrence.series_id;
+            });
+        if (!committed.has_value()) {
+          qWarning() << "QTimelineModel::removeEvent failed for recurring occurrence id=" << id;
           return;
         }
         cancelMeetingIfNeeded(mMeetingCoordinator, mEvents[i]);
-        if (!mEvents[i].is_virtual_occurrence && !mDb->remove_event(id)) {
-          qWarning() << "QTimelineModel::removeEvent failed for recurring override id="
-                     << id;
-          return;
-        }
         beginRemoveRows({}, i, i);
         mEvents.removeAt(i);
         endRemoveRows();
@@ -313,7 +419,20 @@ void QTimelineModel::removeEvent(int64_t id) {
 void QTimelineModel::updateEvent(const DuckEvent &event, const bool allowOverlap) {
   for (int i = 0; i < mEvents.size(); ++i) {
     if (mEvents[i].id == event.id) {
-      if (!mDb->update_event(event, allowOverlap)) {
+      bool saved = false;
+      if (event.series_id.has_value() && isSeriesPublished(*event.series_id)) {
+        const auto stored = mDb->get_event(event.id);
+        if (stored && !occurrenceScheduleChanged(*stored, event)) {
+          saved = mDb->update_event(event, allowOverlap); // not part of the server schedule
+        } else {
+          saved = commitSeriesWrite(event.series_id, {}, [&]() -> std::optional<int64_t> {
+                    return mDb->update_event(event, allowOverlap) ? event.series_id : std::nullopt;
+                  }).has_value();
+        }
+      } else {
+        saved = mDb->update_event(event, allowOverlap);
+      }
+      if (!saved) {
         return;
       }
       mEvents[i] = event;

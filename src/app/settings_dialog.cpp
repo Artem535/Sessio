@@ -11,11 +11,13 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QDateTime>
+#include <QDebug>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QGuiApplication>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -24,6 +26,8 @@
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QScreen>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStackedWidget>
@@ -42,6 +46,15 @@
 #include <algorithm>
 
 namespace {
+QScrollArea *makeScrollPage(QWidget *page, QWidget *parent) {
+  auto *scrollArea = new QScrollArea(parent);
+  scrollArea->setWidgetResizable(true);
+  scrollArea->setFrameShape(QFrame::NoFrame);
+  scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  scrollArea->setWidget(page);
+  return scrollArea;
+}
+
 QWidget *makeSettingRow(const QString &title, const QString &description,
                         QWidget *control,
                         QWidget *parent = nullptr) {
@@ -171,10 +184,19 @@ private:
 
 SettingsDialog::SettingsDialog(std::shared_ptr<pcm::database::Database> db,
                                QWidget *parent)
-    : QDialog(parent), mDb(std::move(db)) {
+    : SettingsDialog(std::move(db), new QtKeychainTokenBackendCredentialStore(),
+                     parent) {}
+
+SettingsDialog::SettingsDialog(std::shared_ptr<pcm::database::Database> db,
+                               TokenBackendCredentialStore *tokenBackendCredentialStore,
+                               QWidget *parent)
+    : QDialog(parent), mDb(std::move(db)),
+      mTokenBackendCredentialStore(tokenBackendCredentialStore) {
+  mTokenBackendCredentialStore->setParent(this);
   mCredentialStore = new pcm::backup::QtKeychainCredentialStore(this);
   mAppLockService = std::make_unique<pcm::AppLockService>();
   setupUi();
+  setupLiveKitSection();
   loadSettings();
   connectSignals();
 
@@ -182,12 +204,39 @@ SettingsDialog::SettingsDialog(std::shared_ptr<pcm::database::Database> db,
           &SettingsDialog::onManualBackupKeyRead);
   connect(mCredentialStore, &pcm::backup::CredentialStore::writeFinished, this,
           &SettingsDialog::onBackupEncryptionKeyWritten);
+
+  // Bug (fixwave userfeedback group A, bug 1): the bearer-credential field is
+  // deliberately write-only (the real secret is never loaded back into the
+  // UI), but that used to leave zero feedback about whether a credential was
+  // actually stored, so a successful earlier save looked identical to no
+  // save at all. An eager read right after construction, plus a re-read
+  // after every successful write, keeps mLiveKitBearerCredentialStatusLabel
+  // truthful without ever putting the credential value in a widget.
+  connect(mTokenBackendCredentialStore, &TokenBackendCredentialStore::readFinished, this,
+          &SettingsDialog::onBearerCredentialRead);
+  connect(mTokenBackendCredentialStore, &TokenBackendCredentialStore::writeFinished, this,
+          [this](const bool ok, const QString & /*error*/) {
+            if (ok) {
+              mTokenBackendCredentialStore->readBearerCredential();
+            }
+          });
+  mTokenBackendCredentialStore->readBearerCredential();
+}
+
+int SettingsDialog::heightForAvailableScreen(const int availableHeight) {
+  return qMax(qMin(760, availableHeight - 80), qMin(400, availableHeight));
 }
 
 void SettingsDialog::setupUi() {
   setWindowTitle(tr("Settings"));
   setModal(true);
-  resize(560, 760);
+  const QScreen *screen = parentWidget() != nullptr
+                              ? parentWidget()->screen()
+                              : QGuiApplication::primaryScreen();
+  const int availableHeight =
+      screen != nullptr ? screen->availableGeometry().height() : 760;
+  const int dialogHeight = heightForAvailableScreen(availableHeight);
+  resize(560, dialogHeight);
 
   auto *rootLayout = new QVBoxLayout(this);
   rootLayout->setContentsMargins(20, 20, 20, 20);
@@ -202,8 +251,11 @@ void SettingsDialog::setupUi() {
 
   mSettingsSections = new oclero::qlementine::SegmentedControl(this);
   mSettingsSections->addItem(tr("General"), {}, {}, QStringLiteral("general"));
+  mSettingsSections->addItem(tr("Privacy & Security"), {}, {}, QStringLiteral("privacy"));
+  mSettingsSections->addItem(tr("Backup"), {}, {}, QStringLiteral("backup"));
   mSettingsSections->addItem(tr("Events"), {}, {}, QStringLiteral("events"));
   mSettingsSections->addItem(tr("Online"), {}, {}, QStringLiteral("online"));
+  mSettingsSections->addItem(tr("LiveKit"), {}, {}, QStringLiteral("livekit"));
   mSettingsSections->setItemsShouldExpand(true);
   rootLayout->addWidget(mSettingsSections);
 
@@ -212,22 +264,34 @@ void SettingsDialog::setupUi() {
 
   auto *generalPage = new QWidget(mSettingsStack);
   auto *generalSettingsLayout = new QVBoxLayout(generalPage);
-  generalSettingsLayout->setContentsMargins(0, 0, 0, 0);
+  generalSettingsLayout->setContentsMargins(0, 0, 8, 0);
   generalSettingsLayout->setSpacing(16);
+
+  auto *privacyPage = new QWidget(mSettingsStack);
+  auto *privacySettingsLayout = new QVBoxLayout(privacyPage);
+  privacySettingsLayout->setContentsMargins(0, 0, 8, 0);
+  privacySettingsLayout->setSpacing(16);
+
+  auto *backupPage = new QWidget(mSettingsStack);
+  auto *backupSettingsLayout = new QVBoxLayout(backupPage);
+  backupSettingsLayout->setContentsMargins(0, 0, 8, 0);
+  backupSettingsLayout->setSpacing(16);
 
   auto *eventsPage = new QWidget(mSettingsStack);
   auto *eventSettingsLayout = new QVBoxLayout(eventsPage);
-  eventSettingsLayout->setContentsMargins(0, 0, 0, 0);
+  eventSettingsLayout->setContentsMargins(0, 0, 8, 0);
   eventSettingsLayout->setSpacing(16);
 
   auto *onlinePage = new QWidget(mSettingsStack);
   auto *onlineSettingsLayout = new QVBoxLayout(onlinePage);
-  onlineSettingsLayout->setContentsMargins(0, 0, 0, 0);
+  onlineSettingsLayout->setContentsMargins(0, 0, 8, 0);
   onlineSettingsLayout->setSpacing(16);
 
-  mSettingsStack->addWidget(generalPage);
-  mSettingsStack->addWidget(eventsPage);
-  mSettingsStack->addWidget(onlinePage);
+  mSettingsStack->addWidget(makeScrollPage(generalPage, mSettingsStack));
+  mSettingsStack->addWidget(makeScrollPage(privacyPage, mSettingsStack));
+  mSettingsStack->addWidget(makeScrollPage(backupPage, mSettingsStack));
+  mSettingsStack->addWidget(makeScrollPage(eventsPage, mSettingsStack));
+  mSettingsStack->addWidget(makeScrollPage(onlinePage, mSettingsStack));
 
   auto *languageBox = new QGroupBox(tr("Language"), generalPage);
   auto *languageLayout = new QVBoxLayout(languageBox);
@@ -261,7 +325,7 @@ void SettingsDialog::setupUi() {
   databaseLayout->addWidget(mOpenDatabaseFolderButton, 0, Qt::AlignLeft);
   generalSettingsLayout->addWidget(databaseBox);
 
-  auto *backupBox = new QGroupBox(tr("Backup"), generalPage);
+  auto *backupBox = new QGroupBox(tr("Backup"), backupPage);
   auto *backupLayout = new QVBoxLayout(backupBox);
   backupLayout->setContentsMargins(16, 16, 16, 16);
   backupLayout->setSpacing(10);
@@ -276,6 +340,7 @@ void SettingsDialog::setupUi() {
   backupButtonsLayout->setContentsMargins(0, 0, 0, 0);
   backupButtonsLayout->setSpacing(10);
   mCreateBackupButton = new QPushButton(tr("Create backup..."), backupBox);
+  mCreateBackupButton->setObjectName(QStringLiteral("createBackupButton"));
   mValidateBackupButton = new QPushButton(tr("Validate backup..."), backupBox);
   mRestoreBackupButton = new QPushButton(tr("Restore backup..."), backupBox);
   backupButtonsLayout->addWidget(mCreateBackupButton);
@@ -295,6 +360,7 @@ void SettingsDialog::setupUi() {
   backupLayout->addWidget(mBackupProgressBar);
 
   mBackupEncryptionEnabledSwitch = new oclero::qlementine::Switch(backupBox);
+  mBackupEncryptionEnabledSwitch->setObjectName(QStringLiteral("backupEncryptionEnabledSwitch"));
   mBackupEncryptionDetails = new QWidget(backupBox);
   auto *encryptionDetailsLayout = new QVBoxLayout(mBackupEncryptionDetails);
   encryptionDetailsLayout->setContentsMargins(0, 0, 0, 0);
@@ -324,13 +390,14 @@ void SettingsDialog::setupUi() {
       tr("Protect new backups with a recovery password and the system keychain."),
       mBackupEncryptionEnabledSwitch, backupBox));
   backupLayout->addWidget(mBackupEncryptionDetails);
-  generalSettingsLayout->addWidget(backupBox);
+  backupSettingsLayout->addWidget(backupBox);
 
-  auto *autoBackupBox = new QGroupBox(tr("Automatic Backups"), generalPage);
+  auto *autoBackupBox = new QGroupBox(tr("Automatic Backups"), backupPage);
   auto *autoBackupLayout = new QVBoxLayout(autoBackupBox);
   autoBackupLayout->setContentsMargins(16, 16, 16, 16);
   autoBackupLayout->setSpacing(14);
   mAutoBackupEnabledSwitch = new oclero::qlementine::Switch(autoBackupBox);
+  mAutoBackupEnabledSwitch->setObjectName(QStringLiteral("autoBackupEnabledSwitch"));
   mAutoBackupIntervalSpinBox = new QSpinBox(autoBackupBox);
   mAutoBackupIntervalSpinBox->setMinimum(1);
   mAutoBackupIntervalSpinBox->setMaximum(90);
@@ -362,13 +429,15 @@ void SettingsDialog::setupUi() {
   autoBackupLayout->addWidget(makeSettingRow(tr("Destination folder"),
                                              tr("Where automatic backups are saved."),
                                              destinationRow, autoBackupBox));
-  generalSettingsLayout->addWidget(autoBackupBox);
+  backupSettingsLayout->addWidget(autoBackupBox);
+  backupSettingsLayout->addStretch();
 
-  auto *notificationsBox = new QGroupBox(tr("Notifications"), generalPage);
+  auto *notificationsBox = new QGroupBox(tr("Notifications"), privacyPage);
   auto *notificationsLayout = new QVBoxLayout(notificationsBox);
   notificationsLayout->setContentsMargins(16, 16, 16, 16);
   notificationsLayout->setSpacing(14);
   mNotificationsEnabledSwitch = new oclero::qlementine::Switch(notificationsBox);
+  mNotificationsEnabledSwitch->setObjectName(QStringLiteral("notificationsEnabledSwitch"));
   mNotificationLeadMinutesSpinBox = new QSpinBox(notificationsBox);
   mNotificationLeadMinutesSpinBox->setMinimum(1);
   mNotificationLeadMinutesSpinBox->setMaximum(24 * 60);
@@ -394,113 +463,137 @@ void SettingsDialog::setupUi() {
       tr("How much a reminder reveals on a shared or locked screen. Client name and "
         "session title are never shown outside Full details."),
       mNotificationPrivacyModeCombo, notificationsBox));
-  generalSettingsLayout->addWidget(notificationsBox);
+  privacySettingsLayout->addWidget(notificationsBox);
 
-  auto *privacyBox = new QGroupBox(tr("Privacy"), generalPage);
-  auto *privacyLayout = new QVBoxLayout(privacyBox);
-  privacyLayout->setContentsMargins(16, 16, 16, 16);
-  privacyLayout->setSpacing(14);
-  mAppLockEnabledSwitch = new oclero::qlementine::Switch(privacyBox);
-  mAppLockTimeoutSpinBox = new QSpinBox(privacyBox);
+  auto *appLockBox = new QGroupBox(tr("App lock"), privacyPage);
+  auto *appLockLayout = new QVBoxLayout(appLockBox);
+  appLockLayout->setContentsMargins(16, 16, 16, 16);
+  appLockLayout->setSpacing(14);
+  mAppLockEnabledSwitch = new oclero::qlementine::Switch(appLockBox);
+  mAppLockEnabledSwitch->setObjectName(QStringLiteral("appLockEnabledSwitch"));
+  mAppLockTimeoutSpinBox = new QSpinBox(appLockBox);
   mAppLockTimeoutSpinBox->setRange(1, 24 * 60);
   mAppLockTimeoutSpinBox->setSuffix(tr(" min"));
-  mChangeAppLockCredentialButton = new QPushButton(tr("Change PIN or password"), privacyBox);
-  mClearSensitiveClipboardSwitch = new oclero::qlementine::Switch(privacyBox);
-  mSensitiveClipboardDelaySpinBox = new QSpinBox(privacyBox);
-  mSensitiveClipboardDelaySpinBox->setRange(5, 10 * 60);
-  mSensitiveClipboardDelaySpinBox->setSuffix(tr(" sec"));
-  privacyLayout->addWidget(makeSettingRow(
+  mChangeAppLockCredentialButton = new QPushButton(tr("Change PIN or password"), appLockBox);
+  appLockLayout->addWidget(makeSettingRow(
       tr("Lock application"),
       tr("Require a PIN or password after inactivity or from the system tray."),
-      mAppLockEnabledSwitch, privacyBox));
-  privacyLayout->addWidget(makeSettingRow(
+      mAppLockEnabledSwitch, appLockBox));
+  appLockLayout->addWidget(makeSettingRow(
       tr("Lock after"), tr("Time without keyboard or mouse activity."),
-      mAppLockTimeoutSpinBox, privacyBox));
-  privacyLayout->addWidget(mChangeAppLockCredentialButton, 0, Qt::AlignRight);
-  privacyLayout->addWidget(makeSettingRow(
+      mAppLockTimeoutSpinBox, appLockBox));
+  appLockLayout->addWidget(mChangeAppLockCredentialButton, 0, Qt::AlignRight);
+  privacySettingsLayout->addWidget(appLockBox);
+
+  auto *clipboardBox = new QGroupBox(tr("Clipboard"), privacyPage);
+  auto *clipboardLayout = new QVBoxLayout(clipboardBox);
+  clipboardLayout->setContentsMargins(16, 16, 16, 16);
+  clipboardLayout->setSpacing(14);
+  mClearSensitiveClipboardSwitch = new oclero::qlementine::Switch(clipboardBox);
+  mClearSensitiveClipboardSwitch->setObjectName(QStringLiteral("clearSensitiveClipboardSwitch"));
+  mSensitiveClipboardDelaySpinBox = new QSpinBox(clipboardBox);
+  mSensitiveClipboardDelaySpinBox->setRange(5, 10 * 60);
+  mSensitiveClipboardDelaySpinBox->setSuffix(tr(" sec"));
+  clipboardLayout->addWidget(makeSettingRow(
       tr("Clear copied meeting details"),
       tr("Clear meeting links and invitations copied by the application."),
-      mClearSensitiveClipboardSwitch, privacyBox));
-  privacyLayout->addWidget(makeSettingRow(
+      mClearSensitiveClipboardSwitch, clipboardBox));
+  clipboardLayout->addWidget(makeSettingRow(
       tr("Clear after"), tr("Delay before copied meeting details are removed."),
-      mSensitiveClipboardDelaySpinBox, privacyBox));
-  generalSettingsLayout->addWidget(privacyBox);
+      mSensitiveClipboardDelaySpinBox, clipboardBox));
+  privacySettingsLayout->addWidget(clipboardBox);
   generalSettingsLayout->addStretch();
+  privacySettingsLayout->addStretch();
 
-  auto *eventsBox = new QGroupBox(tr("Timeline colors"), eventsPage);
-  auto *eventsLayout = new QVBoxLayout(eventsBox);
-  eventsLayout->setContentsMargins(16, 16, 16, 16);
-  eventsLayout->setSpacing(14);
-  mPreventOverlapsSwitch = new oclero::qlementine::Switch(eventsBox);
-  mWorkEventColorEditor = new oclero::qlementine::ColorEditor(eventsBox);
-  mPersonalEventColorEditor = new oclero::qlementine::ColorEditor(eventsBox);
-  mCurrencyCombo = new QComboBox(eventsBox);
+  auto *schedulingDefaultsBox = new QGroupBox(tr("Scheduling defaults"), eventsPage);
+  auto *schedulingDefaultsLayout = new QVBoxLayout(schedulingDefaultsBox);
+  schedulingDefaultsLayout->setContentsMargins(16, 16, 16, 16);
+  schedulingDefaultsLayout->setSpacing(14);
+  mPreventOverlapsSwitch = new oclero::qlementine::Switch(schedulingDefaultsBox);
+  mPreventOverlapsSwitch->setObjectName(QStringLiteral("preventOverlapsSwitch"));
+  mWorkDayStartEdit = new QTimeEdit(schedulingDefaultsBox);
+  mWorkDayStartEdit->setDisplayFormat("HH:mm");
+  mWorkDayEndEdit = new QTimeEdit(schedulingDefaultsBox);
+  mWorkDayEndEdit->setDisplayFormat("HH:mm");
+  mDefaultSessionDurationSpinBox = new QSpinBox(schedulingDefaultsBox);
+  mDefaultSessionDurationSpinBox->setMinimum(5);
+  mDefaultSessionDurationSpinBox->setMaximum(480);
+  mDefaultSessionDurationSpinBox->setSingleStep(5);
+  mDefaultSessionDurationSpinBox->setSuffix(tr(" min"));
+  mDefaultBufferBeforeSpinBox = new QSpinBox(schedulingDefaultsBox);
+  mDefaultBufferBeforeSpinBox->setRange(0, 240);
+  mDefaultBufferBeforeSpinBox->setSuffix(tr(" min"));
+  mDefaultBufferAfterSpinBox = new QSpinBox(schedulingDefaultsBox);
+  mDefaultBufferAfterSpinBox->setRange(0, 240);
+  mDefaultBufferAfterSpinBox->setSuffix(tr(" min"));
+  schedulingDefaultsLayout->addWidget(
+      makeSettingRow(tr("Disallow overlapping events"),
+                     tr("Reject saves when the selected time range intersects another event."),
+                     mPreventOverlapsSwitch, schedulingDefaultsBox));
+  schedulingDefaultsLayout->addWidget(
+      makeSettingRow(tr("Work day start"),
+                     tr("Start time used for quick session suggestions."),
+                     mWorkDayStartEdit, schedulingDefaultsBox));
+  schedulingDefaultsLayout->addWidget(
+      makeSettingRow(tr("Work day end"),
+                     tr("End time used for quick session suggestions."),
+                     mWorkDayEndEdit, schedulingDefaultsBox));
+  schedulingDefaultsLayout->addWidget(
+      makeSettingRow(tr("Default session duration"),
+                     tr("Duration used for quick session suggestions and new sessions."),
+                     mDefaultSessionDurationSpinBox, schedulingDefaultsBox));
+  schedulingDefaultsLayout->addWidget(
+      makeSettingRow(tr("Default buffer before"),
+                     tr("Time reserved before each new session and Quick Slot."),
+                     mDefaultBufferBeforeSpinBox, schedulingDefaultsBox));
+  schedulingDefaultsLayout->addWidget(
+      makeSettingRow(tr("Default buffer after"),
+                     tr("Time reserved after each new session and Quick Slot."),
+                     mDefaultBufferAfterSpinBox, schedulingDefaultsBox));
+  eventSettingsLayout->addWidget(schedulingDefaultsBox);
+
+  auto *billingBox = new QGroupBox(tr("Billing"), eventsPage);
+  auto *billingLayout = new QVBoxLayout(billingBox);
+  billingLayout->setContentsMargins(16, 16, 16, 16);
+  billingLayout->setSpacing(14);
+  mCurrencyCombo = new QComboBox(billingBox);
+  mCurrencyCombo->setObjectName(QStringLiteral("currencyCombo"));
   mCurrencyCombo->addItem(tr("Russian Ruble (₽)"), QStringLiteral("RUB"));
   mCurrencyCombo->addItem(tr("US Dollar ($)"), QStringLiteral("USD"));
   mCurrencyCombo->addItem(tr("Euro (€)"), QStringLiteral("EUR"));
   mCurrencyCombo->addItem(tr("British Pound (£)"), QStringLiteral("GBP"));
-  mDefaultWorkCostSpinBox = new QDoubleSpinBox(eventsBox);
+  mDefaultWorkCostSpinBox = new QDoubleSpinBox(billingBox);
   mDefaultWorkCostSpinBox->setDecimals(2);
   mDefaultWorkCostSpinBox->setMinimum(0.0);
   mDefaultWorkCostSpinBox->setMaximum(1'000'000.0);
   mDefaultWorkCostSpinBox->setSingleStep(100.0);
   mDefaultWorkCostSpinBox->setSuffix(QStringLiteral(" ") + pcm::app_settings::currencySymbol());
-  mWorkDayStartEdit = new QTimeEdit(eventsBox);
-  mWorkDayStartEdit->setDisplayFormat("HH:mm");
-  mWorkDayEndEdit = new QTimeEdit(eventsBox);
-  mWorkDayEndEdit->setDisplayFormat("HH:mm");
-  mDefaultSessionDurationSpinBox = new QSpinBox(eventsBox);
-  mDefaultSessionDurationSpinBox->setMinimum(5);
-  mDefaultSessionDurationSpinBox->setMaximum(480);
-  mDefaultSessionDurationSpinBox->setSingleStep(5);
-  mDefaultSessionDurationSpinBox->setSuffix(tr(" min"));
-  mDefaultBufferBeforeSpinBox = new QSpinBox(eventsBox);
-  mDefaultBufferBeforeSpinBox->setRange(0, 240);
-  mDefaultBufferBeforeSpinBox->setSuffix(tr(" min"));
-  mDefaultBufferAfterSpinBox = new QSpinBox(eventsBox);
-  mDefaultBufferAfterSpinBox->setRange(0, 240);
-  mDefaultBufferAfterSpinBox->setSuffix(tr(" min"));
-  eventsLayout->addWidget(
-      makeSettingRow(tr("Disallow overlapping events"),
-                     tr("Reject saves when the selected time range intersects another event."),
-                     mPreventOverlapsSwitch, eventsBox));
-  eventsLayout->addWidget(
-      makeSettingRow(tr("Work day start"),
-                     tr("Start time used for quick session suggestions."),
-                     mWorkDayStartEdit, eventsBox));
-  eventsLayout->addWidget(
-      makeSettingRow(tr("Work day end"),
-                     tr("End time used for quick session suggestions."),
-                     mWorkDayEndEdit, eventsBox));
-  eventsLayout->addWidget(
-      makeSettingRow(tr("Default session duration"),
-                     tr("Duration used for quick session suggestions and new sessions."),
-                     mDefaultSessionDurationSpinBox, eventsBox));
-  eventsLayout->addWidget(
-      makeSettingRow(tr("Default buffer before"),
-                     tr("Time reserved before each new session and Quick Slot."),
-                     mDefaultBufferBeforeSpinBox, eventsBox));
-  eventsLayout->addWidget(
-      makeSettingRow(tr("Default buffer after"),
-                     tr("Time reserved after each new session and Quick Slot."),
-                     mDefaultBufferAfterSpinBox, eventsBox));
-  eventsLayout->addWidget(
+  billingLayout->addWidget(
       makeSettingRow(tr("Currency"),
                      tr("Symbol shown next to cost values throughout the app."),
-                     mCurrencyCombo, eventsBox));
-  eventsLayout->addWidget(
+                     mCurrencyCombo, billingBox));
+  billingLayout->addWidget(
       makeSettingRow(tr("Default work event cost"),
                      tr("Used to prefill new work sessions."),
-                     mDefaultWorkCostSpinBox, eventsBox));
-  eventsLayout->addWidget(
+                     mDefaultWorkCostSpinBox, billingBox));
+  eventSettingsLayout->addWidget(billingBox);
+
+  auto *eventColorsBox = new QGroupBox(tr("Event colors"), eventsPage);
+  auto *eventColorsLayout = new QVBoxLayout(eventColorsBox);
+  eventColorsLayout->setContentsMargins(16, 16, 16, 16);
+  eventColorsLayout->setSpacing(14);
+  mWorkEventColorEditor = new oclero::qlementine::ColorEditor(eventColorsBox);
+  mWorkEventColorEditor->setObjectName(QStringLiteral("workEventColorEditor"));
+  mPersonalEventColorEditor = new oclero::qlementine::ColorEditor(eventColorsBox);
+  eventColorsLayout->addWidget(
       makeSettingRow(tr("Work events"),
                      tr("Accent color for work sessions in the timeline."),
-                     mWorkEventColorEditor, eventsBox));
-  eventsLayout->addWidget(
+                     mWorkEventColorEditor, eventColorsBox));
+  eventColorsLayout->addWidget(
       makeSettingRow(tr("Personal events"),
                      tr("Accent color for personal events in the timeline."),
-                     mPersonalEventColorEditor, eventsBox));
-  eventSettingsLayout->addWidget(eventsBox);
+                     mPersonalEventColorEditor, eventColorsBox));
+  eventSettingsLayout->addWidget(eventColorsBox);
   eventSettingsLayout->addStretch();
 
   auto *onlineBox = new QGroupBox(tr("Online sessions"), onlinePage);
@@ -527,6 +620,84 @@ void SettingsDialog::setupUi() {
 
   mButtonBox = new QDialogButtonBox(QDialogButtonBox::Close, this);
   rootLayout->addWidget(mButtonBox);
+}
+
+void SettingsDialog::setupLiveKitSection() {
+  auto *liveKitPage = new QWidget(mSettingsStack);
+  auto *liveKitPageLayout = new QVBoxLayout(liveKitPage);
+  liveKitPageLayout->setContentsMargins(0, 0, 8, 0);
+  liveKitPageLayout->setSpacing(16);
+  auto *nameBox = new QGroupBox(tr("Calls"), liveKitPage);
+  auto *nameLayout = new QVBoxLayout(nameBox);
+  auto *nameEdit = new QLineEdit(nameBox);
+  nameEdit->setObjectName("callDisplayNameEdit");
+  nameEdit->setMaxLength(64);
+  nameEdit->setAccessibleName(tr("Name in calls"));
+  nameEdit->setText(pcm::app_settings::callDisplayName());
+  nameLayout->addWidget(new QLabel(tr("Name in calls"), nameBox));
+  nameLayout->addWidget(nameEdit);
+  connect(nameEdit, &QLineEdit::editingFinished, this, [nameEdit] {
+    pcm::app_settings::setCallDisplayName(nameEdit->text());
+  });
+  liveKitPageLayout->addWidget(nameBox);
+
+  auto *liveKitBox = new QGroupBox(tr("Token backend"), liveKitPage);
+  auto *liveKitLayout = new QVBoxLayout(liveKitBox);
+  liveKitLayout->setContentsMargins(16, 16, 16, 16);
+  liveKitLayout->setSpacing(10);
+
+  auto *baseUrlTitle = new QLabel(tr("Token backend URL"), liveKitBox);
+  QFont baseUrlTitleFont = baseUrlTitle->font();
+  baseUrlTitleFont.setBold(true);
+  baseUrlTitle->setFont(baseUrlTitleFont);
+  auto *baseUrlDescription = new QLabel(
+      tr("Base URL of the LiveKit token-issuing backend."), liveKitBox);
+  baseUrlDescription->setWordWrap(true);
+  baseUrlDescription->setStyleSheet("color: rgba(255, 255, 255, 0.68);");
+  mLiveKitBaseUrlEdit = new QLineEdit(liveKitBox);
+  mLiveKitBaseUrlEdit->setObjectName(QStringLiteral("liveKitBaseUrlEdit"));
+  mLiveKitBaseUrlEdit->setPlaceholderText(tr("https://token-backend.example.com"));
+
+  auto *credentialTitle = new QLabel(tr("Bearer credential"), liveKitBox);
+  QFont credentialTitleFont = credentialTitle->font();
+  credentialTitleFont.setBold(true);
+  credentialTitle->setFont(credentialTitleFont);
+  auto *credentialDescription = new QLabel(
+      tr("Stored in the system keychain. Leave blank to keep the current credential."),
+      liveKitBox);
+  credentialDescription->setWordWrap(true);
+  credentialDescription->setStyleSheet("color: rgba(255, 255, 255, 0.68);");
+  mLiveKitBearerCredentialEdit = new QLineEdit(liveKitBox);
+  mLiveKitBearerCredentialEdit->setObjectName(QStringLiteral("liveKitBearerCredentialEdit"));
+  mLiveKitBearerCredentialEdit->setEchoMode(QLineEdit::Password);
+
+  // Reports whether a credential is stored, never the credential itself --
+  // see mLiveKitBearerCredentialStatusLabel's doc comment in the header. Set
+  // for the first time once the initial readBearerCredential() call
+  // (triggered at the end of the constructor) completes.
+  mLiveKitBearerCredentialStatusLabel = new QLabel(liveKitBox);
+  mLiveKitBearerCredentialStatusLabel->setObjectName(
+      QStringLiteral("liveKitBearerCredentialStatusLabel"));
+  mLiveKitBearerCredentialStatusLabel->setStyleSheet("color: rgba(255, 255, 255, 0.68);");
+
+  auto *liveKitSaveButton = new QPushButton(tr("Save"), liveKitBox);
+  liveKitSaveButton->setObjectName(QStringLiteral("liveKitSaveButton"));
+  connect(liveKitSaveButton, &QPushButton::clicked, this,
+          &SettingsDialog::saveLiveKitSettings);
+
+  liveKitLayout->addWidget(baseUrlTitle);
+  liveKitLayout->addWidget(baseUrlDescription);
+  liveKitLayout->addWidget(mLiveKitBaseUrlEdit);
+  liveKitLayout->addWidget(credentialTitle);
+  liveKitLayout->addWidget(credentialDescription);
+  liveKitLayout->addWidget(mLiveKitBearerCredentialEdit);
+  liveKitLayout->addWidget(mLiveKitBearerCredentialStatusLabel);
+  liveKitLayout->addWidget(liveKitSaveButton, 0, Qt::AlignRight);
+
+  liveKitPageLayout->addWidget(liveKitBox);
+  liveKitPageLayout->addStretch();
+
+  mSettingsStack->addWidget(makeScrollPage(liveKitPage, mSettingsStack));
 }
 
 void SettingsDialog::loadSettings() const {
@@ -583,6 +754,16 @@ void SettingsDialog::loadSettings() const {
   mPersonalEventColorEditor->setColor(pcm::app_settings::personalEventColor());
   mMeetingInviteTemplateEdit->setPlainText(
       pcm::app_settings::meetingInviteTemplate());
+  // A corrupt Config.yaml must not take the whole dialog down: leave the
+  // field at Config's default (empty) and let the rest of Settings work.
+  try {
+    mLiveKitBaseUrlEdit->setText(QString::fromStdString(
+        pcm::config::Config::read_config().token_backend_base_url));
+  } catch (const std::exception &error) {
+    qWarning() << "SettingsDialog: failed to read config, token backend URL left empty:"
+               << error.what();
+    mLiveKitBaseUrlEdit->clear();
+  }
 }
 
 void SettingsDialog::connectSignals() {
@@ -1000,6 +1181,38 @@ void SettingsDialog::browseAutoBackupDestination() {
   }
   mAutoBackupDestinationEdit->setText(selected);
   pcm::app_settings::setAutoBackupDestination(selected);
+}
+
+void SettingsDialog::saveLiveKitSettings() {
+  // One guard covers both the read and the save. A failed read skips the
+  // save: writing a default-constructed Config over an unreadable file would
+  // silently reset the app role and database path stored alongside the URL.
+  try {
+    auto conf = pcm::config::Config::read_config();
+    conf.token_backend_base_url = mLiveKitBaseUrlEdit->text().toStdString();
+    pcm::config::Config::save_config(conf);
+  } catch (const std::exception &error) {
+    qWarning() << "SettingsDialog: failed to save the token backend URL:" << error.what();
+    QMessageBox::warning(
+        this, tr("Token backend"),
+        tr("The token backend URL could not be saved:\n%1").arg(QString::fromUtf8(error.what())));
+  }
+
+  // The bearer credential lives in the keychain, independent of Config.yaml,
+  // so it is still saved when the config write above failed.
+  const auto credential = mLiveKitBearerCredentialEdit->text();
+  if (!credential.isEmpty()) {
+    mTokenBackendCredentialStore->writeBearerCredential(credential);
+  }
+}
+
+void SettingsDialog::onBearerCredentialRead(const bool ok, const QString &credential,
+                                            const QString & /*error*/) {
+  // `credential` is the real secret; it must never be placed into any widget
+  // or otherwise surfaced -- only whether it is non-empty.
+  mLiveKitBearerCredentialStatusLabel->setText(ok && !credential.isEmpty()
+                                                   ? tr("Credentials are saved")
+                                                   : tr("No credentials saved yet"));
 }
 
 void SettingsDialog::validateBackup() {

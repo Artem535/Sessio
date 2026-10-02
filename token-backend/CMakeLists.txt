@@ -6,6 +6,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(pcm_token_backend LANGUAGES CXX)
 
+add_subdirectory(schedule)
+
 find_package(oatpp REQUIRED)
 find_package(unofficial-sodium REQUIRED)
 find_package(unofficial-sqlite3 REQUIRED)
@@ -16,13 +18,19 @@ add_library(token_backend_lib STATIC
   src/controller/health_controller.h
   src/controller/dto.h
   src/controller/request_log.h
+  src/controller/invitation_url.h
+  src/controller/invitation_url.cpp
   src/controller/meetings_controller.h
+  src/controller/schedule_controller.h
+  src/controller/series_controller.h
   src/controller/invitations_controller.h
   src/config.cpp
   src/db/sqlite_connection.cpp
   src/db/migrations.cpp
   src/db/accounts_repository.cpp
   src/db/meetings_repository.cpp
+  src/db/schedule_repository.cpp
+  src/db/series_repository.cpp
   src/db/invitations_repository.cpp
   src/crypto/random_token.cpp
   src/crypto/hashing.cpp
@@ -30,10 +38,14 @@ add_library(token_backend_lib STATIC
   src/auth/authorizer.h
   src/auth/static_token_authorizer.h
   src/service/meeting_service.cpp
+  src/service/series_service.cpp
+  src/service/schedule_service.cpp
+  src/service/schedule_wire.cpp
 )
 set_target_properties(token_backend_lib PROPERTIES LINKER_LANGUAGE CXX)
 target_include_directories(token_backend_lib PUBLIC src)
 target_link_libraries(token_backend_lib PUBLIC
+  pcm_schedule
   oatpp::oatpp
   unofficial-sodium::sodium
   unofficial::sqlite3::sqlite3

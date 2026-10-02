@@ -40,6 +40,7 @@ MainWindow::MainWindow(QWidget *parent)
   titleLayout->addWidget(titleIconLabel);
   titleLayout->addWidget(titleTextLabel);
   titleLayout->addStretch();
+  mTitleWidget = titleWidget;
   mUi->gridLayout->replaceWidget(mUi->label, titleWidget);
   mUi->label->hide();
   mUi->label->deleteLater();
@@ -55,6 +56,8 @@ MainWindow::MainWindow(QWidget *parent)
       new TabButton(QIcon(":/icons/users-gear-solid-full.svg"), tr(": NAV_DETAILS"), this);
   mBtnNotes =
       new TabButton(QIcon(":/icons/notes.svg"), tr("Notes"), this);
+  mBtnCalls =
+      new TabButton(QIcon(":/icons/video-solid-full.svg"), tr("Calls"), this);
 
   // Add buttons to the vertical layout
   mUi->verticalLayout->addWidget(mBtnCalendar);
@@ -62,6 +65,7 @@ MainWindow::MainWindow(QWidget *parent)
   mUi->verticalLayout->addWidget(mBtnAnalytics);
   mUi->verticalLayout->addWidget(mBtnProfile);
   mUi->verticalLayout->addWidget(mBtnNotes);
+  mUi->verticalLayout->addWidget(mBtnCalls);
   mBtnProfile->hide();
   mBtnNotes->hide();
 
@@ -153,6 +157,47 @@ void MainWindow::addClientNotesPage(std::shared_ptr<pcm::database::Database> db)
   setPageCustomWidget(Pages::clientNotes, mBtnBackToClients);
 }
 
+void MainWindow::addCallsPage(pcm::video::DeviceManager *deviceManager,
+                              pcm::tokenclient::TokenBackendClient *tokenClient,
+                              std::function<QString()> bearerCredentialProvider) {
+  const auto page = new CallsPage(/*specialistMode=*/true, deviceManager, tokenClient, this);
+  page->setBearerCredentialProvider(std::move(bearerCredentialProvider));
+  mPages.insertOrAssign(Pages::calls, page);
+  connect(page, &CallsPage::fullscreenChanged, this, &MainWindow::setCallFullscreen);
+
+  const int index = mUi->stackedWidget->addWidget(page);
+  mPagesIndex.insertOrAssign(Pages::calls, index);
+}
+
+void MainWindow::setCallFullscreen(bool fullscreen) {
+  if (fullscreen == mCallFullscreen) {
+    return;
+  }
+  mCallFullscreen = fullscreen;
+  if (fullscreen) {
+    mChromeVisibility.clear();
+    const auto hide = [this](QWidget *widget) {
+      if (!widget) return;
+      mChromeVisibility.insert(widget, widget->isVisibleTo(this));
+      widget->hide();
+    };
+    hide(mTitleWidget);
+    hide(mUi->pageCustomWidgetHost);
+    hide(statusBar());
+    for (int i = 0; i < mUi->verticalLayout->count(); ++i) {
+      hide(mUi->verticalLayout->itemAt(i)->widget());
+    }
+    mGridMargins = mUi->gridLayout->contentsMargins();
+    mUi->gridLayout->setContentsMargins(0, 0, 0, 0);
+  } else {
+    for (auto it = mChromeVisibility.cbegin(); it != mChromeVisibility.cend(); ++it) {
+      it.key()->setVisible(it.value());
+    }
+    mChromeVisibility.clear();
+    mUi->gridLayout->setContentsMargins(mGridMargins);
+  }
+}
+
 void MainWindow::setDatabase(std::shared_ptr<pcm::database::Database> db) {
   mDb = std::move(db);
 }
@@ -182,6 +227,8 @@ void MainWindow::connectSignals() {
           [this]() { showPage(Pages::clientCard, mBtnProfile); });
   connect(mBtnNotes, &QPushButton::clicked,
           [this]() { showPage(Pages::clientNotes, mBtnNotes); });
+  connect(mBtnCalls, &QPushButton::clicked,
+          [this]() { showPage(Pages::calls, mBtnCalls); });
 
   // When a client is selected in the list, show its info in the client card page
   connect(clientInfoPage, &ClientInfo::displayButtonClicked, clientCardPage,
@@ -258,6 +305,13 @@ void MainWindow::setPageCustomWidget(const Pages page, QWidget *widget) {
   }
 }
 
+void MainWindow::preselectLiveKitMeeting(const QString &meetingRef) {
+  showPage(Pages::calls, mBtnCalls);
+  if (auto *callsPage = dynamic_cast<CallsPage *>(mPages.value(Pages::calls, nullptr))) {
+    callsPage->preselectOwnMeeting(meetingRef);
+  }
+}
+
 void MainWindow::initDefaultStyle() const {
   checkButton(mBtnCalendar);
 }
@@ -268,6 +322,7 @@ void MainWindow::checkButton(QPushButton *btn) const {
   mBtnAnalytics->setChecked(false);
   mBtnProfile->setChecked(false);
   mBtnNotes->setChecked(false);
+  mBtnCalls->setChecked(false);
   btn->setChecked(true);
 }
 
@@ -367,6 +422,7 @@ void MainWindow::openSettingsDialog() {
   SettingsDialog dialog(mDb, this);
   dialog.exec();
   refreshPageAppearance();
+  emit settingsSaved();
 }
 
 void MainWindow::openAboutDialog() {
@@ -394,6 +450,8 @@ QString MainWindow::pageTitle(const Pages page) const {
       return tr("Details");
     case Pages::clientNotes:
       return tr("Notes");
+    case Pages::calls:
+      return tr("Calls");
   }
 
   return tr("Page");

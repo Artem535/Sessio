@@ -9,7 +9,7 @@ enum class VideoSessionState {
   Provisioned,
   PrejoinCheck,
   Joining,
-  WaitingForClient,
+  WaitingForParticipants,
   Connected,
   Reconnecting,
   Leaving,

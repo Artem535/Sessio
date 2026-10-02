@@ -20,6 +20,7 @@ void RemoteAudioPlayer::attachTrack(const std::shared_ptr<livekit::Track> &track
   }
 
   livekit::AudioStream::Options options;
+  options.capacity = 2;
   mStream = livekit::AudioStream::fromTrack(track, options);
   if (!mStream) {
     return;
@@ -27,10 +28,11 @@ void RemoteAudioPlayer::attachTrack(const std::shared_ptr<livekit::Track> &track
 
   mOutputDevice = outputDevice;
   mRunning.store(true);
-  mReaderThread = std::thread(&RemoteAudioPlayer::readerLoop, this);
+  mReaderThread = std::thread(&RemoteAudioPlayer::readerLoop, this, mGeneration);
 }
 
 void RemoteAudioPlayer::detach() {
+  ++mGeneration;
   mRunning.store(false);
   if (mStream) {
     mStream->close();
@@ -43,7 +45,7 @@ void RemoteAudioPlayer::detach() {
   mStream.reset();
 }
 
-void RemoteAudioPlayer::readerLoop() {
+void RemoteAudioPlayer::readerLoop(uint64_t generation) {
   livekit::AudioFrameEvent event;
   while (mRunning.load()) {
     if (!mStream->read(event)) {
@@ -63,16 +65,16 @@ void RemoteAudioPlayer::readerLoop() {
 
     QMetaObject::invokeMethod(
         this,
-        [this, bytes = std::move(bytes), sampleRate, numChannels]() mutable {
-          deliverAudioOnGuiThread(std::move(bytes), sampleRate, numChannels);
+        [this, bytes = std::move(bytes), sampleRate, numChannels, generation]() mutable {
+          deliverAudioOnGuiThread(std::move(bytes), sampleRate, numChannels, generation);
         },
         Qt::QueuedConnection);
   }
 }
 
 void RemoteAudioPlayer::deliverAudioOnGuiThread(QByteArray pcmBytes, const int sampleRate,
-                                                const int numChannels) {
-  if (!mRunning.load()) {
+                                                const int numChannels, uint64_t generation) {
+  if (!mRunning.load() || generation != mGeneration) {
     return;
   }
 
@@ -86,7 +88,7 @@ void RemoteAudioPlayer::deliverAudioOnGuiThread(QByteArray pcmBytes, const int s
     mSinkDevice = mSink->start();
   }
 
-  if (mSinkDevice) {
+  if (mSinkDevice && mSinkDevice->isWritable()) {
     mSinkDevice->write(pcmBytes);
   }
 }

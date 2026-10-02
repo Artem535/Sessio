@@ -16,11 +16,14 @@
 #include "controller/health_controller.h"
 #include "controller/invitations_controller.h"
 #include "controller/meetings_controller.h"
+#include "controller/schedule_controller.h"
+#include "controller/series_controller.h"
 #include "db/accounts_repository.h"
 #include "db/invitations_repository.h"
 #include "db/meetings_repository.h"
 #include "db/migrations.h"
 #include "db/sqlite_connection.h"
+#include "db/series_repository.h"
 #include "service/meeting_service.h"
 
 #include "oatpp/network/Server.hpp"
@@ -36,6 +39,8 @@
 #include <sodium.h>
 
 #include <algorithm>
+#include <atomic>
+#include <cstring>
 #include <chrono>
 #include <ctime>
 #include <latch>
@@ -98,6 +103,7 @@ std::string jsonString(const std::string &body, const std::string &field) {
 struct HttpResponse {
   int status = 0;
   std::string body;
+  std::string cacheControl;
 };
 
 struct ConcurrentOutcome {
@@ -187,14 +193,20 @@ protected:
     authorizer_ = new pcm::tokenbackend::StaticTokenAuthorizer(*accounts_);
     meetings_ = new pcm::tokenbackend::MeetingsRepository(*conn_);
     invitations_ = new pcm::tokenbackend::InvitationsRepository(*conn_);
+    schedules_ = new pcm::tokenbackend::ScheduleRepository(*conn_);
+    scheduleService_ = new pcm::tokenbackend::ScheduleService(*authorizer_, *schedules_);
 
     config_ = new pcm::tokenbackend::Config{};
     config_->liveKitApiKey = "test-key";
     config_->liveKitApiSecret = "test-secret";
     config_->tokenTtlSeconds = 600;
+    config_->invitationBaseUrl = kInvitationBase;
 
     service_ = new pcm::tokenbackend::MeetingService(*authorizer_, *meetings_, *invitations_,
-                                                      *config_, "ws://livekit.test:7880");
+                                                      *config_, "ws://livekit.test:7880", [] {
+      auto time = testTime_.load();
+      return time ? time : std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    });
 
     auto objectMapper = oatpp::parser::json::mapping::ObjectMapper::createShared();
 
@@ -210,6 +222,10 @@ protected:
     router->route(healthController_->getEndpoints());
     router->route(meetingsController_->getEndpoints());
     router->route(invitationsController_->getEndpoints());
+    scheduleController_ = std::make_shared<pcm::tokenbackend::ScheduleController>(objectMapper, *scheduleService_);
+    router->route(scheduleController_->getEndpoints());
+    seriesController_ = std::make_shared<pcm::tokenbackend::SeriesController>(objectMapper, service_->series());
+    router->route(seriesController_->getEndpoints());
 
     connectionHandler_ = oatpp::web::server::HttpConnectionHandler::createShared(router);
     serverProvider_ = oatpp::network::tcp::server::ConnectionProvider::createShared(
@@ -252,6 +268,9 @@ protected:
     delete serverThread_;
     delete server_;
     delete service_;
+    scheduleController_.reset();
+    delete scheduleService_;
+    delete schedules_;
     delete config_;
     delete invitations_;
     delete meetings_;
@@ -272,6 +291,7 @@ protected:
     auto response = executor_->execute(method, path.c_str(), headers, outgoing, nullptr);
     HttpResponse result;
     result.status = response->getStatusCode();
+    result.cacheControl = pcm::tokenbackend::toStdString(response->getHeader("Cache-Control"));
     auto text = response->readBodyToString();
     result.body = text ? *text : std::string();
     return result;
@@ -313,6 +333,30 @@ protected:
     return "/v1/invitations/" + code + "/client-token";
   }
 
+  struct CreatedSeries {
+    std::string uid;
+    std::string credential;
+    std::string code;
+    std::string passcode;
+    oatpp::web::client::RequestExecutor::Headers headers;
+    pcm::schedule::Snapshot snapshot;
+  };
+  CreatedSeries createSeries(const std::string &uid) {
+    testTime_ = 1791298800;
+    CreatedSeries s; s.uid = uid; s.credential = "Bearer " + accounts_->createAccount();
+    s.headers = authHeaders(s.credential); s.headers.put("Idempotency-Key", "76666666-6666-4666-8666-666666666668");
+    s.snapshot = pcm::tokenbackend::parseScheduleJson(R"({"schema_version":1,"revision":1,"base_revision":0,"timezone":"Europe/Moscow","dtstart_local":"2026-10-06T18:00:00","duration_seconds":3600,"rrule":"FREQ=WEEKLY;BYDAY=TU","until_utc":null,"active":true,"join_enabled":true,"overrides":[],"exceptions":[]})");
+    EXPECT_EQ(request("PUT", "/v1/schedule-series/" + uid, s.headers, pcm::tokenbackend::scheduleJson(s.snapshot)).status, 200);
+    auto invitation = request("POST", "/v1/schedule-series/" + uid + "/invitation", s.headers, R"({"reissue":false})");
+    EXPECT_EQ(invitation.status, 200); EXPECT_EQ(invitation.cacheControl, "no-store");
+    auto url = jsonString(invitation.body, "invitation_url"); s.code = url.substr(url.rfind('/') + 1);
+    s.passcode = jsonString(invitation.body, "passcode"); return s;
+  }
+  void publish(CreatedSeries &s) {
+    s.snapshot.baseRevision = s.snapshot.revision++;
+    ASSERT_EQ(request("PUT", "/v1/schedule-series/" + s.uid, s.headers, pcm::tokenbackend::scheduleJson(s.snapshot)).status, 200);
+  }
+
   static pcm::tokenbackend::SqliteConnection *conn_;
   static pcm::tokenbackend::AccountsRepository *accounts_;
   static pcm::tokenbackend::Authorizer *authorizer_;
@@ -320,6 +364,12 @@ protected:
   static pcm::tokenbackend::InvitationsRepository *invitations_;
   static pcm::tokenbackend::Config *config_;
   static pcm::tokenbackend::MeetingService *service_;
+  static inline pcm::tokenbackend::ScheduleRepository *schedules_;
+  static inline std::atomic<int64_t> testTime_{0};
+  void TearDown() override { testTime_ = 0; }
+  static inline std::shared_ptr<pcm::tokenbackend::SeriesController> seriesController_;
+  static inline pcm::tokenbackend::ScheduleService *scheduleService_;
+  static inline std::shared_ptr<pcm::tokenbackend::ScheduleController> scheduleController_;
   static std::string *credential_;
 
   static std::shared_ptr<pcm::tokenbackend::HealthController> healthController_;
@@ -362,8 +412,201 @@ TEST_F(HttpIntegrationTest, HealthEndpointIsRouted) {
   EXPECT_EQ(response.body, "ok");
 }
 
+TEST_F(HttpIntegrationTest, SeriesInvitationRoutesRequireAuthAndIssueReplayableResponse) {
+  const std::string uid = "76666666-6666-4666-8666-666666666666";
+  const auto snapshot = pcm::tokenbackend::parseScheduleJson(R"({"schema_version":1,"revision":1,"base_revision":0,"timezone":"Europe/Moscow","dtstart_local":"2026-10-06T18:00:00","duration_seconds":3600,"rrule":"FREQ=WEEKLY;BYDAY=TU","until_utc":null,"active":true,"join_enabled":true,"overrides":[],"exceptions":[]})");
+  auto credential = accounts_->createAccount();
+  auto headers = authHeaders("Bearer " + credential);
+  headers.put("Idempotency-Key", "76666666-6666-4666-8666-666666666667");
+  ASSERT_EQ(schedules_->put(*authorizer_->authorize("Bearer " + credential), uid, snapshot).status, pcm::tokenbackend::ScheduleWriteStatus::Applied);
+  auto path = "/v1/schedule-series/" + uid + "/invitation";
+  EXPECT_EQ(request("POST", path, {}, R"({"reissue":false})").status, 401);
+  auto first = request("POST", path, headers, R"({"reissue":false})");
+  ASSERT_EQ(first.status, 200) << first.body;
+  EXPECT_FALSE(jsonString(first.body, "invitation_url").empty());
+  EXPECT_FALSE(jsonString(first.body, "passcode").empty());
+  EXPECT_EQ(request("POST", path, headers, R"({"reissue":false})").body, first.body);
+  EXPECT_EQ(request("POST", path, headers, R"({"reissue":true})").status, 409);
+  EXPECT_EQ(request("POST", "/v1/schedule-series/" + uid + "/revoke", headers).status, 204);
+}
+
+TEST_F(HttpIntegrationTest, SeriesInvitationJoinsTwoWeeklyWindowsAndUsesOneConcurrentRoom) {
+  auto s = createSeries("86666666-6666-4666-8666-666666666666");
+  auto client = request("POST", clientTokenPath(s.code), {}, "{\"passcode\":\"" + s.passcode + "\"}");
+  ASSERT_EQ(client.status, 200) << client.body; EXPECT_EQ(client.cacheControl, "no-store");
+  auto specialistPath = "/v1/schedule-series/" + s.uid + "/occurrences/2026-10-06T15:00:00Z/specialist-token";
+  auto practitioner = request("POST", specialistPath, s.headers);
+  ASSERT_EQ(practitioner.status, 200); EXPECT_EQ(practitioner.cacheControl, "no-store");
+  EXPECT_EQ(jsonString(client.body, "roomName"), jsonString(practitioner.body, "roomName"));
+  testTime_ += 7 * 86400;
+  // First client and practitioner arrivals race from separate HTTP connections.
+  std::thread specialist([&] { practitioner = request("POST", "/v1/schedule-series/" + s.uid + "/occurrences/2026-10-13T15:00:00Z/specialist-token", s.headers); });
+  auto responses = fireConcurrently(8, "POST", clientTokenPath(s.code), {}, "{\"passcode\":\"" + s.passcode + "\"}");
+  specialist.join(); ASSERT_EQ(practitioner.status, 200);
+  EXPECT_TRUE(responses.failures.empty()); ASSERT_EQ(responses.count(200), 8);
+  for (const auto &response : responses.responses) EXPECT_EQ(jsonString(response.body, "roomName"), jsonString(practitioner.body, "roomName"));
+  EXPECT_NE(jsonString(client.body, "roomName"), jsonString(practitioner.body, "roomName"));
+}
+
+TEST_F(HttpIntegrationTest, SeriesLegacyMeetingRoutesCannotBypassCancelMoveOrInactiveSnapshot) {
+  auto s = createSeries("96666666-6666-4666-8666-666666666666");
+  auto specialistPath = "/v1/schedule-series/" + s.uid + "/occurrences/2026-10-06T15:00:00Z/specialist-token";
+  ASSERT_EQ(request("POST", specialistPath, s.headers).status, 200);
+  pcm::tokenbackend::SeriesRepository repository(*conn_);
+  auto meeting = meetings_->findById(*repository.meetingId(s.uid, 1791298800000)); ASSERT_TRUE(meeting);
+  // A pre-existing legacy invitation must also honor the latest mapped schedule.
+  auto legacy = invitations_->create(meeting->id, meeting->accountId);
+  auto legacyPath = "/v1/meetings/" + meeting->meetingRef + "/specialist-token";
+  s.snapshot.exceptions = {1791298800000}; publish(s);
+  auto canceled = request("POST", legacyPath, s.headers);
+  EXPECT_EQ(canceled.status, 409); EXPECT_TRUE(bodyHas(canceled.body, "occurrence_unavailable"));
+  EXPECT_EQ(request("POST", clientTokenPath(legacy.invitationCode), {}, "{\"passcode\":\"" + legacy.passcode + "\"}").status, 409);
+  s.snapshot.overrides = {{1791298800000,1791385200000,1791388800000,true}}; publish(s);
+  EXPECT_EQ(request("POST", legacyPath, s.headers).status, 409);
+  testTime_ += 86400;
+  auto moved = request("POST", legacyPath, s.headers);
+  ASSERT_EQ(moved.status, 200) << moved.body; EXPECT_EQ(jsonString(moved.body, "roomName"), meeting->roomName);
+  EXPECT_EQ(request("POST", clientTokenPath(s.code), {}, "{\"passcode\":\"" + s.passcode + "\"}").status, 200);
+  s.snapshot.active = false; publish(s);
+  EXPECT_EQ(request("POST", legacyPath, s.headers).status, 409);
+  EXPECT_EQ(request("POST", specialistPath, s.headers).status, 409);
+}
+
+TEST_F(HttpIntegrationTest, SeriesMalformedSpecialistRequestsAreStaticClientErrors) {
+  auto s = createSeries("a6666666-6666-4666-8666-666666666666");
+  auto path = "/v1/schedule-series/" + s.uid + "/occurrences/2026-10-06T15:00:00Z/specialist-token";
+  for (auto body : {"{", "null", "{\"displayName\":42}", "{\"extra\":true}", "{\"displayName\":\"one\",\"displayName\":\"two\"}"}) {
+    auto r = request("POST", path, s.headers, body);
+    EXPECT_EQ(r.status, 400) << body; EXPECT_EQ(r.cacheControl, "no-store");
+  }
+  EXPECT_EQ(request("POST", path, s.headers, "{\"displayName\":\"Specialist\"}").status, 200);
+}
+
+TEST_F(HttpIntegrationTest, SeriesConcurrentInvitationRetryReturnsSameGenerationAndStrictPayloadErrors) {
+  auto s = createSeries("b6666666-6666-4666-8666-666666666666");
+  auto path = "/v1/schedule-series/" + s.uid + "/invitation";
+  auto responses = fireConcurrently(6, "POST", path, s.headers, R"({"reissue":false})");
+  ASSERT_EQ(responses.count(200), 6); EXPECT_TRUE(responses.failures.empty());
+  for (const auto &response : responses.responses) {
+    EXPECT_EQ(jsonString(response.body, "passcode"), s.passcode);
+    EXPECT_NE(jsonString(response.body, "invitation_url").find(s.code), std::string::npos);
+    EXPECT_TRUE(bodyHas(response.body, "\"generation\":1"));
+  }
+  EXPECT_EQ(request("POST", path, s.headers, R"({"reissue":false,"unknown":true})").status, 400);
+  auto noKey = authHeaders(s.credential);
+  EXPECT_EQ(request("POST", path, noKey, R"({"reissue":false})").status, 400);
+  auto oversized = request("POST", path, s.headers, std::string(4097, ' '));
+  EXPECT_EQ(oversized.status, 413); EXPECT_EQ(oversized.cacheControl, "no-store");
+  EXPECT_EQ(request("POST", path, s.headers, R"({"reissue":false})").status, 200);
+  EXPECT_EQ(request("POST", path, s.headers, R"({"reissue":false})").status, 429);
+}
+
+TEST_F(HttpIntegrationTest, SeriesClientInternalErrorsAreStaticAndDoNotExposeSecrets) {
+  auto s = createSeries("c6666666-6666-4666-8666-666666666666");
+  conn_->exec("CREATE TRIGGER fail_http_mapping BEFORE INSERT ON occurrence_meetings BEGIN SELECT RAISE(ABORT,'test'); END;");
+  HttpResponse response;
+  EXPECT_NO_THROW(response = request("POST", clientTokenPath(s.code), {}, "{\"passcode\":\"" + s.passcode + "\"}"));
+  conn_->exec("DROP TRIGGER fail_http_mapping");
+  EXPECT_EQ(response.status, 500); EXPECT_EQ(response.cacheControl, "no-store");
+  EXPECT_EQ(response.body, "{\"error\":\"internal_error\"}");
+}
+
 TEST_F(HttpIntegrationTest, UnknownPathIs404) {
   EXPECT_EQ(request("GET", "/v1/nope").status, 404);
+}
+
+namespace {
+const std::string schedulePayload = R"({"schema_version":1,"revision":1,"base_revision":0,"timezone":"Europe/Moscow","dtstart_local":"2026-10-06T18:00:00","duration_seconds":3600,"rrule":"FREQ=WEEKLY;INTERVAL=1;BYDAY=TU","until_utc":null,"active":true,"join_enabled":true,"overrides":[{"original_start_utc":"2026-10-13T15:00:00Z","start_utc":"2026-10-14T15:00:00Z","end_utc":"2026-10-14T16:00:00Z","join_enabled":false}],"exceptions":["2026-10-13T15:00:00Z"]})";
+}
+TEST_F(HttpIntegrationTest, ScheduleCapabilitiesAreAuthenticatedAndAdditive) {
+  EXPECT_EQ(request("GET", "/v1/capabilities").status, 401);
+  auto response = request("GET", "/v1/capabilities", bearer());
+  EXPECT_EQ(response.status, 200);
+  EXPECT_EQ(response.body, R"({"scheduleSeries":true})");
+}
+TEST_F(HttpIntegrationTest, ScheduleSnapshotRoutesRoundTripAndRetryWithoutCreatingMeeting) {
+  const std::string path = "/v1/schedule-series/45f9c587-94c8-4d45-9f21-422a8df32591";
+  EXPECT_EQ(request("PUT", path, {}, schedulePayload).status, 401);
+  auto put = request("PUT", path, bearer(), schedulePayload);
+  ASSERT_EQ(put.status, 200) << put.body;
+  auto hash = jsonString(put.body, "content_hash"); EXPECT_EQ(hash.size(), 64);
+  EXPECT_EQ(jsonString(put.body, "series_uid"), "45f9c587-94c8-4d45-9f21-422a8df32591");
+  auto retry = request("PUT", path, bearer(), schedulePayload);
+  EXPECT_EQ(retry.status, 200); EXPECT_EQ(retry.body, put.body);
+  auto get = request("GET", path, bearer());
+  ASSERT_EQ(get.status, 200) << get.body;
+  EXPECT_EQ(jsonString(get.body, "content_hash"), hash);
+  EXPECT_TRUE(bodyHas(get.body, "\"snapshot\":{\"schema_version\":1"));
+  EXPECT_TRUE(bodyHas(get.body, "\"original_start_utc\":\"2026-10-13T15:00:00Z\""));
+  EXPECT_TRUE(bodyHas(get.body, "\"join_enabled\":false"));
+  EXPECT_FALSE(bodyHas(put.body, "meetingRef"));
+  auto changed = schedulePayload;
+  changed.replace(changed.find("\"active\":true"), 13, "\"active\":false");
+  auto conflict = request("PUT", path, bearer(), changed);
+  EXPECT_EQ(conflict.status, 409); EXPECT_TRUE(bodyHas(conflict.body, "revision_conflict"));
+  auto other = authHeaders("Bearer " + accounts_->createAccount());
+  EXPECT_EQ(request("GET", path, other).status, 404);
+  EXPECT_EQ(request("PUT", path, other, schedulePayload).status, 404);
+}
+TEST_F(HttpIntegrationTest, ScheduleRawByteAndSchemaFailuresHaveContractErrors) {
+  const std::string path = "/v1/schedule-series/45f9c587-94c8-4d45-9f21-422a8df32592";
+  auto invalid = request("PUT", path, bearer(), R"({"client_name":"sensitive"})");
+  EXPECT_EQ(invalid.status, 422); EXPECT_TRUE(bodyHas(invalid.body, "invalid_schedule"));
+  EXPECT_FALSE(bodyHas(invalid.body, "sensitive"));
+  auto huge = request("PUT", path, bearer(), std::string(1024 * 1024 + 1, ' '));
+  EXPECT_EQ(huge.status, 413); EXPECT_TRUE(bodyHas(huge.body, "invalid_schedule"));
+  EXPECT_EQ(request("GET", path, bearer()).status, 404);
+  EXPECT_EQ(request("PUT", "/v1/schedule-series/not-a-uuid", bearer(), schedulePayload).status, 422);
+}
+namespace {
+class UnknownSizeScheduleBody : public oatpp::web::protocol::http::outgoing::Body {
+public:
+  explicit UnknownSizeScheduleBody(std::string text) : text_(std::move(text)) {}
+  void declareHeaders(Headers &headers) override { headers.put("Content-Type", "application/json"); }
+  p_char8 getKnownData() override { return nullptr; }
+  v_int64 getKnownSize() override { return -1; }
+  oatpp::v_io_size read(void *buffer, v_buff_size count, oatpp::async::Action &) override {
+    auto size = std::min<size_t>(count, text_.size() - pos_);
+    std::memcpy(buffer, text_.data() + pos_, size); pos_ += size; return size;
+  }
+private:
+  std::string text_; size_t pos_ = 0;
+};
+}
+TEST_F(HttpIntegrationTest, ScheduleChunkedTransferAlsoEnforcesRawByteLimit) {
+  const char *path = "/v1/schedule-series/45f9c587-94c8-4d45-9f21-422a8df32594";
+  auto chunked = std::make_shared<UnknownSizeScheduleBody>(schedulePayload);
+  auto response = executor_->execute("PUT", path, bearer(), chunked, nullptr);
+  ASSERT_EQ(response->getStatusCode(), 200) << *response->readBodyToString();
+  response->readBodyToString();
+  chunked = std::make_shared<UnknownSizeScheduleBody>(std::string(1024 * 1024 + 1, ' '));
+  response = executor_->execute("PUT", path, bearer(), chunked, nullptr);
+  EXPECT_EQ(response->getStatusCode(), 413);
+  EXPECT_TRUE(bodyHas(*response->readBodyToString(), "invalid_schedule"));
+  EXPECT_EQ(request("GET", path, bearer()).status, 200);
+}
+TEST_F(HttpIntegrationTest, ScheduleConcurrentCasRequestsHaveOneWinnerAndOneConflict) {
+  const char *path = "/v1/schedule-series/45f9c587-94c8-4d45-9f21-422a8df32595";
+  ASSERT_EQ(request("PUT", path, bearer(), schedulePayload).status, 200);
+  auto payload = schedulePayload;
+  payload.replace(payload.find("\"revision\":1"), 12, "\"revision\":2");
+  payload.replace(payload.find("\"base_revision\":0"), 17, "\"base_revision\":1");
+  std::latch start(1); std::atomic<int> successes{0}, conflicts{0}, failures{0};
+  auto write = [&](bool active) {
+    auto own = payload;
+    if (!active) own.replace(own.find("\"active\":true"), 13, "\"active\":false");
+    auto provider = oatpp::network::tcp::client::ConnectionProvider::createShared({"127.0.0.1", kTestPort});
+    auto executor = oatpp::web::client::HttpRequestExecutor::createShared(provider);
+    auto body = oatpp::web::protocol::http::outgoing::BufferBody::createShared(oatpp::String(own.c_str()), "application/json");
+    start.wait();
+    try {
+      auto response = executor->execute("PUT", path, bearer(), body, nullptr);
+      auto status = response->getStatusCode(); response->readBodyToString();
+      if (status == 200) ++successes; else if (status == 409) ++conflicts; else ++failures;
+    } catch (...) { ++failures; }
+  };
+  std::thread a(write, true), b(write, false); start.count_down(); a.join(); b.join();
+  EXPECT_EQ(successes, 1); EXPECT_EQ(conflicts, 1); EXPECT_EQ(failures, 0);
 }
 
 // --- POST /v1/meetings ------------------------------------------------------
@@ -442,6 +685,20 @@ TEST_F(HttpIntegrationTest, SpecialistTokenReturnsTheDocumentedFields) {
 TEST_F(HttpIntegrationTest, SpecialistTokenForAnUnknownMeetingIs404) {
   EXPECT_EQ(request("POST", "/v1/meetings/mtg_does_not_exist/specialist-token", bearer()).status,
             404);
+}
+
+TEST_F(HttpIntegrationTest, TokenEndpointsAcceptDisplayNamesAndRejectControlCharacters) {
+  auto meeting = createMeeting();
+  const auto specialist = request("POST", "/v1/meetings/" + meeting.meetingRef + "/specialist-token",
+                                 bearer(), R"({"displayName":"Анна"})");
+  ASSERT_EQ(specialist.status, 200);
+  const auto client = request("POST", clientTokenPath(meeting.invitationCode), {},
+                             "{\"passcode\":\"" + meeting.passcode + "\",\"displayName\":\"Иван\"}");
+  ASSERT_EQ(client.status, 200);
+  EXPECT_EQ(request("POST", "/v1/meetings/" + meeting.meetingRef + "/specialist-token",
+                    bearer(), R"({"displayName":"bad\nname"})").status, 400);
+  EXPECT_EQ(request("POST", clientTokenPath(meeting.invitationCode), {},
+                    "{\"passcode\":\"" + meeting.passcode + "\",\"displayName\":\"bad\\nname\"}").status, 400);
 }
 
 TEST_F(HttpIntegrationTest, SpecialistTokenWithoutCredentialIs401) {

@@ -7,6 +7,7 @@ class QWidget;
 namespace pcm::meeting {
 
 bool isValidMeetingUrl(const QString &url);
+bool isValidInvitationUrl(const QString &url);
 void openMeetingUrl(const QString &url, QWidget *parent = nullptr);
 void copyMeetingUrl(const QString &url);
 QString buildMeetingInviteText(const QString &meetingUrl, const QString &clientName,

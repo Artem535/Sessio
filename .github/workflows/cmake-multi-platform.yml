@@ -84,6 +84,7 @@ jobs:
             libxcb-xkb1 \
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
+            libpulse-dev \
             libsecret-1-dev \
             libwayland-client0 \
             libwayland-cursor0 \
@@ -222,6 +223,14 @@ jobs:
       - name: Configure
         run: cmake --preset vcpkg-release
 
+      - name: Verify LiveKit RPM staging
+        if: runner.os == 'Linux'
+        run: >
+          cmake
+          -DPCM_SOURCE_DIR="${{ github.workspace }}"
+          -DPCM_TEST_BINARY_DIR="${{ github.workspace }}/build-release/packaging-test"
+          -P test/bundle_livekit_linux_deps_test.cmake
+
       - name: Save vcpkg binary cache
         if: steps.cache-vcpkg-binary.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -271,6 +280,19 @@ jobs:
           Copy-Item $keychainDll.FullName (Join-Path $env:QT_ROOT_DIR "bin") -Force
           Copy-Item $keychainDll.FullName build-release/packages/Sessio/ -Force
 
+          # LiveKit's prebuilt SDK ships its own runtime DLLs (not built by
+          # this project, so they never land next to Sessio.exe on their
+          # own) — without this, the installer launches but any LiveKit
+          # call fails immediately with a missing-DLL error.
+          foreach ($dllName in "livekit.dll", "livekit_ffi.dll") {
+            $dll = Get-ChildItem build-release/_deps/livekit-sdk -Recurse -Filter $dllName |
+              Select-Object -First 1
+            if ($null -eq $dll) {
+              throw "$dllName was not found under build-release/_deps/livekit-sdk"
+            }
+            Copy-Item $dll.FullName build-release/packages/Sessio/ -Force
+          }
+
       - name: Run windeployqt
         if: runner.os == 'Windows'
         shell: pwsh
@@ -292,6 +314,17 @@ jobs:
             -Destination build-release/packages/Sessio `
             -Force
 
+      - name: Copy libical timezone data
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Resolved at run time as <exe dir>\zoneinfo (src/meeting/schedule_zoneinfo.cpp).
+          $zoneinfo = "build-release/vcpkg_installed/x64-windows/share/libical/zoneinfo"
+          if (-not (Test-Path "$zoneinfo/America/New_York.ics")) {
+            throw "libical zoneinfo not found at $zoneinfo"
+          }
+          Copy-Item $zoneinfo build-release/packages/Sessio/zoneinfo -Recurse -Force
+
       - name: Install Inno Setup
         if: runner.os == 'Windows'
         shell: pwsh
@@ -309,6 +342,40 @@ jobs:
             "/DMyIconFile=${{ github.workspace }}\resources\icons\Sessio.ico" `
             "${{ github.workspace }}\packaging\Sessio.iss"
 
+      - name: Build RPM package
+        if: runner.os == 'Linux'
+        run: |
+          cpack --config build-release/CPackConfig.cmake --generator RPM --verbose
+          rpm -qip build-release/packages/*.rpm
+          rpm -qp --requires build-release/packages/*.rpm
+          rpm -qlp build-release/packages/*.rpm
+          # Only /usr/bin, /usr/share and the private /usr/lib/sessio may be owned
+          # by this package: anything else (Qt libs, plugins, headers) can
+          # overwrite system files. Accept the directory entries themselves
+          # as well as their contents, including RPM's build-id metadata.
+          unexpected_rpm_files="$(rpm -qlp build-release/packages/*.rpm |
+            grep -vE '^/usr/(bin|share)(/|$)|^/usr/lib(64)?/(sessio|\.build-id)(/|$)' || true)"
+          if [ -n "$unexpected_rpm_files" ]; then
+            echo "$unexpected_rpm_files"
+            echo "::error::RPM must not install files outside bin, share and /usr/lib/sessio"
+            exit 1
+          fi
+          if rpm -qp --provides build-release/packages/*.rpm | grep -E '\.so'; then
+            echo "::error::RPM must not Provide shared-library sonames"
+            exit 1
+          fi
+          for dep in 'qt6-qtbase >= 6.8' qt6-qtbase-gui qt6-qtsvg qt6-qtwayland qt6-qtmultimedia qtkeychain-qt6; do
+            rpm -qp --requires build-release/packages/*.rpm | grep -Fx "$dep"
+          done
+
+      - name: Upload Linux RPM
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sessio-linux-rpm
+          path: build-release/packages/*.rpm
+          if-no-files-found: error
+
       - name: Download linuxdeployqt
         if: runner.os == 'Linux'
         run: |
@@ -322,6 +389,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           mkdir -p "${{ github.workspace }}/build-release/AppDir"
+          cmake -DSESSIO_BUNDLE_QT=ON build-release
+          cmake --build build-release --parallel
           cmake --install build-release --config MinSizeRel --prefix "${{ github.workspace }}/build-release/AppDir/usr"
           QT_PREFIX="${{ github.workspace }}/Qt/${{ matrix.qt_version }}/gcc_64"
           export PATH="$QT_PREFIX/bin:$PATH"
@@ -339,19 +408,12 @@ jobs:
           mkdir -p build-release/packages
           find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' -exec mv {} build-release/packages/ \;
 
-      - name: Build RPM package
-        if: runner.os == 'Linux'
-        run: |
-          cpack --config build-release/CPackConfig.cmake --generator RPM --verbose
-          rpm -qip build-release/packages/*.rpm
-          rpm -qlp build-release/packages/*.rpm
-
-      - name: Upload Linux package
+      - name: Upload Linux AppImage
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: build-release/packages/*
+          path: build-release/packages/*.AppImage
           if-no-files-found: error
 
       - name: Build macOS DMG
@@ -420,10 +482,16 @@ jobs:
           echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=v$APP_VERSION" >> "$GITHUB_ENV"
 
-      - name: Download Linux artifact
+      - name: Download Linux AppImage artifact
         uses: actions/download-artifact@v4
         with:
           name: Sessio-linux-appimage
+          path: release/linux
+
+      - name: Download Linux RPM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Sessio-linux-rpm
           path: release/linux
 
       - name: Download macOS artifact

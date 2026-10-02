@@ -2,6 +2,7 @@
   "name": "pcm-token-backend",
   "version": "0.1.0",
   "dependencies": [
+    "libical",
     "oatpp",
     "libsodium",
     "sqlite3",
