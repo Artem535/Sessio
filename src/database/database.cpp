@@ -1,5 +1,8 @@
 #include "database.h"
 
+#include <cassert>
+#include <thread>
+
 #include <Poco/UUIDGenerator.h>
 
 namespace pcm::database {
@@ -1470,7 +1473,13 @@ bool Database::export_snapshot(const std::string &target_dir) const {
 
 duckdb::Connection &Database::write_connection(std::optional<duckdb::Connection> &owned) {
   if (mTxConn != nullptr) {
-    return *mTxConn;
+    assert(mTxThread == std::this_thread::get_id() &&
+           "schedule transaction connection used from another thread");
+    if (mTxThread == std::this_thread::get_id()) {
+      return *mTxConn;
+    }
+    // Release builds: never share the transaction's connection across threads.
+    PLOG_ERROR << "Schedule transaction connection requested from another thread";
   }
   owned.emplace(*mDb);
   return *owned;
@@ -1521,7 +1530,10 @@ Database::commit_schedule_change(const ScheduleMutation &mutation,
 
   struct ActiveScope {
     Database &db;
-    ActiveScope(Database &d, duckdb::Connection &c) : db(d) { db.mTxConn = &c; }
+    ActiveScope(Database &d, duckdb::Connection &c) : db(d) {
+      db.mTxThread = std::this_thread::get_id();
+      db.mTxConn = &c;
+    }
     ~ActiveScope() { db.mTxConn = nullptr; }
   } scope(*this, conn);
 

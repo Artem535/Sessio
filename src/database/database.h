@@ -5,6 +5,7 @@
 
 #include <functional>
 #include <memory>
+#include <thread>
 #include <optional>
 #include <set>
 #include <string>
@@ -202,6 +203,10 @@ private:
   std::unique_ptr<duckdb::DuckDB> mDb;
   // Connection of the active schedule transaction; null outside one.
   duckdb::Connection *mTxConn = nullptr;
+  // Thread that opened the active schedule transaction (the GUI thread). The
+  // transaction connection must never be used by another thread, for example a
+  // background backup worker; write_connection() checks this.
+  std::thread::id mTxThread;
 };
 
 } // namespace pcm::database
