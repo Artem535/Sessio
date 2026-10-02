@@ -61,6 +61,16 @@ void SeriesInvitationService::reissueInvitation(const int64_t seriesId) {
   request(seriesId, true);
 }
 
+void SeriesInvitationService::resumeInterruptedReissue(const int64_t seriesId) {
+  const auto identity = mDb.get_schedule_identity(seriesId);
+  if (!identity.has_value() || identity->invitation_generation <= 0 ||
+      !identity->invitation_key.has_value() || identity->invitation_key->empty() ||
+      mRuntime.value(seriesId).inflight) {
+    return;
+  }
+  request(seriesId, true); // keeps the persisted key: ensure_schedule_invitation_key reuses it
+}
+
 void SeriesInvitationService::retry(const int64_t seriesId) {
   request(seriesId, mRuntime.value(seriesId).reissue);
 }

@@ -121,6 +121,10 @@ SeriesStatusView describeSeriesCallStatus(const SeriesCallStatus &status) {
   case InvitationState::Ready:
     view.lines << QCoreApplication::translate("SeriesCallStatus", "Permanent link ready.");
     view.linkReady = true;
+    // The secret lives in the keychain, not in the database or backups. After a
+    // restore or a keychain reset the link can not be read here, and this is
+    // the only way to get a usable one again (behind a confirmation).
+    view.canReissue = true;
     break;
   case InvitationState::None:
     if (sync.state == ScheduleSyncState::Synced) {

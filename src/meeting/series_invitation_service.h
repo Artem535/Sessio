@@ -59,6 +59,11 @@ public:
   void ensureInvitation(int64_t seriesId);
   // Explicitly replaces the invitation (the old generation stops working).
   void reissueInvitation(int64_t seriesId);
+  // Restart resume for a reissue interrupted after the server may already have
+  // rotated the invitation (a persisted idempotency key next to an existing
+  // generation can only come from reissueInvitation()). Replays the same key
+  // with reissue=true, so the server returns the very secret it created.
+  void resumeInterruptedReissue(int64_t seriesId);
   // Manual retry after Failed / NeedsReissue-less errors; repeats the last intent.
   void retry(int64_t seriesId);
 

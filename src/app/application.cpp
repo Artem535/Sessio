@@ -2,6 +2,7 @@
 #include "app_lock_dialog.h"
 #include "role_selection_dialog.h"
 #include "provider_kind.h"
+#include "schedule_zoneinfo.h"
 #include "../backup/encrypted_container.h"
 #include "../backup/restore_service.h"
 #include "../event_view/recurrence_utils.h"
@@ -140,6 +141,9 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
   app.setApplicationVersion("0.2.8");
+  // Installed builds ship libical's timezone data next to the executable; the
+  // path compiled into the schedule engine only exists in development trees.
+  pcm::meeting::configureScheduleZoneinfo(QCoreApplication::applicationDirPath());
   // Wayland panels match a window to its .desktop entry (and icon) by app_id,
   // which Qt derives from the desktop file name; without this an RPM-installed
   // Sessio's window can end up with a foreign icon.
@@ -333,13 +337,19 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
   mMainWindow->show();
   // Recover the persisted schedule queue (and probe the backend once).
   mScheduleSync->start();
-  // Restart resume: a series published before the app was closed may still
-  // lack its permanent invitation (the request was interrupted). ensureInvitation
-  // is a no-op for series that have one and waits for the schedule ACK otherwise.
+  // Restart resume. A series published before the app was closed may lack its
+  // permanent invitation (ensureInvitation is a no-op for series that have one
+  // and waits for the schedule ACK otherwise), or may hold the idempotency key
+  // of a reissue that was interrupted before its secret was stored.
   for (const auto &series : mDb->get_event_series_for_range(0, 253402300799000)) {
-    if (const auto identity = mDb->get_schedule_identity(series.id);
-        identity.has_value() && identity->invitation_generation <= 0) {
+    const auto identity = mDb->get_schedule_identity(series.id);
+    if (!identity.has_value()) {
+      continue;
+    }
+    if (identity->invitation_generation <= 0) {
       mSeriesInvitations->ensureInvitation(series.id);
+    } else if (identity->invitation_key.has_value() && !identity->invitation_key->empty()) {
+      mSeriesInvitations->resumeInterruptedReissue(series.id);
     }
   }
   connect(mScheduleSync.get(), &pcm::meeting::ScheduleSync::statusChanged, this,

@@ -45,6 +45,16 @@ TEST(SeriesCallStatusTextTest, SyncedSeriesWithReadyLinkAllowsCopying) {
   EXPECT_EQ(view.severity, StatusSeverity::Info);
 }
 
+TEST(SeriesCallStatusTextTest, ReadyLinkStillOffersANewLinkBehindTheConfirmation) {
+  // The secret is not in the database or in backups; after a restore the link
+  // can not be copied and the specialist must be able to rotate it.
+  auto status = published(ScheduleSyncState::Synced);
+  status.invitation.state = InvitationState::Ready;
+  const auto view = describeSeriesCallStatus(status);
+  EXPECT_TRUE(view.linkReady);
+  EXPECT_TRUE(view.canReissue);
+}
+
 TEST(SeriesCallStatusTextTest, ConflictOffersTheExplicitOverwriteNotARetry) {
   const auto view = describeSeriesCallStatus(published(ScheduleSyncState::Conflict));
   EXPECT_TRUE(view.canPublishThisDevice);

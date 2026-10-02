@@ -343,3 +343,80 @@ int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+TEST_F(SeriesInvitationTest, ReadyLinkWithoutKeychainSecretCanBeReplacedByAnExplicitReissue) {
+  // A backup restored on a new device (or a reset keychain): the database says
+  // the series has generation 1, the keychain has nothing.
+  const auto commit = createSeries();
+  ASSERT_TRUE(commit.has_value());
+  const auto uid = QString::fromStdString(commit->series_uid);
+  mSync->start();
+  mService->ensureInvitation(commit->series_id);
+  ASSERT_TRUE(waitForInvitation(commit->series_id, InvitationState::Ready));
+  mStore->secrets.clear();
+
+  EXPECT_EQ(mService->status(commit->series_id).state, InvitationState::Ready);
+  bool ok = false;
+  QString url = "unset";
+  mService->loadInvitation(commit->series_id, [&](bool o, const QString &u, const QString &) {
+    ok = o;
+    url = u;
+  });
+  EXPECT_TRUE(ok);
+  EXPECT_TRUE(url.isEmpty()); // nothing to copy ...
+
+  mService->reissueInvitation(commit->series_id); // ... but a new link can be made
+  ASSERT_TRUE(waitFor([&] { return mDb->get_schedule_identity(commit->series_id)->invitation_generation == 2; }));
+  ASSERT_TRUE(waitForInvitation(commit->series_id, InvitationState::Ready));
+  ASSERT_TRUE(mStore->secrets.contains(uid));
+  EXPECT_EQ(mStore->secrets[uid].generation, 2);
+}
+
+TEST_F(SeriesInvitationTest, ReissueInterruptedBeforeTheSecretWasStoredResumesAfterRestart) {
+  const auto commit = createSeries();
+  ASSERT_TRUE(commit.has_value());
+  const auto uid = QString::fromStdString(commit->series_uid);
+  mSync->start();
+  mService->ensureInvitation(commit->series_id);
+  ASSERT_TRUE(waitForInvitation(commit->series_id, InvitationState::Ready));
+
+  // The server rotates the invitation, but the keychain write fails.
+  mStore->available = false;
+  mService->reissueInvitation(commit->series_id);
+  ASSERT_TRUE(waitForInvitation(commit->series_id, InvitationState::Failed));
+  EXPECT_EQ(mModel.invitations, 2);
+  auto identity = mDb->get_schedule_identity(commit->series_id);
+  ASSERT_TRUE(identity.has_value());
+  EXPECT_EQ(identity->invitation_generation, 1); // local state still points at the old link
+  ASSERT_TRUE(identity->invitation_key.has_value());
+
+  // Restart: a fresh service, which on its own would claim Ready (generation 1).
+  mService = std::make_unique<SeriesInvitationService>(*mDb, *mSync, *mClient, reader(), *mStore);
+  mService->setBackoffPolicy([](int) { return 30; });
+  mStore->available = true;
+  EXPECT_EQ(mService->status(commit->series_id).state, InvitationState::Ready);
+
+  mService->resumeInterruptedReissue(commit->series_id);
+
+  ASSERT_TRUE(waitFor([&] { return mDb->get_schedule_identity(commit->series_id)->invitation_generation == 2; }));
+  ASSERT_TRUE(waitForInvitation(commit->series_id, InvitationState::Ready));
+  EXPECT_EQ(mModel.invitations, 2); // the same key was replayed, nothing new was created
+  ASSERT_EQ(mModel.invitationKeys.size(), 3);
+  EXPECT_EQ(mModel.invitationKeys[1], mModel.invitationKeys[2]);
+  EXPECT_EQ(mStore->secrets[uid].generation, 2);
+  EXPECT_FALSE(mDb->get_schedule_identity(commit->series_id)->invitation_key.has_value());
+}
+
+TEST_F(SeriesInvitationTest, ResumeDoesNothingWithoutAPersistedKeyOrWithoutAnInvitation) {
+  const auto commit = createSeries();
+  ASSERT_TRUE(commit.has_value());
+  mSync->start();
+  mService->resumeInterruptedReissue(commit->series_id); // generation 0: not a reissue
+  QTest::qWait(100);
+  EXPECT_TRUE(mModel.invitationKeys.isEmpty());
+  mService->ensureInvitation(commit->series_id);
+  ASSERT_TRUE(waitForInvitation(commit->series_id, InvitationState::Ready));
+  mService->resumeInterruptedReissue(commit->series_id); // no key left
+  QTest::qWait(100);
+  EXPECT_EQ(mModel.invitationKeys.size(), 1);
+}
