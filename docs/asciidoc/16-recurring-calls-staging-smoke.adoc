@@ -1,0 +1,59 @@
+== Recurring calls: staging smoke test
+
+Automated tests (fake backend, in-process HTTP backend with an injected clock,
+and an opt-in interoperability check against a locally started backend) cover
+the protocol. They do not prove that two real devices can talk. Run this
+procedure on staging before enabling recurring calls for specialists. Staging
+and production use separate LiveKit projects, endpoints and credentials; never
+run it against production data.
+
+=== Prerequisites
+
+* A staging token backend of this version, with `LIVEKIT_API_KEY`,
+  `LIVEKIT_API_SECRET`, `LIVEKIT_WS_ENDPOINT` and `INVITATION_BASE_URL` set.
+  `LIVEKIT_API_SECRET` also derives the invitation replay-encryption key
+  (domain `sessio:series-invitation-replay:v1`). Rotating it makes pending
+  replays fail closed with 410 `invitation_replay_expired`; the fallback is an
+  explicit reissue of the invitation.
+* The backend was built with `PCM_SCHEDULE_ZONEINFO_DIR` pointing at an
+  installed libical `zoneinfo` directory (the Docker image does this).
+* A staging specialist bearer credential (`--add-account`, throwaway account).
+* Two devices with Sessio 0.2.8, working camera, microphone and speakers:
+  device A (specialist) and device B (client). Use headphones to avoid echo.
+* Keep credentials out of screenshots and logs.
+
+=== Procedure
+
+. On device A set the staging backend URL and credential in Settings. The
+  header must not show "service does not support schedules".
+. Create a client and a weekly LiveKit event whose first occurrence starts
+  within the next 15 minutes. Confirm the timezone dialog. The second
+  occurrence is a week later: join it either by waiting, or by running the
+  procedure again against a staging backend with an adjustable clock; do not
+  edit the series to fake it, because that changes the invitation-bound
+  schedule.
+. Verify on device A: the series shows "published", one invitation exists and
+  "Copy invitation" yields one link and one passcode.
+. Send the invitation to device B (same text for both occurrences).
+. First occurrence, both devices: A joins from the timeline; B joins with the
+  invitation. Verify bidirectional audio and video for at least one minute,
+  mute/unmute and camera on/off on each side.
+. Record the room id shown in the staging backend log for occurrence 1.
+. Second occurrence: repeat; verify the room id differs from occurrence 1 and
+  the same invitation worked unchanged.
+. Offline retry: switch device A offline, cancel one occurrence, observe "not
+  synced"; go online, press Retry, observe it synced; device B must now be
+  refused for the canceled occurrence.
+. Transfer: restore a backup on a second profile and check the conflict is
+  shown and only an explicit "Publish this device's schedule" replaces the
+  server copy.
+. Revoke/reissue: reissue the invitation on A; B's old link must fail
+  (410) and the new one must work.
+. Legacy regression: a non-recurring LiveKit event and a pre-existing legacy
+  series still join through their old single meeting.
+
+=== Result recording
+
+For each step record pass/fail, device OS, network type (regular and, if
+possible, one needing TURN/TLS) and the backend version. A build or an
+automated suite passing does not mark this procedure as passed.
