@@ -337,7 +337,7 @@ constexpr auto kAdoptScheduleServerRevisionQuery = R"duckdb(
 UPDATE ScheduleSeries
 SET acked_revision = $2, acked_content_hash = $3, sync_state = 'pending',
     last_error = NULL, updated_at = $4
-WHERE series_uid = $1 AND acked_revision <= $2
+WHERE series_uid = $1
 )duckdb";
 
 constexpr auto kSelectScheduleSeriesPendingSyncQuery = R"duckdb(

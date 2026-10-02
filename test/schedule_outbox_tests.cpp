@@ -362,6 +362,41 @@ TEST_F(ScheduleOutboxTest, AdoptServerRevisionRequeuesWithoutResettingRevisionBa
   EXPECT_FALSE(mDb->adopt_schedule_server_revision(commit->series_uid, 4, "older"));
 }
 
+TEST_F(ScheduleOutboxTest, AdoptingServerRevisionInsideCommitIsAtomicWithRequeue) {
+  const auto commit = mDb->commit_schedule_change(
+      [&]() -> std::optional<int64_t> { return mDb->add_event_series(series()); },
+      "Europe/Moscow", builder("v1"));
+  ASSERT_TRUE(commit.has_value());
+  ASSERT_TRUE(mDb->set_schedule_sync_state(commit->series_uid,
+                                           pcm::database::schedule_sync_state::kConflict, "x"));
+
+  // A failing requeue must leave the conflict and the queued payload untouched.
+  EXPECT_FALSE(mDb->commit_schedule_change(
+                      [&]() -> std::optional<int64_t> {
+                        EXPECT_TRUE(mDb->adopt_schedule_server_revision(commit->series_uid, 3, "h", true));
+                        return commit->series_id;
+                      },
+                      "", [](const ScheduleSource &) { return std::optional<std::string>(); })
+                   .has_value());
+  EXPECT_EQ(mDb->get_schedule_identity(commit->series_id)->acked_revision, 0);
+  EXPECT_EQ(mDb->get_schedule_identity(commit->series_id)->sync_state,
+            pcm::database::schedule_sync_state::kConflict);
+  EXPECT_EQ(mDb->get_schedule_outbox(commit->series_uid)->pending_payload.value_or(""), "v1");
+
+  ASSERT_TRUE(mDb->commit_schedule_change(
+                     [&]() -> std::optional<int64_t> {
+                       return mDb->adopt_schedule_server_revision(commit->series_uid, 3, "h", true)
+                                  ? std::optional<int64_t>(commit->series_id)
+                                  : std::nullopt;
+                     },
+                     "", builder("rebuilt"))
+                  .has_value());
+  const auto identity = mDb->get_schedule_identity(commit->series_id);
+  EXPECT_EQ(identity->acked_revision, 3);
+  EXPECT_EQ(identity->sync_state, pcm::database::schedule_sync_state::kPending);
+  EXPECT_EQ(mDb->get_schedule_outbox(commit->series_uid)->pending_payload.value_or(""), "rebuilt");
+}
+
 TEST_F(ScheduleOutboxTest, InvitationGenerationAndIdempotencyKeyArePersisted) {
   const auto commit = mDb->commit_schedule_change(
       [&]() -> std::optional<int64_t> { return mDb->add_event_series(series()); },

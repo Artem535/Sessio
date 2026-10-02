@@ -49,6 +49,25 @@ target_link_libraries(Sessio_schedule_snapshot_tests PRIVATE
 )
 gtest_discover_tests(Sessio_schedule_snapshot_tests)
 
+# Schedule sync service tests (real DB + fake token-backend over local HTTP)
+find_package(Qt6 REQUIRED COMPONENTS Network Test)
+add_executable(Sessio_schedule_sync_tests
+    fake_schedule_backend.h
+    schedule_sync_tests.cpp
+)
+target_link_libraries(Sessio_schedule_sync_tests PRIVATE
+    GTest::gtest
+    Qt6::Network
+    Qt6::Test
+    Sessio_config
+    Sessio_database
+    Sessio_meeting
+    Sessio_token_client
+    Poco::Foundation
+)
+set_target_properties(Sessio_schedule_sync_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_schedule_sync_tests)
+
 # Schedule conflict tests
 add_executable(Sessio_schedule_conflict_tests
     schedule_conflict_service_tests.cpp

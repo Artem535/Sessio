@@ -1765,10 +1765,23 @@ bool Database::set_schedule_sync_state(const std::string &series_uid,
 
 bool Database::adopt_schedule_server_revision(const std::string &series_uid,
                                               const int64_t server_revision,
-                                              const std::string &content_hash) {
-  duckdb::Connection conn(*mDb);
-  Transaction tx(conn);
-  if (!tx.active()) {
+                                              const std::string &content_hash,
+                                              const bool allow_rewind) {
+  // Usable on its own or as part of a commit_schedule_change() mutation, in
+  // which case it joins that transaction instead of opening a nested one.
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  std::optional<Transaction> tx;
+  if (mTxConn == nullptr) {
+    tx.emplace(conn);
+    if (!tx->active()) {
+      return false;
+    }
+  }
+  const auto current = read_schedule_identity(
+      conn, constance::kSelectScheduleIdentityByUidQuery, duckdb::Value(series_uid));
+  if (!current.has_value() ||
+      (!allow_rewind && server_revision < current->acked_revision)) {
     return false;
   }
   auto adopted = executePrepared(
@@ -1777,11 +1790,13 @@ bool Database::adopt_schedule_server_revision(const std::string &series_uid,
        duckdb::Value(content_hash), nowTimestamp()});
   const auto rows = affectedRows(adopted.get());
   if (!rows.has_value() || *rows != 1) {
-    return false; // unknown series, or would move the acknowledged revision backwards
+    return false;
   }
-  return execute_schedule_update(conn, constance::kClearScheduleOutboxQuery,
-                                 {duckdb::Value(series_uid), nowTimestamp()}) &&
-         tx.commit();
+  if (!execute_schedule_update(conn, constance::kClearScheduleOutboxQuery,
+                               {duckdb::Value(series_uid), nowTimestamp()})) {
+    return false;
+  }
+  return !tx.has_value() || tx->commit();
 }
 
 std::string Database::ensure_schedule_invitation_key(const int64_t series_id) {

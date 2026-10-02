@@ -162,9 +162,12 @@ public:
                                const std::string &error = {});
   // Explicitly takes over the server's revision after a conflict (or restore)
   // and drops queued payloads; the caller re-enqueues from local state.
+  // Moving the acknowledged revision backwards (server restored from an older
+  // state) is refused unless the caller explicitly allows it.
   bool adopt_schedule_server_revision(const std::string &series_uid,
                                       int64_t server_revision,
-                                      const std::string &content_hash);
+                                      const std::string &content_hash,
+                                      bool allow_rewind = false);
   std::string ensure_schedule_invitation_key(int64_t series_id);
   bool clear_schedule_invitation_key(int64_t series_id);
   bool set_schedule_invitation_generation(int64_t series_id, int64_t generation);
