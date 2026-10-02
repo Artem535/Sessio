@@ -389,6 +389,56 @@ TEST(CallsPageTest, RepeatedOwnMeetingJoinsStartExactlyOneJoinPerToken) {
   EXPECT_EQ(eventSpy.count(), 3);
 }
 
+// A published series occurrence is joined through the series route, addressed
+// by the occurrence's ORIGINAL start; the single-meeting route is never used.
+TEST(CallsPageTest, SeriesOccurrenceJoinUsesTheOccurrenceTokenRouteWithItsOriginalStart) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/true, &deviceManager, &client);
+  page.setBearerCredentialProvider([]() { return QStringLiteral("bearer-1"); });
+  const QString target = "series:11111111-2222-4333-8444-555555555555@2026-10-27T17:00:00Z";
+  page.setUpcomingMeetings({{target, "18:00", QDateTime::currentDateTime(), true, 9}});
+  int providersConstructed = 0;
+  page.setVideoProviderFactoryForTesting([&providersConstructed]() -> pcm::video::VideoProvider * {
+    ++providersConstructed;
+    return new FakeVideoProvider();
+  });
+  QSignalSpy eventSpy(&page, &CallsPage::eventKnownForCurrentCall);
+
+  page.findChild<QPushButton *>("joinOwnMeetingButton_" + target)->click();
+
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return providersConstructed == 1; }, 2000));
+  EXPECT_EQ(server.lastPath,
+            "/v1/schedule-series/11111111-2222-4333-8444-555555555555/occurrences/"
+            "2026-10-27T17:00:00Z/specialist-token");
+  EXPECT_EQ(server.lastAuthorizationHeader, "Bearer bearer-1");
+  ASSERT_EQ(eventSpy.count(), 1);
+  EXPECT_EQ(eventSpy.at(0).at(0).toLongLong(), 9); // notes panel still finds the event
+}
+
+TEST(CallsPageTest, SeriesOccurrenceJoinFailureIsShownOnTheEntryForm) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(409, R"({"error":"occurrence_unavailable"})");
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/true, &deviceManager, &client);
+  page.setBearerCredentialProvider([]() { return QStringLiteral("bearer-1"); });
+  const QString target = "series:11111111-2222-4333-8444-555555555555@2026-10-27T17:00:00Z";
+  page.setUpcomingMeetings({{target, "18:00", QDateTime::currentDateTime(), true, 9}});
+
+  page.findChild<QPushButton *>("joinOwnMeetingButton_" + target)->click();
+
+  ASSERT_TRUE(QTest::qWaitFor(
+      [&]() {
+        auto *label = page.findChild<QLabel *>("joinErrorLabel");
+        return label && label->isVisibleTo(&page) &&
+               label->text().contains("occurrence_unavailable");
+      },
+      2000));
+}
+
 // Fixwave group 1, bug 3: a failed token request (wrong passcode, expired
 // invitation, network error) used to be completely silent.
 TEST(CallsPageTest, TokenRequestFailureIsShownOnEntryFormAndClearedOnRetry) {

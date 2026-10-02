@@ -25,8 +25,6 @@ qt_add_library(${TARGET_NAME} STATIC
         series_call_service.cpp
         series_schedule_committer.h
         series_schedule_committer.cpp
-        series_join_target.h
-        series_join_target.cpp
         series_invitation_store.h
         series_invitation_service.h
         series_invitation_service.cpp

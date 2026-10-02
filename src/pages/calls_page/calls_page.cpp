@@ -1,5 +1,6 @@
 #include "calls_page.h"
 #include "livekit_video_provider.h"
+#include "series_join_target.h"
 
 #include <QStackedWidget>
 #include <QUrl>
@@ -82,6 +83,15 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
               }
             }
             mEntryWidget->clearError();
+            // A published series occurrence is entered through the series
+            // route by the occurrence's original start; the server decides
+            // from its copy of the schedule whether it is joinable right now.
+            if (const auto occurrence = pcm::meeting::parseSeriesJoinTarget(meetingRef)) {
+              mTokenClient->requestOccurrenceSpecialistToken(
+                  mBearerCredentialProvider(), occurrence->seriesUid, occurrence->originalStartMs,
+                  mEntryWidget->displayName());
+              return;
+            }
             mTokenClient->requestSpecialistToken(mBearerCredentialProvider(), meetingRef, mEntryWidget->displayName());
           });
 

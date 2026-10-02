@@ -13,6 +13,8 @@ qt_add_library(${TARGET_NAME} STATIC
         token_response_parser.cpp
         token_backend_client.h
         token_backend_client.cpp
+        series_join_target.h
+        series_join_target.cpp
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC

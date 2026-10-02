@@ -4,6 +4,8 @@
 
 #include <optional>
 
+// Lives with the token client (not the meeting library) because the Calls page,
+// which must stay free of the database, parses it.
 namespace pcm::meeting {
 
 // Identifies one occurrence of a published series for the specialist join
