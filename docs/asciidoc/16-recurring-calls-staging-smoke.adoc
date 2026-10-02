@@ -38,11 +38,12 @@ run it against production data.
   invitation. Verify bidirectional audio and video for at least one minute,
   mute/unmute and camera on/off on each side.
 . Second occurrence (needs the prerequisite from step 2): repeat the join with
-  the same invitation; it must work unchanged. Note that the backend does not
-  log room ids and occurrences a week apart can not be observed side by side
-  from the clients, so room distinctness is *not* verifiable by this smoke test;
-  it is covered only by the backend tests (for example
-  `SeriesServiceTest.PersistentInvitationSelectsTwoWeeklyRoomsAndSharedPractitionerRoom`).
+  the same invitation; it must work unchanged. The backend logs the room name
+  of every successful client join as `subject=<room>` on the client-token route
+  `/v1/invitations/{code}/client-token` (the code, passcode and token are never logged). Compare the
+  `subject=` value of the client join in occurrence 1 with the one in
+  occurrence 2: they must differ. Do not copy log lines into tickets without
+  redacting them.
 . Offline retry: switch device A offline, cancel one occurrence, observe "not
   synced"; go online, press Retry, observe it synced; device B must now be
   refused for the canceled occurrence.

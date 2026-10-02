@@ -15,7 +15,7 @@ Desktop version **0.2.8** (CMakeLists.txt and src/app/application.cpp). Base
 | Legacy regressions (single events, legacy series, opt-in migration) | Tested (SeriesCallTest, TimelineSeriesTest, SeriesCallUiTest) |
 | Translations | Both catalogs in sync with tests ON and OFF, no unfinished entries |
 | Populated GUI via scripts/run-dev-isolated.sh | Blocked/partial: see below |
-| Distinct rooms per occurrence on real devices | Not observable from clients; backend tests only |
+| Distinct rooms per occurrence on real devices | Not performed; staging check compares the join route's `subject=<room>` log value between occurrences (needs a time-adjustable backend or a one-week wait) |
 | Real two-device call acceptance on staging | **Not performed - blocked** (no staging endpoint or credential available; see docs/asciidoc/16-recurring-calls-staging-smoke.adoc) |
 
 ## Populated GUI
@@ -46,6 +46,16 @@ by this work; not re-run on a base build.
   copies the data to /usr/share/pcm-schedule/zoneinfo in the runtime stage;
   no OS tzdata is needed. Checked by token-backend/scripts/check_zoneinfo_configure.sh
   (passed locally); the Docker image build itself is unverified (no docker/podman).
+- Desktop packages ship libical's timezone data (addressed in the final review
+  wave): `cmake --install` puts it in `<prefix>/share/sessio/zoneinfo` (RPM,
+  AppImage), the macOS bundle in `Contents/Resources/zoneinfo`, and the Windows
+  workflow copies it to `zoneinfo` next to `Sessio.exe`. At startup
+  `configureScheduleZoneinfo()` resolves it relative to the executable
+  (`SESSIO_ZONEINFO_DIR` overrides); without data every named timezone is
+  rejected and recurring series can not be published (fails closed, logged).
+  Residual risk: desktop and backend each carry their own copy of the zone
+  data, so after a tzdata/libical update on only one side they can disagree
+  about an occurrence time around a rule change; update both together.
 - Desktop and backend must both be this version: older backends report
   schedules as unsupported and the app never falls back to a single meeting
   for a recurring event.
@@ -60,14 +70,30 @@ by a downgrade test.
    invitations keep working.
 2. Desktop: reinstall 0.2.7. Published series data stays in the local database
    and the server; 0.2.7 treats those events as ordinary recurring events.
-3. A series migrated from a legacy meeting has its old meeting invalidated only
+   Edits made in 0.2.7 are never published, so the permanent link keeps
+   admitting clients under the last schedule published by 0.2.8 (including
+   occurrences canceled afterwards in 0.2.7). Before downgrading, revoke the
+   series invitations with `POST /v1/schedule-series/{series_uid}/revoke`
+   (a reissue would only replace the link), or accept that exposure.
+3. After a migration the old meeting is invalidated once, without retry. If that
+   request fails the app logs a warning (no meeting reference or link) and emits
+   `legacyInvalidationFailed`; the old shared link then stays valid until its
+   window ends. Invalidate it manually from the backend if that matters.
+4. A series migrated from a legacy meeting has its old meeting invalidated only
    after the new invitation is stored; to undo, create a fresh legacy meeting.
-4. Invitations can be retired at any time with reissue or the series revoke
+5. Invitations can be retired at any time with reissue or the series revoke
    route.
 
 ## Not verified
 
 - Real audio/video between two devices, TURN/TLS networks.
 - A backend binary built from the Dockerfile (Docker not run here).
-- RPM/AppImage do not ship the backend; nothing about backend packaging
-  outside the Dockerfile was verified.
+- RPM, AppImage, Windows installer and macOS bundle builds were not made here
+  (no rpmbuild/linuxdeploy/Inno Setup/macdeployqt run). Verified only:
+  `cmake --install` on Linux lays the data out at `share/sessio/zoneinfo`, and
+  the resolver unit tests cover the Linux, Windows and macOS relative layouts.
+  The Windows workflow step and the macOS install rule are untested.
+- The thread-confinement check in `Database::write_connection` is an `assert`
+  (compiled out in the Release builds the tests use) plus a release-mode
+  fallback to a private connection; no test exercises the cross-thread path.
+- Rollback and revoke claims above come from reading the code.

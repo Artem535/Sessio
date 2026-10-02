@@ -39,7 +39,11 @@ must exist at that same path on the machine that runs the binary:
   image was never built.
 - For any other packaging, pass an explicit `-DPCM_SCHEDULE_ZONEINFO_DIR=<install path>`
   and install the same directory there. This repository has no RPM/AppImage
-  packaging for the backend; the desktop packages do not use this directory.
+  packaging for the backend. The desktop app links the same schedule library
+  but does not use this compiled-in path in packaged builds: it ships its own
+  copy of the data under `share/sessio/zoneinfo` and resolves it at start-up
+  (`src/meeting/schedule_zoneinfo.h`). Backend and desktop zone data can drift
+  if only one side is updated; update both together.
 
 ## Configuration (environment variables)
 

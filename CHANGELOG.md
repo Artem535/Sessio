@@ -23,6 +23,11 @@ All notable changes to this project will be documented in this file.
 - Recurring calls require a token backend of version 0.2.8 or newer; with an
   older backend a recurring event is shown as unsupported and no call is
   created.
+- "Create a new link" is offered next to a ready permanent link (after a backup
+  restore or a keychain reset the link can not be copied on that device), and
+  an interrupted link replacement is completed when the app starts.
+- The installed application now ships the timezone data it needs to publish
+  recurring series (RPM, AppImage, Windows installer and macOS bundle).
 - Splitting a series ("this and following") is blocked while the series is
   published, to keep the shared invitation valid.
 - Joining an occurrence of a published series goes through the series
