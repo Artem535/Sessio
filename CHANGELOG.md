@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Month view for the calendar: a month grid with neighbouring days, the week
-  starting according to the system locale, and a "more N" link in days that
+  starting according to the system locale, and a "+N more" link in days that
   have more meetings than fit in the cell. Meetings crossing midnight and
   occurrences of recurring series are shown in every affected day.
 - A Day / Month switch on the calendar page.

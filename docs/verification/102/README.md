@@ -33,7 +33,7 @@ QT_QPA_PLATFORM=offscreen scripts/run-dev-isolated.sh /usr/bin/ctest \
   нужен реальный token backend).
 - Перед исправлениями визуальной проверки: 519/519, 0 упало.
 - Целевой набор (`CalendarLayoutTest|QEventDetailsWidgetTest|MonthCalendarTest|MonthProjectionTest`): 39/39;
-  `CalendarLayoutTest` — 18 тестов.
+  `CalendarLayoutTest` — 17 тестов.
 - Переводы: `update_translations` — 0 новых строк, 0 `type="unfinished"` в `app_ru.ts` и `app_en.ts`
   (проверено разбором XML).
 
