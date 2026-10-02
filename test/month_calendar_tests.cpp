@@ -11,8 +11,10 @@
 #include <QPushButton>
 #include <QMenu>
 #include <QTest>
+#include <QImage>
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 #include <memory>
@@ -316,6 +318,51 @@ TEST(MonthCalendarTest, OvernightEventAppearsInBothDaysAndEndsAtExclusiveMidnigh
   ending.id = 11;
   widget.setEvents({overnight, ending});
   EXPECT_EQ(widget.findChildren<QPushButton *>("monthEvent").size(), 3);
+}
+
+TEST(MonthCalendarTest, SelectedDayBadgeShowsItsNumberAgainstTheFilledCircle) {
+  MonthCalendarWidget widget;
+  widget.resize(900, 700);
+  widget.setMonth(QDate(2026, 10, 1));
+  widget.setSelectedDate(QDate(2026, 10, 8));
+  widget.show();
+  QApplication::processEvents();
+  QToolButton *selected = nullptr;
+  for (auto *button : widget.findChildren<QToolButton *>("monthDate")) {
+    if (button->property("calendarDate").toDate() == QDate(2026, 10, 8)) selected = button;
+  }
+  ASSERT_NE(selected, nullptr);
+  EXPECT_EQ(selected->text(), "8");
+  EXPECT_TRUE(selected->isChecked());
+  const auto image = selected->grab().toImage().convertToFormat(QImage::Format_RGB32);
+  const auto fill = selected->palette().color(QPalette::Highlight);
+  int fillPixels = 0;
+  int numberPixels = 0;
+  for (int y = 0; y < image.height(); ++y) {
+    for (int x = 0; x < image.width(); ++x) {
+      const QColor c = image.pixelColor(x, y);
+      if (c == fill) ++fillPixels;
+      // glyph pixels: far from the circle colour and much lighter than the cell
+      else if (std::abs(c.lightness() - fill.lightness()) > 60 && c.lightness() > 180) ++numberPixels;
+    }
+  }
+  EXPECT_GT(fillPixels, 200);   // a filled badge
+  EXPECT_GT(numberPixels, 15);  // with a visible number on it
+}
+
+TEST(MonthCalendarTest, RowHeightIsCappedInATallWindow) {
+  MonthCalendarWidget widget;
+  widget.setMonth(QDate(2026, 10, 1));
+  widget.resize(1000, 3000);
+  widget.show();
+  QApplication::processEvents();
+  const auto dates = widget.findChildren<QToolButton *>("monthDate");
+  ASSERT_EQ(dates.size(), 35);
+  for (auto *button : dates) {
+    EXPECT_GE(button->parentWidget()->height(), 96);
+    EXPECT_LE(button->parentWidget()->height(), 160);
+  }
+  EXPECT_LT(widget.height(), 3000);
 }
 
 } // namespace
