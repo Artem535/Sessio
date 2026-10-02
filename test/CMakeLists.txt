@@ -28,6 +28,17 @@ target_link_libraries(Sessio_database_tests PRIVATE
 )
 gtest_discover_tests(Sessio_database_tests)
 
+# Schedule identity / transactional outbox tests
+add_executable(Sessio_schedule_outbox_tests schedule_outbox_tests.cpp)
+target_link_libraries(Sessio_schedule_outbox_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_config
+    Sessio_database
+    Poco::Foundation
+)
+gtest_discover_tests(Sessio_schedule_outbox_tests)
+
 # Schedule conflict tests
 add_executable(Sessio_schedule_conflict_tests
     schedule_conflict_service_tests.cpp

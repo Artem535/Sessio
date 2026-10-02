@@ -3,7 +3,9 @@
 #include <duckdb.hpp>
 #define PLOG_NO_LOG_MACROS
 
+#include <functional>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -45,6 +47,15 @@ struct DashboardMonthlyStats {
   int personal_sessions = 0;
   double income = 0.0;
 };
+
+// Runs the local writes of one schedule change and returns the id of the
+// series they affect (nullopt on failure). Every write must go through the
+// public Database methods so they share the surrounding transaction.
+using ScheduleMutation = std::function<std::optional<int64_t>()>;
+// Builds the wire payload from the local state visible inside the transaction.
+// Returning nullopt (or throwing) aborts the whole change.
+using SchedulePayloadBuilder =
+    std::function<std::optional<std::string>(const ScheduleSource &)>;
 
 class Database {
 public:
@@ -115,6 +126,49 @@ public:
 
   DuckClient get_client_by_event(const int64_t &event_id);
 
+  // --- Recurring schedule identity and transactional outbox ---
+  //
+  // Applies `mutation` and enqueues the resulting full snapshot in one
+  // transaction. A series without schedule identity gets one (random UUID and
+  // the explicit IANA `timezone`); with an empty timezone and no identity the
+  // change is applied transactionally without an outbox entry (legacy series).
+  // Nested calls are rejected. Failure of the mutation, the builder, or any
+  // write rolls back everything.
+  std::optional<ScheduleCommit>
+  commit_schedule_change(const ScheduleMutation &mutation,
+                         const std::string &timezone,
+                         const SchedulePayloadBuilder &builder);
+  std::optional<ScheduleIdentity> get_schedule_identity(int64_t series_id);
+  std::optional<ScheduleIdentity>
+  get_schedule_identity_by_uid(const std::string &series_uid);
+  std::optional<ScheduleOutbox> get_schedule_outbox(const std::string &series_uid);
+  // Series that still have a pending or in-flight payload, in series id order.
+  std::vector<ScheduleIdentity> list_schedule_series_pending_sync();
+  // Moves the pending payload into the immutable in-flight slot. Fails when a
+  // payload is already in flight or the pending snapshot is not the one the
+  // caller read (`expected_pending_desired`).
+  bool freeze_schedule_pending(const std::string &series_uid,
+                               int64_t expected_pending_desired,
+                               int64_t revision, const std::string &payload,
+                               const std::string &content_hash);
+  // Records the server ACK of the in-flight revision. Ignored (nullopt) when
+  // the revision is not the one in flight, so a late ACK never marks newer
+  // local edits as synced.
+  std::optional<ScheduleAck> ack_schedule_inflight(const std::string &series_uid,
+                                                   int64_t revision,
+                                                   const std::string &content_hash);
+  bool set_schedule_sync_state(const std::string &series_uid,
+                               const std::string &state,
+                               const std::string &error = {});
+  // Explicitly takes over the server's revision after a conflict (or restore)
+  // and drops queued payloads; the caller re-enqueues from local state.
+  bool adopt_schedule_server_revision(const std::string &series_uid,
+                                      int64_t server_revision,
+                                      const std::string &content_hash);
+  std::string ensure_schedule_invitation_key(int64_t series_id);
+  bool clear_schedule_invitation_key(int64_t series_id);
+  bool set_schedule_invitation_generation(int64_t series_id, int64_t generation);
+
 private:
   void add_demo_data();
   void init_tables();
@@ -123,7 +177,16 @@ private:
   void init_payment_status_table();
   void init_event_status_table();
 
+  duckdb::Connection &write_connection(std::optional<duckdb::Connection> &owned);
+  std::optional<ScheduleIdentity> read_schedule_identity(duckdb::Connection &conn,
+                                                         const char *query,
+                                                         duckdb::Value key);
+  bool execute_schedule_update(duckdb::Connection &conn, const char *query,
+                               duckdb::vector<duckdb::Value> values);
+
   std::unique_ptr<duckdb::DuckDB> mDb;
+  // Connection of the active schedule transaction; null outside one.
+  duckdb::Connection *mTxConn = nullptr;
 };
 
 } // namespace pcm::database
