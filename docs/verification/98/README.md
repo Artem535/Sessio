@@ -15,6 +15,7 @@ Desktop version **0.2.8** (CMakeLists.txt and src/app/application.cpp). Base
 | Legacy regressions (single events, legacy series, opt-in migration) | Tested (SeriesCallTest, TimelineSeriesTest, SeriesCallUiTest) |
 | Translations | Both catalogs in sync with tests ON and OFF, no unfinished entries |
 | Populated GUI via scripts/run-dev-isolated.sh | Blocked/partial: see below |
+| Distinct rooms per occurrence on real devices | Not observable from clients; backend tests only |
 | Real two-device call acceptance on staging | **Not performed - blocked** (no staging endpoint or credential available; see docs/asciidoc/16-recurring-calls-staging-smoke.adoc) |
 
 ## Populated GUI
@@ -39,10 +40,12 @@ by this work; not re-run on a base build.
   INVITATION_BASE_URL (all required). LIVEKIT_API_SECRET also derives the
   invitation replay-encryption key; rotating it makes pending replays fail
   closed (410 invitation_replay_expired). Fallback: explicit reissue.
-- Backend build: PCM_SCHEDULE_ZONEINFO_DIR must point at an installed libical
-  zoneinfo directory that also exists at run time (configure now fails if the
-  directory has no timezone data). The Docker image installs it at
-  /usr/share/pcm-schedule/zoneinfo; no OS tzdata is needed.
+- Backend build: PCM_SCHEDULE_ZONEINFO_SOURCE_DIR (vcpkg libical data, validated at
+  configure; fails if missing) and PCM_SCHEDULE_ZONEINFO_DIR (runtime path
+  compiled in; only a configure warning if absent at build time). The Dockerfile
+  copies the data to /usr/share/pcm-schedule/zoneinfo in the runtime stage;
+  no OS tzdata is needed. Checked by token-backend/scripts/check_zoneinfo_configure.sh
+  (passed locally); the Docker image build itself is unverified (no docker/podman).
 - Desktop and backend must both be this version: older backends report
   schedules as unsupported and the app never falls back to a single meeting
   for a recurring event.

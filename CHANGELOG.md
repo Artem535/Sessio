@@ -20,6 +20,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Recurring calls require a token backend of version 0.2.8 or newer; with an
+  older backend a recurring event is shown as unsupported and no call is
+  created.
 - Splitting a series ("this and following") is blocked while the series is
   published, to keep the shared invitation valid.
 - Joining an occurrence of a published series goes through the series

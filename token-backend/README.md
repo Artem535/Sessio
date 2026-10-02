@@ -23,17 +23,23 @@ the backend and the desktop app resolve occurrences identically. The directory
 is compiled in as `PCM_SCHEDULE_ZONEINFO_DIR` and read at run time, therefore it
 must exist at that same path on the machine that runs the binary:
 
-- The default (`<libical cmake dir>/../libical/zoneinfo`) points into the
-  build tree and is only suitable for local builds and tests. Configure fails
-  with an error if the directory has no timezone data.
+- `PCM_SCHEDULE_ZONEINFO_SOURCE_DIR` (default
+  `<libical cmake dir>/../libical/zoneinfo`, i.e. the vcpkg copy) is the data
+  available at **build** time. Configure fails if it has no timezone data.
+- `PCM_SCHEDULE_ZONEINFO_DIR` (defaults to the source dir) is the **runtime**
+  path compiled into the binary. It may differ from the source dir; if it does
+  not exist at configure time CMake only warns, because it can legitimately be
+  created later (installed or copied) on the machine that runs the binary.
+  `scripts/check_zoneinfo_configure.sh` verifies all three cases.
 - `Dockerfile` passes `-DPCM_SCHEDULE_ZONEINFO_DIR=/usr/share/pcm-schedule/zoneinfo`
+  in the build stage (configure prints the warning, which is expected there)
   and copies the vcpkg `libical/zoneinfo` directory to that path in the runtime
-  image; the `COPY` fails the image build if it is missing. No OS tzdata package
-  is needed in the image.
-- For any other packaging (RPM/AppImage of the backend, bare-metal), pass an
-  explicit `-DPCM_SCHEDULE_ZONEINFO_DIR=<install path>` and install the same
-  directory there. Not verified: this repository has no RPM/AppImage packaging
-  for the backend; the desktop packages do not use this directory.
+  stage; the `COPY` fails the image build if the source is missing. No OS tzdata
+  package is needed. Not verified: no docker/podman is available here, so the
+  image was never built.
+- For any other packaging, pass an explicit `-DPCM_SCHEDULE_ZONEINFO_DIR=<install path>`
+  and install the same directory there. This repository has no RPM/AppImage
+  packaging for the backend; the desktop packages do not use this directory.
 
 ## Configuration (environment variables)
 
