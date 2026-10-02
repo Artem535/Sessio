@@ -66,6 +66,7 @@ public:
    * @brief Configures widget for usage inside a modal dialog.
    */
   void setDialogMode(bool enabled);
+  void setInspectorMode(bool enabled);
   void setConflictChecker(
       std::function<std::optional<DuckEvent>(const DuckEvent &)> checker);
   void setMeetingCoordinator(pcm::meeting::MeetingCoordinator *coordinator);
@@ -126,6 +127,7 @@ public:
   void setClientList(const QHash<int64_t, QString> &clients);
 
 signals:
+  void editRequested();
   /**
    * @brief Signal emitted when user requests to save the event.
    * Passes a pointer to the event data that should be saved.
@@ -180,6 +182,7 @@ private slots:
   void onCopyMeetingPasscodeClicked();
 
 private:
+  void refreshInspector();
   void applySeriesCallState();
   void refreshSeriesCallPanel();
   void withSeriesInvitation(const std::function<void(const QString &url, const QString &passcode)> &use);
@@ -228,6 +231,14 @@ private:
 
   // --- UI ---
   std::unique_ptr<Ui::EventDetails> mUI;
+  QWidget *mEditorFields = nullptr;
+  QWidget *mInspectorSummary = nullptr;
+  QLabel *mInspectorTitle = nullptr;
+  QLabel *mInspectorFacts = nullptr;
+  QLabel *mInspectorRecurrence = nullptr;
+  std::unique_ptr<QEventItem> mInspectorEvent;
+  bool mInspectorMode = false;
+  quint64 mSelectionRevision = 0;
   oclero::qlementine::Switch *mEventTypeSwitch = nullptr;
   oclero::qlementine::Switch *mOnlineSessionSwitch = nullptr;
   oclero::qlementine::SegmentedControl *mProviderKindControl = nullptr;

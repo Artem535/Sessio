@@ -385,20 +385,7 @@ void MainWindow::setupUtilityButtons() {
     button->setCursor(Qt::PointingHandCursor);
     button->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     button->setIconSize(QSize(16, 16));
-    button->setStyleSheet(
-        "QPushButton {"
-        " color: rgba(255, 255, 255, 0.52);"
-        " background: transparent;"
-        " border: none;"
-        " padding: 6px 10px;"
-        " text-align: left;"
-        "}"
-        "QPushButton:hover {"
-        " color: rgba(255, 255, 255, 0.78);"
-        "}"
-        "QPushButton:pressed {"
-        " color: rgba(255, 255, 255, 0.92);"
-        "}");
+    // Let Qlementine supply the foreground in both light and dark themes.
     return button;
   };
 

@@ -734,13 +734,6 @@
     </message>
 </context>
 <context>
-    <name>EventInfo</name>
-    <message>
-        <source>: EVENT_INFO_FORM_TITLE</source>
-        <translation>Event Calendar</translation>
-    </message>
-</context>
-<context>
     <name>MainWindow</name>
     <message>
         <source>: APP_TITLE</source>
@@ -1037,6 +1030,46 @@
         <translation>Move to a permanent link...</translation>
     </message>
     <message>
+        <source>Meeting</source>
+        <translation>Meeting</translation>
+    </message>
+    <message>
+        <source>In person</source>
+        <translation>In person</translation>
+    </message>
+    <message>
+        <source>Online (LiveKit)</source>
+        <translation>Online (LiveKit)</translation>
+    </message>
+    <message>
+        <source>Online (external link)</source>
+        <translation>Online (external link)</translation>
+    </message>
+    <message>
+        <source>%1 minutes</source>
+        <translation>%1 minutes</translation>
+    </message>
+    <message>
+        <source>Does not repeat</source>
+        <translation>Does not repeat</translation>
+    </message>
+    <message>
+        <source>Repeats daily</source>
+        <translation>Repeats daily</translation>
+    </message>
+    <message>
+        <source>Repeats every %1 week(s)</source>
+        <translation>Repeats every %1 week(s)</translation>
+    </message>
+    <message>
+        <source>Repeats monthly</source>
+        <translation>Repeats monthly</translation>
+    </message>
+    <message>
+        <source>Repeats yearly</source>
+        <translation>Repeats yearly</translation>
+    </message>
+    <message>
         <source>Create a new link</source>
         <translation>Create a new link</translation>
     </message>
@@ -1226,6 +1259,42 @@
     <message>
         <source>Recurring event</source>
         <translation>Recurring event</translation>
+    </message>
+    <message>
+        <source>Calendar</source>
+        <translation>Calendar</translation>
+    </message>
+    <message>
+        <source>Day</source>
+        <translation>Day</translation>
+    </message>
+    <message>
+        <source>Calendar view</source>
+        <translation>Calendar view</translation>
+    </message>
+    <message>
+        <source>Month</source>
+        <translation>Month</translation>
+    </message>
+    <message>
+        <source>New meeting</source>
+        <translation>New meeting</translation>
+    </message>
+    <message>
+        <source>Previous period</source>
+        <translation>Previous period</translation>
+    </message>
+    <message>
+        <source>Next period</source>
+        <translation>Next period</translation>
+    </message>
+    <message>
+        <source>Today</source>
+        <translation>Today</translation>
+    </message>
+    <message>
+        <source>Select a meeting</source>
+        <translation>Select a meeting</translation>
     </message>
     <message>
         <source>: EVENT_ADD_BUTTON</source>

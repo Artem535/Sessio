@@ -387,6 +387,116 @@ void QEventDetailsWidget::initUi() {
   mUI->mAddButton->setIconSize(QSize(16, 16));
   mUI->mChangeButton->setIcon(QIcon(":/icons/user-pen-solid-full.svg"));
   mUI->mChangeButton->setIconSize(QSize(16, 16));
+
+  // Keep the existing form intact for dialogs; the inspector uses plain labels
+  // and reparents only the existing call actions into its vertical presentation.
+  mUI->verticalLayout->removeItem(mUI->formLayout);
+  mEditorFields = new QWidget(this);
+  mEditorFields->setLayout(mUI->formLayout);
+  mUI->verticalLayout->insertWidget(0, mEditorFields);
+  mInspectorSummary = new QWidget(this);
+  auto *summary = new QVBoxLayout(mInspectorSummary);
+  summary->setContentsMargins(0, 0, 0, 0);
+  summary->setSpacing(20);
+  auto *heading = new QLabel(tr("Meeting"), mInspectorSummary);
+  auto headingFont = heading->font();
+  headingFont.setPointSize(18);
+  headingFont.setBold(true);
+  heading->setFont(headingFont);
+  summary->addWidget(heading);
+  mInspectorTitle = new QLabel(mInspectorSummary);
+  mInspectorTitle->setObjectName(QStringLiteral("inspectorTitle"));
+  mInspectorTitle->setWordWrap(true);
+  mInspectorTitle->setTextFormat(Qt::PlainText);
+  mInspectorTitle->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+  summary->addWidget(mInspectorTitle);
+  mInspectorFacts = new QLabel(mInspectorSummary);
+  mInspectorFacts->setObjectName(QStringLiteral("inspectorFacts"));
+  mInspectorFacts->setWordWrap(true);
+  mInspectorFacts->setTextFormat(Qt::PlainText);
+  summary->addWidget(mInspectorFacts);
+  mInspectorRecurrence = new QLabel(mInspectorSummary);
+  mInspectorRecurrence->setWordWrap(true);
+  mInspectorRecurrence->setTextFormat(Qt::PlainText);
+  summary->addWidget(mInspectorRecurrence);
+  mUI->verticalLayout->insertWidget(0, mInspectorSummary);
+  mInspectorSummary->hide();
+}
+
+void QEventDetailsWidget::setInspectorMode(bool enabled) {
+  if (mInspectorMode == enabled) {
+    return;
+  }
+  mInspectorMode = enabled;
+  ++mSelectionRevision;
+  mInEditMode = false;
+  mCreatingNewEvent = false;
+  auto *summary = qobject_cast<QVBoxLayout *>(mInspectorSummary->layout());
+  if (enabled) {
+    mUI->formLayout->removeWidget(mMeetingActionsWidget);
+    mUI->formLayout->removeWidget(mSeriesCallWidget);
+    summary->addWidget(mSeriesCallWidget);
+    summary->addWidget(mMeetingActionsWidget);
+    static_cast<QBoxLayout *>(mMeetingActionsWidget->layout())->setDirection(QBoxLayout::TopToBottom);
+    // Series actions can have long translated labels. Stacking keeps all of
+    // them accessible inside the narrow scrollable panel.
+    static_cast<QBoxLayout *>(mSeriesCallWidget->layout()->itemAt(1)->layout())
+        ->setDirection(QBoxLayout::TopToBottom);
+  } else {
+    summary->removeWidget(mMeetingActionsWidget);
+    summary->removeWidget(mSeriesCallWidget);
+    mUI->formLayout->setWidget(16, QFormLayout::FieldRole, mMeetingActionsWidget);
+    mUI->formLayout->setWidget(17, QFormLayout::FieldRole, mSeriesCallWidget);
+    static_cast<QBoxLayout *>(mMeetingActionsWidget->layout())->setDirection(QBoxLayout::LeftToRight);
+    static_cast<QBoxLayout *>(mSeriesCallWidget->layout()->itemAt(1)->layout())
+        ->setDirection(QBoxLayout::LeftToRight);
+  }
+  mEditorFields->setVisible(!enabled);
+  mInspectorSummary->setVisible(enabled);
+  initDefaultStyle();
+  refreshInspector();
+}
+
+void QEventDetailsWidget::refreshInspector() {
+  if (!mInspectorMode) {
+    return;
+  }
+  mUI->mButtonBox->hide();
+  mUI->mAddButton->hide();
+  mUI->mChangeButton->setVisible(mCurrentEvent != nullptr);
+  if (!mCurrentEvent) {
+    mInspectorTitle->clear();
+    mInspectorFacts->clear();
+    mInspectorRecurrence->clear();
+    mMeetingActionsWidget->hide();
+    return;
+  }
+  const auto event = mCurrentEvent->toEvent();
+  mInspectorTitle->setText(mCurrentEvent->getTitle());
+  mInspectorTitle->setToolTip(mCurrentEvent->getTitle());
+  const auto start = mCurrentEvent->getStartTime().toLocalTime();
+  const auto end = mCurrentEvent->getEndTime().toLocalTime();
+  const QString format = !event.is_online ? tr("In person")
+      : mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit
+          ? tr("Online (LiveKit)") : tr("Online (external link)");
+  QStringList facts{locale().toString(start.date(), QLocale::LongFormat),
+      start.toString(QStringLiteral("HH:mm")) + QStringLiteral(" – ") +
+          (start.date() == end.date() ? end.toString(QStringLiteral("HH:mm"))
+                                    : locale().toString(end, QLocale::ShortFormat)),
+      tr("%1 minutes").arg(start.secsTo(end) / 60), format,
+      mUI->mEventStatusComboBox->currentText()};
+  if (event.client_name && !event.client_name->empty()) {
+    facts.prepend(QString::fromStdString(*event.client_name));
+  }
+  mInspectorFacts->setText(facts.join(QStringLiteral("\n\n")));
+  const auto repeat = mRepeatTypeControl->currentData().toString();
+  QString repetition = tr("Does not repeat");
+  if (repeat == QLatin1String("daily")) repetition = tr("Repeats daily");
+  if (repeat == QLatin1String("weekly")) repetition = tr("Repeats every %1 week(s)").arg(mRepeatIntervalSpinBox->value());
+  if (repeat == QLatin1String("monthly")) repetition = tr("Repeats monthly");
+  if (repeat == QLatin1String("yearly")) repetition = tr("Repeats yearly");
+  mInspectorRecurrence->setText(repetition);
+  mMeetingActionsWidget->setVisible(event.is_online);
 }
 
 void QEventDetailsWidget::initConnections() {
@@ -475,6 +585,10 @@ void QEventDetailsWidget::initConnections() {
 }
 
 void QEventDetailsWidget::initDefaultStyle() {
+  if (mInspectorMode) {
+    refreshInspector();
+    return;
+  }
   if (mDialogMode) {
     initEditStyle();
     return;
@@ -535,8 +649,20 @@ void QEventDetailsWidget::setClientList(const QHash<int64_t, QString> &clients) 
 
 void QEventDetailsWidget::loadEvent(QEventItem *event,
                                     const std::optional<int64_t> clientId) {
-  if (!event)
+  ++mSelectionRevision;
+  setSeriesCall(nullptr, 0, {});
+  if (!event) {
+    mCurrentEvent.clear();
+    mInspectorEvent.reset();
+    refreshInspector();
     return;
+  }
+
+  if (mInspectorMode) {
+    auto copy = std::make_unique<QEventItem>(event->toEvent());
+    mInspectorEvent = std::move(copy);
+    event = mInspectorEvent.get();
+  }
 
   qCDebug(logEventDetails) << "EventDetailsWidget::loadEvent|"
                            << "Start time:" << event->getStartTime()
@@ -601,6 +727,7 @@ void QEventDetailsWidget::loadEvent(QEventItem *event,
   onEventTypeToggled(isWorkItem);
   onOnlineSessionToggled(event->isOnline());
   updateCancellationControls();
+  refreshInspector();
 }
 
 void QEventDetailsWidget::startEditingEvent(
@@ -673,6 +800,9 @@ int64_t QEventDetailsWidget::selectedClientId() const {
 }
 
 QString QEventDetailsWidget::selectedClientName() const {
+  if (mInspectorMode && mCurrentEvent) {
+    return QString::fromStdString(mCurrentEvent->toEvent().client_name.value_or(""));
+  }
   if (!mEventTypeSwitch->isChecked()) {
     return {};
   }
@@ -767,6 +897,7 @@ void QEventDetailsWidget::setRecurrenceRule(
 
   onRecurrenceTypeChanged();
   updateRecurringControls();
+  refreshInspector();
 }
 
 void QEventDetailsWidget::rejectPendingSave() {
@@ -858,6 +989,9 @@ QEventItem *QEventDetailsWidget::currentEvent() const {
 }
 
 void QEventDetailsWidget::onApplyClicked() {
+  if (mInspectorMode) {
+    return;
+  }
   if (mPendingMeetingCreation) {
     // An earlier Apply is still waiting for its LiveKit meeting.
     return;
@@ -979,6 +1113,10 @@ void QEventDetailsWidget::onAddClicked() { startCreatingNewEvent(); }
 void QEventDetailsWidget::onChangeClicked() {
   if (!mCurrentEvent)
     return;
+  if (mInspectorMode) {
+    emit editRequested();
+    return;
+  }
   mInEditMode = true;
   emit provideEditModeChanged();
   initEditStyle();
@@ -1080,7 +1218,7 @@ void QEventDetailsWidget::onCopyMeetingInviteClicked() {
     return;
   }
 
-  const auto event = collectEventData();
+  const auto event = mInspectorMode && mCurrentEvent ? mCurrentEvent->toEvent() : collectEventData();
   pcm::meeting::copyMeetingInvite(QString::fromStdString(event.meeting_url),
                                   selectedClientName(),
                                   event.start_date.value_or(0));
@@ -1474,9 +1612,10 @@ void QEventDetailsWidget::withSeriesInvitation(
   // The secret is read from secure storage only now, asynchronously, and handed
   // to the clipboard helper; it is never kept in this widget.
   QPointer<QEventDetailsWidget> guard(this);
-  mSeriesCalls->loadInvitation(mSeriesId, [guard, use](const bool ok, const QString &url,
+  const auto revision = mSelectionRevision;
+  mSeriesCalls->loadInvitation(mSeriesId, [guard, revision, use](const bool ok, const QString &url,
                                                        const QString &passcode) {
-    if (!guard) {
+    if (!guard || guard->mSelectionRevision != revision) {
       return;
     }
     if (!ok) {
@@ -1495,6 +1634,7 @@ void QEventDetailsWidget::withSeriesInvitation(
 
 void QEventDetailsWidget::setSeriesCall(pcm::meeting::SeriesCallService *service,
                                         const int64_t seriesId, const QString &joinTarget) {
+  ++mSelectionRevision;
   if (mSeriesCalls) {
     disconnect(mSeriesCalls, &pcm::meeting::SeriesCallService::statusChanged, this, nullptr);
   }

@@ -7,7 +7,10 @@
 #include "qevent_details_widget.h"
 #include "timeline_widget.h"
 #include "../../widgets/quick_slots_widget.h"
-#include "../../widgets/rounded_calendar_widget.h"
+#include "month_calendar_widget.h"
+#include <QScrollArea>
+#include <QStackedWidget>
+#include <QVBoxLayout>
 #include <QDate>
 #include <QDateTime>
 #include <QPair>
@@ -33,6 +36,8 @@ public:
   // The recurring-call facade. Without it recurring LiveKit events keep the
   // legacy local-only behavior.
   void setSeriesCallService(pcm::meeting::SeriesCallService *service);
+  void setMonthView(bool enabled);
+  [[nodiscard]] bool isMonthView() const;
   // Whether "This and future events" may be offered for this series (it may
   // not for a published series: the permanent invitation cannot be split).
   [[nodiscard]] bool canDeleteFutureOccurrences(int64_t seriesId) const;
@@ -72,7 +77,10 @@ private:
   // picks when the machine's is unusable. Empty when they decline.
   [[nodiscard]] QString confirmNewSeriesTimezone();
   void initDefaultStates();
-  void updateCalendarHighlights() const;
+  void refreshCalendar();
+  void selectMonthEvent(DuckEvent event);
+  void showInspector(const std::optional<DuckEvent> &event);
+  void editSelectedEvent();
   void openEventDialog(const std::optional<DuckEvent> &event = std::nullopt,
                        std::optional<int64_t> clientId = std::nullopt);
   void openQuickEventDialog(const QTime &startTime, int durationMinutes);
@@ -83,7 +91,14 @@ private:
   [[nodiscard]] std::optional<DuckEvent> checkEventConflict(const DuckEvent &event) const;
 
   std::unique_ptr<Ui::EventInfo> mUi;
-  RoundedCalendarWidget *mCalendarWidget = nullptr;
+  MonthCalendarWidget *mMonthCalendar = nullptr;
+  oclero::qlementine::Switch *mViewSwitch = nullptr;
+  QStackedWidget *mCalendarStack = nullptr;
+  QLabel *mPeriodLabel = nullptr;
+  QVBoxLayout *mInspectorLayout = nullptr;
+  QLabel *mEmptyInspector = nullptr;
+  QPointer<QEventDetailsWidget> mInspector;
+  std::optional<DuckEvent> mSelectedEvent;
   QTimelineWidget *mTimelineWidget = nullptr;
   QPointer<pcm::meeting::MeetingCoordinator> mMeetingCoordinator;
   QPointer<QTimelineModel> mModel;
