@@ -17,6 +17,8 @@ qt_add_library(${TARGET_NAME} STATIC
         day_summary_widget.h
         series_call_status_text.cpp
         series_call_status_text.h
+        series_timezone_dialog.cpp
+        series_timezone_dialog.h
 )
 
 target_include_directories(${TARGET_NAME} PRIVATE

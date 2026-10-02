@@ -195,6 +195,20 @@ target_link_libraries(Sessio_series_call_ui_tests PRIVATE
 set_target_properties(Sessio_series_call_ui_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_series_call_ui_tests)
 
+# Timezone confirmation dialog for publishing a series
+add_executable(Sessio_series_timezone_dialog_tests
+    series_timezone_dialog_tests.cpp
+)
+target_include_directories(Sessio_series_timezone_dialog_tests PRIVATE
+    ${qlementine_SOURCE_DIR}/lib/include
+)
+target_link_libraries(Sessio_series_timezone_dialog_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Sessio_event_page
+)
+gtest_discover_tests(Sessio_series_timezone_dialog_tests)
+
 # Schedule conflict tests
 add_executable(Sessio_schedule_conflict_tests
     schedule_conflict_service_tests.cpp
