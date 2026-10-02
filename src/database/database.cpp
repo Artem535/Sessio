@@ -1,5 +1,8 @@
 #include "database.h"
 
+#include <cassert>
+#include <thread>
+
 #include <Poco/UUIDGenerator.h>
 
 namespace pcm::database {
@@ -39,6 +42,81 @@ std::unique_ptr<duckdb::QueryResult> executePrepared(
   }
   auto boundValues = std::move(values);
   return statement->Execute(boundValues);
+}
+
+std::int64_t nowMs() { return Poco::Timestamp().epochMicroseconds() / 1000; }
+
+duckdb::Value nowTimestamp() {
+  return db_utils::toDuckTimestamp(std::make_optional(nowMs() * 1000));
+}
+
+// Explicit transaction on one connection; rolls back unless commit() ran.
+class Transaction {
+public:
+  explicit Transaction(duckdb::Connection &conn) : mConn(conn) {
+    auto result = mConn.Query("BEGIN TRANSACTION");
+    mActive = result && !result->HasError();
+  }
+  ~Transaction() {
+    if (mActive) {
+      mConn.Query("ROLLBACK");
+    }
+  }
+  Transaction(const Transaction &) = delete;
+  Transaction &operator=(const Transaction &) = delete;
+  [[nodiscard]] bool active() const { return mActive; }
+  bool commit() {
+    if (!mActive) {
+      return false;
+    }
+    mActive = false;
+    auto result = mConn.Query("COMMIT");
+    if (!result || result->HasError()) {
+      mConn.Query("ROLLBACK");
+      return false;
+    }
+    return true;
+  }
+
+private:
+  duckdb::Connection &mConn;
+  bool mActive = false;
+};
+
+std::optional<ScheduleIdentity> identityFromChunk(const duckdb::DataChunk &chunk,
+                                                  const duckdb::idx_t row) {
+  ScheduleIdentity identity;
+  identity.series_id = db_utils::toInt32AsInt64(chunk.GetValue(0, row));
+  identity.series_uid = chunk.GetValue(1, row).ToString();
+  identity.timezone = chunk.GetValue(2, row).ToString();
+  identity.invitation_generation = chunk.GetValue(3, row).GetValue<int64_t>();
+  identity.invitation_key = db_utils::toOptionalString(chunk.GetValue(4, row));
+  identity.desired_revision = chunk.GetValue(5, row).GetValue<int64_t>();
+  identity.acked_revision = chunk.GetValue(6, row).GetValue<int64_t>();
+  identity.acked_content_hash =
+      db_utils::toOptionalString(chunk.GetValue(7, row)).value_or("");
+  identity.sync_state = chunk.GetValue(8, row).ToString();
+  identity.last_error = db_utils::toOptionalString(chunk.GetValue(9, row)).value_or("");
+  return identity;
+}
+
+std::optional<std::int64_t> optionalBigint(const duckdb::Value &value) {
+  if (value.IsNull()) {
+    return std::nullopt;
+  }
+  return value.GetValue<int64_t>();
+}
+
+// Rows touched by an UPDATE/DELETE, or nullopt on failure.
+std::optional<std::int64_t> affectedRows(duckdb::QueryResult *result) {
+  if (!result || result->HasError()) {
+    return std::nullopt;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) {
+    return 0;
+  }
+  return chunk->GetValue(0, 0).GetValue<int64_t>();
 }
 } // namespace
 
@@ -80,7 +158,8 @@ int64_t Database::add_event(const DuckEvent &event, const bool allowOverlap) {
     return 0;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   duckdb::vector<duckdb::Value> values{
       db_utils::toDuckValue(event.name),
       db_utils::toDuckValue(event.description),
@@ -132,7 +211,8 @@ bool Database::update_event(const DuckEvent &event, const bool allowOverlap) {
     return false;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   std::unique_ptr<DuckEvent> existingEvent;
   auto existingResult = executePrepared(conn, constance::kSelectEventByIdQuery,
                                         {duckdb::Value::BIGINT(event.id)});
@@ -267,7 +347,8 @@ bool Database::remove_event(const int64_t &id) {
     return false;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   auto relationResult = executePrepared(
       conn, constance::kDeleteEventClientByEventIdQuery,
       {duckdb::Value::BIGINT(id)});
@@ -327,7 +408,8 @@ int64_t Database::add_event_series(const DuckEventSeries &series) {
     return 0;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   const auto nowMs = Poco::Timestamp().epochMicroseconds() / 1000;
   duckdb::vector<duckdb::Value> values{
       db_utils::toDuckValue(series.name),
@@ -379,7 +461,8 @@ bool Database::update_event_series(const DuckEventSeries &series) {
     return false;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   const auto nowMs = Poco::Timestamp().epochMicroseconds() / 1000;
   duckdb::vector<duckdb::Value> values{
       db_utils::toDuckValue(series.name),
@@ -423,7 +506,8 @@ bool Database::deactivate_event_series(const int64_t series_id) {
     return false;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   const auto nowMs = Poco::Timestamp().epochMicroseconds() / 1000;
   auto result = executePrepared(
       conn, constance::kDeactivateEventSeriesQuery,
@@ -444,7 +528,8 @@ bool Database::delete_event_series_overrides_from(
     return false;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   auto result = executePrepared(
       conn, constance::kDeleteEventSeriesOverridesFromQuery,
       {duckdb::Value::BIGINT(series_id),
@@ -565,7 +650,8 @@ bool Database::add_event_series_exception(const int64_t series_id,
     return false;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   auto result = executePrepared(
       conn, constance::kInsertEventSeriesExceptionQuery,
       {duckdb::Value::BIGINT(series_id),
@@ -1381,6 +1467,435 @@ bool Database::export_snapshot(const std::string &target_dir) const {
     return false;
   }
   return true;
+}
+
+// --- Recurring schedule identity and transactional outbox ---
+
+duckdb::Connection &Database::write_connection(std::optional<duckdb::Connection> &owned) {
+  if (mTxConn != nullptr) {
+    assert(mTxThread == std::this_thread::get_id() &&
+           "schedule transaction connection used from another thread");
+    if (mTxThread == std::this_thread::get_id()) {
+      return *mTxConn;
+    }
+    // Release builds: never share the transaction's connection across threads.
+    PLOG_ERROR << "Schedule transaction connection requested from another thread";
+  }
+  owned.emplace(*mDb);
+  return *owned;
+}
+
+std::optional<ScheduleIdentity>
+Database::read_schedule_identity(duckdb::Connection &conn, const char *query,
+                                 duckdb::Value key) {
+  auto result = executePrepared(conn, query, {std::move(key)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to read schedule identity: "
+               << (result ? result->GetError() : "prepare failed");
+    return std::nullopt;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) {
+    return std::nullopt;
+  }
+  return identityFromChunk(*chunk, 0);
+}
+
+bool Database::execute_schedule_update(duckdb::Connection &conn, const char *query,
+                                       duckdb::vector<duckdb::Value> values) {
+  auto result = executePrepared(conn, query, std::move(values));
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Schedule update failed: "
+               << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  return true;
+}
+
+std::optional<ScheduleCommit>
+Database::commit_schedule_change(const ScheduleMutation &mutation,
+                                 const std::string &timezone,
+                                 const SchedulePayloadBuilder &builder) {
+  if (mTxConn != nullptr) {
+    PLOG_ERROR << "Nested schedule transaction rejected";
+    return std::nullopt;
+  }
+
+  duckdb::Connection conn(*mDb);
+  Transaction tx(conn);
+  if (!tx.active()) {
+    PLOG_ERROR << "Failed to begin schedule transaction";
+    return std::nullopt;
+  }
+
+  struct ActiveScope {
+    Database &db;
+    ActiveScope(Database &d, duckdb::Connection &c) : db(d) {
+      db.mTxThread = std::this_thread::get_id();
+      db.mTxConn = &c;
+    }
+    ~ActiveScope() { db.mTxConn = nullptr; }
+  } scope(*this, conn);
+
+  try {
+    const auto changed = mutation();
+    if (!changed.has_value() || *changed <= 0) {
+      return std::nullopt;
+    }
+    const auto seriesId = *changed;
+
+    auto identity = read_schedule_identity(
+        conn, constance::kSelectScheduleIdentityBySeriesQuery,
+        duckdb::Value::BIGINT(seriesId));
+    if (!identity.has_value()) {
+      if (timezone.empty()) {
+        // Legacy series: local change only, nothing to publish.
+        if (!tx.commit()) {
+          return std::nullopt;
+        }
+        return ScheduleCommit{seriesId, {}, 0};
+      }
+      const auto uid = Poco::UUIDGenerator::defaultGenerator().createRandom().toString();
+      if (!execute_schedule_update(conn, constance::kInsertScheduleIdentityQuery,
+                                   {duckdb::Value::BIGINT(seriesId), duckdb::Value(uid),
+                                    duckdb::Value(timezone), nowTimestamp()})) {
+        return std::nullopt;
+      }
+    }
+    if (!execute_schedule_update(conn, constance::kBumpScheduleDesiredRevisionQuery,
+                                 {duckdb::Value::BIGINT(seriesId), nowTimestamp()})) {
+      return std::nullopt;
+    }
+    identity = read_schedule_identity(conn, constance::kSelectScheduleIdentityBySeriesQuery,
+                                      duckdb::Value::BIGINT(seriesId));
+    if (!identity.has_value()) {
+      return std::nullopt;
+    }
+
+    ScheduleSource source;
+    source.identity = *identity;
+    {
+      auto seriesResult = executePrepared(conn, constance::kSelectEventSeriesByIdQuery,
+                                          {duckdb::Value::BIGINT(seriesId)});
+      if (!seriesResult || seriesResult->HasError()) {
+        return std::nullopt;
+      }
+      auto chunk = seriesResult->Fetch();
+      if (!chunk || chunk->size() == 0) {
+        return std::nullopt;
+      }
+      source.series = DuckEventSeries(*chunk, 0);
+    }
+    {
+      auto overrides = executePrepared(conn, constance::kSelectScheduleOverridesQuery,
+                                       {duckdb::Value::BIGINT(seriesId)});
+      if (!overrides || overrides->HasError()) {
+        return std::nullopt;
+      }
+      while (auto chunk = overrides->Fetch()) {
+        for (duckdb::idx_t i = 0; i < chunk->size(); ++i) {
+          ScheduleOverrideSource item;
+          item.original_start_ms =
+              db_utils::toOptionalTimestampMs(chunk->GetValue(0, i)).value_or(0);
+          item.start_ms = db_utils::toOptionalTimestampMs(chunk->GetValue(1, i)).value_or(0);
+          item.end_ms = db_utils::toOptionalTimestampMs(chunk->GetValue(2, i)).value_or(0);
+          item.event_stat_id = db_utils::toInt32AsInt64(chunk->GetValue(3, i));
+          source.overrides.push_back(item);
+        }
+      }
+    }
+    {
+      auto exceptions = executePrepared(conn, constance::kSelectScheduleExceptionsQuery,
+                                        {duckdb::Value::BIGINT(seriesId)});
+      if (!exceptions || exceptions->HasError()) {
+        return std::nullopt;
+      }
+      while (auto chunk = exceptions->Fetch()) {
+        for (duckdb::idx_t i = 0; i < chunk->size(); ++i) {
+          source.exceptions.push_back(
+              db_utils::toOptionalTimestampMs(chunk->GetValue(0, i)).value_or(0));
+        }
+      }
+    }
+
+    const auto payload = builder(source);
+    if (!payload.has_value()) {
+      PLOG_WARNING << "Schedule payload builder rejected the change; rolling back";
+      return std::nullopt;
+    }
+
+    auto outbox = executePrepared(conn, constance::kSelectScheduleOutboxQuery,
+                                  {duckdb::Value(identity->series_uid)});
+    if (!outbox || outbox->HasError()) {
+      return std::nullopt;
+    }
+    const auto outboxChunk = outbox->Fetch();
+    const bool outboxExists = outboxChunk && outboxChunk->size() > 0;
+    const duckdb::vector<duckdb::Value> values{
+        duckdb::Value(identity->series_uid), duckdb::Value(*payload),
+        duckdb::Value::BIGINT(identity->desired_revision), nowTimestamp()};
+    if (!execute_schedule_update(conn,
+                                 outboxExists ? constance::kUpdateScheduleOutboxPendingQuery
+                                              : constance::kInsertScheduleOutboxQuery,
+                                 values)) {
+      return std::nullopt;
+    }
+
+    if (!tx.commit()) {
+      return std::nullopt;
+    }
+    return ScheduleCommit{seriesId, identity->series_uid, identity->desired_revision};
+  } catch (const std::exception &error) {
+    PLOG_ERROR << "Schedule transaction aborted: " << error.what();
+    return std::nullopt;
+  } catch (...) {
+    PLOG_ERROR << "Schedule transaction aborted";
+    return std::nullopt;
+  }
+}
+
+std::optional<ScheduleIdentity> Database::get_schedule_identity(const int64_t series_id) {
+  duckdb::Connection conn(*mDb);
+  return read_schedule_identity(conn, constance::kSelectScheduleIdentityBySeriesQuery,
+                                duckdb::Value::BIGINT(series_id));
+}
+
+std::optional<ScheduleIdentity>
+Database::get_schedule_identity_by_uid(const std::string &series_uid) {
+  duckdb::Connection conn(*mDb);
+  return read_schedule_identity(conn, constance::kSelectScheduleIdentityByUidQuery,
+                                duckdb::Value(series_uid));
+}
+
+std::optional<ScheduleOutbox> Database::get_schedule_outbox(const std::string &series_uid) {
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn, constance::kSelectScheduleOutboxQuery,
+                                {duckdb::Value(series_uid)});
+  if (!result || result->HasError()) {
+    return std::nullopt;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) {
+    return std::nullopt;
+  }
+  ScheduleOutbox outbox;
+  outbox.series_uid = chunk->GetValue(0, 0).ToString();
+  outbox.pending_payload = db_utils::toOptionalString(chunk->GetValue(1, 0));
+  outbox.pending_desired_revision = optionalBigint(chunk->GetValue(2, 0));
+  outbox.inflight_revision = optionalBigint(chunk->GetValue(3, 0));
+  outbox.inflight_payload = db_utils::toOptionalString(chunk->GetValue(4, 0));
+  outbox.inflight_hash = db_utils::toOptionalString(chunk->GetValue(5, 0));
+  outbox.inflight_desired_revision = optionalBigint(chunk->GetValue(6, 0));
+  return outbox;
+}
+
+std::vector<ScheduleIdentity> Database::list_schedule_series_pending_sync() {
+  duckdb::Connection conn(*mDb);
+  std::vector<ScheduleIdentity> identities;
+  auto result = conn.Query(constance::kSelectScheduleSeriesPendingSyncQuery);
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to list pending schedule series";
+    return identities;
+  }
+  while (auto chunk = result->Fetch()) {
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) {
+      if (auto identity = identityFromChunk(*chunk, i)) {
+        identities.push_back(std::move(*identity));
+      }
+    }
+  }
+  return identities;
+}
+
+bool Database::freeze_schedule_pending(const std::string &series_uid,
+                                       const int64_t expected_pending_desired,
+                                       const int64_t revision,
+                                       const std::string &payload,
+                                       const std::string &content_hash) {
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(
+      conn, constance::kFreezeScheduleOutboxQuery,
+      {duckdb::Value(series_uid), duckdb::Value::BIGINT(expected_pending_desired),
+       duckdb::Value::BIGINT(revision), duckdb::Value(payload),
+       duckdb::Value(content_hash), nowTimestamp()});
+  const auto rows = affectedRows(result.get());
+  return rows.has_value() && *rows == 1;
+}
+
+std::optional<ScheduleAck>
+Database::ack_schedule_inflight(const std::string &series_uid, const int64_t revision,
+                                const std::string &content_hash) {
+  duckdb::Connection conn(*mDb);
+  Transaction tx(conn);
+  if (!tx.active()) {
+    return std::nullopt;
+  }
+
+  auto outboxResult = executePrepared(conn, constance::kSelectScheduleOutboxQuery,
+                                      {duckdb::Value(series_uid)});
+  if (!outboxResult || outboxResult->HasError()) {
+    return std::nullopt;
+  }
+  auto chunk = outboxResult->Fetch();
+  if (!chunk || chunk->size() == 0) {
+    return std::nullopt;
+  }
+  const auto inflightRevision = optionalBigint(chunk->GetValue(3, 0));
+  if (!inflightRevision.has_value() || *inflightRevision != revision) {
+    return std::nullopt;
+  }
+  const bool hasNewer = !chunk->GetValue(1, 0).IsNull();
+
+  if (!execute_schedule_update(conn, constance::kClearScheduleInflightQuery,
+                               {duckdb::Value(series_uid), nowTimestamp()}) ||
+      !execute_schedule_update(
+          conn, constance::kAckScheduleIdentityQuery,
+          {duckdb::Value(series_uid), duckdb::Value::BIGINT(revision),
+           duckdb::Value(content_hash),
+           duckdb::Value(hasNewer ? schedule_sync_state::kPending
+                                  : schedule_sync_state::kSynced),
+           nowTimestamp()})) {
+    return std::nullopt;
+  }
+  if (!tx.commit()) {
+    return std::nullopt;
+  }
+  return ScheduleAck{hasNewer};
+}
+
+bool Database::release_schedule_inflight(const std::string &series_uid,
+                                         const std::string &pending_payload) {
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(
+      conn, constance::kReleaseScheduleInflightQuery,
+      {duckdb::Value(series_uid), duckdb::Value(pending_payload), nowTimestamp()});
+  const auto rows = affectedRows(result.get());
+  return rows.has_value() && *rows == 1;
+}
+
+std::optional<std::vector<std::string>>
+Database::clear_series_legacy_meeting(const int64_t series_id) {
+  if (series_id <= 0) {
+    return std::nullopt;
+  }
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  std::optional<Transaction> tx;
+  if (mTxConn == nullptr) {
+    tx.emplace(conn);
+    if (!tx->active()) {
+      return std::nullopt;
+    }
+  }
+
+  std::vector<std::string> refs;
+  auto selected = executePrepared(conn, constance::kSelectSeriesLegacyMeetingRefsQuery,
+                                  {duckdb::Value::BIGINT(series_id)});
+  if (!selected || selected->HasError()) {
+    return std::nullopt;
+  }
+  while (auto chunk = selected->Fetch()) {
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) {
+      refs.push_back(chunk->GetValue(0, i).ToString());
+    }
+  }
+  if (!execute_schedule_update(conn, constance::kClearSeriesLegacyMeetingQuery,
+                               {duckdb::Value::BIGINT(series_id), nowTimestamp()}) ||
+      !execute_schedule_update(conn, constance::kClearSeriesEventsLegacyMeetingQuery,
+                               {duckdb::Value::BIGINT(series_id)})) {
+    return std::nullopt;
+  }
+  if (tx && !tx->commit()) {
+    return std::nullopt;
+  }
+  return refs;
+}
+
+bool Database::set_schedule_sync_state(const std::string &series_uid,
+                                       const std::string &state,
+                                       const std::string &error) {
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(
+      conn, constance::kSetScheduleSyncStateQuery,
+      {duckdb::Value(series_uid), duckdb::Value(state),
+       error.empty() ? duckdb::Value() : duckdb::Value(error), nowTimestamp()});
+  const auto rows = affectedRows(result.get());
+  return rows.has_value() && *rows == 1;
+}
+
+bool Database::adopt_schedule_server_revision(const std::string &series_uid,
+                                              const int64_t server_revision,
+                                              const std::string &content_hash,
+                                              const bool allow_rewind) {
+  // Usable on its own or as part of a commit_schedule_change() mutation, in
+  // which case it joins that transaction instead of opening a nested one.
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  std::optional<Transaction> tx;
+  if (mTxConn == nullptr) {
+    tx.emplace(conn);
+    if (!tx->active()) {
+      return false;
+    }
+  }
+  const auto current = read_schedule_identity(
+      conn, constance::kSelectScheduleIdentityByUidQuery, duckdb::Value(series_uid));
+  if (!current.has_value() ||
+      (!allow_rewind && server_revision < current->acked_revision)) {
+    return false;
+  }
+  auto adopted = executePrepared(
+      conn, constance::kAdoptScheduleServerRevisionQuery,
+      {duckdb::Value(series_uid), duckdb::Value::BIGINT(server_revision),
+       duckdb::Value(content_hash), nowTimestamp()});
+  const auto rows = affectedRows(adopted.get());
+  if (!rows.has_value() || *rows != 1) {
+    return false;
+  }
+  if (!execute_schedule_update(conn, constance::kClearScheduleOutboxQuery,
+                               {duckdb::Value(series_uid), nowTimestamp()})) {
+    return false;
+  }
+  return !tx.has_value() || tx->commit();
+}
+
+std::string Database::ensure_schedule_invitation_key(const int64_t series_id) {
+  duckdb::Connection conn(*mDb);
+  Transaction tx(conn);
+  if (!tx.active()) {
+    return {};
+  }
+  const auto identity = read_schedule_identity(
+      conn, constance::kSelectScheduleIdentityBySeriesQuery, duckdb::Value::BIGINT(series_id));
+  if (!identity.has_value()) {
+    return {};
+  }
+  if (identity->invitation_key.has_value() && !identity->invitation_key->empty()) {
+    return *identity->invitation_key;
+  }
+  const auto key = Poco::UUIDGenerator::defaultGenerator().createRandom().toString();
+  if (!execute_schedule_update(conn, constance::kSetScheduleInvitationKeyQuery,
+                               {duckdb::Value::BIGINT(series_id), duckdb::Value(key),
+                                nowTimestamp()}) ||
+      !tx.commit()) {
+    return {};
+  }
+  return key;
+}
+
+bool Database::clear_schedule_invitation_key(const int64_t series_id) {
+  duckdb::Connection conn(*mDb);
+  return execute_schedule_update(conn, constance::kSetScheduleInvitationKeyQuery,
+                                 {duckdb::Value::BIGINT(series_id), duckdb::Value(),
+                                  nowTimestamp()});
+}
+
+bool Database::set_schedule_invitation_generation(const int64_t series_id,
+                                                  const int64_t generation) {
+  duckdb::Connection conn(*mDb);
+  return execute_schedule_update(conn, constance::kSetScheduleInvitationGenerationQuery,
+                                 {duckdb::Value::BIGINT(series_id),
+                                  duckdb::Value::BIGINT(generation), nowTimestamp()});
 }
 
 // --- Init ---

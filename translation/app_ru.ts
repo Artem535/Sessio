@@ -1011,6 +1011,38 @@
         <translation>Провайдер</translation>
     </message>
     <message>
+        <source>Copy passcode</source>
+        <translation>Копировать код доступа</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Повторить</translation>
+    </message>
+    <message>
+        <source>Create new link</source>
+        <translation>Создать новую ссылку</translation>
+    </message>
+    <message>
+        <source>Publish this device&apos;s schedule</source>
+        <translation>Опубликовать расписание с этого устройства</translation>
+    </message>
+    <message>
+        <source>Move to a permanent link...</source>
+        <translation>Перейти на постоянную ссылку...</translation>
+    </message>
+    <message>
+        <source>Create a new link</source>
+        <translation>Создать новую ссылку</translation>
+    </message>
+    <message>
+        <source>The current link stops working immediately. Anyone who has it will need the new link. Continue?</source>
+        <translation>Текущая ссылка сразу перестанет работать. Всем, у кого она есть, потребуется новая. Продолжить?</translation>
+    </message>
+    <message>
+        <source>The server holds a different version of this schedule. Publishing replaces it with the schedule on this device. Continue?</source>
+        <translation>На сервере другая версия этого расписания. Публикация заменит её расписанием с этого устройства. Продолжить?</translation>
+    </message>
+    <message>
         <source>Failed to create the LiveKit meeting: %1</source>
         <translation>Не удалось создать встречу LiveKit: %1</translation>
     </message>
@@ -1021,6 +1053,18 @@
     <message>
         <source>Overlaps with &quot;%1&quot;, %2.</source>
         <translation>Пересекается с «%1», %2.</translation>
+    </message>
+    <message>
+        <source>The system keychain is not available, so the link cannot be read.</source>
+        <translation>Системная связка ключей недоступна, поэтому ссылку не удаётся прочитать.</translation>
+    </message>
+    <message>
+        <source>The permanent link is not stored on this device. Create a new link.</source>
+        <translation>Постоянная ссылка не сохранена на этом устройстве. Создайте новую ссылку.</translation>
+    </message>
+    <message>
+        <source>The permanent link is stored securely. Use Copy link.</source>
+        <translation>Постоянная ссылка надёжно сохранена. Используйте «Копировать ссылку».</translation>
     </message>
     <message>
         <source>Repeat</source>
@@ -1157,6 +1201,26 @@
 </context>
 <context>
     <name>QEventInfoPage</name>
+    <message>
+        <source>The change was not saved.</source>
+        <translation>Изменение не сохранено.</translation>
+    </message>
+    <message>
+        <source>This series has a permanent call link, so it cannot be split into &quot;this and future&quot; events. Nothing was changed.</source>
+        <translation>У этой серии есть постоянная ссылка на звонок, поэтому её нельзя разделить на «это и последующие» события. Ничего не изменено.</translation>
+    </message>
+    <message>
+        <source>The schedule cannot be published: %1. Nothing was changed.</source>
+        <translation>Расписание нельзя опубликовать: %1. Ничего не изменено.</translation>
+    </message>
+    <message>
+        <source>The change was not saved: %1</source>
+        <translation>Изменение не сохранено: %1</translation>
+    </message>
+    <message>
+        <source>Recurring event</source>
+        <translation>Повторяющееся событие</translation>
+    </message>
     <message>
         <source>: EVENT_ADD_BUTTON</source>
         <translation>Добавить</translation>
@@ -1400,6 +1464,10 @@ See you!</source>
         <translation>Это и все последующие события</translation>
     </message>
     <message>
+        <source>&quot;This and future events&quot; is not available for a series with a permanent call link. Delete only this event or the whole series.</source>
+        <translation>Вариант «Это и последующие события» недоступен для серии с постоянной ссылкой на звонок. Удалите только это событие или всю серию.</translation>
+    </message>
+    <message>
         <source>Access to keychain denied</source>
         <translation>Доступ к хранилищу ключей запрещён</translation>
     </message>
@@ -1495,6 +1563,117 @@ See you!</source>
     <message>
         <source>I&apos;m a client</source>
         <translation>Я клиент</translation>
+    </message>
+</context>
+<context>
+    <name>SeriesCallStatus</name>
+    <message>
+        <source>the system keychain is not available</source>
+        <translation>системная связка ключей недоступна</translation>
+    </message>
+    <message>
+        <source>the access key could not be read</source>
+        <translation>не удалось прочитать ключ доступа</translation>
+    </message>
+    <message>
+        <source>the server rejected the access key</source>
+        <translation>сервер отклонил ключ доступа</translation>
+    </message>
+    <message>
+        <source>the server refused the schedule</source>
+        <translation>сервер отклонил расписание</translation>
+    </message>
+    <message>
+        <source>the server has a different version of the schedule</source>
+        <translation>на сервере другая версия расписания</translation>
+    </message>
+    <message>
+        <source>the server does not support recurring calls</source>
+        <translation>сервер не поддерживает повторяющиеся звонки</translation>
+    </message>
+    <message>
+        <source>the local database could not be updated</source>
+        <translation>не удалось обновить локальную базу данных</translation>
+    </message>
+    <message>
+        <source>Moving this series to a permanent link: sending the schedule to the server...</source>
+        <translation>Переход на постоянную ссылку: отправка расписания на сервер...</translation>
+    </message>
+    <message>
+        <source>Moving this series to a permanent link: creating the link...</source>
+        <translation>Переход на постоянную ссылку: создание ссылки...</translation>
+    </message>
+    <message>
+        <source>Could not move this series to a permanent link (%1). The previous link stays valid.</source>
+        <translation>Не удалось перевести серию на постоянную ссылку (%1). Прежняя ссылка остаётся действительной.</translation>
+    </message>
+    <message>
+        <source>Schedule synchronized with the server.</source>
+        <translation>Расписание синхронизировано с сервером.</translation>
+    </message>
+    <message>
+        <source>Schedule saved on this device, waiting to be sent.</source>
+        <translation>Расписание сохранено на этом устройстве и ожидает отправки.</translation>
+    </message>
+    <message>
+        <source>Sending the schedule...</source>
+        <translation>Отправка расписания...</translation>
+    </message>
+    <message>
+        <source>Waiting for the network. The schedule will be sent automatically.</source>
+        <translation>Ожидание сети. Расписание будет отправлено автоматически.</translation>
+    </message>
+    <message>
+        <source>The server has a different version of this schedule. Nothing was overwritten.</source>
+        <translation>На сервере другая версия этого расписания. Ничего не перезаписано.</translation>
+    </message>
+    <message>
+        <source>The server refused this schedule (%1). Your changes are kept on this device.</source>
+        <translation>Сервер отклонил это расписание (%1). Ваши изменения сохранены на этом устройстве.</translation>
+    </message>
+    <message>
+        <source>This server does not support recurring calls yet. The schedule stays on this device and no call link can be created.</source>
+        <translation>Этот сервер пока не поддерживает повторяющиеся звонки. Расписание остаётся на этом устройстве, ссылку на звонок создать нельзя.</translation>
+    </message>
+    <message>
+        <source>The server rejected the saved access key. Check it in Settings.</source>
+        <translation>Сервер отклонил сохранённый ключ доступа. Проверьте его в настройках.</translation>
+    </message>
+    <message>
+        <source>The access key could not be read from the system keychain.</source>
+        <translation>Не удалось прочитать ключ доступа из системной связки ключей.</translation>
+    </message>
+    <message>
+        <source>The server may still allow entry under the previous schedule until this is sent.</source>
+        <translation>Пока это не отправлено, сервер может по-прежнему пускать на звонок по прежнему расписанию.</translation>
+    </message>
+    <message>
+        <source>Permanent link ready.</source>
+        <translation>Постоянная ссылка готова.</translation>
+    </message>
+    <message>
+        <source>The permanent link has not been created yet.</source>
+        <translation>Постоянная ссылка ещё не создана.</translation>
+    </message>
+    <message>
+        <source>The link will be created once the server has the schedule.</source>
+        <translation>Ссылка будет создана, когда расписание появится на сервере.</translation>
+    </message>
+    <message>
+        <source>Creating the permanent link...</source>
+        <translation>Создание постоянной ссылки...</translation>
+    </message>
+    <message>
+        <source>Waiting for the network to create the link.</source>
+        <translation>Ожидание сети для создания ссылки.</translation>
+    </message>
+    <message>
+        <source>The link is not available on this device. Create a new link; the old one will stop working.</source>
+        <translation>Ссылка недоступна на этом устройстве. Создайте новую; старая перестанет работать.</translation>
+    </message>
+    <message>
+        <source>Could not create the link (%1).</source>
+        <translation>Не удалось создать ссылку (%1).</translation>
     </message>
 </context>
 <context>
@@ -2152,6 +2331,49 @@ Your previous data was kept.</source>
     <message>
         <source>Quit</source>
         <translation>Выйти</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::eventpage::SeriesTimezoneDialog</name>
+    <message>
+        <source>Confirm the series timezone</source>
+        <translation>Подтвердите часовой пояс серии</translation>
+    </message>
+    <message>
+        <source>A permanent link needs a fixed timezone for this series. From now on the meeting times follow this timezone, not the timezone of this computer. Check that the dates below stay the same.</source>
+        <translation>Для постоянной ссылки у серии должен быть фиксированный часовой пояс. Теперь время встреч определяется им, а не часовым поясом этого компьютера. Убедитесь, что даты ниже не изменились.</translation>
+    </message>
+    <message>
+        <source>Choose a timezone</source>
+        <translation>Выберите часовой пояс</translation>
+    </message>
+    <message>
+        <source>not available</source>
+        <translation>недоступно</translation>
+    </message>
+    <message>
+        <source>no upcoming dates</source>
+        <translation>нет ближайших дат</translation>
+    </message>
+    <message>
+        <source>Dates today: %1</source>
+        <translation>Даты сейчас: %1</translation>
+    </message>
+    <message>
+        <source>Choose the timezone this series is scheduled in.</source>
+        <translation>Выберите часовой пояс, в котором назначена серия.</translation>
+    </message>
+    <message>
+        <source>Dates in %1: %2</source>
+        <translation>Даты в %1: %2</translation>
+    </message>
+    <message>
+        <source>This timezone cannot be used for the series.</source>
+        <translation>Этот часовой пояс нельзя использовать для серии.</translation>
+    </message>
+    <message>
+        <source>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</source>
+        <translation>Некоторые встречи сместятся на другие даты или время. Выберите другой часовой пояс или отмените и оставьте серию как есть.</translation>
     </message>
 </context>
 <context>

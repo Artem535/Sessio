@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.8] - 2026-10-02
+
+### Added
+
+- Recurring LiveKit calls: a weekly (or other recurring) event can be
+  published as one series with a single permanent invitation link and
+  passcode. Every occurrence gets its own room, so one invitation covers the
+  whole series.
+- The event editor shows the series state (publishing, published, needs
+  attention), lets you copy the invitation, and offers a retry when syncing the
+  schedule to the call service failed or is offline.
+- A timezone confirmation dialog appears before a series is published, so the
+  occurrences are pinned to the timezone you intend.
+- Existing recurring events can be moved to the new series model on request
+  (opt-in legacy series migration); nothing is migrated automatically.
+
+### Changed
+
+- Recurring calls require a token backend of version 0.2.8 or newer; with an
+  older backend a recurring event is shown as unsupported and no call is
+  created.
+- "Create a new link" is offered next to a ready permanent link (after a backup
+  restore or a keychain reset the link can not be copied on that device), and
+  an interrupted link replacement is completed when the app starts.
+- The installed application now ships the timezone data it needs to publish
+  recurring series (RPM, AppImage, Windows installer and macOS bundle).
+- Splitting a series ("this and following") is blocked while the series is
+  published, to keep the shared invitation valid.
+- Joining an occurrence of a published series goes through the series
+  invitation and the per-occurrence room.
+
 ## [0.2.7] - 2026-10-01
 
 ### Fixed

@@ -314,6 +314,17 @@ jobs:
             -Destination build-release/packages/Sessio `
             -Force
 
+      - name: Copy libical timezone data
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Resolved at run time as <exe dir>\zoneinfo (src/meeting/schedule_zoneinfo.cpp).
+          $zoneinfo = "build-release/vcpkg_installed/x64-windows/share/libical/zoneinfo"
+          if (-not (Test-Path "$zoneinfo/America/New_York.ics")) {
+            throw "libical zoneinfo not found at $zoneinfo"
+          }
+          Copy-Item $zoneinfo build-release/packages/Sessio/zoneinfo -Recurse -Force
+
       - name: Install Inno Setup
         if: runner.os == 'Windows'
         shell: pwsh

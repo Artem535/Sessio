@@ -1,6 +1,8 @@
 #include "qevent_details_widget.h"
 #include "../../widgets/app_settings.h"
 #include "../../widgets/meeting_utils.h"
+#include "../../widgets/sensitive_clipboard.h"
+#include "series_call_status_text.h"
 #include "ui/pages/ui_eventdetails.h"
 
 #include <oclero/qlementine/widgets/Switch.hpp>
@@ -303,15 +305,49 @@ void QEventDetailsWidget::initUi() {
   mOpenMeetingButton = new QPushButton(tr("Open"), mMeetingActionsWidget);
   mCopyMeetingUrlButton = new QPushButton(tr("Copy link"), mMeetingActionsWidget);
   mCopyMeetingInviteButton = new QPushButton(tr("Copy invite"), mMeetingActionsWidget);
+  mCopyMeetingPasscodeButton = new QPushButton(tr("Copy passcode"), mMeetingActionsWidget);
+  mCopyMeetingPasscodeButton->setObjectName(QStringLiteral("copyMeetingPasscodeButton"));
+  mCopyMeetingPasscodeButton->setVisible(false); // series calls only
   mOpenMeetingButton->setObjectName(QStringLiteral("openMeetingButton"));
   mCopyMeetingUrlButton->setObjectName(QStringLiteral("copyMeetingUrlButton"));
   mCopyMeetingInviteButton->setObjectName(QStringLiteral("copyMeetingInviteButton"));
   meetingActionsLayout->addWidget(mOpenMeetingButton);
   meetingActionsLayout->addWidget(mCopyMeetingUrlButton);
   meetingActionsLayout->addWidget(mCopyMeetingInviteButton);
+  meetingActionsLayout->addWidget(mCopyMeetingPasscodeButton);
   meetingActionsLayout->addStretch();
   mUI->formLayout->insertRow(onlineSectionRow + 6, QString(),
                              mMeetingActionsWidget);
+
+  mSeriesCallWidget = new QWidget(this);
+  mSeriesCallWidget->setObjectName(QStringLiteral("seriesCallPanel"));
+  auto *seriesCallLayout = new QVBoxLayout(mSeriesCallWidget);
+  seriesCallLayout->setContentsMargins(0, 0, 0, 0);
+  seriesCallLayout->setSpacing(6);
+  mSeriesStatusLabel = new QLabel(mSeriesCallWidget);
+  mSeriesStatusLabel->setObjectName(QStringLiteral("seriesCallStatusLabel"));
+  mSeriesStatusLabel->setWordWrap(true);
+  mSeriesStatusLabel->setTextFormat(Qt::PlainText);
+  seriesCallLayout->addWidget(mSeriesStatusLabel);
+  auto *seriesActionsLayout = new QHBoxLayout();
+  seriesActionsLayout->setContentsMargins(0, 0, 0, 0);
+  seriesActionsLayout->setSpacing(8);
+  mSeriesRetryButton = new QPushButton(tr("Retry"), mSeriesCallWidget);
+  mSeriesRetryButton->setObjectName(QStringLiteral("seriesCallRetryButton"));
+  mSeriesReissueButton = new QPushButton(tr("Create new link"), mSeriesCallWidget);
+  mSeriesReissueButton->setObjectName(QStringLiteral("seriesCallReissueButton"));
+  mSeriesPublishButton = new QPushButton(tr("Publish this device's schedule"), mSeriesCallWidget);
+  mSeriesPublishButton->setObjectName(QStringLiteral("seriesCallPublishButton"));
+  mMigrateButton = new QPushButton(tr("Move to a permanent link..."), mSeriesCallWidget);
+  mMigrateButton->setObjectName(QStringLiteral("migrateToPermanentLinkButton"));
+  seriesActionsLayout->addWidget(mSeriesRetryButton);
+  seriesActionsLayout->addWidget(mSeriesReissueButton);
+  seriesActionsLayout->addWidget(mSeriesPublishButton);
+  seriesActionsLayout->addWidget(mMigrateButton);
+  seriesActionsLayout->addStretch();
+  seriesCallLayout->addLayout(seriesActionsLayout);
+  mSeriesCallWidget->setVisible(false);
+  mUI->formLayout->insertRow(onlineSectionRow + 7, QString(), mSeriesCallWidget);
 
   mBuffersWidget = new QWidget(this);
   auto *buffersLayout = new QHBoxLayout(mBuffersWidget);
@@ -330,7 +366,7 @@ void QEventDetailsWidget::initUi() {
   mBufferAfterSpinBox->setMinimumWidth(92);
   buffersLayout->addWidget(mBufferAfterSpinBox);
   buffersLayout->addStretch();
-  mUI->formLayout->insertRow(onlineSectionRow + 7, tr("Buffers"),
+  mUI->formLayout->insertRow(onlineSectionRow + 8, tr("Buffers"),
                              mBuffersWidget);
 
   auto *conflictWidget = new QWidget(this);
@@ -345,7 +381,7 @@ void QEventDetailsWidget::initUi() {
   mSuggestFreeSlotButton->setVisible(false);
   conflictLayout->addWidget(mConflictWarningLabel);
   conflictLayout->addWidget(mSuggestFreeSlotButton, 0, Qt::AlignLeft);
-  mUI->formLayout->insertRow(onlineSectionRow + 8, QString(), conflictWidget);
+  mUI->formLayout->insertRow(onlineSectionRow + 9, QString(), conflictWidget);
 
   mUI->mAddButton->setIcon(QIcon(":/icons/calendar-plus-solid-full.svg"));
   mUI->mAddButton->setIconSize(QSize(16, 16));
@@ -384,6 +420,41 @@ void QEventDetailsWidget::initConnections() {
           &QEventDetailsWidget::onCopyMeetingUrlClicked);
   connect(mCopyMeetingInviteButton, &QPushButton::clicked, this,
           &QEventDetailsWidget::onCopyMeetingInviteClicked);
+  connect(mCopyMeetingPasscodeButton, &QPushButton::clicked, this,
+          &QEventDetailsWidget::onCopyMeetingPasscodeClicked);
+  connect(mSeriesRetryButton, &QPushButton::clicked, this, [this]() {
+    if (mSeriesCalls) {
+      mSeriesCalls->retry(mSeriesId);
+    }
+  });
+  connect(mSeriesReissueButton, &QPushButton::clicked, this, [this]() {
+    if (!mSeriesCalls) {
+      return;
+    }
+    const auto answer = QMessageBox::question(
+        this, tr("Create a new link"),
+        tr("The current link stops working immediately. Anyone who has it will need the new "
+           "link. Continue?"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer == QMessageBox::Yes) {
+      mSeriesCalls->reissueInvitation(mSeriesId);
+    }
+  });
+  connect(mSeriesPublishButton, &QPushButton::clicked, this, [this]() {
+    if (!mSeriesCalls) {
+      return;
+    }
+    const auto answer = QMessageBox::warning(
+        this, tr("Publish this device's schedule"),
+        tr("The server holds a different version of this schedule. Publishing replaces it with "
+           "the schedule on this device. Continue?"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer == QMessageBox::Yes) {
+      mSeriesCalls->publishThisDeviceSchedule(mSeriesId);
+    }
+  });
+  connect(mMigrateButton, &QPushButton::clicked, this,
+          [this]() { emit migrateToPermanentLinkRequested(mSeriesId); });
   connect(mUI->mTimeFrom, &QTimeEdit::timeChanged, this,
           &QEventDetailsWidget::onTimeFromChanged);
   connect(mUI->mTimeTo, &QTimeEdit::timeChanged, this,
@@ -607,6 +678,11 @@ QString QEventDetailsWidget::selectedClientName() const {
   }
 
   return mUI->mClientComboBox->currentText();
+}
+
+bool QEventDetailsWidget::wantsNewLiveKitSeries() const {
+  return mCreatingNewEvent && isRecurring() && mOnlineSessionSwitch->isChecked() &&
+         mProviderKindControl->currentIndex() == 1 && !mLegacyMigratable;
 }
 
 bool QEventDetailsWidget::isRecurring() const {
@@ -963,6 +1039,10 @@ void QEventDetailsWidget::onMeetingUrlChanged(const QString &url) {
 }
 
 void QEventDetailsWidget::onOpenMeetingClicked() {
+  if (mSeriesBacked) {
+    emit openLiveKitMeetingRequested(mSeriesJoinTarget);
+    return;
+  }
   if (mCurrentEvent &&
       mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit) {
     emit openLiveKitMeetingRequested(mCurrentEvent->meetingRef());
@@ -972,6 +1052,10 @@ void QEventDetailsWidget::onOpenMeetingClicked() {
 }
 
 void QEventDetailsWidget::onCopyMeetingUrlClicked() {
+  if (mSeriesBacked) {
+    withSeriesInvitation([](const QString &url, const QString &) { pcm::meeting::copyMeetingUrl(url); });
+    return;
+  }
   if (!pcm::meeting::isValidInvitationUrl(mMeetingUrlEdit->text())) {
     QMessageBox::warning(this, tr(": ERROR_TITLE"),
                          tr("Enter a valid http or https meeting link."));
@@ -982,6 +1066,14 @@ void QEventDetailsWidget::onCopyMeetingUrlClicked() {
 }
 
 void QEventDetailsWidget::onCopyMeetingInviteClicked() {
+  if (mSeriesBacked) {
+    const auto clientName = selectedClientName();
+    const auto startMs = mCurrentEvent ? mCurrentEvent->toEvent().start_date.value_or(0) : 0;
+    withSeriesInvitation([clientName, startMs](const QString &url, const QString &) {
+      pcm::meeting::copyMeetingInvite(url, clientName, startMs);
+    });
+    return;
+  }
   if (!pcm::meeting::isValidInvitationUrl(mMeetingUrlEdit->text())) {
     QMessageBox::warning(this, tr(": ERROR_TITLE"),
                          tr("Enter a valid http or https meeting link."));
@@ -1015,6 +1107,16 @@ void QEventDetailsWidget::updateButtonState() const {
                        mUI->mTimeTo->time() > mUI->mTimeFrom->time();
   if (auto *applyButton = mUI->mButtonBox->button(QDialogButtonBox::Apply)) {
     applyButton->setEnabled(isValid && !mPendingMeetingCreation);
+  }
+
+  if (mSeriesBacked) {
+    // The occurrence is joined by its series target; the permanent invitation
+    // lives in secure storage and is read when one of the copy buttons is used.
+    mOpenMeetingButton->setEnabled(!mSeriesJoinTarget.isEmpty());
+    mCopyMeetingUrlButton->setEnabled(mSeriesLinkReady);
+    mCopyMeetingInviteButton->setEnabled(mSeriesLinkReady);
+    mCopyMeetingPasscodeButton->setEnabled(mSeriesLinkReady);
+    return;
   }
 
   if (mCurrentEvent &&
@@ -1135,6 +1237,17 @@ bool QEventDetailsWidget::updateMeetingViaCoordinator() {
     // (finishApply); an external link has nothing to cancel.
     supersedeCurrentLiveKitMeeting();
     applyProviderFields(std::nullopt, QString{}, std::nullopt, QString{});
+    return true;
+  }
+
+  const bool wantsSeriesLiveKit = mProviderKindControl->currentIndex() == 1;
+  if (mSeriesBacked ||
+      (wantsSeriesLiveKit && mCreatingNewEvent && isRecurring() && !mLegacyMigratable)) {
+    // The call belongs to a recurring SERIES (existing, or about to be created
+    // by the owner of this form): one permanent invitation for all dates, rooms
+    // created per date by the server. Never create or replace a single meeting
+    // here - that would copy one scheduled room to every occurrence.
+    applyProviderFields(pcm::meeting::ProviderKind::LiveKit, QString{}, std::nullopt, QString{});
     return true;
   }
 
@@ -1345,4 +1458,118 @@ void QEventDetailsWidget::onSuggestFreeSlotClicked() {
     const auto conflictEnd = conflict->end_date.value_or(cursor + durationMs);
     cursor = conflictEnd + conflict->buffer_after_minutes * 60'000;
   }
+}
+
+void QEventDetailsWidget::onCopyMeetingPasscodeClicked() {
+  withSeriesInvitation([](const QString &, const QString &passcode) {
+    pcm::clipboard::copySensitiveText(passcode);
+  });
+}
+
+void QEventDetailsWidget::withSeriesInvitation(
+    const std::function<void(const QString &url, const QString &passcode)> &use) {
+  if (!mSeriesCalls) {
+    return;
+  }
+  // The secret is read from secure storage only now, asynchronously, and handed
+  // to the clipboard helper; it is never kept in this widget.
+  QPointer<QEventDetailsWidget> guard(this);
+  mSeriesCalls->loadInvitation(mSeriesId, [guard, use](const bool ok, const QString &url,
+                                                       const QString &passcode) {
+    if (!guard) {
+      return;
+    }
+    if (!ok) {
+      QMessageBox::warning(guard, tr(": ERROR_TITLE"),
+                           tr("The system keychain is not available, so the link cannot be read."));
+      return;
+    }
+    if (url.isEmpty()) {
+      QMessageBox::warning(guard, tr(": ERROR_TITLE"),
+                           tr("The permanent link is not stored on this device. Create a new link."));
+      return;
+    }
+    use(url, passcode);
+  });
+}
+
+void QEventDetailsWidget::setSeriesCall(pcm::meeting::SeriesCallService *service,
+                                        const int64_t seriesId, const QString &joinTarget) {
+  if (mSeriesCalls) {
+    disconnect(mSeriesCalls, &pcm::meeting::SeriesCallService::statusChanged, this, nullptr);
+  }
+  mSeriesCalls = service;
+  mSeriesId = seriesId;
+  mSeriesJoinTarget = joinTarget;
+  mSeriesBacked = service != nullptr && seriesId > 0;
+  mLegacyMigratable = false;
+  if (mSeriesCalls) {
+    connect(mSeriesCalls, &pcm::meeting::SeriesCallService::statusChanged, this,
+            [this](const qint64 changed) {
+              if (changed == mSeriesId) {
+                refreshSeriesCallPanel();
+              }
+            });
+  }
+  applySeriesCallState();
+}
+
+void QEventDetailsWidget::setLegacyMigration(pcm::meeting::SeriesCallService *service,
+                                             const int64_t seriesId) {
+  setSeriesCall(nullptr, 0, {});
+  mSeriesCalls = service;
+  mSeriesId = seriesId;
+  mLegacyMigratable = service != nullptr && seriesId > 0;
+  if (mSeriesCalls) {
+    connect(mSeriesCalls, &pcm::meeting::SeriesCallService::statusChanged, this,
+            [this](const qint64 changed) {
+              if (changed == mSeriesId) {
+                refreshSeriesCallPanel();
+              }
+            });
+  }
+  applySeriesCallState();
+}
+
+void QEventDetailsWidget::applySeriesCallState() {
+  // A series-backed call is the series' business: the online/provider choice
+  // is locked so a stray click cannot detach one occurrence from its series.
+  mOnlineSessionSwitch->setEnabled(!mSeriesBacked);
+  mProviderKindControl->setEnabled(!mSeriesBacked);
+  mMeetingUrlEdit->setReadOnly(mSeriesBacked);
+  mCopyMeetingPasscodeButton->setVisible(mSeriesBacked);
+  if (mSeriesBacked) {
+    mMeetingUrlEdit->setText(QString{});
+    mMeetingUrlEdit->setPlaceholderText(
+        tr("The permanent link is stored securely. Use Copy link."));
+  } else {
+    mMeetingUrlEdit->setPlaceholderText(tr("https://..."));
+  }
+  refreshSeriesCallPanel();
+}
+
+void QEventDetailsWidget::refreshSeriesCallPanel() {
+  const bool relevant = mSeriesCalls && (mSeriesBacked || mLegacyMigratable);
+  pcm::eventpage::SeriesStatusView view;
+  if (relevant) {
+    view = pcm::eventpage::describeSeriesCallStatus(mSeriesCalls->status(mSeriesId));
+  }
+  const bool showPanel = relevant && (mSeriesBacked || !view.lines.isEmpty() || mLegacyMigratable);
+  mSeriesCallWidget->setVisible(showPanel);
+  mSeriesStatusLabel->setText(view.lines.join(QLatin1Char('\n')));
+  mSeriesStatusLabel->setVisible(!view.lines.isEmpty());
+  const char *color = view.severity == pcm::eventpage::StatusSeverity::Error     ? "#ff8a80"
+                      : view.severity == pcm::eventpage::StatusSeverity::Warning ? "#f0c36d"
+                                                                                 : "#9aa4b2";
+  mSeriesStatusLabel->setStyleSheet(QStringLiteral("color: %1;").arg(QLatin1String(color)));
+  mSeriesRetryButton->setVisible(relevant && view.canRetry);
+  mSeriesReissueButton->setVisible(relevant && view.canReissue);
+  mSeriesPublishButton->setVisible(relevant && view.canPublishThisDevice);
+  mMigrateButton->setVisible(relevant && mLegacyMigratable &&
+                             mSeriesCalls->status(mSeriesId).migration.state !=
+                                 pcm::meeting::MigrationState::Publishing &&
+                             mSeriesCalls->status(mSeriesId).migration.state !=
+                                 pcm::meeting::MigrationState::CreatingInvitation);
+  mSeriesLinkReady = relevant && view.linkReady;
+  updateButtonState();
 }

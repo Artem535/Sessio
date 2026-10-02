@@ -27,7 +27,18 @@ inline oatpp::web::protocol::http::Status statusForError(ServiceError err) {
   case ServiceError::MeetingWindowClosed:
     return oatpp::web::protocol::http::Status::CODE_410;
   case ServiceError::InvalidDisplayName:
+  case ServiceError::InvalidRequest:
     return oatpp::web::protocol::http::Status::CODE_400;
+  case ServiceError::InvitationExists:
+  case ServiceError::IdempotencyConflict:
+  case ServiceError::OccurrenceUnavailable:
+  case ServiceError::AmbiguousOccurrence:
+    return oatpp::web::protocol::http::Status::CODE_409;
+  case ServiceError::ReplayExpired:
+  case ServiceError::InvitationRevoked:
+    return oatpp::web::protocol::http::Status::CODE_410;
+  case ServiceError::ScheduleUnavailable:
+    return oatpp::web::protocol::http::Status::CODE_503;
   }
   return oatpp::web::protocol::http::Status::CODE_500;
 }
@@ -123,14 +134,20 @@ public:
         return createResponse(Status::CODE_400, "invalid_request");
       }
     }
-    auto result =
-        service_.issueSpecialistToken(authCredentialOf(request), toStdString(meetingRef), displayName);
+    Result<TokenResult> result;
+    try {
+      result = service_.issueSpecialistToken(authCredentialOf(request), toStdString(meetingRef), displayName);
+    } catch (...) {
+      auto response = createResponse(Status::CODE_500, "{\"error\":\"internal_error\"}");
+      response->putHeader("Cache-Control", "no-store"); response->putHeader("Content-Type", "application/json"); return response;
+    }
     if (!result.ok()) {
       auto status = statusForError(*result.error);
       logServiceFailure("POST", kRoute, toStdString(meetingRef), status.code, *result.error);
       auto err = ErrorResponseDto::createShared();
-      err->error = "request_failed";
-      return createDtoResponse(status, err);
+      err->error = serviceErrorName(*result.error);
+      auto response = createDtoResponse(status, err); response->putHeader("Cache-Control", "no-store");
+      if (*result.error == ServiceError::TooManyAttempts) response->putHeader("Retry-After", "60"); return response;
     }
     // The JWT itself is deliberately never logged.
     logRequestOk("POST", kRoute, toStdString(meetingRef), Status::CODE_200.code);
@@ -139,7 +156,7 @@ public:
     dto->roomName = result.value->roomName;
     dto->token = result.value->jwt;
     dto->expiresAt = result.value->expiresAtUnix;
-    return createDtoResponse(Status::CODE_200, dto);
+    auto response = createDtoResponse(Status::CODE_200, dto); response->putHeader("Cache-Control", "no-store"); return response;
   }
 
   ENDPOINT("POST", "/v1/meetings/{meetingRef}/invalidate", invalidateMeeting,

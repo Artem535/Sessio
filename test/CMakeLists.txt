@@ -28,6 +28,195 @@ target_link_libraries(Sessio_database_tests PRIVATE
 )
 gtest_discover_tests(Sessio_database_tests)
 
+# Schedule identity / transactional outbox tests
+add_executable(Sessio_schedule_outbox_tests schedule_outbox_tests.cpp)
+target_link_libraries(Sessio_schedule_outbox_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_config
+    Sessio_database
+    Poco::Foundation
+)
+gtest_discover_tests(Sessio_schedule_outbox_tests)
+
+# Schedule snapshot export / wire tests
+add_executable(Sessio_schedule_snapshot_tests schedule_snapshot_tests.cpp)
+target_link_libraries(Sessio_schedule_snapshot_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_meeting
+    Sessio_database
+)
+gtest_discover_tests(Sessio_schedule_snapshot_tests)
+
+# Schedule sync service tests (real DB + fake token-backend over local HTTP)
+find_package(Qt6 REQUIRED COMPONENTS Network Test)
+add_executable(Sessio_schedule_sync_tests
+    fake_schedule_backend.h
+    schedule_sync_tests.cpp
+)
+target_link_libraries(Sessio_schedule_sync_tests PRIVATE
+    GTest::gtest
+    Qt6::Network
+    Qt6::Test
+    Sessio_config
+    Sessio_database
+    Sessio_meeting
+    Sessio_token_client
+    Poco::Foundation
+)
+set_target_properties(Sessio_schedule_sync_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_schedule_sync_tests)
+
+# Zoneinfo resolution for packaged builds (and the schedule engine's use of it)
+add_executable(Sessio_schedule_zoneinfo_tests schedule_zoneinfo_tests.cpp)
+target_link_libraries(Sessio_schedule_zoneinfo_tests PRIVATE
+    GTest::gtest
+    Sessio_meeting
+)
+gtest_discover_tests(Sessio_schedule_zoneinfo_tests)
+
+# Series invitation service / join target tests (real DB + fake backend model)
+add_executable(Sessio_series_invitation_tests
+    fake_schedule_backend.h
+    series_backend_model.h
+    fake_series_invitation_store.h
+    series_invitation_service_tests.cpp
+)
+target_link_libraries(Sessio_series_invitation_tests PRIVATE
+    GTest::gtest
+    Qt6::Network
+    Qt6::Test
+    Sessio_config
+    Sessio_database
+    Sessio_meeting
+    Sessio_token_client
+    Poco::Foundation
+)
+set_target_properties(Sessio_series_invitation_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_series_invitation_tests)
+
+# Adapter from the keychain credential store to the schedule services
+add_executable(Sessio_store_credential_reader_tests
+    fake_token_backend_credential_store.h
+    store_credential_reader_tests.cpp
+    ../src/app/store_credential_reader.cpp
+    ../src/app/store_credential_reader.h
+    ../src/app/token_backend_credential_store.h
+    ../src/app/token_backend_credential_store.cpp
+)
+target_include_directories(Sessio_store_credential_reader_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/app
+    ${qtkeychain_SOURCE_DIR}
+    ${qtkeychain_BINARY_DIR}
+)
+target_link_libraries(Sessio_store_credential_reader_tests PRIVATE
+    GTest::gtest
+    Qt6::Network
+    Qt6::Test
+    Sessio_meeting
+    qt6keychain
+)
+set_target_properties(Sessio_store_credential_reader_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_store_credential_reader_tests)
+
+# Timeline model + published series (real local DB, no network)
+find_package(Qt6 REQUIRED COMPONENTS Network Test)
+add_executable(Sessio_timeline_series_tests
+    fake_schedule_backend.h
+    timeline_series_tests.cpp
+)
+target_link_libraries(Sessio_timeline_series_tests PRIVATE
+    GTest::gtest
+    Qt6::Network
+    Qt6::Test
+    Sessio_config
+    Sessio_database
+    Sessio_event_view
+    Sessio_meeting
+    Poco::Foundation
+)
+set_target_properties(Sessio_timeline_series_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_timeline_series_tests)
+
+# Recurring-call facade: publication, invitation, join targets, migration
+add_executable(Sessio_series_call_tests
+    fake_schedule_backend.h
+    series_backend_model.h
+    fake_series_invitation_store.h
+    series_call_service_tests.cpp
+)
+target_link_libraries(Sessio_series_call_tests PRIVATE
+    GTest::gtest
+    Qt6::Network
+    Qt6::Test
+    Sessio_config
+    Sessio_database
+    Sessio_event_view
+    Sessio_meeting
+    Sessio_token_client
+    Poco::Foundation
+)
+set_target_properties(Sessio_series_call_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_series_call_tests)
+
+# Status text of a published recurring call series
+add_executable(Sessio_series_call_status_text_tests
+    series_call_status_text_tests.cpp
+)
+target_include_directories(Sessio_series_call_status_text_tests PRIVATE
+    ${qlementine_SOURCE_DIR}/lib/include
+)
+target_link_libraries(Sessio_series_call_status_text_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Sessio_event_page
+    Sessio_meeting
+)
+gtest_discover_tests(Sessio_series_call_status_text_tests)
+
+# Event editor with published recurring call series (real DB + backend model)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network Test)
+add_executable(Sessio_series_call_ui_tests
+    fake_schedule_backend.h
+    series_backend_model.h
+    fake_series_invitation_store.h
+    series_call_fixture.h
+    series_call_ui_tests.cpp
+)
+target_include_directories(Sessio_series_call_ui_tests PRIVATE
+    ${qlementine_SOURCE_DIR}/lib/include
+)
+target_link_libraries(Sessio_series_call_ui_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Qt6::Network
+    Qt6::Test
+    Sessio_config
+    Sessio_database
+    Sessio_event_page
+    Sessio_event_view
+    Sessio_meeting
+    Sessio_token_client
+    Poco::Foundation
+)
+set_target_properties(Sessio_series_call_ui_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_series_call_ui_tests)
+
+# Timezone confirmation dialog for publishing a series
+add_executable(Sessio_series_timezone_dialog_tests
+    series_timezone_dialog_tests.cpp
+)
+target_include_directories(Sessio_series_timezone_dialog_tests PRIVATE
+    ${qlementine_SOURCE_DIR}/lib/include
+)
+target_link_libraries(Sessio_series_timezone_dialog_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Sessio_event_page
+)
+gtest_discover_tests(Sessio_series_timezone_dialog_tests)
+
 # Schedule conflict tests
 add_executable(Sessio_schedule_conflict_tests
     schedule_conflict_service_tests.cpp
@@ -470,6 +659,7 @@ gtest_discover_tests(Sessio_token_response_parser_tests)
 find_package(Qt6 REQUIRED COMPONENTS Network Test)
 add_executable(Sessio_token_backend_client_tests
     fake_token_backend_server.h
+    fake_schedule_backend.h
     token_backend_client_tests.cpp
 )
 target_link_libraries(Sessio_token_backend_client_tests PRIVATE

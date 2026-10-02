@@ -2,6 +2,7 @@
 #include "app_lock_dialog.h"
 #include "role_selection_dialog.h"
 #include "provider_kind.h"
+#include "schedule_zoneinfo.h"
 #include "../backup/encrypted_container.h"
 #include "../backup/restore_service.h"
 #include "../event_view/recurrence_utils.h"
@@ -139,7 +140,10 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  app.setApplicationVersion("0.2.7");
+  app.setApplicationVersion("0.2.8");
+  // Installed builds ship libical's timezone data next to the executable; the
+  // path compiled into the schedule engine only exists in development trees.
+  pcm::meeting::configureScheduleZoneinfo(QCoreApplication::applicationDirPath());
   // Wayland panels match a window to its .desktop entry (and icon) by app_id,
   // which Qt derives from the desktop file name; without this an RPM-installed
   // Sessio's window can end up with a foreign icon.
@@ -285,8 +289,30 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
   mMainWindow = std::make_unique<MainWindow>();
   mClientModel = std::make_shared<QClientModel>(mDb);
 
-  mMainWindow->addEventInfoPage(new QTimelineModel(mDb, mMeetingCoordinator.get(), this),
-                                mMeetingCoordinator.get());
+  // Recurring-call publishing: schedule outbox sync, permanent invitation and
+  // the facade the event editor / timeline use. The sync starts once the
+  // window is up (see below).
+  mScheduleCredentialReader =
+      std::make_unique<StoreCredentialReader>(*mTokenCredentialStore);
+  mInvitationSecretStore = std::make_unique<QtKeychainSeriesInvitationStore>();
+  mScheduleSync = std::make_unique<pcm::meeting::ScheduleSync>(
+      *mDb, *mTokenClient, mScheduleCredentialReader->reader());
+  mSeriesInvitations = std::make_unique<pcm::meeting::SeriesInvitationService>(
+      *mDb, *mScheduleSync, *mTokenClient, mScheduleCredentialReader->reader(),
+      *mInvitationSecretStore);
+  mScheduleCommitter = std::make_unique<pcm::meeting::SeriesScheduleCommitter>(*mDb);
+  mScheduleCommitter->setSync(mScheduleSync.get());
+  mSeriesCalls = std::make_unique<pcm::meeting::SeriesCallService>(
+      *mDb, *mScheduleSync, *mSeriesInvitations, *mScheduleCommitter,
+      mMeetingCoordinator.get());
+
+  auto *timelineModel = new QTimelineModel(mDb, mMeetingCoordinator.get(), this);
+  timelineModel->setScheduleCommitter(mScheduleCommitter.get());
+  mMainWindow->addEventInfoPage(timelineModel, mMeetingCoordinator.get());
+  if (auto *eventPage = dynamic_cast<QEventInfoPage *>(
+          mMainWindow->getPage(MainWindow::Pages::eventInfo))) {
+    eventPage->setSeriesCallService(mSeriesCalls.get());
+  }
   mMainWindow->addClientInfoPage(mClientModel);
   mMainWindow->addAnalyticsPage(mDb);
   mMainWindow->addClientCardPage(mDb);
@@ -309,6 +335,25 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
   connect(&mNotificationTimer, &QTimer::timeout, this, &Application::refreshUpcomingMeetings);
 
   mMainWindow->show();
+  // Recover the persisted schedule queue (and probe the backend once).
+  mScheduleSync->start();
+  // Restart resume. A series published before the app was closed may lack its
+  // permanent invitation (ensureInvitation is a no-op for series that have one
+  // and waits for the schedule ACK otherwise), or may hold the idempotency key
+  // of a reissue that was interrupted before its secret was stored.
+  for (const auto &series : mDb->get_event_series_for_range(0, 253402300799000)) {
+    const auto identity = mDb->get_schedule_identity(series.id);
+    if (!identity.has_value()) {
+      continue;
+    }
+    if (identity->invitation_generation <= 0) {
+      mSeriesInvitations->ensureInvitation(series.id);
+    } else if (identity->invitation_key.has_value() && !identity->invitation_key->empty()) {
+      mSeriesInvitations->resumeInterruptedReissue(series.id);
+    }
+  }
+  connect(mScheduleSync.get(), &pcm::meeting::ScheduleSync::statusChanged, this,
+          [this](const QString &) { refreshUpcomingMeetings(); });
   if (!launchUrl.isEmpty()) {
     handleJoinLink(launchUrl);
   }
@@ -400,8 +445,26 @@ void Application::refreshUpcomingMeetings() {
     return a.start_date.value_or(0) < b.start_date.value_or(0);
   });
 
+  // Occurrences of published series have no Event row until edited, and their
+  // call is the series' permanent invitation, joined by occurrence.
+  if (mSeriesCalls) {
+    const auto dayStart = QDateTime::fromMSecsSinceEpoch(dayStartMs);
+    const auto dayEnd = QDateTime::fromMSecsSinceEpoch(dayEndMs);
+    auto virtualEvents = pcm::recurrence::virtualOccurrencesInRange(*mDb, dayStart, dayEnd);
+    events.insert(events.end(), virtualEvents.cbegin(), virtualEvents.cend());
+    std::sort(events.begin(), events.end(), [](const DuckEvent &a, const DuckEvent &b) {
+      return a.start_date.value_or(0) < b.start_date.value_or(0);
+    });
+  }
+
   QList<UpcomingMeeting> meetings;
-  for (const auto &event : events) {
+  for (auto &event : events) {
+    if (mSeriesCalls && event.series_id.has_value()) {
+      if (const auto target = mSeriesCalls->joinTargetFor(event)) {
+        event.provider_kind = "livekit";
+        event.meeting_ref = target->toStdString();
+      }
+    }
     const auto kind = pcm::meeting::providerKindFromString(event.provider_kind.value_or(""));
     if (kind != pcm::meeting::ProviderKind::LiveKit) {
       continue;
@@ -489,6 +552,9 @@ void Application::applyTokenBackendBaseUrl(const QString &baseUrl) {
   mTokenBackendBaseUrl = baseUrl;
   if (mTokenClient) {
     mTokenClient->setBaseUrl(mTokenBackendBaseUrl);
+    if (mScheduleSync) {
+      mScheduleSync->wake();
+    }
   }
   // Bug 3 (fixwave group 5): mMeetingCoordinator is null in Client mode
   // (never constructed there) and also null here if this runs before
@@ -535,6 +601,9 @@ void Application::onSettingsSaved() {
   // loadBearerCredential() updates mBearerCredential asynchronously.
   if (mTokenCredentialStore) {
     mTokenCredentialStore->readBearerCredential();
+  }
+  if (mScheduleSync) {
+    mScheduleSync->wake();
   }
 
   config::Config conf;
@@ -918,7 +987,8 @@ void Application::notifyUpcomingSeriesOccurrences(const int64_t nowMs,
 
     const auto materializedStarts =
         mDb->get_materialized_occurrence_starts_for_series(series.id);
-    const auto occurrences = pcm::recurrence::occurrences(series, rangeStart, rangeEnd);
+    const auto occurrences =
+        pcm::recurrence::seriesOccurrences(*mDb, series, rangeStart, rangeEnd);
     for (const auto &occurrence : occurrences) {
       const auto occurrenceStartMs = occurrence.toUTC().toMSecsSinceEpoch();
       const std::pair<int64_t, int64_t> key{series.id, occurrenceStartMs};
