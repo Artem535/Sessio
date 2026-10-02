@@ -37,7 +37,7 @@ QString eventLabel(const DuckEvent &event) {
 
 // Layout metrics (device independent pixels).
 constexpr int kMinRowHeight = 112;
-constexpr int kMaxRowHeight = 160;
+constexpr int kMaxRowHeight = 260;
 constexpr int kChipHeight = 38; // two lines: time, then title
 constexpr int kMoreHeight = 18;
 constexpr int kChipGap = 3;
@@ -61,7 +61,9 @@ protected:
     f.setPointSizeF(std::max(7.0, f.pointSizeF() - 1.0));
     painter.setFont(f);
     painter.setPen(withAlpha(palette().color(QPalette::Text), 140));
-    painter.drawText(rect(), Qt::AlignCenter, text());
+    // Left edge matches the day numbers inside the cells below.
+    painter.drawText(rect().adjusted(kCellPadding + 6, 0, 0, 0),
+                     Qt::AlignLeft | Qt::AlignVCenter, text());
   }
 };
 

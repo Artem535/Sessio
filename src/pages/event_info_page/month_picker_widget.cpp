@@ -100,6 +100,15 @@ protected:
     painter.drawText(rect(), Qt::AlignCenter, text());
   }
 };
+
+// Consistent three-letter names ("Sep", not "Sept"; "сен", not "сент.").
+QString shortMonthName(const QLocale &locale, const int month) {
+  auto name = locale.standaloneMonthName(month, QLocale::ShortFormat);
+  if (name.endsWith(QLatin1Char('.')) || name.size() != 3) {
+    name = locale.standaloneMonthName(month, QLocale::LongFormat).left(3);
+  }
+  return name.isEmpty() ? name : name.left(1).toUpper() + name.mid(1);
+}
 } // namespace
 
 MonthPickerWidget::MonthPickerWidget(QWidget *parent) : QWidget(parent) {
@@ -163,7 +172,7 @@ void MonthPickerWidget::refreshLabels() {
   const auto today = QDate::currentDate();
   for (int month = 1; month <= 12; ++month) {
     auto *tile = static_cast<MonthTile *>(mTiles[month - 1]);
-    const auto name = locale.standaloneMonthName(month, QLocale::ShortFormat);
+    const auto name = shortMonthName(locale, month);
     tile->setText(name);
     tile->setAccessibleName(locale.standaloneMonthName(month, QLocale::LongFormat) +
                             QLatin1Char(' ') + QString::number(mYear));

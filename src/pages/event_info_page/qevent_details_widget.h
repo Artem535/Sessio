@@ -184,9 +184,6 @@ private slots:
   void onSuggestFreeSlotClicked();
   void onCopyMeetingPasscodeClicked();
 
-protected:
-  void paintEvent(QPaintEvent *event) override;
-
 private:
   void refreshInspector();
   void applySeriesCallState();

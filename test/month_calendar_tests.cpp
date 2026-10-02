@@ -360,7 +360,7 @@ TEST(MonthCalendarTest, RowHeightIsCappedInATallWindow) {
   ASSERT_EQ(dates.size(), 35);
   for (auto *button : dates) {
     EXPECT_GE(button->parentWidget()->height(), 96);
-    EXPECT_LE(button->parentWidget()->height(), 160);
+    EXPECT_LE(button->parentWidget()->height(), 260);
   }
   EXPECT_LT(widget.height(), 3000);
 }

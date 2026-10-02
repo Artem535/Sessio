@@ -20,6 +20,7 @@
 #include <QScrollArea>
 #include <QStackedWidget>
 #include <QLabel>
+#include <QHBoxLayout>
 #include <QImage>
 #include "rounded_calendar_widget.h"
 #include "month_picker_widget.h"
@@ -627,6 +628,64 @@ TEST_F(CalendarLayoutTest, FirstMeetingOfTheDayIsScrolledIntoView) {
   ASSERT_GT(bar->maximum(), 0);
   EXPECT_LE(bar->value(), 16 * 60);
   EXPECT_GE(bar->value() + view->viewport()->height(), 16 * 60);
+}
+TEST_F(CalendarLayoutTest, HeaderControlsSitTogetherAtTheRightOfTheirHost) {
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  QWidget host;
+  auto *layout = new QHBoxLayout(&host);
+  layout->setContentsMargins(19, 0, 19, 0);
+  page.headerControls()->setParent(&host);
+  layout->addWidget(page.headerControls());
+  host.resize(1000, 40);
+  host.show();
+  QApplication::processEvents();
+  auto *toggle = page.headerControls()->findChild<QWidget *>("calendarViewSwitch");
+  auto *button = page.headerControls()->findChild<QWidget *>("newCalendarEvent");
+  const auto toggleLeft = toggle->mapTo(&host, QPoint(0, 0)).x();
+  const auto buttonRight = button->mapTo(&host, QPoint(button->width(), 0)).x();
+  EXPECT_GE(buttonRight, host.width() - 19 - 2);
+  EXPECT_GT(toggleLeft, host.width() - 450); // right next to the button, not at the left
+}
+TEST_F(CalendarLayoutTest, MonthPickerUsesConsistentThreeLetterNames) {
+  MonthPickerWidget picker;
+  for (auto *tile : picker.findChildren<QToolButton *>("monthPickerTile")) {
+    EXPECT_EQ(tile->text().size(), 3) << tile->text().toStdString();
+    EXPECT_FALSE(tile->text().endsWith('.'));
+  }
+}
+TEST_F(CalendarLayoutTest, InfoPanelIsOneCardWithTheSelectedDateAsHeading) {
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.resize(1275, 900);
+  page.show();
+  page.setMonthView(true);
+  QApplication::processEvents();
+  auto *card = page.findChild<QWidget *>("infoPanelCard");
+  auto *info = page.findChild<QStackedWidget *>("calendarInfoStack");
+  ASSERT_NE(card, nullptr);
+  EXPECT_TRUE(card->isAncestorOf(info));
+  auto *heading = page.findChild<QLabel *>("daySummaryDate");
+  ASSERT_NE(heading, nullptr);
+  const auto date = QDate::currentDate().addDays(1);
+  auto *month = page.findChild<MonthCalendarWidget *>();
+  emit month->dateSelected(date);
+  auto expected = QLocale().toString(date, QLocale::LongFormat);
+  expected[0] = expected.at(0).toUpper();
+  EXPECT_EQ(heading->text(), expected);
+  page.findChild<QToolButton *>("monthPickerNextYear")->click();
+  for (auto *tile : page.findChildren<QToolButton *>("monthPickerTile"))
+    if (tile->property("calendarMonth").toInt() == 5) tile->click();
+  EXPECT_TRUE(heading->text().contains(QLocale().standaloneMonthName(5, QLocale::LongFormat)) ||
+              heading->text().contains(QLocale().monthName(5, QLocale::LongFormat)));
+}
+TEST_F(CalendarLayoutTest, MonthGridFillsTheCentreHeight) {
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.resize(1275, 1290);
+  page.show();
+  page.setMonthView(true);
+  QApplication::processEvents();
+  auto *month = page.findChild<MonthCalendarWidget *>();
+  auto *centre = page.findChild<QStackedWidget *>("calendarCenterStack");
+  EXPECT_GE(month->height(), centre->height() - 4);
 }
 } // namespace
 int main(int argc, char **argv) {

@@ -504,7 +504,7 @@ void QEventDetailsWidget::setInspectorMode(bool enabled) {
       button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
       button->setMinimumHeight(32);
     }
-    mUI->verticalLayout->setContentsMargins(16, 16, 16, 16);
+    mUI->verticalLayout->setContentsMargins(0, 0, 0, 0);
     summary->setSpacing(4);
     static_cast<QBoxLayout *>(mMeetingActionsWidget->layout())->setDirection(QBoxLayout::TopToBottom);
     // Series actions can have long translated labels. Stacking keeps all of
@@ -574,20 +574,6 @@ void QEventDetailsWidget::refreshInspector() {
   // The main action gets the primary look.
   mCopyMeetingInviteButton->setDefault(event.is_online);
   mUI->mChangeButton->setDefault(!event.is_online);
-}
-
-void QEventDetailsWidget::paintEvent(QPaintEvent *event) {
-  QWidget::paintEvent(event);
-  if (!mInspectorMode) {
-    return;
-  }
-  QPainter painter(this);
-  painter.setRenderHint(QPainter::Antialiasing);
-  auto border = palette().color(QPalette::Text);
-  border.setAlpha(46);
-  painter.setPen(QPen(border, 1));
-  painter.setBrush(QColor(255, 255, 255, 8));
-  painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 14, 14);
 }
 
 void QEventDetailsWidget::initConnections() {

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <QIcon>
 #include <QMessageBox>
+#include <QPainter>
 #include <QSize>
 #include <QTextCharFormat>
 #include <QTimeZone>
@@ -20,6 +21,23 @@
 Q_LOGGING_CATEGORY(logEventInfo, "pcm.EventInfo")
 
 namespace {
+// Rounded bordered card; colours come from the live palette.
+class InfoPanelCard final : public QWidget {
+public:
+  using QWidget::QWidget;
+
+protected:
+  void paintEvent(QPaintEvent *) override {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    auto border = palette().color(QPalette::Text);
+    border.setAlpha(46);
+    painter.setPen(QPen(border, 1));
+    painter.setBrush(QColor(255, 255, 255, 8));
+    painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 14, 14);
+  }
+};
+
 bool sameOccurrence(const DuckEvent &a, const DuckEvent &b) {
   if (a.series_id && a.original_occurrence_start) {
     return a.series_id == b.series_id &&
@@ -143,6 +161,10 @@ QEventInfoPage::QEventInfoPage(QTimelineModel *model,
   auto *header = new QHBoxLayout(mHeaderControls);
   header->setContentsMargins(0, 0, 0, 0);
   header->setSpacing(10);
+  // Fill the host row and push the group to its right edge: the stretch comes
+  // first, so Day|Month and "New meeting" stay together.
+  mHeaderControls->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+  header->addStretch(1);
   header->addWidget(new QLabel(tr("Day"), mHeaderControls));
   mViewSwitch = new oclero::qlementine::Switch(mHeaderControls);
   mViewSwitch->setObjectName(QStringLiteral("calendarViewSwitch"));
@@ -151,7 +173,7 @@ QEventInfoPage::QEventInfoPage(QTimelineModel *model,
   mViewSwitch->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   header->addWidget(mViewSwitch);
   header->addWidget(new QLabel(tr("Month"), mHeaderControls));
-  header->addStretch(1);
+  header->addSpacing(16);
   mCreateEventButton = new QPushButton(tr("New meeting"), mHeaderControls);
   mCreateEventButton->setObjectName(QStringLiteral("newCalendarEvent"));
   mCreateEventButton->setIcon(QIcon(":/icons/calendar-plus-solid-full.svg"));
@@ -191,15 +213,26 @@ QEventInfoPage::QEventInfoPage(QTimelineModel *model,
                                               mMonthPicker->minimumHeight()));
   leftLayout->addWidget(mCalendarCardStack);
 
-  mInfoStack = new QStackedWidget(left);
+  // One bordered card hosts both pages (day info / meeting info).
+  auto *infoCard = new InfoPanelCard(left);
+  infoCard->setObjectName(QStringLiteral("infoPanelCard"));
+  infoCard->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+  auto *infoCardLayout = new QVBoxLayout(infoCard);
+  infoCardLayout->setContentsMargins(16, 16, 16, 16);
+  mInfoStack = new QStackedWidget(infoCard);
   mInfoStack->setObjectName(QStringLiteral("calendarInfoStack"));
-  auto *summaryPage = new QWidget(mInfoStack);
-  auto *summaryLayout = new QVBoxLayout(summaryPage);
-  summaryLayout->setContentsMargins(0, 0, 0, 0);
-  mDaySummaryWidget = new DaySummaryWidget(summaryPage);
-  summaryLayout->addWidget(mDaySummaryWidget);
-  summaryLayout->addStretch(1);
-  mInfoStack->addWidget(summaryPage);
+  infoCardLayout->addWidget(mInfoStack);
+  auto *summaryScroll = new QScrollArea(mInfoStack);
+  summaryScroll->setObjectName(QStringLiteral("calendarDayInfoScroll"));
+  summaryScroll->setWidgetResizable(true);
+  summaryScroll->setFrameShape(QFrame::NoFrame);
+  summaryScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  mDaySummaryWidget = new DaySummaryWidget(summaryScroll);
+  summaryScroll->setWidget(mDaySummaryWidget);
+  // The card provides the background; scroll viewports must not paint their own.
+  summaryScroll->viewport()->setAutoFillBackground(false);
+  mDaySummaryWidget->setAutoFillBackground(false);
+  mInfoStack->addWidget(summaryScroll);
   mInspectorScroll = new QScrollArea(mInfoStack);
   mInspectorScroll->setObjectName(QStringLiteral("calendarInspectorScroll"));
   mInspectorScroll->setWidgetResizable(true);
@@ -212,8 +245,10 @@ QEventInfoPage::QEventInfoPage(QTimelineModel *model,
   mInspectorLayout->setSpacing(8);
   mInspectorLayout->addStretch(1);
   mInspectorScroll->setWidget(inspectorContent);
+  mInspectorScroll->viewport()->setAutoFillBackground(false);
+  inspectorContent->setAutoFillBackground(false);
   mInfoStack->addWidget(mInspectorScroll);
-  leftLayout->addWidget(mInfoStack, 1);
+  leftLayout->addWidget(infoCard, 1);
   mQuickSlotsWidget = new QuickSlotsWidget(left);
   leftLayout->addWidget(mQuickSlotsWidget);
   body->addWidget(left);
