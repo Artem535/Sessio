@@ -6,6 +6,9 @@
 
 #include <libical/ical.h>
 
+#include <mutex>
+#include <set>
+
 #include <QSet>
 #include <QTimeZone>
 #include <algorithm>
@@ -182,8 +185,17 @@ QVector<QDateTime> seriesOccurrences(pcm::database::Database &db, const DuckEven
       if (auto pinned = occurrencesInTimezone(series, identity->timezone, rangeStart, rangeEnd)) {
         return *pinned;
       }
-      qWarning() << "Pinned-timezone recurrence could not be evaluated for series" << series.id
-                 << "; showing the local calendar instead";
+      static std::mutex warnedMutex;
+      static std::set<int64_t> warned;
+      bool first = false;
+      {
+        const std::lock_guard lock(warnedMutex);
+        first = warned.insert(series.id).second; // log once per series, not per repaint
+      }
+      if (first) {
+        qWarning() << "Pinned-timezone recurrence could not be evaluated for series" << series.id
+                   << "; showing the local calendar instead";
+      }
     }
   }
   return occurrences(series, rangeStart, rangeEnd);
