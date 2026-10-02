@@ -8,6 +8,8 @@
 #include <QLineEdit>
 #include <QSettings>
 #include <QPointer>
+#include <QToolButton>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -365,6 +367,91 @@ TEST_F(CalendarLayoutTest, EventsAddedInDayModeAppearWhenSwitchingToMonth) {
   page.setMonthView(true);
   EXPECT_GT(month->findChildren<QAbstractButton *>().size(), before);
 }
+namespace {
+QToolButton *dateButtonFor(MonthCalendarWidget *month, const QDate &date) {
+  for (auto *button : month->findChildren<QToolButton *>("monthDate")) {
+    if (button->property("calendarDate").toDate() == date) {
+      return button;
+    }
+  }
+  return nullptr;
+}
+} // namespace
+
+TEST_F(CalendarLayoutTest, ActivatingADateCellByKeyboardKeepsFocusOnThatDate) {
+  model->addEvent(appointment(QDate::currentDate()));
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.resize(1000, 760);
+  page.show();
+  ASSERT_TRUE(QTest::qWaitForWindowActive(&page));
+  page.setMonthView(true);
+  auto *month = page.findChild<MonthCalendarWidget *>();
+  const auto today = QDate::currentDate();
+  const auto target = QDate(today.year(), today.month(), today.day() == 15 ? 16 : 15);
+  auto *button = dateButtonFor(month, target);
+  ASSERT_NE(button, nullptr);
+  button->setFocus();
+  ASSERT_EQ(QApplication::focusWidget(), button);
+  QTest::keyClick(button, Qt::Key_Space);
+  QApplication::processEvents();
+  auto *now = dateButtonFor(month, target);
+  ASSERT_NE(now, nullptr);
+  EXPECT_TRUE(now->isChecked());
+  EXPECT_EQ(QApplication::focusWidget(), now);
+}
+
+TEST_F(CalendarLayoutTest, ActivatingAnEventButtonByKeyboardKeepsFocusOnThatEvent) {
+  const auto today = QDate::currentDate();
+  model->addEvent(appointment(today));
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.resize(1000, 760);
+  page.show();
+  ASSERT_TRUE(QTest::qWaitForWindowActive(&page));
+  page.setMonthView(true);
+  auto *month = page.findChild<MonthCalendarWidget *>();
+  auto buttons = month->findChildren<QPushButton *>("monthEvent");
+  ASSERT_EQ(buttons.size(), 1);
+  buttons.first()->setFocus();
+  ASSERT_EQ(QApplication::focusWidget(), buttons.first());
+  QTest::keyClick(buttons.first(), Qt::Key_Space);
+  QApplication::processEvents();
+  buttons = month->findChildren<QPushButton *>("monthEvent");
+  ASSERT_EQ(buttons.size(), 1);
+  EXPECT_EQ(QApplication::focusWidget(), buttons.first());
+}
+
+TEST_F(CalendarLayoutTest, RefreshWithUnchangedMonthAndEventsKeepsTheCellWidgets) {
+  model->addEvent(appointment(QDate::currentDate()));
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.resize(1000, 760);
+  page.show();
+  page.setMonthView(true);
+  auto *month = page.findChild<MonthCalendarWidget *>();
+  const auto dates = month->findChildren<QToolButton *>("monthDate");
+  const auto events = month->findChildren<QPushButton *>("monthEvent");
+  ASSERT_FALSE(dates.isEmpty());
+  ASSERT_EQ(events.size(), 1);
+  const auto builds = month->rebuildCount();
+  page.setMonthView(true);
+  QApplication::processEvents();
+  EXPECT_EQ(month->rebuildCount(), builds);
+  EXPECT_EQ(month->findChildren<QToolButton *>("monthDate"), dates);
+  EXPECT_EQ(month->findChildren<QPushButton *>("monthEvent"), events);
+}
+
+TEST_F(CalendarLayoutTest, MonthNavigationBuildsTheGridOncePerRefresh) {
+  model->addEvent(appointment(QDate::currentDate()));
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.resize(1000, 760);
+  page.show();
+  page.setMonthView(true);
+  auto *month = page.findChild<MonthCalendarWidget *>();
+  const auto builds = month->rebuildCount();
+  month->dateSelected(QDate::currentDate().addMonths(1));
+  QApplication::processEvents();
+  EXPECT_EQ(month->rebuildCount(), builds + 1);
+}
+
 TEST_F(CalendarLayoutTest, TogglingViewModeWritesNoSettingsOrData) {
   model->addEvent(appointment(QDate::currentDate()));
   QSettings settings;

@@ -32,8 +32,8 @@ QT_QPA_PLATFORM=offscreen scripts/run-dev-isolated.sh /usr/bin/ctest \
   1 пропущен (`ScheduleSyncTest.InteroperatesWithRealTokenBackendWhenConfigured` —
   нужен реальный token backend).
 - Перед исправлениями визуальной проверки: 519/519, 0 упало.
-- Целевой набор (`CalendarLayoutTest|QEventDetailsWidgetTest|MonthCalendarTest|MonthProjectionTest`): 39/39;
-  `CalendarLayoutTest` — 17 тестов.
+- Целевой набор (`CalendarLayoutTest|QEventDetailsWidgetTest|MonthCalendarTest|MonthProjectionTest`): 43/43 (после исправления фокуса клавиатуры, +4 теста);
+  `CalendarLayoutTest` — 21 тест.
 - Переводы: `update_translations` — 0 новых строк, 0 `type="unfinished"` в `app_ru.ts` и `app_en.ts`
   (проверено разбором XML).
 

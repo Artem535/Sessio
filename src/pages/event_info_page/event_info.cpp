@@ -314,12 +314,10 @@ void QEventInfoPage::refreshCalendar() {
   mPeriodLabel->setText(locale().toString(mSelectedDate,
       isMonthView() ? QStringLiteral("MMMM yyyy") : QStringLiteral("d MMMM yyyy")));
   if (isMonthView()) {
-    mMonthCalendar->setMonth(mSelectedDate);
     mMonthCalendar->setSelectedDate(mSelectedDate);
-    const auto events = mModel ? mModel->eventsForRange(mMonthCalendar->firstVisibleDate(),
-                                                       mMonthCalendar->lastVisibleDate())
-                               : QVector<DuckEvent>{};
-    mMonthCalendar->setEvents(events);
+    const auto [first, last] = MonthCalendarWidget::visibleRange(mSelectedDate);
+    const auto events = mModel ? mModel->eventsForRange(first, last) : QVector<DuckEvent>{};
+    mMonthCalendar->setMonthAndEvents(mSelectedDate, events);
     syncInspector(events);
   } else if (mSelectedEvent && mModel) {
     // The hidden month grid is rebuilt when the view switches back to it; only

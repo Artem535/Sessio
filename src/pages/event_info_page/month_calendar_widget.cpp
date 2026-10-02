@@ -1,5 +1,6 @@
 #include "month_calendar_widget.h"
 
+#include <QApplication>
 #include <QEvent>
 #include <QGridLayout>
 #include <QLabel>
@@ -11,6 +12,7 @@
 #include <QToolButton>
 #include <algorithm>
 #include <functional>
+#include <tuple>
 
 namespace {
 
@@ -23,6 +25,40 @@ QString eventLabel(const DuckEvent &event) {
     title += QStringLiteral(" · ") + client;
   }
   return start.toString(QStringLiteral("HH:mm")) + QStringLiteral("  ") + title;
+}
+
+bool sameEventData(const DuckEvent &a, const DuckEvent &b) {
+  return a.id == b.id && a.name == b.name && a.description == b.description &&
+         a.client_name == b.client_name && a.is_work_event == b.is_work_event &&
+         a.event_stat_id == b.event_stat_id && a.payment_stat_id == b.payment_stat_id &&
+         a.start_date == b.start_date && a.end_date == b.end_date &&
+         a.duration == b.duration && a.cost == b.cost && a.is_online == b.is_online &&
+         a.meeting_url == b.meeting_url && a.series_id == b.series_id &&
+         a.original_occurrence_start == b.original_occurrence_start &&
+         a.cancellation_reason == b.cancellation_reason && a.canceled_by == b.canceled_by &&
+         a.buffer_before_minutes == b.buffer_before_minutes &&
+         a.buffer_after_minutes == b.buffer_after_minutes &&
+         a.is_virtual_occurrence == b.is_virtual_occurrence &&
+         a.provider_kind == b.provider_kind && a.meeting_ref == b.meeting_ref &&
+         a.invitation_state == b.invitation_state;
+}
+
+void sortEvents(QVector<DuckEvent> &events) {
+  std::stable_sort(events.begin(), events.end(), [](const DuckEvent &left, const DuckEvent &right) {
+    return left.start_date.value_or(0) < right.start_date.value_or(0);
+  });
+}
+
+bool sameEvents(const QVector<DuckEvent> &left, const QVector<DuckEvent> &right) {
+  return std::equal(left.cbegin(), left.cend(), right.cbegin(), right.cend(), sameEventData);
+}
+
+// Stable identity of an occurrence across rebuilds (range-local ids are not).
+QString eventKey(const DuckEvent &event) {
+  if (event.series_id && event.original_occurrence_start) {
+    return QStringLiteral("s%1@%2").arg(*event.series_id).arg(*event.original_occurrence_start);
+  }
+  return QStringLiteral("i%1").arg(event.id);
 }
 
 class EventButton final : public QPushButton {
@@ -68,6 +104,7 @@ public:
     connect(mDateButton, &QToolButton::clicked, this, [selectDate, date] { selectDate(date); });
     for (const auto &item : mEvents) {
       auto *button = new EventButton(eventLabel(item), this);
+      button->setProperty("eventKey", eventKey(item));
       connect(button, &QPushButton::clicked, this,
               [select = mSelectEvent, item] { select(item); });
       mButtons.append(button);
@@ -96,6 +133,16 @@ public:
   }
 
   QDate date() const { return mDate; }
+  QWidget *dateButton() const { return mDateButton; }
+  QWidget *overflowButton() const { return mMore; }
+  QWidget *eventButton(const QString &key) const {
+    for (auto *button : mButtons) {
+      if (button->property("eventKey").toString() == key) {
+        return button;
+      }
+    }
+    return nullptr;
+  }
 
 protected:
   void resizeEvent(QResizeEvent *event) override {
@@ -152,16 +199,47 @@ MonthCalendarWidget::MonthCalendarWidget(QWidget *parent)
     : QWidget(parent), mGrid(new QGridLayout(this)) {
   mGrid->setContentsMargins(0, 0, 0, 0);
   mGrid->setSpacing(0);
-  setMonth(QDate::currentDate());
+  const auto today = QDate::currentDate();
+  mMonth = QDate(today.year(), today.month(), 1);
+  rebuild();
 }
 
 void MonthCalendarWidget::setMonth(QDate month) {
   if (!month.isValid()) {
     return;
   }
-  mMonth = QDate(month.year(), month.month(), 1);
+  const auto first = QDate(month.year(), month.month(), 1);
+  if (first == mMonth) {
+    return;
+  }
+  mMonth = first;
   rebuild();
 }
+
+void MonthCalendarWidget::setMonthAndEvents(QDate month, QVector<DuckEvent> events) {
+  if (!month.isValid()) {
+    return;
+  }
+  const auto first = QDate(month.year(), month.month(), 1);
+  sortEvents(events);
+  if (first == mMonth && sameEvents(events, mEvents)) {
+    return;
+  }
+  mMonth = first;
+  mEvents = std::move(events);
+  rebuild();
+}
+
+std::pair<QDate, QDate> MonthCalendarWidget::visibleRange(QDate month) {
+  const auto first = QDate(month.year(), month.month(), 1);
+  const auto origin = static_cast<int>(QLocale().firstDayOfWeek());
+  const auto offset = (first.dayOfWeek() - origin + 7) % 7;
+  const auto start = first.addDays(-offset);
+  const auto rows = std::max(5, (offset + first.daysInMonth() + 6) / 7);
+  return {start, start.addDays(rows * 7 - 1)};
+}
+
+int MonthCalendarWidget::rebuildCount() const { return mRebuildCount; }
 
 void MonthCalendarWidget::setSelectedDate(QDate date) {
   mSelectedDate = date;
@@ -173,10 +251,11 @@ void MonthCalendarWidget::setSelectedDate(QDate date) {
 }
 
 void MonthCalendarWidget::setEvents(QVector<DuckEvent> events) {
+  sortEvents(events);
+  if (sameEvents(events, mEvents)) {
+    return;
+  }
   mEvents = std::move(events);
-  std::stable_sort(mEvents.begin(), mEvents.end(), [](const DuckEvent &left, const DuckEvent &right) {
-    return left.start_date.value_or(0) < right.start_date.value_or(0);
-  });
   rebuild();
 }
 
@@ -191,16 +270,35 @@ void MonthCalendarWidget::changeEvent(QEvent *event) {
 }
 
 void MonthCalendarWidget::rebuild() {
+  ++mRebuildCount;
+  std::tie(mFirst, mLast) = visibleRange(mMonth);
+  // Remember what keyboard focus was on so it can follow the rebuilt cell.
+  enum class FocusKind { None, Date, Event, Overflow } kind = FocusKind::None;
+  QDate focusDate;
+  QString focusEvent;
+  if (auto *focused = QApplication::focusWidget(); focused && isAncestorOf(focused)) {
+    for (QWidget *w = focused; w && w != this; w = w->parentWidget()) {
+      if (auto *cell = dynamic_cast<DayCell *>(w)) {
+        focusDate = cell->date();
+        if (focused == cell->dateButton()) {
+          kind = FocusKind::Date;
+        } else if (focused == cell->overflowButton()) {
+          kind = FocusKind::Overflow;
+        } else {
+          kind = FocusKind::Event;
+          focusEvent = focused->property("eventKey").toString();
+        }
+        break;
+      }
+    }
+  }
   while (auto *item = mGrid->takeAt(0)) {
     delete item->widget();
     delete item;
   }
   const auto locale = QLocale();
   const auto origin = static_cast<int>(locale.firstDayOfWeek());
-  const auto offset = (mMonth.dayOfWeek() - origin + 7) % 7;
-  mFirst = mMonth.addDays(-offset);
-  const auto rows = std::max(5, (offset + mMonth.daysInMonth() + 6) / 7);
-  mLast = mFirst.addDays(rows * 7 - 1);
+  const auto rows = static_cast<int>(mFirst.daysTo(mLast) + 1) / 7;
   mGrid->setRowStretch(0, 0);
   for (int row = 1; row <= 6; ++row) {
     mGrid->setRowStretch(row, row <= rows ? 1 : 0);
@@ -236,5 +334,19 @@ void MonthCalendarWidget::rebuild() {
                                emit eventSelected(event);
                              }, this);
     mGrid->addWidget(cell, i / 7 + 1, i % 7);
+  }
+  if (kind != FocusKind::None) {
+    for (int i = 0; i < mGrid->count(); ++i) {
+      auto *cell = dynamic_cast<DayCell *>(mGrid->itemAt(i)->widget());
+      if (!cell || cell->date() != focusDate) {
+        continue;
+      }
+      QWidget *target = kind == FocusKind::Event   ? cell->eventButton(focusEvent)
+                        : kind == FocusKind::Overflow ? cell->overflowButton()
+                                                      : cell->dateButton();
+      // Event/overflow rows may be laid out differently now; the date is stable.
+      (target ? target : cell->dateButton())->setFocus(Qt::OtherFocusReason);
+      break;
+    }
   }
 }

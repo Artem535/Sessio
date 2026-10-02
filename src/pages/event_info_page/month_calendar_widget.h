@@ -2,6 +2,7 @@
 
 #include "qtimeline_model.h"
 #include <QWidget>
+#include <utility>
 
 class QGridLayout;
 
@@ -12,8 +13,15 @@ public:
   void setMonth(QDate month);
   void setSelectedDate(QDate date);
   void setEvents(QVector<DuckEvent> events);
+  // Single combined update: builds the grid at most once, and not at all when
+  // neither the month nor the events changed.
+  void setMonthAndEvents(QDate month, QVector<DuckEvent> events);
+  // First/last date the grid shows for `month` in the current locale.
+  static std::pair<QDate, QDate> visibleRange(QDate month);
   QDate firstVisibleDate() const;
   QDate lastVisibleDate() const;
+  // Number of full grid builds so far (regression guard against rebuild storms).
+  int rebuildCount() const;
 
 signals:
   void dateSelected(QDate date);
@@ -30,4 +38,5 @@ private:
   QDate mFirst;
   QDate mLast;
   QVector<DuckEvent> mEvents;
+  int mRebuildCount = 0;
 };
