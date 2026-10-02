@@ -47,7 +47,7 @@ MonthCalendarWidget exposes `setMonth(QDate)`, `setSelectedDate(QDate)`,
 
 **Files:** `src/pages/event_info_page/event_info.{h,cpp}`, `qevent_details_widget.{h,cpp}`,
 `ui/pages/eventinfo.ui`, `ui/pages/eventdetails.ui` as needed,
-`src/app/main_window.{h,cpp}`, `ui/mainwindow.ui` (verify actual filename),
+`src/app/main_window.{h,cpp}`, `ui/app/mainwindow.ui`,
 `test/calendar_layout_tests.cpp`, existing relevant Qt tests/CMake.
 
 **Consumes:** Task1 projection and month widget. Existing QTimelineWidget day loading,
