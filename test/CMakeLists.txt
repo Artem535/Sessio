@@ -491,6 +491,7 @@ gtest_discover_tests(Sessio_token_response_parser_tests)
 find_package(Qt6 REQUIRED COMPONENTS Network Test)
 add_executable(Sessio_token_backend_client_tests
     fake_token_backend_server.h
+    fake_schedule_backend.h
     token_backend_client_tests.cpp
 )
 target_link_libraries(Sessio_token_backend_client_tests PRIVATE

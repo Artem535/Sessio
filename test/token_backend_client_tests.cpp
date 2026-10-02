@@ -186,3 +186,153 @@ int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+// --- Schedule series routes (Task 4) ---
+
+#include "fake_schedule_backend.h"
+
+using pcm::tokenclient::ScheduleHttpResult;
+
+namespace {
+constexpr auto kUid = "11111111-2222-4333-8444-555555555555";
+}
+
+TEST(TokenBackendClientScheduleTest, PutSendsExactBodyBearerAndCorrelatesByUidAndRevision) {
+  FakeScheduleBackend server;
+  server.setFallback({.status = 200,
+                      .body = R"({"series_uid":"11111111-2222-4333-8444-555555555555","revision":4,"content_hash":"abc"})"});
+  TokenBackendClient client(server.baseUrl());
+  QSignalSpy spy(&client, &TokenBackendClient::schedulePutFinished);
+
+  client.putSchedule("cred", kUid, 4, R"({"revision":4})");
+
+  ASSERT_TRUE(spy.wait(2000));
+  ASSERT_EQ(server.requests().size(), 1);
+  const auto &request = server.requests().first();
+  EXPECT_EQ(request.method, "PUT");
+  EXPECT_EQ(request.path, QStringLiteral("/v1/schedule-series/%1").arg(kUid));
+  EXPECT_EQ(request.headers.value("authorization"), "Bearer cred");
+  EXPECT_EQ(request.body, R"({"revision":4})");
+  const auto result = spy.at(0).at(0).value<ScheduleHttpResult>();
+  EXPECT_EQ(result.seriesUid, kUid);
+  EXPECT_EQ(result.revision, 4);
+  EXPECT_EQ(result.httpStatus, 200);
+  EXPECT_TRUE(result.ok());
+  EXPECT_FALSE(result.timedOut);
+}
+
+TEST(TokenBackendClientScheduleTest, ConflictCarriesStatusAndServerErrorCode) {
+  FakeScheduleBackend server;
+  server.setFallback({.status = 409, .body = R"({"error":"revision_conflict"})"});
+  TokenBackendClient client(server.baseUrl());
+  QSignalSpy spy(&client, &TokenBackendClient::schedulePutFinished);
+
+  client.putSchedule("cred", kUid, 2, "{}");
+
+  ASSERT_TRUE(spy.wait(2000));
+  const auto result = spy.at(0).at(0).value<ScheduleHttpResult>();
+  EXPECT_EQ(result.httpStatus, 409);
+  EXPECT_EQ(result.errorCode, "revision_conflict");
+  EXPECT_FALSE(result.ok());
+}
+
+TEST(TokenBackendClientScheduleTest, RetryAfterHeaderIsParsedAndBounded) {
+  FakeScheduleBackend server;
+  server.enqueue({.status = 429, .body = R"({"error":"too_many_attempts"})",
+                  .headers = {{"Retry-After", "60"}}});
+  server.enqueue({.status = 429, .body = "{}", .headers = {{"Retry-After", "999999"}}});
+  TokenBackendClient client(server.baseUrl());
+  QSignalSpy spy(&client, &TokenBackendClient::schedulePutFinished);
+
+  client.putSchedule("cred", kUid, 1, "{}");
+  ASSERT_TRUE(spy.wait(2000));
+  EXPECT_EQ(spy.at(0).at(0).value<ScheduleHttpResult>().retryAfterSeconds, 60);
+  client.putSchedule("cred", kUid, 1, "{}");
+  ASSERT_TRUE(spy.wait(2000));
+  EXPECT_EQ(spy.at(1).at(0).value<ScheduleHttpResult>().retryAfterSeconds, 3600);
+}
+
+TEST(TokenBackendClientScheduleTest, UnreachableBackendReportsNoHttpStatus) {
+  TokenBackendClient client("http://127.0.0.1:1"); // nothing listens on port 1
+  QSignalSpy spy(&client, &TokenBackendClient::schedulePutFinished);
+
+  client.putSchedule("cred", kUid, 1, "{}");
+
+  ASSERT_TRUE(spy.wait(5000));
+  const auto result = spy.at(0).at(0).value<ScheduleHttpResult>();
+  EXPECT_EQ(result.httpStatus, 0);
+  EXPECT_FALSE(result.ok());
+  EXPECT_FALSE(result.timedOut);
+}
+
+TEST(TokenBackendClientScheduleTest, SilentServerTimesOutInsteadOfHanging) {
+  FakeScheduleBackend server;
+  server.setFallback({.neverRespond = true});
+  TokenBackendClient client(server.baseUrl());
+  client.setScheduleRequestTimeoutMs(300);
+  QSignalSpy spy(&client, &TokenBackendClient::schedulePutFinished);
+
+  client.putSchedule("cred", kUid, 1, "{}");
+
+  ASSERT_TRUE(spy.wait(3000));
+  const auto result = spy.at(0).at(0).value<ScheduleHttpResult>();
+  EXPECT_TRUE(result.timedOut);
+  EXPECT_EQ(result.httpStatus, 0);
+}
+
+TEST(TokenBackendClientScheduleTest, DefaultRequestTimeoutIsFifteenSeconds) {
+  TokenBackendClient client("http://127.0.0.1:1");
+  EXPECT_EQ(client.scheduleRequestTimeoutMs(), 15000);
+}
+
+TEST(TokenBackendClientScheduleTest, GetScheduleReturnsBodyForRecovery) {
+  FakeScheduleBackend server;
+  server.setFallback({.status = 200, .body = R"({"revision":3,"content_hash":"h","snapshot":{}})"});
+  TokenBackendClient client(server.baseUrl());
+  QSignalSpy spy(&client, &TokenBackendClient::scheduleGetFinished);
+
+  client.getSchedule("cred", kUid);
+
+  ASSERT_TRUE(spy.wait(2000));
+  EXPECT_EQ(server.requests().first().method, "GET");
+  const auto result = spy.at(0).at(0).value<ScheduleHttpResult>();
+  EXPECT_EQ(result.seriesUid, kUid);
+  EXPECT_TRUE(result.body.contains("content_hash"));
+}
+
+TEST(TokenBackendClientScheduleTest, CapabilitiesDistinguishSupportedFromLegacyBackend) {
+  FakeScheduleBackend server;
+  server.enqueue({.status = 200, .body = R"({"scheduleSeries":true})"});
+  server.enqueue({.status = 404, .body = R"({"error":"not_found"})"});
+  TokenBackendClient client(server.baseUrl());
+  QSignalSpy spy(&client, &TokenBackendClient::scheduleCapabilitiesFinished);
+
+  client.requestScheduleCapabilities("cred");
+  ASSERT_TRUE(spy.wait(2000));
+  EXPECT_EQ(server.requests().first().path, "/v1/capabilities");
+  EXPECT_EQ(server.requests().first().headers.value("authorization"), "Bearer cred");
+  EXPECT_TRUE(spy.at(0).at(0).value<ScheduleHttpResult>().ok());
+  EXPECT_TRUE(spy.at(0).at(0).value<ScheduleHttpResult>().body.contains("scheduleSeries"));
+
+  client.requestScheduleCapabilities("cred");
+  ASSERT_TRUE(spy.wait(2000));
+  EXPECT_EQ(spy.at(1).at(0).value<ScheduleHttpResult>().httpStatus, 404);
+}
+
+TEST(TokenBackendClientScheduleTest, SeriesInvitationSendsIdempotencyKeyAndReissueFlag) {
+  FakeScheduleBackend server;
+  server.setFallback({.status = 200,
+                      .body = R"({"invitation_url":"https://x/i/c","passcode":"p","generation":2})"});
+  TokenBackendClient client(server.baseUrl());
+  QSignalSpy spy(&client, &TokenBackendClient::seriesInvitationFinished);
+
+  client.requestSeriesInvitation("cred", kUid, "key-1", true);
+
+  ASSERT_TRUE(spy.wait(2000));
+  const auto &request = server.requests().first();
+  EXPECT_EQ(request.method, "POST");
+  EXPECT_EQ(request.path, QStringLiteral("/v1/schedule-series/%1/invitation").arg(kUid));
+  EXPECT_EQ(request.headers.value("idempotency-key"), "key-1");
+  EXPECT_EQ(QJsonDocument::fromJson(request.body).object().value("reissue").toBool(), true);
+  EXPECT_EQ(spy.at(0).at(0).value<ScheduleHttpResult>().seriesUid, kUid);
+}
