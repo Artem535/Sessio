@@ -1010,6 +1010,38 @@
         <translation>Provider</translation>
     </message>
     <message>
+        <source>Copy passcode</source>
+        <translation>Copy passcode</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Retry</translation>
+    </message>
+    <message>
+        <source>Create new link</source>
+        <translation>Create new link</translation>
+    </message>
+    <message>
+        <source>Publish this device&apos;s schedule</source>
+        <translation>Publish this device&apos;s schedule</translation>
+    </message>
+    <message>
+        <source>Move to a permanent link...</source>
+        <translation>Move to a permanent link...</translation>
+    </message>
+    <message>
+        <source>Create a new link</source>
+        <translation>Create a new link</translation>
+    </message>
+    <message>
+        <source>The current link stops working immediately. Anyone who has it will need the new link. Continue?</source>
+        <translation>The current link stops working immediately. Anyone who has it will need the new link. Continue?</translation>
+    </message>
+    <message>
+        <source>The server holds a different version of this schedule. Publishing replaces it with the schedule on this device. Continue?</source>
+        <translation>The server holds a different version of this schedule. Publishing replaces it with the schedule on this device. Continue?</translation>
+    </message>
+    <message>
         <source>Failed to create the LiveKit meeting: %1</source>
         <translation>Failed to create the LiveKit meeting: %1</translation>
     </message>
@@ -1020,6 +1052,18 @@
     <message>
         <source>Overlaps with &quot;%1&quot;, %2.</source>
         <translation>Overlaps with &quot;%1&quot;, %2.</translation>
+    </message>
+    <message>
+        <source>The system keychain is not available, so the link cannot be read.</source>
+        <translation>The system keychain is not available, so the link cannot be read.</translation>
+    </message>
+    <message>
+        <source>The permanent link is not stored on this device. Create a new link.</source>
+        <translation>The permanent link is not stored on this device. Create a new link.</translation>
+    </message>
+    <message>
+        <source>The permanent link is stored securely. Use Copy link.</source>
+        <translation>The permanent link is stored securely. Use Copy link.</translation>
     </message>
     <message>
         <source>Repeat</source>
@@ -1156,6 +1200,26 @@
 </context>
 <context>
     <name>QEventInfoPage</name>
+    <message>
+        <source>The change was not saved.</source>
+        <translation>The change was not saved.</translation>
+    </message>
+    <message>
+        <source>This series has a permanent call link, so it cannot be split into &quot;this and future&quot; events. Nothing was changed.</source>
+        <translation>This series has a permanent call link, so it cannot be split into &quot;this and future&quot; events. Nothing was changed.</translation>
+    </message>
+    <message>
+        <source>The schedule cannot be published: %1. Nothing was changed.</source>
+        <translation>The schedule cannot be published: %1. Nothing was changed.</translation>
+    </message>
+    <message>
+        <source>The change was not saved: %1</source>
+        <translation>The change was not saved: %1</translation>
+    </message>
+    <message>
+        <source>Recurring event</source>
+        <translation type="unfinished">Recurring event</translation>
+    </message>
     <message>
         <source>: EVENT_ADD_BUTTON</source>
         <translation>Add</translation>
@@ -1399,6 +1463,10 @@ See you!</translation>
         <translation>This and future events</translation>
     </message>
     <message>
+        <source>&quot;This and future events&quot; is not available for a series with a permanent call link. Delete only this event or the whole series.</source>
+        <translation>&quot;This and future events&quot; is not available for a series with a permanent call link. Delete only this event or the whole series.</translation>
+    </message>
+    <message>
         <source>Access to keychain denied</source>
         <translation>Access to keychain denied</translation>
     </message>
@@ -1494,6 +1562,117 @@ See you!</translation>
     <message>
         <source>I&apos;m a client</source>
         <translation>I&apos;m a client</translation>
+    </message>
+</context>
+<context>
+    <name>SeriesCallStatus</name>
+    <message>
+        <source>the system keychain is not available</source>
+        <translation>the system keychain is not available</translation>
+    </message>
+    <message>
+        <source>the access key could not be read</source>
+        <translation>the access key could not be read</translation>
+    </message>
+    <message>
+        <source>the server rejected the access key</source>
+        <translation>the server rejected the access key</translation>
+    </message>
+    <message>
+        <source>the server refused the schedule</source>
+        <translation>the server refused the schedule</translation>
+    </message>
+    <message>
+        <source>the server has a different version of the schedule</source>
+        <translation>the server has a different version of the schedule</translation>
+    </message>
+    <message>
+        <source>the server does not support recurring calls</source>
+        <translation>the server does not support recurring calls</translation>
+    </message>
+    <message>
+        <source>the local database could not be updated</source>
+        <translation>the local database could not be updated</translation>
+    </message>
+    <message>
+        <source>Moving this series to a permanent link: sending the schedule to the server...</source>
+        <translation>Moving this series to a permanent link: sending the schedule to the server...</translation>
+    </message>
+    <message>
+        <source>Moving this series to a permanent link: creating the link...</source>
+        <translation>Moving this series to a permanent link: creating the link...</translation>
+    </message>
+    <message>
+        <source>Could not move this series to a permanent link (%1). The previous link stays valid.</source>
+        <translation>Could not move this series to a permanent link (%1). The previous link stays valid.</translation>
+    </message>
+    <message>
+        <source>Schedule synchronized with the server.</source>
+        <translation>Schedule synchronized with the server.</translation>
+    </message>
+    <message>
+        <source>Schedule saved on this device, waiting to be sent.</source>
+        <translation>Schedule saved on this device, waiting to be sent.</translation>
+    </message>
+    <message>
+        <source>Sending the schedule...</source>
+        <translation>Sending the schedule...</translation>
+    </message>
+    <message>
+        <source>Waiting for the network. The schedule will be sent automatically.</source>
+        <translation>Waiting for the network. The schedule will be sent automatically.</translation>
+    </message>
+    <message>
+        <source>The server has a different version of this schedule. Nothing was overwritten.</source>
+        <translation>The server has a different version of this schedule. Nothing was overwritten.</translation>
+    </message>
+    <message>
+        <source>The server refused this schedule (%1). Your changes are kept on this device.</source>
+        <translation>The server refused this schedule (%1). Your changes are kept on this device.</translation>
+    </message>
+    <message>
+        <source>This server does not support recurring calls yet. The schedule stays on this device and no call link can be created.</source>
+        <translation>This server does not support recurring calls yet. The schedule stays on this device and no call link can be created.</translation>
+    </message>
+    <message>
+        <source>The server rejected the saved access key. Check it in Settings.</source>
+        <translation>The server rejected the saved access key. Check it in Settings.</translation>
+    </message>
+    <message>
+        <source>The access key could not be read from the system keychain.</source>
+        <translation>The access key could not be read from the system keychain.</translation>
+    </message>
+    <message>
+        <source>The server may still allow entry under the previous schedule until this is sent.</source>
+        <translation>The server may still allow entry under the previous schedule until this is sent.</translation>
+    </message>
+    <message>
+        <source>Permanent link ready.</source>
+        <translation>Permanent link ready.</translation>
+    </message>
+    <message>
+        <source>The permanent link has not been created yet.</source>
+        <translation>The permanent link has not been created yet.</translation>
+    </message>
+    <message>
+        <source>The link will be created once the server has the schedule.</source>
+        <translation>The link will be created once the server has the schedule.</translation>
+    </message>
+    <message>
+        <source>Creating the permanent link...</source>
+        <translation>Creating the permanent link...</translation>
+    </message>
+    <message>
+        <source>Waiting for the network to create the link.</source>
+        <translation>Waiting for the network to create the link.</translation>
+    </message>
+    <message>
+        <source>The link is not available on this device. Create a new link; the old one will stop working.</source>
+        <translation>The link is not available on this device. Create a new link; the old one will stop working.</translation>
+    </message>
+    <message>
+        <source>Could not create the link (%1).</source>
+        <translation>Could not create the link (%1).</translation>
     </message>
 </context>
 <context>
@@ -2151,6 +2330,49 @@ Your previous data was kept.</translation>
     <message>
         <source>Quit</source>
         <translation>Quit</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::eventpage::SeriesTimezoneDialog</name>
+    <message>
+        <source>Confirm the series timezone</source>
+        <translation>Confirm the series timezone</translation>
+    </message>
+    <message>
+        <source>A permanent link needs a fixed timezone for this series. From now on the meeting times follow this timezone, not the timezone of this computer. Check that the dates below stay the same.</source>
+        <translation>A permanent link needs a fixed timezone for this series. From now on the meeting times follow this timezone, not the timezone of this computer. Check that the dates below stay the same.</translation>
+    </message>
+    <message>
+        <source>Choose a timezone</source>
+        <translation>Choose a timezone</translation>
+    </message>
+    <message>
+        <source>not available</source>
+        <translation>not available</translation>
+    </message>
+    <message>
+        <source>no upcoming dates</source>
+        <translation>no upcoming dates</translation>
+    </message>
+    <message>
+        <source>Dates today: %1</source>
+        <translation>Dates today: %1</translation>
+    </message>
+    <message>
+        <source>Choose the timezone this series is scheduled in.</source>
+        <translation>Choose the timezone this series is scheduled in.</translation>
+    </message>
+    <message>
+        <source>Dates in %1: %2</source>
+        <translation>Dates in %1: %2</translation>
+    </message>
+    <message>
+        <source>This timezone cannot be used for the series.</source>
+        <translation>This timezone cannot be used for the series.</translation>
+    </message>
+    <message>
+        <source>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</source>
+        <translation>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</translation>
     </message>
 </context>
 <context>
