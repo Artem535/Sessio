@@ -40,6 +40,12 @@ QVector<DuckEvent> virtualOccurrencesInRange(pcm::database::Database &db,
 std::optional<QVector<QDateTime>> previewOccurrences(const DuckEventSeries &series,
                                                      const std::string &timezone,
                                                      const QDateTime &from, int count);
+// True when the shared schedule module (and therefore the server) accepts this
+// IANA timezone id.
+bool isSupportedScheduleTimezone(const std::string &timezone);
+// The machine's IANA timezone when it is supported, otherwise empty: a series
+// is never published with a guessed timezone.
+std::string systemScheduleTimezone();
 DuckEvent buildVirtualOccurrence(const DuckEventSeries &series,
                                  const QDateTime &occurrenceStart,
                                  int64_t virtualId);

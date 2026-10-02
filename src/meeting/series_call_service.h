@@ -64,6 +64,10 @@ public:
   // Manual retry of everything that is stuck for this series: wakes the
   // schedule queue, repeats a failed invitation request and a failed migration.
   void retry(int64_t seriesId);
+  // Explicit "publish this device's schedule" after a conflict: the server's
+  // revision is adopted and the local schedule is re-queued on top of it, so the
+  // server copy is replaced. Only ever called from a deliberate user action.
+  void publishThisDeviceSchedule(int64_t seriesId);
   // Asynchronous read of the stored invitation (link + passcode) from secure
   // storage, for "copy link" / "copy invite".
   void loadInvitation(int64_t seriesId, const SeriesInvitationService::LoadCallback &done);

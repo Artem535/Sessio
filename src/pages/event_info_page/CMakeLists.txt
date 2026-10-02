@@ -15,6 +15,8 @@ qt_add_library(${TARGET_NAME} STATIC
         qevent_details_widget.h
         day_summary_widget.cpp
         day_summary_widget.h
+        series_call_status_text.cpp
+        series_call_status_text.h
 )
 
 target_include_directories(${TARGET_NAME} PRIVATE

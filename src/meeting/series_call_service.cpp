@@ -104,6 +104,12 @@ void SeriesCallService::retry(const int64_t seriesId) {
   }
 }
 
+void SeriesCallService::publishThisDeviceSchedule(const int64_t seriesId) {
+  if (const auto identity = mDb.get_schedule_identity(seriesId)) {
+    mSync.publishRestoredSchedule(QString::fromStdString(identity->series_uid));
+  }
+}
+
 void SeriesCallService::setMigration(const int64_t seriesId, const MigrationState state,
                                      const QString &detail) {
   mMigrations.insert(seriesId, {state, detail});

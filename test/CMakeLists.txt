@@ -152,6 +152,49 @@ target_link_libraries(Sessio_series_call_tests PRIVATE
 set_target_properties(Sessio_series_call_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_series_call_tests)
 
+# Status text of a published recurring call series
+add_executable(Sessio_series_call_status_text_tests
+    series_call_status_text_tests.cpp
+)
+target_include_directories(Sessio_series_call_status_text_tests PRIVATE
+    ${qlementine_SOURCE_DIR}/lib/include
+)
+target_link_libraries(Sessio_series_call_status_text_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Sessio_event_page
+    Sessio_meeting
+)
+gtest_discover_tests(Sessio_series_call_status_text_tests)
+
+# Event editor with published recurring call series (real DB + backend model)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network Test)
+add_executable(Sessio_series_call_ui_tests
+    fake_schedule_backend.h
+    series_backend_model.h
+    fake_series_invitation_store.h
+    series_call_fixture.h
+    series_call_ui_tests.cpp
+)
+target_include_directories(Sessio_series_call_ui_tests PRIVATE
+    ${qlementine_SOURCE_DIR}/lib/include
+)
+target_link_libraries(Sessio_series_call_ui_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Qt6::Network
+    Qt6::Test
+    Sessio_config
+    Sessio_database
+    Sessio_event_page
+    Sessio_event_view
+    Sessio_meeting
+    Sessio_token_client
+    Poco::Foundation
+)
+set_target_properties(Sessio_series_call_ui_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_series_call_ui_tests)
+
 # Schedule conflict tests
 add_executable(Sessio_schedule_conflict_tests
     schedule_conflict_service_tests.cpp

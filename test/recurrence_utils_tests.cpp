@@ -661,3 +661,18 @@ TEST(RecurrenceUtilsTest, VirtualOccurrencesSkipExceptionsAndMaterializedOverrid
   EXPECT_EQ(events[0].series_id.value(), commit->series_id);
   EXPECT_EQ(events[0].original_occurrence_start.value(), events[0].start_date.value());
 }
+
+TEST(RecurrenceUtilsTest, ScheduleTimezoneSupportIsDecidedByTheSharedModule) {
+  EXPECT_TRUE(pcm::recurrence::isSupportedScheduleTimezone("Europe/Berlin"));
+  EXPECT_TRUE(pcm::recurrence::isSupportedScheduleTimezone("UTC"));
+  EXPECT_FALSE(pcm::recurrence::isSupportedScheduleTimezone(""));
+  EXPECT_FALSE(pcm::recurrence::isSupportedScheduleTimezone("localtime"));
+  EXPECT_FALSE(pcm::recurrence::isSupportedScheduleTimezone("Not/AZone"));
+}
+
+TEST(RecurrenceUtilsTest, DefaultScheduleTimezoneNeverGuessesAnUnknownZone) {
+  const auto zone = pcm::recurrence::systemScheduleTimezone();
+  // Either the machine's IANA id, accepted by the shared module, or nothing -
+  // the caller then asks the specialist instead of publishing a guess.
+  EXPECT_TRUE(zone.empty() || pcm::recurrence::isSupportedScheduleTimezone(zone));
+}

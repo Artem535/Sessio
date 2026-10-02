@@ -43,6 +43,10 @@ struct SeriesBackendModel {
       return capabilities ? R{.status = 200, .body = R"({"scheduleSeries":true})"}
                           : R{.status = 404, .body = R"({"error":"not_found"})"};
     }
+    if (request.path == "/v1/meetings" && request.method == "POST") {
+      return {.status = 200,
+              .body = R"({"meetingRef":"ref-new","invitationUrl":"https://x/c","passcode":"1"})"};
+    }
     if (request.path.startsWith("/v1/meetings/") && request.path.endsWith("/invalidate")) {
       invalidatedMeetings.append(request.path.section('/', 3, 3));
       return {.status = 204, .body = ""};

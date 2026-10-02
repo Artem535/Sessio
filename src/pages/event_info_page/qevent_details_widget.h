@@ -2,6 +2,7 @@
 
 #include "event_item.h"
 #include "meeting_coordinator.h"
+#include "series_call_service.h"
 
 #include <QComboBox>
 #include <QDate>
@@ -70,6 +71,23 @@ public:
   void setMeetingCoordinator(pcm::meeting::MeetingCoordinator *coordinator);
 
   /**
+   * @brief Marks the edited event as an occurrence of a published recurring
+   * call series. Its call is owned by the series: no single meeting is ever
+   * created or replaced for it, the online/provider choice is locked, Open
+   * joins the occurrence by `joinTarget`, Copy link/invite/passcode read the
+   * series' permanent invitation from secure storage, and sync / invitation
+   * state is shown inline with manual retry.
+   */
+  void setSeriesCall(pcm::meeting::SeriesCallService *service, int64_t seriesId,
+                     const QString &joinTarget);
+  /**
+   * @brief Marks the edited event as part of a legacy LiveKit series (one
+   * shared meeting) and offers the opt-in move to a permanent series link.
+   */
+  void setLegacyMigration(pcm::meeting::SeriesCallService *service, int64_t seriesId);
+  [[nodiscard]] bool isSeriesBacked() const { return mSeriesBacked; }
+
+  /**
    * @brief Checks if the widget is in edit mode.
    * @return true if in edit mode, false otherwise.
    */
@@ -129,6 +147,12 @@ signals:
    */
   void openLiveKitMeetingRequested(QString meetingRef);
 
+  /**
+   * @brief The user asked to move this legacy LiveKit series to a permanent
+   * link; the owner confirms the series' timezone and starts the migration.
+   */
+  void migrateToPermanentLinkRequested(qint64 seriesId);
+
 private slots:
   // --- Button Slots ---
   void onApplyClicked();
@@ -149,8 +173,13 @@ private slots:
   void onTimeFromChanged(const QTime &timeFrom);
   void onTimeToChanged(const QTime &timeTo);
   void onSuggestFreeSlotClicked();
+  void onCopyMeetingPasscodeClicked();
 
 private:
+  void applySeriesCallState();
+  void refreshSeriesCallPanel();
+  void withSeriesInvitation(const std::function<void(const QString &url, const QString &passcode)> &use);
+
   // --- Initialization ---
   void initUi();
   void initConnections();
@@ -211,6 +240,13 @@ private:
   QPushButton *mOpenMeetingButton = nullptr;
   QPushButton *mCopyMeetingUrlButton = nullptr;
   QPushButton *mCopyMeetingInviteButton = nullptr;
+  QPushButton *mCopyMeetingPasscodeButton = nullptr;
+  QWidget *mSeriesCallWidget = nullptr;
+  QLabel *mSeriesStatusLabel = nullptr;
+  QPushButton *mSeriesRetryButton = nullptr;
+  QPushButton *mSeriesReissueButton = nullptr;
+  QPushButton *mSeriesPublishButton = nullptr;
+  QPushButton *mMigrateButton = nullptr;
   QWidget *mBuffersWidget = nullptr;
   QSpinBox *mBufferBeforeSpinBox = nullptr;
   QSpinBox *mBufferAfterSpinBox = nullptr;
@@ -241,4 +277,12 @@ private:
   QDateTime mMeetingScheduledEnd;
   std::function<std::optional<DuckEvent>(const DuckEvent &)> mConflictChecker;
   QPointer<pcm::meeting::MeetingCoordinator> mMeetingCoordinator;
+
+  // --- Published recurring call series ---
+  QPointer<pcm::meeting::SeriesCallService> mSeriesCalls;
+  int64_t mSeriesId = 0;
+  QString mSeriesJoinTarget;
+  bool mSeriesBacked = false;      // the call is owned by a published series
+  bool mLegacyMigratable = false;  // legacy LiveKit series: move to a permanent link offered
+  bool mSeriesLinkReady = false;   // the permanent invitation can be copied
 };

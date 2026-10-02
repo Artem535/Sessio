@@ -217,6 +217,27 @@ QVector<DuckEvent> virtualOccurrencesInRange(pcm::database::Database &db,
   return result;
 }
 
+bool isSupportedScheduleTimezone(const std::string &timezone) {
+  if (timezone.empty()) {
+    return false;
+  }
+  pcm::schedule::Snapshot probe;
+  probe.revision = 1;
+  probe.baseRevision = 0;
+  probe.timezone = timezone;
+  probe.dtstartLocal = "2026-01-05T09:00:00";
+  probe.durationSeconds = 3600;
+  probe.rrule = "FREQ=DAILY";
+  probe.active = true;
+  probe.joinEnabled = true;
+  return pcm::schedule::validate(probe).valid;
+}
+
+std::string systemScheduleTimezone() {
+  const auto id = QTimeZone::systemTimeZoneId().toStdString();
+  return isSupportedScheduleTimezone(id) ? id : std::string{};
+}
+
 std::optional<QVector<QDateTime>> previewOccurrences(const DuckEventSeries &series,
                                                      const std::string &timezone,
                                                      const QDateTime &from, const int count) {
