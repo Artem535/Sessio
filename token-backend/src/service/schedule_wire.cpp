@@ -44,6 +44,18 @@ std::string iso(int64_t ms) {
 class Reader {
 public:
   explicit Reader(const std::string &json) : json_(json) {}
+  bool invitation() {
+    bool reissue = false;
+    object({"reissue"}, [&](const std::string &) { reissue = boolean(); });
+    whitespace(); if (pos_ != json_.size()) invalid("trailing_json");
+    return reissue;
+  }
+  std::string specialistName() {
+    std::string name;
+    object({"displayName"}, [&](const std::string &) { name = string(); }, false);
+    whitespace(); if (pos_ != json_.size()) invalid("trailing_json");
+    return name;
+  }
   schedule::Snapshot snapshot() {
     schedule::Snapshot s;
     object({"schema_version", "revision", "base_revision", "timezone", "dtstart_local", "duration_seconds", "rrule", "until_utc", "active", "join_enabled", "overrides", "exceptions"}, [&](const std::string &key) {
@@ -94,7 +106,7 @@ private:
     if (parsed.ec != std::errc{}) invalid("integer_out_of_range");
     return n;
   }
-  template<class F> void object(const std::set<std::string> &allowed, F read) {
+  template<class F> void object(const std::set<std::string> &allowed, F read, bool requireAll = true) {
     require('{'); std::set<std::string> seen;
     if (!take('}')) {
       do {
@@ -106,7 +118,7 @@ private:
         require(',');
       } while (true);
     }
-    if (seen != allowed) invalid("missing_field");
+    if (requireAll && seen != allowed) invalid("missing_field");
   }
   template<class F> void array(F read) {
     require('['); size_t count = 0;
@@ -130,6 +142,10 @@ private:
 } // namespace
 
 schedule::Snapshot parseScheduleJson(const std::string &json) { return Reader(json).snapshot(); }
+bool parseSeriesInvitationJson(const std::string &json) { return Reader(json).invitation(); }
+std::string parseSpecialistNameJson(const std::string &json) { return Reader(json).specialistName(); }
+int64_t parseUtcTimestamp(const std::string &value) { return utc(value); }
+std::string utcTimestamp(int64_t ms) { return iso(ms); }
 std::string jsonQuote(const std::string &value) {
   return "\"" + *oatpp::parser::json::Utils::escapeString(value.data(), value.size()) + "\"";
 }

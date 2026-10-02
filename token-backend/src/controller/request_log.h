@@ -38,6 +38,14 @@ inline const char *serviceErrorName(ServiceError err) {
     return "meeting_window_closed";
   case ServiceError::InvalidDisplayName:
     return "invalid_display_name";
+  case ServiceError::InvalidRequest: return "invalid_request";
+  case ServiceError::InvitationExists: return "invitation_exists";
+  case ServiceError::IdempotencyConflict: return "idempotency_conflict";
+  case ServiceError::ReplayExpired: return "invitation_replay_expired";
+  case ServiceError::OccurrenceUnavailable: return "occurrence_unavailable";
+  case ServiceError::AmbiguousOccurrence: return "ambiguous_occurrence";
+  case ServiceError::ScheduleUnavailable: return "schedule_resolution_unavailable";
+  case ServiceError::InvitationRevoked: return "invitation_revoked";
   }
   return "unknown_error";
 }

@@ -5,6 +5,7 @@
 #include "controller/invitations_controller.h"
 #include "controller/meetings_controller.h"
 #include "controller/schedule_controller.h"
+#include "controller/series_controller.h"
 #include "db/accounts_repository.h"
 #include "db/invitations_repository.h"
 #include "db/meetings_repository.h"
@@ -200,6 +201,8 @@ int main(int argc, char **argv) {
     router->route(invitationsController->getEndpoints());
     auto scheduleController = std::make_shared<pcm::tokenbackend::ScheduleController>(objectMapper, scheduleService);
     router->route(scheduleController->getEndpoints());
+    auto seriesController = std::make_shared<pcm::tokenbackend::SeriesController>(objectMapper, service.series());
+    router->route(seriesController->getEndpoints());
 
     auto connectionHandler = oatpp::web::server::HttpConnectionHandler::createShared(router);
     const char *portEnv = std::getenv("PORT");

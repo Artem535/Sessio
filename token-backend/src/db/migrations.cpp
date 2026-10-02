@@ -65,6 +65,32 @@ void runMigrations(SqliteConnection &conn) {
       original_start_ms INTEGER NOT NULL,
       PRIMARY KEY(series_uid, original_start_ms)
     );
+    CREATE TABLE IF NOT EXISTS series_invitations (
+      id INTEGER PRIMARY KEY,
+      series_uid TEXT NOT NULL REFERENCES schedule_series(series_uid),
+      generation INTEGER NOT NULL,
+      code_hash TEXT NOT NULL UNIQUE,
+      passcode_hash TEXT NOT NULL,
+      failed_attempts INTEGER NOT NULL DEFAULT 0,
+      revoked_at INTEGER,
+      UNIQUE(series_uid, generation)
+    );
+    CREATE TABLE IF NOT EXISTS series_invitation_replays (
+      account_id INTEGER NOT NULL REFERENCES accounts(id),
+      idempotency_key TEXT NOT NULL,
+      series_uid TEXT NOT NULL REFERENCES schedule_series(series_uid),
+      reissue INTEGER NOT NULL,
+      generation INTEGER NOT NULL,
+      encrypted_payload TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      PRIMARY KEY(account_id, idempotency_key)
+    );
+    CREATE TABLE IF NOT EXISTS occurrence_meetings (
+      series_uid TEXT NOT NULL REFERENCES schedule_series(series_uid),
+      original_start_ms INTEGER NOT NULL,
+      meeting_id INTEGER NOT NULL UNIQUE REFERENCES meetings(id),
+      PRIMARY KEY(series_uid, original_start_ms)
+    );
   )sql");
 }
 

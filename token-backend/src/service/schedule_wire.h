@@ -8,4 +8,8 @@ inline constexpr size_t kMaxScheduleBytes = 1024 * 1024;
 schedule::Snapshot parseScheduleJson(const std::string &json);
 std::string scheduleJson(const schedule::Snapshot &snapshot);
 std::string jsonQuote(const std::string &value);
+bool parseSeriesInvitationJson(const std::string &json);
+std::string parseSpecialistNameJson(const std::string &json);
+int64_t parseUtcTimestamp(const std::string &value);
+std::string utcTimestamp(int64_t ms);
 }

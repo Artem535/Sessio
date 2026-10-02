@@ -222,6 +222,79 @@ against the 5-attempt limit.
 parsed as UTC in the `YYYY-MM-DDTHH:MM:SSZ` form. A value that cannot be
 parsed fails closed (the window is treated as shut).
 
+## Persistent recurring invitations
+
+Publish a schema-v1 schedule snapshot first through
+`PUT /v1/schedule-series/{series_uid}` (see the repository's recurring-call
+service specification). Then authenticated
+`POST /v1/schedule-series/{series_uid}/invitation` accepts exactly
+`{"reissue":false}` with a non-nil UUID `Idempotency-Key` header and returns
+`{"invitation_url":"...","passcode":"...","generation":1}`.
+To replace an invitation explicitly, use `{"reissue":true}` and a new key.
+The previous generation is revoked atomically. A new key with `reissue=false`
+when any generation already exists returns 409 `invitation_exists`.
+`POST /v1/schedule-series/{series_uid}/revoke` (empty body or `{}`) returns 204.
+All practitioner routes enforce account ownership; foreign resources return 404.
+
+The existing `POST /v1/invitations/{code}/client-token` also accepts series codes.
+It checks the passcode before resolving the latest server schedule. The first
+five wrong passcodes return 401; the sixth permanently revokes that generation
+and returns 410 `invitation_revoked`. This count survives weeks and restarts.
+The single-meeting invitation policy remains unchanged.
+Practitioners join via authenticated
+`POST /v1/schedule-series/{series_uid}/occurrences/{original_start_utc}/specialist-token`,
+with no body, `{}`, or `{"displayName":"..."}`. The original start is strict
+UTC `YYYY-MM-DDTHH:MM:SSZ`; it stays unchanged after a move. Both token routes
+return existing `endpointUrl`, `roomName`, `token`, `expiresAt` fields.
+
+Join windows include start minus 5 minutes through end plus 15 minutes. No
+eligible occurrence returns 409 `occurrence_unavailable`; multiple eligible
+occurrences return 409 `ambiguous_occurrence` for both participant paths.
+Resolver failure returns 503 `schedule_resolution_unavailable`. A moved
+occurrence keeps its room and client identity. All tokens for a mapped legacy
+meeting also check the latest schedule; stale stored meeting dates are not used.
+Legacy invitation reissue on a mapped meeting is rejected with 400; use the
+series invitation endpoint. Legacy invalidate permanently closes that mapped
+room to new tokens and preserves its mapping; it does not cancel the entire
+series or create a replacement room. Revocation does not disconnect participants
+or invalidate an already-issued JWT before expiry.
+
+Invitation mutation/replay/revoke share a rolling 10 requests/minute/account
+limit. Series practitioner token routes (including mapped legacy routes) share
+30/minute/account; series client exchange is 30/minute/invitation. Limits are
+process-local, reset on restart, and return 429 with `Retry-After: 60`.
+Secret responses have `Cache-Control: no-store`. New series request bodies and
+the client-token body are bounded to 4 KiB; oversized bodies return 413. Invalid
+invitation fields, UUID keys and specialist request shapes return 400
+`invalid_request` without echoing input. Snapshot bodies retain their own limits.
+
+Idempotency keys are scoped to the account and bind the series and normalized
+`reissue` value. Reusing a key for a different series or payload returns 409
+`idempotency_conflict`. For 24 hours retries return the original URL, passcode
+and generation, even after a URL configuration change or a later reissue/revoke;
+such an old generation remains revoked. The response is encrypted at rest with
+XChaCha20-Poly1305 and a fresh random nonce. The key is HMAC-SHA256 of the fixed
+domain `sessio:series-invitation-replay:v1`, keyed by the existing mandatory
+`LIVEKIT_API_SECRET`. Account/key/series/payload/generation/expiry are authenticated
+as associated data. No additional secret or ephemeral startup key is used.
+Existing required configuration validation remains the startup readiness gate.
+
+Rotating `LIVEKIT_API_SECRET` makes existing replay ciphertext unreadable; those
+retries fail closed with 410 `invitation_replay_expired`, as do expired retries.
+An explicit reissue with a new idempotency key is then required to recover a lost
+invitation. Passcode hashes and existing invitation codes remain valid across
+rotation; new JWTs use the new key. Keep the configured secret with database
+backups if replay restoration is needed. Never include it in the database.
+Expired encrypted payloads are cleared on service startup and invitation
+requests; expiry is checked before every replay. Tombstones remain so an old
+key never silently creates new secrets. Cleanup of history/tombstones and
+multi-process rate limiting remain production lifecycle work.
+
+Tests inject a constructor clock into `MeetingService`/`SeriesService`, including
+real HTTP tests covering two weekly windows. Production defaults to system UTC;
+there is no environment clock override or public test-clock endpoint. JWT `nbf`,
+`exp` and the response `expiresAt` use the same selected server instant.
+
 ## Account management: one credential per specialist
 
 Each specialist gets their own bearer credential; every meeting and

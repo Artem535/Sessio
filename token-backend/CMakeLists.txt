@@ -22,6 +22,7 @@ add_library(token_backend_lib STATIC
   src/controller/invitation_url.cpp
   src/controller/meetings_controller.h
   src/controller/schedule_controller.h
+  src/controller/series_controller.h
   src/controller/invitations_controller.h
   src/config.cpp
   src/db/sqlite_connection.cpp
@@ -29,6 +30,7 @@ add_library(token_backend_lib STATIC
   src/db/accounts_repository.cpp
   src/db/meetings_repository.cpp
   src/db/schedule_repository.cpp
+  src/db/series_repository.cpp
   src/db/invitations_repository.cpp
   src/crypto/random_token.cpp
   src/crypto/hashing.cpp
@@ -36,6 +38,7 @@ add_library(token_backend_lib STATIC
   src/auth/authorizer.h
   src/auth/static_token_authorizer.h
   src/service/meeting_service.cpp
+  src/service/series_service.cpp
   src/service/schedule_service.cpp
   src/service/schedule_wire.cpp
 )

@@ -1,4 +1,6 @@
 #include "service/meeting_service.h"
+#include "service/series_service.h"
+#include "db/series_repository.h"
 
 #include "crypto/hashing.h"
 #include "crypto/random_token.h"
@@ -76,6 +78,15 @@ std::optional<ServiceError> meetingUsabilityError(const Meeting &meeting) {
 
 } // namespace
 
+MeetingService::MeetingService(Authorizer &authorizer, MeetingsRepository &meetings,
+                               InvitationsRepository &invitations, const Config &config,
+                               std::string endpoint, std::function<int64_t()> clock)
+    : authorizer_(authorizer), meetings_(meetings), invitations_(invitations), config_(config),
+      liveKitEndpointUrl_(std::move(endpoint)),
+      series_(std::make_unique<SeriesService>(meetings.connection(), authorizer, meetings, config,
+                                             liveKitEndpointUrl_, std::move(clock))) {}
+MeetingService::~MeetingService() = default;
+
 Result<MeetingService::CreateMeetingOutcome>
 MeetingService::createMeeting(const std::string &bearerCredential,
                                const std::string &scheduledStart,
@@ -100,6 +111,7 @@ MeetingService::createMeeting(const std::string &bearerCredential,
 Result<MeetingService::ReissueInvitationOutcome>
 MeetingService::reissueInvitation(const std::string &bearerCredential,
                                    const std::string &meetingRef) {
+  auto lock = meetings_.connection().lock();
   auto accountId = authorizer_.authorize(bearerCredential);
   if (!accountId) {
     return {std::nullopt, ServiceError::Unauthorized};
@@ -109,6 +121,9 @@ MeetingService::reissueInvitation(const std::string &bearerCredential,
   if (!meeting || meeting->accountId != *accountId) {
     return {std::nullopt, ServiceError::NotFound};
   }
+  // Series invitations belong to generations, not individual mapped rooms.
+  if (SeriesRepository(meetings_.connection()).mapping(meeting->id))
+    return {std::nullopt, ServiceError::InvalidRequest};
   if (meeting->status != "active") {
     // An explicitly invalidated meeting stays dead; re-issuing an invitation
     // for it would quietly undo the practitioner's invalidate call.
@@ -131,6 +146,7 @@ MeetingService::reissueInvitation(const std::string &bearerCredential,
 
 Result<TokenResult> MeetingService::issueSpecialistToken(const std::string &bearerCredential,
                                                            const std::string &meetingRef, const std::string &displayName) {
+  auto lock = meetings_.connection().lock();
   auto accountId = authorizer_.authorize(bearerCredential);
   if (!accountId) {
     return {std::nullopt, ServiceError::Unauthorized};
@@ -140,6 +156,7 @@ Result<TokenResult> MeetingService::issueSpecialistToken(const std::string &bear
   if (!meeting || meeting->accountId != *accountId) {
     return {std::nullopt, ServiceError::NotFound};
   }
+  if (auto mapped = series_->mappedToken(*meeting, false, displayName)) return *mapped;
   if (auto usability = meetingUsabilityError(*meeting)) {
     return {std::nullopt, *usability};
   }
@@ -164,6 +181,8 @@ Result<TokenResult> MeetingService::issueSpecialistToken(const std::string &bear
 
 Result<TokenResult> MeetingService::issueClientToken(const std::string &invitationCode,
                                                        const std::string &passcode, const std::string &displayName) {
+  auto lock = meetings_.connection().lock();
+  if (auto result = series_->clientToken(invitationCode, passcode, displayName)) return *result;
   auto invitation = invitations_.findByCode(invitationCode);
   if (!invitation) {
     return {std::nullopt, ServiceError::NotFound};
@@ -188,8 +207,9 @@ Result<TokenResult> MeetingService::issueClientToken(const std::string &invitati
   if (!meeting) {
     return {std::nullopt, ServiceError::NotFound};
   }
-  if (auto usability = meetingUsabilityError(*meeting)) {
-    return {std::nullopt, *usability};
+  const bool mapped = SeriesRepository(meetings_.connection()).mapping(meeting->id).has_value();
+  if (!mapped) {
+    if (auto usability = meetingUsabilityError(*meeting)) return {std::nullopt, *usability};
   }
 
   if (!passcodeMatches(passcode, invitation->passcodeHash)) {
@@ -199,6 +219,8 @@ Result<TokenResult> MeetingService::issueClientToken(const std::string &invitati
     }
     return {std::nullopt, ServiceError::WrongPasscode};
   }
+
+  if (mapped) return *series_->mappedToken(*meeting, true, displayName);
 
   VideoGrants grants;
   grants.room = meeting->roomName;

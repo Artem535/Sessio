@@ -9,8 +9,11 @@
 #include <optional>
 #include <string>
 #include <variant>
+#include <memory>
+#include <functional>
 
 namespace pcm::tokenbackend {
+class SeriesService;
 
 struct TokenResult {
   std::string endpointUrl;
@@ -26,6 +29,14 @@ enum class ServiceError {
   TooManyAttempts,
   MeetingWindowClosed,
   InvalidDisplayName,
+  InvalidRequest,
+  InvitationExists,
+  IdempotencyConflict,
+  ReplayExpired,
+  OccurrenceUnavailable,
+  AmbiguousOccurrence,
+  ScheduleUnavailable,
+  InvitationRevoked,
 };
 
 template <typename T> struct Result {
@@ -38,9 +49,9 @@ class MeetingService {
 public:
   MeetingService(Authorizer &authorizer, MeetingsRepository &meetings,
                   InvitationsRepository &invitations, const Config &config,
-                  std::string liveKitEndpointUrl)
-      : authorizer_(authorizer), meetings_(meetings), invitations_(invitations),
-        config_(config), liveKitEndpointUrl_(std::move(liveKitEndpointUrl)) {}
+                  std::string liveKitEndpointUrl, std::function<int64_t()> clock = {});
+  ~MeetingService();
+  SeriesService &series() { return *series_; }
 
   struct CreateMeetingOutcome {
     std::string meetingRef;
@@ -82,6 +93,7 @@ private:
   InvitationsRepository &invitations_;
   const Config &config_;
   std::string liveKitEndpointUrl_;
+  std::unique_ptr<SeriesService> series_;
 };
 
 } // namespace pcm::tokenbackend
