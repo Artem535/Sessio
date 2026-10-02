@@ -918,7 +918,8 @@ void Application::notifyUpcomingSeriesOccurrences(const int64_t nowMs,
 
     const auto materializedStarts =
         mDb->get_materialized_occurrence_starts_for_series(series.id);
-    const auto occurrences = pcm::recurrence::occurrences(series, rangeStart, rangeEnd);
+    const auto occurrences =
+        pcm::recurrence::seriesOccurrences(*mDb, series, rangeStart, rangeEnd);
     for (const auto &occurrence : occurrences) {
       const auto occurrenceStartMs = occurrence.toUTC().toMSecsSinceEpoch();
       const std::pair<int64_t, int64_t> key{series.id, occurrenceStartMs};

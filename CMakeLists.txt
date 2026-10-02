@@ -165,6 +165,9 @@ qt_add_translations(Sessio
 )
 
 # Include subdirectories for modules
+# Shared recurring-schedule calculation (also used by the token backend):
+# series with a pinned timezone are expanded by the same code on both sides.
+add_subdirectory(token-backend/schedule ${CMAKE_BINARY_DIR}/pcm_schedule)
 add_subdirectory(src/token_client)
 add_subdirectory(src/widgets)
 add_subdirectory(src/config)

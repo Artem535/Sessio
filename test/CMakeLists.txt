@@ -112,6 +112,25 @@ target_link_libraries(Sessio_store_credential_reader_tests PRIVATE
 set_target_properties(Sessio_store_credential_reader_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_store_credential_reader_tests)
 
+# Timeline model + published series (real local DB, no network)
+find_package(Qt6 REQUIRED COMPONENTS Network Test)
+add_executable(Sessio_timeline_series_tests
+    fake_schedule_backend.h
+    timeline_series_tests.cpp
+)
+target_link_libraries(Sessio_timeline_series_tests PRIVATE
+    GTest::gtest
+    Qt6::Network
+    Qt6::Test
+    Sessio_config
+    Sessio_database
+    Sessio_event_view
+    Sessio_meeting
+    Poco::Foundation
+)
+set_target_properties(Sessio_timeline_series_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_timeline_series_tests)
+
 # Schedule conflict tests
 add_executable(Sessio_schedule_conflict_tests
     schedule_conflict_service_tests.cpp

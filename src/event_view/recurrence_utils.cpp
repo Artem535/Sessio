@@ -1,6 +1,8 @@
 #include "recurrence_utils.h"
 
 #include "database.h"
+#include "schedule/schedule.h"
+#include "schedule_snapshot.h"
 
 #include <libical/ical.h>
 
@@ -139,6 +141,104 @@ QVector<QDateTime> occurrences(const DuckEventSeries &series,
   return occurrences;
 }
 
+namespace {
+
+std::optional<QVector<QDateTime>> occurrencesInTimezone(const DuckEventSeries &series,
+                                                        const std::string &timezone,
+                                                        const QDateTime &rangeStart,
+                                                        const QDateTime &rangeEnd) {
+  pcm::database::ScheduleSource source;
+  source.series = series;
+  source.identity.timezone = timezone;
+  auto snapshot = pcm::meeting::buildScheduleSnapshot(source);
+  if (!snapshot.has_value() || !rangeStart.isValid() || !rangeEnd.isValid() ||
+      rangeEnd < rangeStart) {
+    return std::nullopt;
+  }
+  snapshot->revision = 1; // only the recurrence is evaluated; the schedule module wants a valid pair
+  snapshot->baseRevision = 0;
+  const auto resolution = pcm::schedule::occurrencesBetween(
+      *snapshot, rangeStart.toUTC().toMSecsSinceEpoch(), rangeEnd.toUTC().toMSecsSinceEpoch());
+  if (resolution.status != pcm::schedule::Status::Available &&
+      resolution.status != pcm::schedule::Status::Unavailable) {
+    return std::nullopt;
+  }
+  QVector<QDateTime> result;
+  result.reserve(static_cast<qsizetype>(resolution.occurrences.size()));
+  for (const auto &occurrence : resolution.occurrences) {
+    result.append(QDateTime::fromMSecsSinceEpoch(occurrence.startMs, QTimeZone::UTC)
+                      .toTimeZone(QTimeZone::systemTimeZone()));
+  }
+  return result;
+}
+
+} // namespace
+
+QVector<QDateTime> seriesOccurrences(pcm::database::Database &db, const DuckEventSeries &series,
+                                     const QDateTime &rangeStart, const QDateTime &rangeEnd) {
+  if (series.id > 0) {
+    if (const auto identity = db.get_schedule_identity(series.id);
+        identity.has_value() && !identity->timezone.empty()) {
+      if (auto pinned = occurrencesInTimezone(series, identity->timezone, rangeStart, rangeEnd)) {
+        return *pinned;
+      }
+      qWarning() << "Pinned-timezone recurrence could not be evaluated for series" << series.id
+                 << "; showing the local calendar instead";
+    }
+  }
+  return occurrences(series, rangeStart, rangeEnd);
+}
+
+QVector<DuckEvent> virtualOccurrencesInRange(pcm::database::Database &db,
+                                             const QDateTime &rangeStart,
+                                             const QDateTime &rangeEnd) {
+  QVector<DuckEvent> result;
+  const auto startMs = rangeStart.toUTC().toMSecsSinceEpoch();
+  const auto endMs = rangeEnd.toUTC().toMSecsSinceEpoch();
+  const auto exceptions = db.get_event_series_exceptions_for_range(startMs, endMs);
+  auto seriesList = db.get_event_series_for_range(startMs, endMs);
+  for (auto &series : seriesList) {
+    resolveSeriesClientName(db, series);
+    const auto materializedStarts = db.get_materialized_occurrence_starts_for_series(series.id);
+    for (const auto &occurrence : seriesOccurrences(db, series, rangeStart, rangeEnd)) {
+      const auto occurrenceStartMs = occurrence.toUTC().toMSecsSinceEpoch();
+      if (exceptions.contains({series.id, occurrenceStartMs}) ||
+          materializedStarts.contains(occurrenceStartMs)) {
+        continue;
+      }
+      const auto virtualId =
+          -(series.id * 1'000'000LL + static_cast<int64_t>(occurrence.date().toJulianDay()));
+      result.append(buildVirtualOccurrence(series, occurrence, virtualId));
+    }
+  }
+  std::sort(result.begin(), result.end(), [](const DuckEvent &left, const DuckEvent &right) {
+    return left.start_date.value_or(0) < right.start_date.value_or(0);
+  });
+  return result;
+}
+
+std::optional<QVector<QDateTime>> previewOccurrences(const DuckEventSeries &series,
+                                                     const std::string &timezone,
+                                                     const QDateTime &from, const int count) {
+  if (count <= 0 || !from.isValid()) {
+    return QVector<QDateTime>{};
+  }
+  const auto to = from.addYears(3);
+  std::optional<QVector<QDateTime>> all;
+  if (timezone.empty()) {
+    all = occurrences(series, from, to);
+  } else {
+    all = occurrencesInTimezone(series, timezone, from, to);
+  }
+  if (!all.has_value()) {
+    return std::nullopt;
+  }
+  if (all->size() > count) {
+    all->resize(count);
+  }
+  return all;
+}
+
 DuckEvent buildVirtualOccurrence(const DuckEventSeries &series,
                                  const QDateTime &occurrenceStart,
                                  const int64_t virtualId) {
@@ -195,7 +295,7 @@ QVector<DuckEvent> eventsForClient(pcm::database::Database &db, const int64_t cl
       db.get_event_series_for_client_and_range(clientId, windowStartMs, windowEndMs);
   for (const auto &series : seriesList) {
     const auto materializedStarts = db.get_materialized_occurrence_starts_for_series(series.id);
-    const auto occurrenceList = occurrences(series, virtualWindowStart, virtualWindowEnd);
+    const auto occurrenceList = seriesOccurrences(db, series, virtualWindowStart, virtualWindowEnd);
     for (const auto &occurrence : occurrenceList) {
       const auto occurrenceStartMs = occurrence.toUTC().toMSecsSinceEpoch();
       if (exceptions.contains({series.id, occurrenceStartMs}) ||

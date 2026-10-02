@@ -22,6 +22,24 @@ QString weeklyRuleForDate(const QDate &date, int intervalWeeks = 1);
 QVector<QDateTime> occurrences(const DuckEventSeries &series,
                                const QDateTime &rangeStart,
                                const QDateTime &rangeEnd);
+// Base occurrence starts of one series. A series with a pinned timezone (a
+// published series, see Database::get_schedule_identity) is expanded by the
+// shared schedule module in that timezone, so DST and the wall clock follow the
+// series rather than the machine; every other series keeps the legacy
+// local-calendar calculation until it is explicitly migrated.
+QVector<QDateTime> seriesOccurrences(pcm::database::Database &db, const DuckEventSeries &series,
+                                     const QDateTime &rangeStart, const QDateTime &rangeEnd);
+// Not-yet-materialized occurrences of all active series in the range, without
+// exceptions and without occurrences that already have their own Event row.
+QVector<DuckEvent> virtualOccurrencesInRange(pcm::database::Database &db,
+                                             const QDateTime &rangeStart, const QDateTime &rangeEnd);
+// The next `count` occurrence starts at or after `from` if the series were
+// pinned to `timezone` (empty: the legacy calendar the series has today). Used
+// to show the specialist what a timezone confirmation would do. nullopt: the
+// timezone is unknown or the series cannot be expressed in it.
+std::optional<QVector<QDateTime>> previewOccurrences(const DuckEventSeries &series,
+                                                     const std::string &timezone,
+                                                     const QDateTime &from, int count);
 DuckEvent buildVirtualOccurrence(const DuckEventSeries &series,
                                  const QDateTime &occurrenceStart,
                                  int64_t virtualId);

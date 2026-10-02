@@ -21,6 +21,8 @@ qt_add_library(${TARGET_NAME} STATIC
         schedule_snapshot.cpp
         schedule_sync.h
         schedule_sync.cpp
+        series_schedule_committer.h
+        series_schedule_committer.cpp
         series_join_target.h
         series_join_target.cpp
         series_invitation_store.h
@@ -32,6 +34,7 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         Qt6::Core
         ${PROJECT_NAME}_token_client
         ${PROJECT_NAME}_database
+        pcm_schedule
 )
 
 # Header-only use of the shared schedule DTOs (pcm_schedule); the libical-backed
