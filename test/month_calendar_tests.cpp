@@ -350,19 +350,27 @@ TEST(MonthCalendarTest, SelectedDayBadgeShowsItsNumberAgainstTheFilledCircle) {
   EXPECT_GT(numberPixels, 15);  // with a visible number on it
 }
 
-TEST(MonthCalendarTest, RowHeightIsCappedInATallWindow) {
+TEST(MonthCalendarTest, RowsShareTheWholeHeightEvenInATallWindow) {
   MonthCalendarWidget widget;
   widget.setMonth(QDate(2026, 10, 1));
-  widget.resize(1000, 3000);
+  widget.resize(1000, 1500);
   widget.show();
   QApplication::processEvents();
   const auto dates = widget.findChildren<QToolButton *>("monthDate");
   ASSERT_EQ(dates.size(), 35);
+  int bottom = 0;
+  int minHeight = 100000;
+  int maxHeight = 0;
   for (auto *button : dates) {
-    EXPECT_GE(button->parentWidget()->height(), 96);
-    EXPECT_LE(button->parentWidget()->height(), 260);
+    auto *cell = button->parentWidget();
+    bottom = std::max(bottom, cell->geometry().bottom() + 1);
+    minHeight = std::min(minHeight, cell->height());
+    maxHeight = std::max(maxHeight, cell->height());
   }
-  EXPECT_LT(widget.height(), 3000);
+  EXPECT_GE(minHeight, 96);
+  EXPECT_LE(maxHeight - minHeight, 1);        // equal rows
+  EXPECT_EQ(bottom, widget.height());         // the last row ends at the widget bottom
+  EXPECT_EQ(widget.height(), 1500);
 }
 
 } // namespace

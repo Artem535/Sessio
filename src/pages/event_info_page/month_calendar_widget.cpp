@@ -37,7 +37,6 @@ QString eventLabel(const DuckEvent &event) {
 
 // Layout metrics (device independent pixels).
 constexpr int kMinRowHeight = 112;
-constexpr int kMaxRowHeight = 260;
 constexpr int kChipHeight = 38; // two lines: time, then title
 constexpr int kMoreHeight = 18;
 constexpr int kChipGap = 3;
@@ -472,9 +471,10 @@ void MonthCalendarWidget::rebuild() {
     mGrid->setRowMinimumHeight(row, row <= rows ? kMinRowHeight : 0);
   }
   const auto headerHeight = std::max(28, fontMetrics().height() + 10);
-  // Rows share extra height but never grow into huge empty cells.
+  // Rows share all extra height equally, so the grid's bottom edge always meets
+  // the bottom of the area it lives in (and the left column beside it).
   setMinimumHeight(headerHeight + rows * kMinRowHeight);
-  setMaximumHeight(headerHeight + rows * kMaxRowHeight);
+  setMaximumHeight(QWIDGETSIZE_MAX);
   for (int column = 0; column < 7; ++column) {
     const auto weekday = (origin - 1 + column) % 7 + 1;
     auto *label = new WeekdayLabel(locale.standaloneDayName(weekday, QLocale::ShortFormat), this);

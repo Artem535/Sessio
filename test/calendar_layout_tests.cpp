@@ -677,15 +677,27 @@ TEST_F(CalendarLayoutTest, InfoPanelIsOneCardWithTheSelectedDateAsHeading) {
   EXPECT_TRUE(heading->text().contains(QLocale().standaloneMonthName(5, QLocale::LongFormat)) ||
               heading->text().contains(QLocale().monthName(5, QLocale::LongFormat)));
 }
-TEST_F(CalendarLayoutTest, MonthGridFillsTheCentreHeight) {
+TEST_F(CalendarLayoutTest, MonthGridBottomMeetsTheLeftColumnBottomAtAnySize) {
   QEventInfoPage page(model.get(), nullptr, nullptr);
-  page.resize(1275, 1290);
-  page.show();
-  page.setMonthView(true);
-  QApplication::processEvents();
   auto *month = page.findChild<MonthCalendarWidget *>();
-  auto *centre = page.findChild<QStackedWidget *>("calendarCenterStack");
-  EXPECT_GE(month->height(), centre->height() - 4);
+  auto *left = page.findChild<QWidget *>("calendarLeftColumn");
+  auto *day = page.findChild<QTimelineWidget *>();
+  const auto bottomOf = [&page](QWidget *w) { return w->mapTo(&page, QPoint(0, w->height())).y(); };
+  for (const auto &month6 : {QDate(2026, 10, 1), QDate(2026, 3, 1)}) { // 5 and 6 rows
+    for (const auto size : {QSize(2000, 1200), QSize(1920, 1060), QSize(1500, 880), QSize(1275, 1375), QSize(3000, 2000)}) {
+      page.setMonthView(false);
+      QMetaObject::invokeMethod(&page, "onCalendarClicked", Q_ARG(QDate, month6));
+      page.resize(size);
+      page.show();
+      QApplication::processEvents();
+      EXPECT_NEAR(bottomOf(day), bottomOf(left), 1) << size.width() << "x" << size.height();
+      page.setMonthView(true);
+      QApplication::processEvents();
+      EXPECT_EQ(month->firstVisibleDate(), MonthCalendarWidget::visibleRange(month6).first);
+      EXPECT_NEAR(bottomOf(month), bottomOf(left), 1)
+          << month6.toString().toStdString() << " " << size.width() << "x" << size.height();
+    }
+  }
 }
 } // namespace
 int main(int argc, char **argv) {

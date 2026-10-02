@@ -10,8 +10,9 @@ All notable changes to this project will be documented in this file.
   title; accent colour for work meetings, neutral for personal ones), dimmed
   neighbouring days, a filled badge with the day number for the selected day, a
   ring for today, the week starting according to the system locale, and a
-  "+N more" link in days that have more meetings than fit in the cell. Rows keep
-  a moderate height in tall windows. Meetings crossing midnight and occurrences
+  "+N more" link in days that have more meetings than fit in the cell. Rows share the
+  window height equally (at least 112 px) so the grid ends at the bottom of the
+  left column. Meetings crossing midnight and occurrences
   of recurring series are shown in every affected day.
 - A Day / Month switch and the "New meeting" button in the top row of the
   Calendar page.
