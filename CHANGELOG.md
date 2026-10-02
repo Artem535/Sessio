@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.9] - 2026-10-02
+
+### Added
+
+- Month view for the calendar: a month grid with neighbouring days, the week
+  starting according to the system locale, and a "more N" link in days that
+  have more meetings than fit in the cell. Meetings crossing midnight and
+  occurrences of recurring series are shown in every affected day.
+- A Day / Month switch on the calendar page.
+- A shared meeting inspector in the right panel: selecting a meeting in the day
+  timeline or in the month grid shows the same details, call actions and
+  recurring series state there.
+
+### Changed
+
+- The calendar page layout is reorganised: navigation on the left, the day
+  timeline or month grid in the centre and the meeting inspector on the right.
+
+### Removed
+
+- The old standalone calendar widget, replaced by the new month grid.
+
 ## [0.2.8] - 2026-10-02
 
 ### Added
