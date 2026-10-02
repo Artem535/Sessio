@@ -312,6 +312,18 @@ SET inflight_revision = NULL, inflight_payload = NULL, inflight_hash = NULL,
 WHERE series_uid = $1
 )duckdb";
 
+// The server refused the in-flight snapshot without storing it: put it back in
+// the pending slot unless a newer local snapshot already replaced it.
+constexpr auto kReleaseScheduleInflightQuery = R"duckdb(
+UPDATE ScheduleOutbox
+SET pending_desired_revision = CASE WHEN pending_payload IS NULL
+        THEN inflight_desired_revision ELSE pending_desired_revision END,
+    pending_payload = COALESCE(pending_payload, $2),
+    inflight_revision = NULL, inflight_payload = NULL, inflight_hash = NULL,
+    inflight_desired_revision = NULL, updated_at = $3
+WHERE series_uid = $1 AND inflight_payload IS NOT NULL
+)duckdb";
+
 constexpr auto kClearScheduleOutboxQuery = R"duckdb(
 UPDATE ScheduleOutbox
 SET pending_payload = NULL, pending_desired_revision = NULL,

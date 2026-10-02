@@ -1751,6 +1751,16 @@ Database::ack_schedule_inflight(const std::string &series_uid, const int64_t rev
   return ScheduleAck{hasNewer};
 }
 
+bool Database::release_schedule_inflight(const std::string &series_uid,
+                                         const std::string &pending_payload) {
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(
+      conn, constance::kReleaseScheduleInflightQuery,
+      {duckdb::Value(series_uid), duckdb::Value(pending_payload), nowTimestamp()});
+  const auto rows = affectedRows(result.get());
+  return rows.has_value() && *rows == 1;
+}
+
 bool Database::set_schedule_sync_state(const std::string &series_uid,
                                        const std::string &state,
                                        const std::string &error) {

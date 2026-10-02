@@ -157,6 +157,11 @@ public:
   std::optional<ScheduleAck> ack_schedule_inflight(const std::string &series_uid,
                                                    int64_t revision,
                                                    const std::string &content_hash);
+  // After a definitive refusal (nothing was stored server side) returns the
+  // in-flight snapshot to the pending slot, in queue form, unless a newer
+  // pending snapshot exists. The revision is assigned again when re-frozen.
+  bool release_schedule_inflight(const std::string &series_uid,
+                                 const std::string &pending_payload);
   bool set_schedule_sync_state(const std::string &series_uid,
                                const std::string &state,
                                const std::string &error = {});

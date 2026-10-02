@@ -309,6 +309,31 @@ TEST_F(ScheduleOutboxTest, FreezeKeepsNewerEditPendingAndAckOfOldRevisionDoesNot
   EXPECT_TRUE(mDb->list_schedule_series_pending_sync().empty());
 }
 
+TEST_F(ScheduleOutboxTest, ReleasedInflightReturnsToQueueUnlessNewerEditExists) {
+  const auto commit = mDb->commit_schedule_change(
+      [&]() -> std::optional<int64_t> { return mDb->add_event_series(series()); },
+      "Europe/Moscow", builder("v1"));
+  ASSERT_TRUE(commit.has_value());
+  const auto uid = commit->series_uid;
+  ASSERT_TRUE(mDb->freeze_schedule_pending(uid, 1, 1, "wire-1", "h1"));
+  ASSERT_TRUE(mDb->release_schedule_inflight(uid, "queue-form-1"));
+  auto outbox = mDb->get_schedule_outbox(uid);
+  EXPECT_FALSE(outbox->inflight_payload.has_value());
+  EXPECT_EQ(outbox->pending_payload.value_or(""), "queue-form-1");
+  EXPECT_EQ(outbox->pending_desired_revision.value_or(-1), 1);
+  EXPECT_FALSE(mDb->release_schedule_inflight(uid, "nothing in flight"));
+
+  ASSERT_TRUE(mDb->freeze_schedule_pending(uid, 1, 1, "wire-1", "h1"));
+  ASSERT_TRUE(mDb->commit_schedule_change(
+                     [&]() -> std::optional<int64_t> { return commit->series_id; }, "",
+                     builder("v2"))
+                  .has_value());
+  ASSERT_TRUE(mDb->release_schedule_inflight(uid, "queue-form-1"));
+  outbox = mDb->get_schedule_outbox(uid);
+  EXPECT_EQ(outbox->pending_payload.value_or(""), "v2"); // newer edit wins
+  EXPECT_EQ(outbox->pending_desired_revision.value_or(-1), 2);
+}
+
 TEST_F(ScheduleOutboxTest, FreezeRejectsStalePendingSnapshot) {
   const auto commit = mDb->commit_schedule_change(
       [&]() -> std::optional<int64_t> { return mDb->add_event_series(series()); },

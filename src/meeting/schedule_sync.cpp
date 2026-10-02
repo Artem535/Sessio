@@ -353,6 +353,16 @@ void ScheduleSync::onPutFinished(const pcm::tokenclient::ScheduleHttpResult &res
     const auto reason = !result.reason.isEmpty() ? result.reason
                         : !result.errorCode.isEmpty() ? result.errorCode
                                                        : QStringLiteral("http_%1").arg(result.httpStatus);
+    // The server stored nothing, so the snapshot goes back to the queue: a
+    // later edit replaces it instead of the refused bytes being replayed.
+    if (const auto outbox = mDb.get_schedule_outbox(uidStd);
+        outbox.has_value() && outbox->inflight_payload.has_value()) {
+      if (auto snapshot = parseSnapshot(QByteArray::fromStdString(*outbox->inflight_payload))) {
+        snapshot->revision = 0;
+        snapshot->baseRevision = 0;
+        mDb.release_schedule_inflight(uidStd, serializeSnapshot(*snapshot).toStdString());
+      }
+    }
     mDb.set_schedule_sync_state(uidStd, kRejected, reason.toStdString());
     setTransient(uid, std::nullopt, reason);
   }
@@ -406,6 +416,12 @@ void ScheduleSync::requestGet(const QString &uid, const GetPurpose purpose) {
   if (mPendingGets.contains(uid)) {
     return;
   }
+  if (purpose == GetPurpose::Publish && mActive.has_value() && mActive->uid == uid) {
+    // Adopting a server revision would pull the payload out from under the
+    // request that owns it; retry once that request has finished.
+    emit serverSnapshotFetchFailed(uid, QStringLiteral("request_in_flight"));
+    return;
+  }
   mPendingGets.insert(uid, purpose);
   QPointer<ScheduleSync> guard(this);
   mReadCredential([guard, uid](bool ok, const QString &credential) {
@@ -452,6 +468,11 @@ void ScheduleSync::onGetFinished(const pcm::tokenclient::ScheduleHttpResult &res
 
   if (purpose == GetPurpose::View) {
     emit serverSnapshotFetched(uid, revision, hash, snapshotJson);
+    return;
+  }
+
+  if (mActive.has_value() && mActive->uid == uid) {
+    emit serverSnapshotFetchFailed(uid, QStringLiteral("request_in_flight"));
     return;
   }
 

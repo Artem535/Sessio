@@ -413,11 +413,51 @@ TEST_F(ScheduleSyncTest, ValidationRejectionStopsAutomaticRetriesUntilManualRetr
   QTest::qWait(200);
   EXPECT_EQ(mServer.puts, 1);
   EXPECT_FALSE(mSync->status(uid).detail.isEmpty());
-  EXPECT_TRUE(mDb->get_schedule_outbox(commit->series_uid)->inflight_payload.has_value()); // kept
+  // The refused payload was never stored by the server: it returns to the
+  // queue (nothing is lost) instead of staying frozen as a poisoned in-flight.
+  const auto outbox = mDb->get_schedule_outbox(commit->series_uid);
+  EXPECT_FALSE(outbox->inflight_payload.has_value());
+  EXPECT_TRUE(outbox->pending_payload.has_value());
 
   mSync->retry(uid);
   ASSERT_TRUE(waitForState(uid, ScheduleSyncState::Synced));
   EXPECT_EQ(mServer.puts, 2);
+}
+
+TEST_F(ScheduleSyncTest, EditAfterRejectionReplacesTheRefusedSnapshot) {
+  const auto commit = createSeries();
+  ASSERT_TRUE(commit.has_value());
+  const auto uid = QString::fromStdString(commit->series_uid);
+  mServer.forceStatusForNextPuts = 1;
+  mServer.forcedStatus = 422;
+  mSync->start();
+  ASSERT_TRUE(waitForState(uid, ScheduleSyncState::Rejected));
+
+  ASSERT_TRUE(cancelOccurrence(commit->series_id, 1).has_value()); // user fixes the data
+  mSync->notifyLocalChange(uid);
+
+  ASSERT_TRUE(waitForState(uid, ScheduleSyncState::Synced));
+  ASSERT_EQ(mServer.putBodies.size(), 2); // the refused bytes are not replayed
+  const auto accepted = QJsonDocument::fromJson(mServer.putBodies[1]).object();
+  EXPECT_EQ(accepted["revision"].toInt(), 1);
+  EXPECT_EQ(accepted["exceptions"].toArray().size(), 1);
+  EXPECT_EQ(mServer.series[uid].revision, 1);
+}
+
+TEST_F(ScheduleSyncTest, PublishRestoredIsRefusedWhileARequestIsInFlight) {
+  const auto commit = createSeries();
+  ASSERT_TRUE(commit.has_value());
+  const auto uid = QString::fromStdString(commit->series_uid);
+  mServer.putDelayMs = 300;
+  mSync->start();
+  ASSERT_TRUE(waitFor([&] { return mServer.puts >= 1; }));
+  QSignalSpy failed(mSync.get(), &ScheduleSync::serverSnapshotFetchFailed);
+
+  mSync->publishRestoredSchedule(uid);
+
+  ASSERT_GE(failed.count(), 1);
+  EXPECT_EQ(failed.at(0).at(1).toString(), "request_in_flight");
+  ASSERT_TRUE(waitForState(uid, ScheduleSyncState::Synced));
 }
 
 TEST_F(ScheduleSyncTest, ServerErrorsAndTimeoutsBackOffAndRetrySameBytes) {
@@ -535,6 +575,47 @@ TEST_F(ScheduleSyncTest, BackoffPolicyIsBoundedWithJitter) {
       EXPECT_LE(delay, static_cast<int>(base[attempt] * 1.2)) << attempt;
     }
   }
+}
+
+// Opt-in interoperability check against a real pcm-token-backend process
+// (PCM_TEST_TOKEN_BACKEND_URL, PCM_TEST_TOKEN_BACKEND_CREDENTIAL). Proves the
+// client wire format, canonical content hash and CAS flow match the server.
+TEST_F(ScheduleSyncTest, InteroperatesWithRealTokenBackendWhenConfigured) {
+  const auto url = qEnvironmentVariable("PCM_TEST_TOKEN_BACKEND_URL");
+  const auto credential = qEnvironmentVariable("PCM_TEST_TOKEN_BACKEND_CREDENTIAL");
+  if (url.isEmpty() || credential.isEmpty()) {
+    GTEST_SKIP() << "PCM_TEST_TOKEN_BACKEND_URL / _CREDENTIAL not set";
+  }
+  mSync.reset();
+  mClient = std::make_unique<TokenBackendClient>(url);
+  mSync = std::make_unique<ScheduleSync>(
+      *mDb, *mClient, [credential](const ScheduleSync::CredentialCallback &done) {
+        done(true, credential);
+      });
+  mSync->setBackoffPolicy([](int) { return 200; });
+
+  const auto commit = createSeries();
+  ASSERT_TRUE(commit.has_value());
+  const auto uid = QString::fromStdString(commit->series_uid);
+  mSync->start();
+  ASSERT_TRUE(waitForState(uid, ScheduleSyncState::Synced, 10000));
+  EXPECT_EQ(mSync->capability(), ScheduleCapability::Supported);
+
+  // Second revision: cancel one occurrence; base_revision must be accepted.
+  ASSERT_TRUE(cancelOccurrence(commit->series_id, 1).has_value());
+  mSync->notifyLocalChange(uid);
+  ASSERT_TRUE(waitFor([&] { return mSync->status(uid).ackedRevision == 2; }, 10000));
+  ASSERT_TRUE(waitForState(uid, ScheduleSyncState::Synced, 10000));
+
+  QSignalSpy fetched(mSync.get(), &ScheduleSync::serverSnapshotFetched);
+  mSync->fetchServerSnapshot(uid);
+  ASSERT_TRUE(fetched.wait(5000));
+  EXPECT_EQ(fetched.at(0).at(1).toLongLong(), 2);
+  EXPECT_EQ(fetched.at(0).at(2).toString().toStdString(),
+            mDb->get_schedule_identity(commit->series_id)->acked_content_hash);
+  const auto server = QJsonDocument::fromJson(fetched.at(0).at(3).toByteArray()).object();
+  EXPECT_EQ(server["exceptions"].toArray().size(), 1);
+  EXPECT_TRUE(server["join_enabled"].toBool());
 }
 
 int main(int argc, char **argv) {
