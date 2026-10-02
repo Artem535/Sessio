@@ -15,6 +15,26 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+### Timezone data
+
+Recurring-schedule resolution uses libical's **own** builtin timezone files
+(`share/libical/zoneinfo`, `*.ics`), not the operating system's tzdata, so that
+the backend and the desktop app resolve occurrences identically. The directory
+is compiled in as `PCM_SCHEDULE_ZONEINFO_DIR` and read at run time, therefore it
+must exist at that same path on the machine that runs the binary:
+
+- The default (`<libical cmake dir>/../libical/zoneinfo`) points into the
+  build tree and is only suitable for local builds and tests. Configure fails
+  with an error if the directory has no timezone data.
+- `Dockerfile` passes `-DPCM_SCHEDULE_ZONEINFO_DIR=/usr/share/pcm-schedule/zoneinfo`
+  and copies the vcpkg `libical/zoneinfo` directory to that path in the runtime
+  image; the `COPY` fails the image build if it is missing. No OS tzdata package
+  is needed in the image.
+- For any other packaging (RPM/AppImage of the backend, bare-metal), pass an
+  explicit `-DPCM_SCHEDULE_ZONEINFO_DIR=<install path>` and install the same
+  directory there. Not verified: this repository has no RPM/AppImage packaging
+  for the backend; the desktop packages do not use this directory.
+
 ## Configuration (environment variables)
 
 | Variable | Required | Default | Purpose |
