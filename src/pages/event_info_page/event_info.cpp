@@ -146,6 +146,8 @@ QEventInfoPage::QEventInfoPage(QTimelineModel *model,
   mViewSwitch = new oclero::qlementine::Switch(this);
   mViewSwitch->setObjectName(QStringLiteral("calendarViewSwitch"));
   mViewSwitch->setAccessibleName(tr("Calendar view"));
+  // Qlementine's Switch is horizontally expanding; keep it hugging its labels.
+  mViewSwitch->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
   header->addWidget(mViewSwitch);
   header->addWidget(new QLabel(tr("Month"), this));
   header->addSpacing(16);
@@ -398,7 +400,9 @@ void QEventInfoPage::showInspector(const std::optional<DuckEvent> &event, bool f
   connect(mInspector, &QEventDetailsWidget::editRequested, this, &QEventInfoPage::editSelectedEvent);
   connect(mInspector, &QEventDetailsWidget::openLiveKitMeetingRequested,
           this, &QEventInfoPage::openLiveKitMeetingRequested);
-  mInspectorLayout->insertWidget(0, mInspector);
+  // Keep the details at their natural height: a vertically stretched details
+  // widget spreads its rows across the whole panel.
+  mInspectorLayout->insertWidget(0, mInspector, 0, Qt::AlignTop);
 }
 
 void QEventInfoPage::editSelectedEvent() {

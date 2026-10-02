@@ -65,6 +65,28 @@ TEST_F(CalendarLayoutTest, RealSwitchChangesVisibleCalendarWithoutReloadingDay) 
   EXPECT_TRUE(day->isVisible());
   EXPECT_FALSE(month->isVisible());
 }
+TEST_F(CalendarLayoutTest, SwitchKeepsItsNaturalWidthNextToItsLabels) {
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.resize(1500, 900);
+  page.show();
+  QApplication::processEvents();
+  auto *toggle = page.findChild<oclero::qlementine::Switch *>("calendarViewSwitch");
+  ASSERT_NE(toggle, nullptr);
+  EXPECT_EQ(toggle->sizePolicy().horizontalPolicy(), QSizePolicy::Fixed);
+  EXPECT_LE(toggle->width(), toggle->sizeHint().width() + 2);
+}
+TEST_F(CalendarLayoutTest, InspectorKeepsNaturalHeightInATallPanel) {
+  model->addEvent(appointment(QDate::currentDate()));
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.resize(1500, 900);
+  page.show();
+  QApplication::processEvents();
+  page.findChild<MonthCalendarWidget *>()->eventSelected(model->events().first());
+  QApplication::processEvents();
+  auto *details = page.findChild<QEventDetailsWidget *>("calendarInspector");
+  ASSERT_NE(details, nullptr);
+  EXPECT_LE(details->height(), details->sizeHint().height() + 2);
+}
 TEST_F(CalendarLayoutTest, MonthlySelectionOwnsReadOnlyDetailsAndRefreshClearsDeletedEvent) {
   const auto id = model->addEvent(appointment(QDate::currentDate()));
   QEventInfoPage page(model.get(), nullptr, nullptr);
