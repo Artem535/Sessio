@@ -12,6 +12,10 @@ class QNetworkReply;
 
 namespace pcm::tokenclient {
 
+// "YYYY-MM-DDTHH:MM:SSZ" (UTC, second precision): the occurrence key used in
+// the series token routes and the snapshot. Milliseconds are dropped.
+[[nodiscard]] QString formatOriginalStartUtc(qint64 originalStartMs);
+
 class TokenBackendClient final : public QObject {
   Q_OBJECT
 
@@ -28,6 +32,12 @@ public:
                               const QString &displayName = {});
   void requestClientToken(const QString &invitationCode, const QString &passcode,
                           const QString &displayName = {});
+  // Specialist entry to one occurrence of a published series, addressed by the
+  // occurrence's ORIGINAL start (the key before any move). Reports through
+  // tokenReceived / tokenRequestFailed like the single-meeting route; the
+  // server alone decides whether the occurrence is joinable now.
+  void requestOccurrenceSpecialistToken(const QString &bearerCredential, const QString &seriesUid,
+                                        qint64 originalStartMs, const QString &displayName = {});
   void requestCreateMeeting(const QString &bearerCredential, const QString &scheduledStartIso,
                             const QString &scheduledEndIso);
   void requestInvalidateMeeting(const QString &bearerCredential, const QString &meetingRef);

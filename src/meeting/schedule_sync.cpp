@@ -275,9 +275,19 @@ void ScheduleSync::send(const pcm::database::ScheduleIdentity &identity) {
     snapshot->baseRevision = identity.acked_revision;
     wire = serializeSnapshot(*snapshot).toStdString();
     hash = scheduleContentHash(*snapshot);
-    if (!mDb.freeze_schedule_pending(identity.series_uid, *outbox->pending_desired_revision,
-                                     revision, wire, hash)) {
-      QTimer::singleShot(0, this, [this] { pump(); });
+    const bool frozen =
+        mFreezeOverride ? mFreezeOverride(identity.series_uid, *outbox->pending_desired_revision,
+                                          revision, wire, hash)
+                        : mDb.freeze_schedule_pending(identity.series_uid,
+                                                      *outbox->pending_desired_revision, revision,
+                                                      wire, hash);
+    if (!frozen) {
+      // The local queue could not move the snapshot into the in-flight slot.
+      // Retrying immediately would spin the event loop on a persistent failure,
+      // so treat it like any other transient problem: visible state, backoff.
+      setTransient(uid, ScheduleSyncState::WaitingForNetwork,
+                   QStringLiteral("local_queue_unavailable"));
+      scheduleRetry(uid, 0);
       return;
     }
   } else {

@@ -336,3 +336,43 @@ TEST(TokenBackendClientScheduleTest, SeriesInvitationSendsIdempotencyKeyAndReiss
   EXPECT_EQ(QJsonDocument::fromJson(request.body).object().value("reissue").toBool(), true);
   EXPECT_EQ(spy.at(0).at(0).value<ScheduleHttpResult>().seriesUid, kUid);
 }
+
+TEST(TokenBackendClientScheduleTest, OccurrenceSpecialistTokenTargetsExactOriginalStart) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, R"({
+    "endpointUrl": "wss://livekit.example.test", "roomName": "room-occ",
+    "token": "jwt-occ", "expiresAt": 5
+  })");
+  TokenBackendClient client(server.baseUrl().toString());
+  QSignalSpy receivedSpy(&client, &TokenBackendClient::tokenReceived);
+
+  // 2026-10-13T15:00:00Z, the key before any move of that occurrence.
+  client.requestOccurrenceSpecialistToken("secret-credential", kUid, 1791903600000, " Анна ");
+
+  ASSERT_TRUE(receivedSpy.wait(2000));
+  EXPECT_EQ(server.lastMethod, QStringLiteral("POST"));
+  EXPECT_EQ(server.lastPath,
+            QStringLiteral("/v1/schedule-series/%1/occurrences/2026-10-13T15:00:00Z/specialist-token")
+                .arg(kUid));
+  EXPECT_EQ(server.lastAuthorizationHeader, QStringLiteral("Bearer secret-credential"));
+  EXPECT_EQ(QJsonDocument::fromJson(server.lastBody).object().value("displayName").toString(), "Анна");
+  EXPECT_EQ(receivedSpy.at(0).at(0).value<TokenResult>().roomName, QStringLiteral("room-occ"));
+}
+
+TEST(TokenBackendClientScheduleTest, OccurrenceSpecialistTokenFailureReportsServerReason) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(409, R"({"error":"occurrence_unavailable"})");
+  TokenBackendClient client(server.baseUrl().toString());
+  QSignalSpy failedSpy(&client, &TokenBackendClient::tokenRequestFailed);
+
+  client.requestOccurrenceSpecialistToken("cred", kUid, 1791903600000);
+
+  ASSERT_TRUE(failedSpy.wait(2000));
+  EXPECT_EQ(failedSpy.at(0).at(0).toString(), QStringLiteral("occurrence_unavailable"));
+  EXPECT_TRUE(server.lastBody.isEmpty());
+}
+
+TEST(TokenBackendClientScheduleTest, OriginalStartIsFormattedWithSecondPrecisionAndZ) {
+  EXPECT_EQ(pcm::tokenclient::formatOriginalStartUtc(1791903600000), "2026-10-13T15:00:00Z");
+  EXPECT_EQ(pcm::tokenclient::formatOriginalStartUtc(1791903600999), "2026-10-13T15:00:00Z");
+}

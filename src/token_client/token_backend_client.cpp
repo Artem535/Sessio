@@ -1,10 +1,12 @@
 #include "token_backend_client.h"
 #include "token_response_parser.h"
 
+#include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QTimeZone>
 
 #include <algorithm>
 
@@ -17,6 +19,13 @@ TokenBackendClient::TokenBackendClient(QString baseUrl, QObject *parent)
   qRegisterMetaType<ScheduleHttpResult>();
 }
 
+QString formatOriginalStartUtc(const qint64 originalStartMs) {
+  const qint64 seconds = originalStartMs >= 0 ? originalStartMs / 1000
+                                              : -((-originalStartMs + 999) / 1000);
+  return QDateTime::fromSecsSinceEpoch(seconds, QTimeZone::UTC)
+      .toString(QStringLiteral("yyyy-MM-dd'T'HH:mm:ss'Z'"));
+}
+
 void TokenBackendClient::setBaseUrl(const QString &baseUrl) { mBaseUrl = baseUrl; }
 
 void TokenBackendClient::requestSpecialistToken(const QString &bearerCredential,
@@ -25,6 +34,17 @@ void TokenBackendClient::requestSpecialistToken(const QString &bearerCredential,
       QJsonDocument(QJsonObject{{"displayName", displayName.trimmed()}}).toJson(QJsonDocument::Compact);
   post(QStringLiteral("/v1/meetings/%1/specialist-token").arg(meetingRef), body,
        bearerCredential);
+}
+
+void TokenBackendClient::requestOccurrenceSpecialistToken(const QString &bearerCredential,
+                                                          const QString &seriesUid,
+                                                          const qint64 originalStartMs,
+                                                          const QString &displayName) {
+  const auto body = displayName.trimmed().isEmpty() ? QByteArray() :
+      QJsonDocument(QJsonObject{{"displayName", displayName.trimmed()}}).toJson(QJsonDocument::Compact);
+  post(QStringLiteral("/v1/schedule-series/%1/occurrences/%2/specialist-token")
+           .arg(seriesUid, formatOriginalStartUtc(originalStartMs)),
+       body, bearerCredential);
 }
 
 void TokenBackendClient::requestClientToken(const QString &invitationCode,

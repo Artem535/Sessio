@@ -565,6 +565,35 @@ TEST_F(ScheduleSyncTest, ConcurrentSeriesAreCorrelatedByUuid) {
   EXPECT_EQ(mSync->status(uid2).ackedRevision, 0);
 }
 
+TEST_F(ScheduleSyncTest, PersistentFreezeFailureBacksOffInsteadOfSpinning) {
+  const auto commit = createSeries();
+  ASSERT_TRUE(commit.has_value());
+  const auto uid = QString::fromStdString(commit->series_uid);
+  int freezeCalls = 0;
+  mSync->setFreezeForTesting([&](const std::string &, int64_t, int64_t, const std::string &,
+                                 const std::string &) {
+    ++freezeCalls;
+    return false;
+  });
+  mSync->setBackoffPolicy([](int) { return 120; });
+
+  mSync->start();
+  QTest::qWait(400);
+
+  // A tight singleShot(0) loop would run thousands of times in 400 ms.
+  EXPECT_GE(freezeCalls, 1);
+  EXPECT_LE(freezeCalls, 8);
+  EXPECT_EQ(mServer.puts, 0);
+  const auto status = mSync->status(uid);
+  EXPECT_NE(status.state, ScheduleSyncState::Synced);
+  EXPECT_TRUE(status.unconfirmed);
+  EXPECT_EQ(status.detail, "local_queue_unavailable");
+
+  // Recovery: once freezing works the queue publishes without a restart.
+  mSync->setFreezeForTesting({});
+  ASSERT_TRUE(waitForState(uid, ScheduleSyncState::Synced));
+}
+
 TEST_F(ScheduleSyncTest, BackoffPolicyIsBoundedWithJitter) {
   const int base[] = {2000, 5000, 15000, 60000, 300000, 300000, 300000};
   for (int attempt = 0; attempt < 7; ++attempt) {

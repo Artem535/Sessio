@@ -64,6 +64,12 @@ public:
   [[nodiscard]] static int retryDelayMs(int attempt, double jitterUnit);
   // Test hook; the default policy is retryDelayMs with random jitter.
   void setBackoffPolicy(std::function<int(int attempt)> policy) { mBackoff = std::move(policy); }
+  // Test hook: replaces Database::freeze_schedule_pending so a persistent local
+  // queue failure can be simulated. An empty function restores the default.
+  using FreezeFn = std::function<bool(const std::string &uid, int64_t expectedPendingDesired,
+                                      int64_t revision, const std::string &payload,
+                                      const std::string &hash)>;
+  void setFreezeForTesting(FreezeFn freeze) { mFreezeOverride = std::move(freeze); }
 
   // Recovers the persisted queue after restart, probes the backend once and
   // drains. Safe to call repeatedly.
@@ -129,6 +135,7 @@ private:
   pcm::tokenclient::TokenBackendClient &mClient;
   CredentialReader mReadCredential;
   std::function<int(int)> mBackoff;
+  FreezeFn mFreezeOverride;
 
   QHash<QString, Runtime> mRuntime;
   QHash<QString, GetPurpose> mPendingGets;
@@ -139,7 +146,6 @@ private:
   int mProbeAttempts = 0;
   QTimer *mProbeTimer = nullptr;
   bool mStarted = false;
-  bool mPumpQueued = false;
 };
 
 } // namespace pcm::meeting
