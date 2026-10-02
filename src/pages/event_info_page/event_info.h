@@ -3,6 +3,7 @@
 #include "database.h"
 #include "day_summary_widget.h"
 #include "meeting_coordinator.h"
+#include "series_call_service.h"
 #include "qevent_details_widget.h"
 #include "timeline_widget.h"
 #include "../../widgets/quick_slots_widget.h"
@@ -28,6 +29,13 @@ public:
   QEventInfoPage(QTimelineModel *model, pcm::meeting::MeetingCoordinator *meetingCoordinator,
                 QWidget *parent);
   ~QEventInfoPage() override;
+
+  // The recurring-call facade. Without it recurring LiveKit events keep the
+  // legacy local-only behavior.
+  void setSeriesCallService(pcm::meeting::SeriesCallService *service);
+  // Whether "This and future events" may be offered for this series (it may
+  // not for a published series: the permanent invitation cannot be split).
+  [[nodiscard]] bool canDeleteFutureOccurrences(int64_t seriesId) const;
 
 signals:
   void provideClientEventPairSave(int64_t clientId, int64_t eventId);
@@ -59,6 +67,10 @@ private slots:
 
 private:
   void connectSignals();
+  void setupSeriesCall(QEventDetailsWidget *widget, const DuckEvent &event);
+  // IANA timezone to pin a series to: the machine's, or one the specialist
+  // picks when the machine's is unusable. Empty when they decline.
+  [[nodiscard]] QString confirmNewSeriesTimezone();
   void initDefaultStates();
   void updateCalendarHighlights() const;
   void openEventDialog(const std::optional<DuckEvent> &event = std::nullopt,
@@ -74,6 +86,8 @@ private:
   RoundedCalendarWidget *mCalendarWidget = nullptr;
   QTimelineWidget *mTimelineWidget = nullptr;
   QPointer<pcm::meeting::MeetingCoordinator> mMeetingCoordinator;
+  QPointer<QTimelineModel> mModel;
+  QPointer<pcm::meeting::SeriesCallService> mSeriesCallService;
   QPushButton *mCreateEventButton = nullptr;
   QuickSlotsWidget *mQuickSlotsWidget = nullptr;
   DaySummaryWidget *mDaySummaryWidget = nullptr;

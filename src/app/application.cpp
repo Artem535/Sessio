@@ -285,8 +285,30 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
   mMainWindow = std::make_unique<MainWindow>();
   mClientModel = std::make_shared<QClientModel>(mDb);
 
-  mMainWindow->addEventInfoPage(new QTimelineModel(mDb, mMeetingCoordinator.get(), this),
-                                mMeetingCoordinator.get());
+  // Recurring-call publishing: schedule outbox sync, permanent invitation and
+  // the facade the event editor / timeline use. The sync starts once the
+  // window is up (see below).
+  mScheduleCredentialReader =
+      std::make_unique<StoreCredentialReader>(*mTokenCredentialStore);
+  mInvitationSecretStore = std::make_unique<QtKeychainSeriesInvitationStore>();
+  mScheduleSync = std::make_unique<pcm::meeting::ScheduleSync>(
+      *mDb, *mTokenClient, mScheduleCredentialReader->reader());
+  mSeriesInvitations = std::make_unique<pcm::meeting::SeriesInvitationService>(
+      *mDb, *mScheduleSync, *mTokenClient, mScheduleCredentialReader->reader(),
+      *mInvitationSecretStore);
+  mScheduleCommitter = std::make_unique<pcm::meeting::SeriesScheduleCommitter>(*mDb);
+  mScheduleCommitter->setSync(mScheduleSync.get());
+  mSeriesCalls = std::make_unique<pcm::meeting::SeriesCallService>(
+      *mDb, *mScheduleSync, *mSeriesInvitations, *mScheduleCommitter,
+      mMeetingCoordinator.get());
+
+  auto *timelineModel = new QTimelineModel(mDb, mMeetingCoordinator.get(), this);
+  timelineModel->setScheduleCommitter(mScheduleCommitter.get());
+  mMainWindow->addEventInfoPage(timelineModel, mMeetingCoordinator.get());
+  if (auto *eventPage = dynamic_cast<QEventInfoPage *>(
+          mMainWindow->getPage(MainWindow::Pages::eventInfo))) {
+    eventPage->setSeriesCallService(mSeriesCalls.get());
+  }
   mMainWindow->addClientInfoPage(mClientModel);
   mMainWindow->addAnalyticsPage(mDb);
   mMainWindow->addClientCardPage(mDb);
@@ -309,6 +331,10 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
   connect(&mNotificationTimer, &QTimer::timeout, this, &Application::refreshUpcomingMeetings);
 
   mMainWindow->show();
+  // Recover the persisted schedule queue (and probe the backend once).
+  mScheduleSync->start();
+  connect(mScheduleSync.get(), &pcm::meeting::ScheduleSync::statusChanged, this,
+          [this](const QString &) { refreshUpcomingMeetings(); });
   if (!launchUrl.isEmpty()) {
     handleJoinLink(launchUrl);
   }
@@ -400,8 +426,26 @@ void Application::refreshUpcomingMeetings() {
     return a.start_date.value_or(0) < b.start_date.value_or(0);
   });
 
+  // Occurrences of published series have no Event row until edited, and their
+  // call is the series' permanent invitation, joined by occurrence.
+  if (mSeriesCalls) {
+    const auto dayStart = QDateTime::fromMSecsSinceEpoch(dayStartMs);
+    const auto dayEnd = QDateTime::fromMSecsSinceEpoch(dayEndMs);
+    auto virtualEvents = pcm::recurrence::virtualOccurrencesInRange(*mDb, dayStart, dayEnd);
+    events.insert(events.end(), virtualEvents.cbegin(), virtualEvents.cend());
+    std::sort(events.begin(), events.end(), [](const DuckEvent &a, const DuckEvent &b) {
+      return a.start_date.value_or(0) < b.start_date.value_or(0);
+    });
+  }
+
   QList<UpcomingMeeting> meetings;
-  for (const auto &event : events) {
+  for (auto &event : events) {
+    if (mSeriesCalls && event.series_id.has_value()) {
+      if (const auto target = mSeriesCalls->joinTargetFor(event)) {
+        event.provider_kind = "livekit";
+        event.meeting_ref = target->toStdString();
+      }
+    }
     const auto kind = pcm::meeting::providerKindFromString(event.provider_kind.value_or(""));
     if (kind != pcm::meeting::ProviderKind::LiveKit) {
       continue;
@@ -489,6 +533,9 @@ void Application::applyTokenBackendBaseUrl(const QString &baseUrl) {
   mTokenBackendBaseUrl = baseUrl;
   if (mTokenClient) {
     mTokenClient->setBaseUrl(mTokenBackendBaseUrl);
+    if (mScheduleSync) {
+      mScheduleSync->wake();
+    }
   }
   // Bug 3 (fixwave group 5): mMeetingCoordinator is null in Client mode
   // (never constructed there) and also null here if this runs before
@@ -535,6 +582,9 @@ void Application::onSettingsSaved() {
   // loadBearerCredential() updates mBearerCredential asynchronously.
   if (mTokenCredentialStore) {
     mTokenCredentialStore->readBearerCredential();
+  }
+  if (mScheduleSync) {
+    mScheduleSync->wake();
   }
 
   config::Config conf;

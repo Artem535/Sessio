@@ -1,5 +1,6 @@
 #include "series_call_fixture.h"
 
+#include "event_info.h"
 #include "event_item.h"
 #include "qevent_details_widget.h"
 
@@ -300,6 +301,40 @@ TEST_F(SeriesCallUiTest, LegacyLiveKitSeriesOffersTheOptInMigrationAction) {
 
   // Legacy editing still replaces its single meeting (no series shortcut).
   EXPECT_FALSE(form.widget.isSeriesBacked());
+}
+
+TEST_F(SeriesCallUiTest, SplittingIsOfferedForLegacySeriesButNotForAPublishedOne) {
+  QEventInfoPage page(mTimeline.get(), mCoordinator.get(), nullptr);
+  page.setSeriesCallService(mService.get());
+  const auto legacy = createLegacyLiveKitSeries();
+  auto event = liveKitEvent();
+  event.start_date = kFirst + 5 * kDay;
+  event.end_date = *event.start_date + kHour;
+  const auto published = mTimeline->addEventSeries(event, 0, kRule, std::nullopt, "Europe/Berlin");
+  ASSERT_GT(legacy, 0);
+  ASSERT_GT(published, 0);
+
+  EXPECT_TRUE(page.canDeleteFutureOccurrences(legacy));
+  EXPECT_FALSE(page.canDeleteFutureOccurrences(published));
+}
+
+TEST_F(SeriesCallUiTest, ARefusedPublishedSeriesChangeIsReportedToTheSpecialist) {
+  QEventInfoPage page(mTimeline.get(), mCoordinator.get(), nullptr);
+  page.setSeriesCallService(mService.get());
+  const auto published = mTimeline->addEventSeries(liveKitEvent(), 0, kRule, std::nullopt, "Europe/Berlin");
+  ASSERT_GT(published, 0);
+
+  QString shown;
+  QTimer::singleShot(0, [&]() {
+    for (auto *widget : QApplication::topLevelWidgets()) {
+      if (auto *box = qobject_cast<QMessageBox *>(widget)) {
+        shown = box->text();
+        box->accept();
+      }
+    }
+  });
+  EXPECT_FALSE(mTimeline->removeFutureEventSeriesOccurrences(published, kFirst + kDay));
+  EXPECT_TRUE(shown.contains("permanent call link")) << shown.toStdString();
 }
 
 int main(int argc, char **argv) {

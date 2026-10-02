@@ -101,6 +101,10 @@ public:
   [[nodiscard]] int64_t selectedClientId() const;
   [[nodiscard]] QString selectedClientName() const;
   [[nodiscard]] bool isRecurring() const;
+  // True when saving this form creates a NEW recurring series that wants the
+  // LiveKit provider (the owner then publishes it and requests the permanent
+  // invitation instead of the form creating a single meeting).
+  [[nodiscard]] bool wantsNewLiveKitSeries() const;
   [[nodiscard]] QString recurrenceRule() const;
   [[nodiscard]] std::optional<int64_t> recurrenceUntilMs() const;
   void setRecurrenceRule(const QString &rule,

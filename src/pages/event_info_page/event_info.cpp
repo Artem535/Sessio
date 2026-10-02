@@ -1,6 +1,8 @@
 #include "event_info.h"
 #include "../../widgets/constants.hpp"
 #include "../../widgets/app_settings.h"
+#include "recurrence_utils.h"
+#include "series_timezone_dialog.h"
 #include "ui/pages/ui_eventinfo.h"
 
 #include <QDialog>
@@ -48,14 +50,21 @@ RecurringEditScope askRecurringEditScope(QWidget *parent) {
   return RecurringEditScope::Cancel;
 }
 
-RecurringDeleteScope askRecurringDeleteScope(QWidget *parent) {
+RecurringDeleteScope askRecurringDeleteScope(QWidget *parent, bool allowFuture) {
   QMessageBox messageBox(parent);
   messageBox.setWindowTitle(QObject::tr("Recurring event"));
   messageBox.setText(QObject::tr("What do you want to delete?"));
   const auto singleButton =
       messageBox.addButton(QObject::tr("Only this event"), QMessageBox::AcceptRole);
-  const auto futureButton =
-      messageBox.addButton(QObject::tr("This and future events"), QMessageBox::ActionRole);
+  QAbstractButton *futureButton = nullptr;
+  if (allowFuture) {
+    futureButton =
+        messageBox.addButton(QObject::tr("This and future events"), QMessageBox::ActionRole);
+  } else {
+    messageBox.setInformativeText(
+        QObject::tr("\"This and future events\" is not available for a series with a "
+                    "permanent call link. Delete only this event or the whole series."));
+  }
   const auto seriesButton =
       messageBox.addButton(QObject::tr("Whole series"), QMessageBox::DestructiveRole);
   messageBox.addButton(QMessageBox::Cancel);
@@ -65,7 +74,7 @@ RecurringDeleteScope askRecurringDeleteScope(QWidget *parent) {
   if (messageBox.clickedButton() == singleButton) {
     return RecurringDeleteScope::SingleOccurrence;
   }
-  if (messageBox.clickedButton() == futureButton) {
+  if (futureButton && messageBox.clickedButton() == futureButton) {
     return RecurringDeleteScope::FutureOccurrences;
   }
   if (messageBox.clickedButton() == seriesButton) {
@@ -80,8 +89,26 @@ QEventInfoPage::QEventInfoPage(QTimelineModel *model,
                                pcm::meeting::MeetingCoordinator *meetingCoordinator,
                                QWidget *parent)
     : QWidget(parent), mUi(std::make_unique<Ui::EventInfo>()),
-      mMeetingCoordinator(meetingCoordinator) {
+      mMeetingCoordinator(meetingCoordinator), mModel(model) {
   mUi->setupUi(this);
+  if (mModel) {
+    // A schedule change the server could not be offered is rolled back as a
+    // whole; never let that pass silently.
+    connect(mModel, &QTimelineModel::scheduleCommitFailed, this,
+            [this](const QString &error, const QString &detail) {
+              QString text = tr("The change was not saved.");
+              if (error == QLatin1String("split_unsupported")) {
+                text = tr("This series has a permanent call link, so it cannot be split into "
+                          "\"this and future\" events. Nothing was changed.");
+              } else if (error == QLatin1String("invalid_schedule")) {
+                text = tr("The schedule cannot be published: %1. Nothing was changed.")
+                           .arg(detail);
+              } else if (!detail.isEmpty()) {
+                text = tr("The change was not saved: %1").arg(detail);
+              }
+              QMessageBox::warning(this, tr("Recurring event"), text);
+            });
+  }
   mUi->list_view_layout->setColumnStretch(0, 1);
   mUi->list_view_layout->setColumnStretch(1, 0);
 
@@ -182,6 +209,72 @@ void QEventInfoPage::updateCalendarHighlights() const {
   mCalendarWidget->setDateTextFormat(QDate::currentDate(), currentDayFormat);
 }
 
+void QEventInfoPage::setSeriesCallService(pcm::meeting::SeriesCallService *service) {
+  mSeriesCallService = service;
+}
+
+bool QEventInfoPage::canDeleteFutureOccurrences(const int64_t seriesId) const {
+  return !mModel || !mModel->isSeriesSplitBlocked(seriesId);
+}
+
+void QEventInfoPage::setupSeriesCall(QEventDetailsWidget *widget, const DuckEvent &event) {
+  if (!mSeriesCallService || !mModel || !event.series_id.has_value()) {
+    return;
+  }
+  const auto seriesId = *event.series_id;
+  const auto series = mModel->eventSeriesById(seriesId);
+  if (!series.has_value()) {
+    return;
+  }
+  if (mSeriesCallService->isSeriesBacked(*series)) {
+    widget->setSeriesCall(mSeriesCallService.data(), seriesId,
+                          mSeriesCallService->joinTargetFor(event).value_or(QString{}));
+    return;
+  }
+  if (!pcm::meeting::SeriesCallService::isLegacyLiveKitSeries(*series)) {
+    return;
+  }
+  widget->setLegacyMigration(mSeriesCallService.data(), seriesId);
+  connect(widget, &QEventDetailsWidget::migrateToPermanentLinkRequested, this,
+          [this, widget](const qint64 id) {
+            const auto current = mModel->eventSeriesById(id);
+            if (!current.has_value() || !mSeriesCallService) {
+              return;
+            }
+            const auto preview = [&current](const std::string &timezone) {
+              return pcm::recurrence::previewOccurrences(
+                  *current, timezone, QDateTime::currentDateTimeUtc(), 5);
+            };
+            pcm::eventpage::SeriesTimezoneDialog dialog(
+                preview, QString::fromStdString(pcm::recurrence::systemScheduleTimezone()),
+                widget);
+            if (dialog.exec() != QDialog::Accepted || dialog.selectedTimezone().isEmpty()) {
+              return;
+            }
+            mSeriesCallService->migrateLegacySeries(id, dialog.selectedTimezone());
+          });
+}
+
+QString QEventInfoPage::confirmNewSeriesTimezone() {
+  const auto system = QString::fromStdString(pcm::recurrence::systemScheduleTimezone());
+  if (!system.isEmpty()) {
+    return system;
+  }
+  // The machine's timezone is unknown to the server: never guess, ask. A new
+  // series has no earlier dates to compare, so only the zone's validity counts.
+  const auto preview = [](const std::string &timezone) -> std::optional<QVector<QDateTime>> {
+    if (timezone.empty() || pcm::recurrence::isSupportedScheduleTimezone(timezone)) {
+      return QVector<QDateTime>{};
+    }
+    return std::nullopt;
+  };
+  pcm::eventpage::SeriesTimezoneDialog dialog(preview, QString{}, this);
+  if (dialog.exec() != QDialog::Accepted) {
+    return {};
+  }
+  return dialog.selectedTimezone();
+}
+
 void QEventInfoPage::onCreateEventClicked() { openEventDialog(std::nullopt); }
 
 void QEventInfoPage::openQuickEventDialog(const QTime &startTime,
@@ -269,6 +362,7 @@ void QEventInfoPage::openEventDialog(const std::optional<DuckEvent> &event,
   if (event.has_value()) {
     editingEvent = std::make_unique<QEventItem>(*event);
     detailsWidget->startEditingEvent(editingEvent.get(), clientId);
+    setupSeriesCall(detailsWidget, *event);
     if (event->series_id.has_value()) {
       const auto series = mTimelineWidget->eventSeriesById(*event->series_id);
       if (series.has_value()) {
@@ -302,7 +396,7 @@ void QEventInfoPage::onTimelineEventDeleteRequested(const int64_t eventId) {
   }
 
   if (event->series_id.has_value()) {
-    const auto scope = askRecurringDeleteScope(this);
+    const auto scope = askRecurringDeleteScope(this, canDeleteFutureOccurrences(*event->series_id));
     if (scope == RecurringDeleteScope::Cancel) {
       return;
     }
@@ -387,9 +481,21 @@ void QEventInfoPage::onEventSaved(QEventItem *event) {
 
   if (mActiveEventDetailsWidget && mActiveEventDetailsWidget->isCreatingNewEvent() &&
       mActiveEventDetailsWidget->isRecurring()) {
+    QString publishTimezone;
+    const bool publish = mSeriesCallService && mActiveEventDetailsWidget->wantsNewLiveKitSeries();
+    if (publish) {
+      publishTimezone = confirmNewSeriesTimezone();
+      if (publishTimezone.isEmpty()) {
+        rejectSave();
+        return;
+      }
+    }
     const auto seriesId = mTimelineWidget->addEventSeries(
         eventDetails, selectedClientId, mActiveEventDetailsWidget->recurrenceRule(),
-        mActiveEventDetailsWidget->recurrenceUntilMs());
+        mActiveEventDetailsWidget->recurrenceUntilMs(), publishTimezone);
+    if (seriesId > 0 && publish) {
+      mSeriesCallService->ensureInvitation(seriesId);
+    }
     if (seriesId <= 0) {
       qCWarning(logEventInfo) << "Failed to persist event series in DB";
       rejectSave();

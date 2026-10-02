@@ -24,6 +24,12 @@
 #include "main_window.h"
 #include "qclient_model.h"
 #include "event_info.h"
+#include "keychain_series_invitation_store.h"
+#include "schedule_sync.h"
+#include "series_call_service.h"
+#include "series_invitation_service.h"
+#include "series_schedule_committer.h"
+#include "store_credential_reader.h"
 #include "meeting_coordinator.h"
 #include "sessio_url.h"
 #include "single_instance_guard.h"
@@ -119,6 +125,14 @@ private:
   bool mAppLockDialogVisible = false;
   std::unique_ptr<pcm::backup::AutoBackupScheduler> mAutoBackupScheduler;
   std::unique_ptr<pcm::meeting::MeetingCoordinator> mMeetingCoordinator;
+  // Recurring-call publishing (specialist flow). Declared last so they are
+  // destroyed before the database, token client and credential store they use.
+  std::unique_ptr<StoreCredentialReader> mScheduleCredentialReader;
+  std::unique_ptr<QtKeychainSeriesInvitationStore> mInvitationSecretStore;
+  std::unique_ptr<pcm::meeting::ScheduleSync> mScheduleSync;
+  std::unique_ptr<pcm::meeting::SeriesInvitationService> mSeriesInvitations;
+  std::unique_ptr<pcm::meeting::SeriesScheduleCommitter> mScheduleCommitter;
+  std::unique_ptr<pcm::meeting::SeriesCallService> mSeriesCalls;
   bool mIsQuitting = false;
   bool mTrayCloseHintShown = false;
   config::Config mConf;

@@ -680,6 +680,11 @@ QString QEventDetailsWidget::selectedClientName() const {
   return mUI->mClientComboBox->currentText();
 }
 
+bool QEventDetailsWidget::wantsNewLiveKitSeries() const {
+  return mCreatingNewEvent && isRecurring() && mOnlineSessionSwitch->isChecked() &&
+         mProviderKindControl->currentIndex() == 1 && !mLegacyMigratable;
+}
+
 bool QEventDetailsWidget::isRecurring() const {
   return mRepeatTypeControl &&
          mRepeatTypeControl->currentData().toString() != QLatin1String("none");
