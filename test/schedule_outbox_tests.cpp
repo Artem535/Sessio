@@ -5,6 +5,7 @@
 
 #include <functional>
 #include <memory>
+#include <set>
 #include <stdexcept>
 
 #include "config.h"
@@ -69,6 +70,58 @@ protected:
 };
 
 } // namespace
+
+TEST_F(ScheduleOutboxTest, ClearLegacyMeetingReturnsEveryOldReferenceAndKeepsTheSchedule) {
+  auto legacy = series();
+  legacy.is_online = true;
+  legacy.provider_kind = "LiveKit";
+  legacy.meeting_ref = "ref-series";
+  legacy.invitation_state = "https://x/old|123456";
+  legacy.meeting_url = "https://x/old";
+  const auto seriesId = mDb->add_event_series(legacy);
+  ASSERT_GT(seriesId, 0);
+
+  DuckEvent moved;
+  moved.name = std::string{"moved"};
+  moved.event_stat_id = 1;
+  moved.payment_stat_id = 1;
+  moved.start_date = kStart + 24 * kHour;
+  moved.end_date = moved.start_date.value() + kHour;
+  moved.duration = 3600;
+  moved.series_id = seriesId;
+  moved.original_occurrence_start = kStart + 7 * 24 * kHour;
+  moved.is_online = true;
+  moved.provider_kind = "LiveKit";
+  moved.meeting_ref = "ref-moved";
+  moved.invitation_state = "https://x/m|654321";
+  moved.meeting_url = "https://x/m";
+  const auto movedId = mDb->add_event(moved, true);
+  ASSERT_GT(movedId, 0);
+
+  const auto refs = mDb->clear_series_legacy_meeting(seriesId);
+
+  ASSERT_TRUE(refs.has_value());
+  EXPECT_EQ(std::set<std::string>(refs->begin(), refs->end()),
+            (std::set<std::string>{"ref-series", "ref-moved"}));
+  const auto after = mDb->get_event_series(seriesId);
+  ASSERT_TRUE(after);
+  EXPECT_FALSE(after->meeting_ref.has_value());
+  EXPECT_FALSE(after->invitation_state.has_value());
+  EXPECT_EQ(after->meeting_url, "");
+  EXPECT_EQ(after->provider_kind.value_or(""), "LiveKit"); // still a LiveKit series
+  EXPECT_TRUE(after->is_online);
+  EXPECT_EQ(after->recurrence_rule, legacy.recurrence_rule);
+  const auto afterMoved = mDb->get_event(movedId);
+  ASSERT_TRUE(afterMoved);
+  EXPECT_FALSE(afterMoved->meeting_ref.has_value());
+  EXPECT_FALSE(afterMoved->invitation_state.has_value());
+  EXPECT_EQ(afterMoved->start_date, moved.start_date); // schedule untouched
+
+  // Nothing left to clear the second time.
+  const auto again = mDb->clear_series_legacy_meeting(seriesId);
+  ASSERT_TRUE(again.has_value());
+  EXPECT_TRUE(again->empty());
+}
 
 TEST_F(ScheduleOutboxTest, CommitsSeriesAndOutboxTogetherWithStableIdentity) {
   int64_t seriesId = 0;

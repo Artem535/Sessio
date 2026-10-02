@@ -1761,6 +1761,44 @@ bool Database::release_schedule_inflight(const std::string &series_uid,
   return rows.has_value() && *rows == 1;
 }
 
+std::optional<std::vector<std::string>>
+Database::clear_series_legacy_meeting(const int64_t series_id) {
+  if (series_id <= 0) {
+    return std::nullopt;
+  }
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  std::optional<Transaction> tx;
+  if (mTxConn == nullptr) {
+    tx.emplace(conn);
+    if (!tx->active()) {
+      return std::nullopt;
+    }
+  }
+
+  std::vector<std::string> refs;
+  auto selected = executePrepared(conn, constance::kSelectSeriesLegacyMeetingRefsQuery,
+                                  {duckdb::Value::BIGINT(series_id)});
+  if (!selected || selected->HasError()) {
+    return std::nullopt;
+  }
+  while (auto chunk = selected->Fetch()) {
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) {
+      refs.push_back(chunk->GetValue(0, i).ToString());
+    }
+  }
+  if (!execute_schedule_update(conn, constance::kClearSeriesLegacyMeetingQuery,
+                               {duckdb::Value::BIGINT(series_id), nowTimestamp()}) ||
+      !execute_schedule_update(conn, constance::kClearSeriesEventsLegacyMeetingQuery,
+                               {duckdb::Value::BIGINT(series_id)})) {
+    return std::nullopt;
+  }
+  if (tx && !tx->commit()) {
+    return std::nullopt;
+  }
+  return refs;
+}
+
 bool Database::set_schedule_sync_state(const std::string &series_uid,
                                        const std::string &state,
                                        const std::string &error) {

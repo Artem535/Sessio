@@ -21,6 +21,11 @@ qt_add_library(${TARGET_NAME} STATIC
         schedule_snapshot.cpp
         schedule_sync.h
         schedule_sync.cpp
+        series_join_target.h
+        series_join_target.cpp
+        series_invitation_store.h
+        series_invitation_service.h
+        series_invitation_service.cpp
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC

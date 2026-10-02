@@ -18,6 +18,8 @@ qt_add_library(${TARGET_NAME} STATIC
         backup_encryption_policy.cpp
         credential_store.cpp
         token_backend_credential_store.cpp
+        store_credential_reader.cpp
+        keychain_series_invitation_store.cpp
         app_lock_service.cpp
         app_lock_controller.cpp
         app_lock_dialog.cpp

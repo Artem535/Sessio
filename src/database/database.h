@@ -173,6 +173,13 @@ public:
                                       int64_t server_revision,
                                       const std::string &content_hash,
                                       bool allow_rewind = false);
+  // Final step of moving a legacy LiveKit series (one shared meeting) to a
+  // published series: drops the old meeting reference, invitation state and URL
+  // from the series and its materialized occurrences in one transaction and
+  // returns every distinct old reference so the caller can invalidate the
+  // backend meetings. The schedule itself is untouched. nullopt on failure
+  // (nothing changed).
+  std::optional<std::vector<std::string>> clear_series_legacy_meeting(int64_t series_id);
   std::string ensure_schedule_invitation_key(int64_t series_id);
   bool clear_schedule_invitation_key(int64_t series_id);
   bool set_schedule_invitation_generation(int64_t series_id, int64_t generation);

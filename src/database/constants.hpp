@@ -494,6 +494,28 @@ SET name = $1,
 WHERE id = $23
 )duckdb";
 
+// Every legacy single-meeting reference of a LiveKit series: the series row's
+// and those copied onto (or created for) its materialized occurrences.
+constexpr auto kSelectSeriesLegacyMeetingRefsQuery = R"duckdb(
+SELECT meeting_ref FROM EventSeries
+WHERE id = $1 AND provider_kind = 'LiveKit' AND meeting_ref IS NOT NULL AND TRIM(meeting_ref) <> ''
+UNION
+SELECT meeting_ref FROM Event
+WHERE series_id = $1 AND provider_kind = 'LiveKit' AND meeting_ref IS NOT NULL AND TRIM(meeting_ref) <> ''
+)duckdb";
+
+constexpr auto kClearSeriesLegacyMeetingQuery = R"duckdb(
+UPDATE EventSeries
+SET meeting_ref = NULL, invitation_state = NULL, meeting_url = '', updated_at = $2
+WHERE id = $1 AND provider_kind = 'LiveKit'
+)duckdb";
+
+constexpr auto kClearSeriesEventsLegacyMeetingQuery = R"duckdb(
+UPDATE Event
+SET meeting_ref = NULL, invitation_state = NULL, meeting_url = ''
+WHERE series_id = $1 AND provider_kind = 'LiveKit'
+)duckdb";
+
 constexpr auto kDeactivateEventSeriesQuery = R"duckdb(
 UPDATE EventSeries
 SET active = FALSE,

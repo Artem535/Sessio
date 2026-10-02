@@ -68,6 +68,50 @@ target_link_libraries(Sessio_schedule_sync_tests PRIVATE
 set_target_properties(Sessio_schedule_sync_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_schedule_sync_tests)
 
+# Series invitation service / join target tests (real DB + fake backend model)
+add_executable(Sessio_series_invitation_tests
+    fake_schedule_backend.h
+    series_backend_model.h
+    fake_series_invitation_store.h
+    series_invitation_service_tests.cpp
+)
+target_link_libraries(Sessio_series_invitation_tests PRIVATE
+    GTest::gtest
+    Qt6::Network
+    Qt6::Test
+    Sessio_config
+    Sessio_database
+    Sessio_meeting
+    Sessio_token_client
+    Poco::Foundation
+)
+set_target_properties(Sessio_series_invitation_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_series_invitation_tests)
+
+# Adapter from the keychain credential store to the schedule services
+add_executable(Sessio_store_credential_reader_tests
+    fake_token_backend_credential_store.h
+    store_credential_reader_tests.cpp
+    ../src/app/store_credential_reader.cpp
+    ../src/app/store_credential_reader.h
+    ../src/app/token_backend_credential_store.h
+    ../src/app/token_backend_credential_store.cpp
+)
+target_include_directories(Sessio_store_credential_reader_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/app
+    ${qtkeychain_SOURCE_DIR}
+    ${qtkeychain_BINARY_DIR}
+)
+target_link_libraries(Sessio_store_credential_reader_tests PRIVATE
+    GTest::gtest
+    Qt6::Network
+    Qt6::Test
+    Sessio_meeting
+    qt6keychain
+)
+set_target_properties(Sessio_store_credential_reader_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_store_credential_reader_tests)
+
 # Schedule conflict tests
 add_executable(Sessio_schedule_conflict_tests
     schedule_conflict_service_tests.cpp
