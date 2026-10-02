@@ -285,6 +285,54 @@ TEST_F(CalendarLayoutTest, NoOpRefreshKeepsTheInspectorWidgetAndChangedEventUpda
   EXPECT_EQ(second->currentEvent()->getTitle(), "Moved on");
   EXPECT_EQ(second->currentEvent()->toEvent().start_date, changed.start_date);
 }
+TEST_F(CalendarLayoutTest, NoOpRefreshKeepsTheInspectorOfAVirtualOccurrence) {
+  const auto date = QDate::currentDate();
+  ASSERT_GT(model->addEventSeries(appointment(date), 0, "FREQ=DAILY", std::nullopt), 0);
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.setMonthView(true);
+  page.findChild<MonthCalendarWidget *>()->eventSelected(model->events().first());
+  QPointer<QEventDetailsWidget> first = page.findChild<QEventDetailsWidget *>("calendarInspector");
+  ASSERT_NE(first, nullptr);
+  ASSERT_TRUE(first->currentEvent()->toEvent().is_virtual_occurrence);
+  EXPECT_EQ(first->recurrenceRule(), "FREQ=DAILY;INTERVAL=1");
+  model->loadEventsForDay(date);
+  page.refreshAppearance();
+  EXPECT_EQ(page.findChild<QEventDetailsWidget *>("calendarInspector"), first.data());
+}
+TEST_F(CalendarLayoutTest, SeriesRuleChangeRebuildsTheInspectorWhenTheOccurrenceIsUnchanged) {
+  // A materialized occurrence is stored separately from its series, so editing
+  // only the series rule leaves the occurrence data byte-identical.
+  const auto date = QDate::currentDate();
+  const auto seriesId = model->addEventSeries(appointment(date), 0, "FREQ=DAILY", std::nullopt);
+  ASSERT_GT(seriesId, 0);
+  const auto range = model->eventsForRange(date, date);
+  ASSERT_FALSE(range.isEmpty());
+  auto materialized = range.first();
+  materialized.id = -1;
+  ASSERT_GT(model->addEvent(materialized), 0);
+  model->loadEventsForDay(date);
+  ASSERT_FALSE(model->events().isEmpty());
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.setMonthView(true);
+  page.findChild<MonthCalendarWidget *>()->eventSelected(model->events().first());
+  QPointer<QEventDetailsWidget> first = page.findChild<QEventDetailsWidget *>("calendarInspector");
+  ASSERT_NE(first, nullptr);
+  ASSERT_FALSE(first->currentEvent()->toEvent().is_virtual_occurrence);
+  ASSERT_TRUE(first->currentEvent()->toEvent().series_id.has_value());
+  EXPECT_FALSE(first->recurrenceUntilMs().has_value());
+  model->loadEventsForDay(date);
+  page.refreshAppearance();
+  EXPECT_EQ(page.findChild<QEventDetailsWidget *>("calendarInspector"), first.data());
+  const auto until = QDateTime(date.addDays(30), QTime(23, 59, 59)).toMSecsSinceEpoch();
+  ASSERT_TRUE(model->updateEventSeries(appointment(date), seriesId, 0, "FREQ=DAILY", until));
+  model->loadEventsForDay(date); // the model reloads after a series edit
+  auto *second = page.findChild<QEventDetailsWidget *>("calendarInspector");
+  ASSERT_NE(second, nullptr);
+  EXPECT_TRUE(second->recurrenceUntilMs().has_value());
+  model->loadEventsForDay(date);
+  page.refreshAppearance();
+  EXPECT_EQ(page.findChild<QEventDetailsWidget *>("calendarInspector"), second);
+}
 TEST_F(CalendarLayoutTest, EventsAddedInDayModeAppearWhenSwitchingToMonth) {
   QEventInfoPage page(model.get(), nullptr, nullptr);
   page.setMonthView(true);

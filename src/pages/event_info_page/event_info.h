@@ -79,6 +79,14 @@ private:
   void initDefaultStates();
   void refreshCalendar();
   void selectMonthEvent(DuckEvent event);
+  // Series data the inspector shows besides the occurrence itself.
+  struct ShownSeriesRule {
+    std::string recurrence_rule;
+    std::optional<int64_t> recurrence_until;
+    bool operator==(const ShownSeriesRule &) const = default;
+  };
+  [[nodiscard]] std::optional<ShownSeriesRule>
+  shownSeriesRule(const std::optional<DuckEvent> &event) const;
   void showInspector(const std::optional<DuckEvent> &event, bool force = false);
   void syncInspector(const QVector<DuckEvent> &events);
   void editSelectedEvent();
@@ -100,6 +108,7 @@ private:
   QLabel *mEmptyInspector = nullptr;
   QPointer<QEventDetailsWidget> mInspector;
   std::optional<DuckEvent> mSelectedEvent;
+  std::optional<ShownSeriesRule> mShownSeriesRule;
   bool mNavigating = false;
   QTimelineWidget *mTimelineWidget = nullptr;
   QPointer<pcm::meeting::MeetingCoordinator> mMeetingCoordinator;

@@ -350,9 +350,22 @@ void QEventInfoPage::selectMonthEvent(DuckEvent event) {
   showInspector(selected != day.cend() ? std::optional<DuckEvent>(*selected) : std::nullopt);
 }
 
+std::optional<QEventInfoPage::ShownSeriesRule>
+QEventInfoPage::shownSeriesRule(const std::optional<DuckEvent> &event) const {
+  if (!event || !event->series_id || !mModel) {
+    return std::nullopt;
+  }
+  const auto series = mModel->eventSeriesById(*event->series_id);
+  if (!series) {
+    return std::nullopt;
+  }
+  return ShownSeriesRule{series->recurrence_rule, series->recurrence_until};
+}
+
 void QEventInfoPage::showInspector(const std::optional<DuckEvent> &event, bool force) {
   if (!force && mInspector && event && mSelectedEvent &&
-      sameOccurrence(*mSelectedEvent, *event) && sameEventData(*mSelectedEvent, *event)) {
+      sameOccurrence(*mSelectedEvent, *event) && sameEventData(*mSelectedEvent, *event) &&
+      shownSeriesRule(event) == mShownSeriesRule) {
     return; // nothing changed: keep the widget (scroll position, focus, call state)
   }
   if (mInspector) {
@@ -364,6 +377,7 @@ void QEventInfoPage::showInspector(const std::optional<DuckEvent> &event, bool f
     mInspector.clear();
   }
   mSelectedEvent = event;
+  mShownSeriesRule = shownSeriesRule(event);
   mEmptyInspector->setVisible(!event.has_value());
   if (!event) {
     return;
