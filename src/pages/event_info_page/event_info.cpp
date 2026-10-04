@@ -850,6 +850,9 @@ void QEventInfoPage::refreshAppearance() {
 
   mTimelineWidget->updateScene();
   mTimelineWidget->update();
+  if (mMonthCalendar) {
+    mMonthCalendar->refreshAppearance();
+  }
   refreshCalendar();
   refreshQuickSlots();
   refreshDaySummary();

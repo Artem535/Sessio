@@ -140,7 +140,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  app.setApplicationVersion("0.2.9");
+  app.setApplicationVersion("0.2.11");
   // Installed builds ship libical's timezone data next to the executable; the
   // path compiled into the schedule engine only exists in development trees.
   pcm::meeting::configureScheduleZoneinfo(QCoreApplication::applicationDirPath());

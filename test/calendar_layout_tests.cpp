@@ -1,5 +1,6 @@
 #include "event_info.h"
 #include "month_calendar_widget.h"
+#include "app_settings.h"
 #include <oclero/qlementine/widgets/Switch.hpp>
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 #include <QApplication>
@@ -291,6 +292,26 @@ TEST_F(CalendarLayoutTest, SmallPageKeepsCalendarAndScrollingInspectorAccessible
   }
   EXPECT_LT(calendarBase[1].lightness(), calendarBase[0].lightness() - 100);
 }
+TEST_F(CalendarLayoutTest, MonthChipsFollowEventColorSettingsAfterPageRefresh) {
+  auto event = appointment(QDate::currentDate());
+  event.is_work_event = true;
+  model->addEvent(event);
+  pcm::app_settings::setWorkEventColor(QColor(20, 160, 60));
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.setMonthView(true);
+  page.resize(1500, 900);
+  page.show();
+  QApplication::processEvents();
+  auto chips = page.findChildren<QPushButton *>("monthEvent");
+  ASSERT_FALSE(chips.isEmpty());
+  EXPECT_EQ(chips.first()->property("chipFill").value<QColor>(), QColor(20, 160, 60));
+  pcm::app_settings::setWorkEventColor(QColor(200, 30, 30));
+  page.refreshAppearance();
+  chips = page.findChildren<QPushButton *>("monthEvent");
+  ASSERT_FALSE(chips.isEmpty());
+  EXPECT_EQ(chips.first()->property("chipFill").value<QColor>(), QColor(200, 30, 30));
+}
+
 TEST_F(CalendarLayoutTest, NoOpRefreshKeepsTheInspectorWidgetAndChangedEventUpdatesIt) {
   const auto id = model->addEvent(appointment(QDate::currentDate()));
   QEventInfoPage page(model.get(), nullptr, nullptr);
