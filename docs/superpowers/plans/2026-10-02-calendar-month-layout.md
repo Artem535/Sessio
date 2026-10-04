@@ -1,5 +1,12 @@
 # Calendar Month Layout Implementation Plan
 
+> **Superseded in layout** by the owner-approved design implemented in 6a73698/7bfb825: top
+> page-widget row (Day|Switch|Month + New meeting), left column = calendar card
+> (RoundedCalendarWidget / month picker) + one info card (day summary / meeting inspector) +
+> quick slots, centre = timeline / month grid; no page title, no right column. Statements below
+> about a page title, period row or right-hand panel describe the earlier, rejected layout.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Transfer the accepted Qt calendar composition into real Sessio with a Qlementine day/month Switch.
