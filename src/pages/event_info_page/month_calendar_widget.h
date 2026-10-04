@@ -22,6 +22,8 @@ public:
   QDate lastVisibleDate() const;
   // Number of full grid builds so far (regression guard against rebuild storms).
   int rebuildCount() const;
+  // Re-reads the work/personal event colors from settings and repaints chips.
+  void refreshAppearance();
 
 signals:
   void dateSelected(QDate date);

@@ -1,6 +1,7 @@
 #include "qtimeline_model.h"
 #include "series_schedule_committer.h"
 #include "month_calendar_widget.h"
+#include "app_settings.h"
 
 #include <QApplication>
 #include <QPersistentModelIndex>
@@ -373,6 +374,73 @@ TEST(MonthCalendarTest, RowsShareTheWholeHeightEvenInATallWindow) {
   EXPECT_EQ(widget.height(), 1500);
 }
 
+
+QPushButton *chipNamed(MonthCalendarWidget &widget, const QString &name) {
+  for (auto *button : widget.findChildren<QPushButton *>("monthEvent")) {
+    if (button->accessibleName().contains(name)) return button;
+  }
+  return nullptr;
+}
+
+MonthCalendarWidget *colorWidget(std::unique_ptr<MonthCalendarWidget> &holder) {
+  holder = std::make_unique<MonthCalendarWidget>();
+  holder->resize(1100, 700);
+  holder->setMonth(QDate(2026, 10, 1));
+  auto work = eventAt(QDate(2026, 10, 12), QTime(9, 0));
+  work.name = "WorkChip";
+  work.is_work_event = true;
+  auto personal = eventAt(QDate(2026, 10, 13), QTime(9, 0));
+  personal.name = "PersonalChip";
+  personal.is_work_event = false;
+  holder->setEvents({work, personal});
+  holder->show();
+  QApplication::processEvents();
+  return holder.get();
+}
+
+TEST(MonthCalendarTest, ChipsUseTheSameWorkAndPersonalColorsAsTheDayTimeline) {
+  pcm::app_settings::setWorkEventColor(QColor(20, 160, 60));
+  pcm::app_settings::setPersonalEventColor(QColor(240, 140, 20));
+  std::unique_ptr<MonthCalendarWidget> holder;
+  auto *widget = colorWidget(holder);
+  auto *work = chipNamed(*widget, "WorkChip");
+  auto *personal = chipNamed(*widget, "PersonalChip");
+  ASSERT_NE(work, nullptr);
+  ASSERT_NE(personal, nullptr);
+  EXPECT_EQ(work->property("chipFill").value<QColor>(), QColor(20, 160, 60));
+  EXPECT_EQ(work->property("chipBorder").value<QColor>(), QColor(20, 160, 60).darker(165));
+  EXPECT_EQ(personal->property("chipFill").value<QColor>(), QColor(240, 140, 20));
+  EXPECT_EQ(personal->property("chipBorder").value<QColor>(), QColor(240, 140, 20).darker(165));
+}
+
+TEST(MonthCalendarTest, ChipColorsFollowSettingsAfterRefreshAppearance) {
+  pcm::app_settings::setWorkEventColor(QColor(20, 160, 60));
+  pcm::app_settings::setPersonalEventColor(QColor(240, 140, 20));
+  std::unique_ptr<MonthCalendarWidget> holder;
+  auto *widget = colorWidget(holder);
+  pcm::app_settings::setWorkEventColor(QColor(200, 30, 30));
+  pcm::app_settings::setPersonalEventColor(QColor(30, 30, 200));
+  widget->refreshAppearance();
+  EXPECT_EQ(chipNamed(*widget, "WorkChip")->property("chipFill").value<QColor>(),
+            QColor(200, 30, 30));
+  EXPECT_EQ(chipNamed(*widget, "PersonalChip")->property("chipFill").value<QColor>(),
+            QColor(30, 30, 200));
+}
+
+TEST(MonthCalendarTest, ChipTextContrastsWithVeryLightAndVeryDarkColors) {
+  for (const QColor color : {QColor(255, 250, 200), QColor(10, 10, 40)}) {
+    pcm::app_settings::setWorkEventColor(color);
+    pcm::app_settings::setPersonalEventColor(color);
+    std::unique_ptr<MonthCalendarWidget> holder;
+    auto *widget = colorWidget(holder);
+    auto *chip = chipNamed(*widget, "WorkChip");
+    ASSERT_NE(chip, nullptr);
+    const auto fill = chip->property("chipFill").value<QColor>();
+    const auto text = chip->property("chipText").value<QColor>();
+    EXPECT_GE(std::abs(fill.lightness() - text.lightness()), 120) << color.name().toStdString();
+  }
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -380,6 +448,8 @@ int main(int argc, char **argv) {
   qputenv("TZ", "Europe/Berlin");
   tzset();
   QApplication app(argc, argv);
+  QCoreApplication::setOrganizationName("SessioMonthCalendarTests");
+  QCoreApplication::setApplicationName("MonthCalendarTests");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

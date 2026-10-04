@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.11] - 2026-10-04
+
+### Changed
+
+- Month view: meeting chips now use the same work and personal event colors as the
+  day timeline (configurable in Settings) with a matching darker border and a
+  light or dark text chosen for contrast. Colors update without restarting the
+  application.
+
 ## [0.2.10] - 2026-10-04
 
 ### Changed
