@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
   light or dark text chosen for contrast. Colors update without restarting the
   application.
 
+## [0.2.10] - 2026-10-04
+
+### Changed
+
+- The first-launch role dialog has a fixed size and centered layout.
+
 ## [0.2.9] - 2026-10-02
 
 ### Added
