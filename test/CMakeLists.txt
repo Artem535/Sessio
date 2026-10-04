@@ -139,6 +139,21 @@ target_link_libraries(Sessio_timeline_series_tests PRIVATE
 set_target_properties(Sessio_timeline_series_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_timeline_series_tests)
 
+# Month projection and the actual calendar widget, with a real isolated DB.
+add_executable(Sessio_month_calendar_tests
+    month_calendar_tests.cpp
+    ../src/pages/event_info_page/month_calendar_widget.cpp
+    ../src/pages/event_info_page/month_calendar_widget.h
+)
+target_include_directories(Sessio_month_calendar_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/pages/event_info_page
+)
+target_link_libraries(Sessio_month_calendar_tests PRIVATE
+    GTest::gtest Qt6::Widgets Qt6::Test Sessio_event_view
+)
+set_target_properties(Sessio_month_calendar_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_month_calendar_tests)
+
 # Recurring-call facade: publication, invitation, join targets, migration
 add_executable(Sessio_series_call_tests
     fake_schedule_backend.h
@@ -516,9 +531,15 @@ target_link_libraries(Sessio_meeting_coordinator_tests PRIVATE
 set_target_properties(Sessio_meeting_coordinator_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_meeting_coordinator_tests)
 
+# Calendar page layout tests (Day/Month switch, shared inspector)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network Test)
+add_executable(Sessio_calendar_layout_tests calendar_layout_tests.cpp)
+target_link_libraries(Sessio_calendar_layout_tests PRIVATE
+    GTest::gtest Qt6::Widgets Qt6::Test Sessio_event_page)
+gtest_discover_tests(Sessio_calendar_layout_tests)
+
 # QEventDetailsWidget meeting tests (real MeetingCoordinator against the fake
 # token-backend HTTP server, same double as Sessio_livekit_meeting_provider_tests)
-find_package(Qt6 REQUIRED COMPONENTS Widgets Network Test)
 add_executable(Sessio_qevent_details_widget_tests
     fake_token_backend_server.h
     qevent_details_widget_tests.cpp

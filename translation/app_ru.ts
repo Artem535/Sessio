@@ -735,13 +735,6 @@
     </message>
 </context>
 <context>
-    <name>EventInfo</name>
-    <message>
-        <source>: EVENT_INFO_FORM_TITLE</source>
-        <translation>Календарь событий</translation>
-    </message>
-</context>
-<context>
     <name>MainWindow</name>
     <message>
         <source>: APP_TITLE</source>
@@ -822,6 +815,24 @@
     <message>
         <source>Page</source>
         <translation>Страница</translation>
+    </message>
+</context>
+<context>
+    <name>MonthCalendarWidget</name>
+    <message>
+        <source>+%1 more</source>
+        <translation>Ещё %1</translation>
+    </message>
+</context>
+<context>
+    <name>MonthPickerWidget</name>
+    <message>
+        <source>Previous year</source>
+        <translation>Предыдущий год</translation>
+    </message>
+    <message>
+        <source>Next year</source>
+        <translation>Следующий год</translation>
     </message>
 </context>
 <context>
@@ -1015,6 +1026,10 @@
         <translation>Копировать код доступа</translation>
     </message>
     <message>
+        <source>Use one link for all meetings of this series.</source>
+        <translation>Используйте одну ссылку для всех встреч этой серии.</translation>
+    </message>
+    <message>
         <source>Retry</source>
         <translation>Повторить</translation>
     </message>
@@ -1029,6 +1044,62 @@
     <message>
         <source>Move to a permanent link...</source>
         <translation>Перейти на постоянную ссылку...</translation>
+    </message>
+    <message>
+        <source>Meeting</source>
+        <translation>Встреча</translation>
+    </message>
+    <message>
+        <source>Back to day</source>
+        <translation>К дню</translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>Дата</translation>
+    </message>
+    <message>
+        <source>Time</source>
+        <translation>Время</translation>
+    </message>
+    <message>
+        <source>Delivery format</source>
+        <translation>Способ проведения</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Статус</translation>
+    </message>
+    <message>
+        <source>In person</source>
+        <translation>Очно</translation>
+    </message>
+    <message>
+        <source>Online (LiveKit)</source>
+        <translation>Онлайн (LiveKit)</translation>
+    </message>
+    <message>
+        <source>Online (external link)</source>
+        <translation>Онлайн (внешняя ссылка)</translation>
+    </message>
+    <message>
+        <source>Does not repeat</source>
+        <translation>Не повторяется</translation>
+    </message>
+    <message>
+        <source>Repeats daily</source>
+        <translation>Повторяется ежедневно</translation>
+    </message>
+    <message>
+        <source>Repeats every %1 week(s)</source>
+        <translation>Повторяется каждые %1 нед.</translation>
+    </message>
+    <message>
+        <source>Repeats monthly</source>
+        <translation>Повторяется ежемесячно</translation>
+    </message>
+    <message>
+        <source>Repeats yearly</source>
+        <translation>Повторяется ежегодно</translation>
     </message>
     <message>
         <source>Create a new link</source>
@@ -1154,6 +1225,14 @@
         <source>Suggest free slot</source>
         <translation>Предложить свободное время</translation>
     </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation>
+            <numerusform>%n минута</numerusform>
+            <numerusform>%n минуты</numerusform>
+            <numerusform>%n минут</numerusform>
+        </translation>
+    </message>
     <message>
         <source>Repeat end date must not be earlier than the event date.</source>
         <translation>Дата окончания повтора не может быть раньше даты события.</translation>
@@ -1220,6 +1299,22 @@
     <message>
         <source>Recurring event</source>
         <translation>Повторяющееся событие</translation>
+    </message>
+    <message>
+        <source>Day</source>
+        <translation>День</translation>
+    </message>
+    <message>
+        <source>Calendar view</source>
+        <translation>Вид календаря</translation>
+    </message>
+    <message>
+        <source>Month</source>
+        <translation>Месяц</translation>
+    </message>
+    <message>
+        <source>New meeting</source>
+        <translation>Новая встреча</translation>
     </message>
     <message>
         <source>: EVENT_ADD_BUTTON</source>

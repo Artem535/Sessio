@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.9] - 2026-10-02
+
+### Added
+
+- Month view for the calendar: a month grid with rounded meeting chips (time and
+  title; accent colour for work meetings, neutral for personal ones), dimmed
+  neighbouring days, a filled badge with the day number for the selected day, a
+  ring for today, the week starting according to the system locale, and a
+  "+N more" link in days that have more meetings than fit in the cell. Rows share the
+  window height equally (at least 112 px) so the grid ends at the bottom of the
+  left column. Meetings crossing midnight and occurrences
+  of recurring series are shown in every affected day.
+- A Day / Month switch and the "New meeting" button in the top row of the
+  Calendar page.
+- In Month mode the calendar card becomes a month picker (year arrows and
+  twelve month tiles).
+- One info panel under the calendar card: the day summary, replaced by the
+  meeting inspector (labelled Date / Time / Repeat / Delivery format / Status
+  fields, full-width actions, recurring series state) when a meeting is
+  selected in the timeline or the month grid; "Back to day" returns to the
+  day summary.
+- The day timeline scrolls to the first meeting of the day (or 08:00).
+
+### Changed
+
+- Month mode uses the same layout as Day mode: calendar card, info panel and
+  quick session slots on the left, the month grid in the centre.
+
+### Fixed
+
+- Settings/About button text colour follows the theme (padding and left alignment unchanged).
+- The day timeline no longer jumps back to the first meeting after saving, editing or deleting a meeting of the same day.
+
 ## [0.2.8] - 2026-10-02
 
 ### Added

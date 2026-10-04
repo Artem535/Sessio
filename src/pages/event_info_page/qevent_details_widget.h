@@ -5,6 +5,7 @@
 #include "series_call_service.h"
 
 #include <QComboBox>
+#include <QBoxLayout>
 #include <QDate>
 #include <QDateEdit>
 #include <QDateTime>
@@ -66,6 +67,7 @@ public:
    * @brief Configures widget for usage inside a modal dialog.
    */
   void setDialogMode(bool enabled);
+  void setInspectorMode(bool enabled);
   void setConflictChecker(
       std::function<std::optional<DuckEvent>(const DuckEvent &)> checker);
   void setMeetingCoordinator(pcm::meeting::MeetingCoordinator *coordinator);
@@ -126,6 +128,9 @@ public:
   void setClientList(const QHash<int64_t, QString> &clients);
 
 signals:
+  // Inspector mode: "Back to day" was pressed.
+  void backRequested();
+  void editRequested();
   /**
    * @brief Signal emitted when user requests to save the event.
    * Passes a pointer to the event data that should be saved.
@@ -180,6 +185,8 @@ private slots:
   void onCopyMeetingPasscodeClicked();
 
 private:
+  void refreshInspector();
+  void setMeetingActionOrder(const QList<QPushButton *> &order);
   void applySeriesCallState();
   void refreshSeriesCallPanel();
   void withSeriesInvitation(const std::function<void(const QString &url, const QString &passcode)> &use);
@@ -228,6 +235,21 @@ private:
 
   // --- UI ---
   std::unique_ptr<Ui::EventDetails> mUI;
+  QWidget *mEditorFields = nullptr;
+  QWidget *mInspectorSummary = nullptr;
+  QBoxLayout *mSeriesActionsLayout = nullptr;
+  QLabel *mInspectorTitle = nullptr;
+  // Labelled read-only fields: small muted caption above the value.
+  struct InspectorField {
+    QLabel *caption = nullptr;
+    QLabel *value = nullptr;
+  };
+  InspectorField mFieldClient, mFieldDate, mFieldTime, mFieldRepeat, mFieldFormat, mFieldStatus;
+  QLabel *mInspectorDuration = nullptr;
+  QLabel *mSeriesHint = nullptr;
+  std::unique_ptr<QEventItem> mInspectorEvent;
+  bool mInspectorMode = false;
+  quint64 mSelectionRevision = 0;
   oclero::qlementine::Switch *mEventTypeSwitch = nullptr;
   oclero::qlementine::Switch *mOnlineSessionSwitch = nullptr;
   oclero::qlementine::SegmentedControl *mProviderKindControl = nullptr;

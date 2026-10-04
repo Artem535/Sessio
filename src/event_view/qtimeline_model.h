@@ -44,6 +44,9 @@ public:
 
   // API
   void loadEventsForDay(const QDate &date);
+  [[nodiscard]] QDate currentDate() const { return mCurrentDate; }
+  // Inclusive local dates. Returns owned copies without changing the day model.
+  QVector<DuckEvent> eventsForRange(const QDate &first, const QDate &last) const;
   int64_t addEvent(const DuckEvent &event, bool allowOverlap = true);
   // `publishTimezone` (an IANA id) publishes the new series to the server
   // from now on and pins that timezone to it for good; empty keeps the series
@@ -87,6 +90,8 @@ signals:
   void scheduleCommitFailed(const QString &error, const QString &detail);
 
 private:
+  QVector<DuckEvent> projectEvents(const QDate &first, const QDate &last,
+                                  bool includeOverlappingOccurrences) const;
   // Runs a series write through the committer when the series is published;
   // `plain` is used otherwise. Returns the series id or nullopt (failure
   // already reported).

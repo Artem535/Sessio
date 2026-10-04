@@ -128,6 +128,8 @@ void MainWindow::addEventInfoPage(QTimelineModel *model,
 
   const int index = mUi->stackedWidget->addWidget(page);
   mPagesIndex.insertOrAssign(Pages::eventInfo, index);
+  // Day|Month switch and "New meeting" live in the top row next to the title.
+  setPageCustomWidget(Pages::eventInfo, page->headerControls());
 }
 
 void MainWindow::addAnalyticsPage(std::shared_ptr<pcm::database::Database> db) {
@@ -385,19 +387,16 @@ void MainWindow::setupUtilityButtons() {
     button->setCursor(Qt::PointingHandCursor);
     button->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     button->setIconSize(QSize(16, 16));
+    // The colour is taken from the live palette (no hard-coded value), so it
+    // follows the light and dark Qlementine themes; a style sheet without any
+    // colour would leave the text unreadable.
     button->setStyleSheet(
         "QPushButton {"
-        " color: rgba(255, 255, 255, 0.52);"
+        " color: palette(window-text);"
         " background: transparent;"
         " border: none;"
         " padding: 6px 10px;"
         " text-align: left;"
-        "}"
-        "QPushButton:hover {"
-        " color: rgba(255, 255, 255, 0.78);"
-        "}"
-        "QPushButton:pressed {"
-        " color: rgba(255, 255, 255, 0.92);"
         "}");
     return button;
   };
