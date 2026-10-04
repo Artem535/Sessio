@@ -58,6 +58,7 @@ private:
   qreal mPixelPerMin = pcm::widgets::constants::kPixelPerMin;
   QMap<int64_t, QEventItem *> mSceneItems;
   bool mAutoScrollPending = false;
+  QDate mLastScrolledDate;
 
   void drawBackground(QPainter *painter, const QRectF &rect) override;
   void showCreateEventMenu(const QPoint &viewportPos, const QPoint &globalPos);

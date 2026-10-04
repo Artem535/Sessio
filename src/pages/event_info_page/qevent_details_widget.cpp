@@ -339,10 +339,11 @@ void QEventDetailsWidget::initUi() {
   mOpenMeetingButton->setObjectName(QStringLiteral("openMeetingButton"));
   mCopyMeetingUrlButton->setObjectName(QStringLiteral("copyMeetingUrlButton"));
   mCopyMeetingInviteButton->setObjectName(QStringLiteral("copyMeetingInviteButton"));
-  meetingActionsLayout->addWidget(mCopyMeetingInviteButton);
-  meetingActionsLayout->addWidget(mCopyMeetingUrlButton);
-  meetingActionsLayout->addWidget(mCopyMeetingPasscodeButton);
+  // Dialog order is the original one; the inspector reorders in setInspectorMode.
   meetingActionsLayout->addWidget(mOpenMeetingButton);
+  meetingActionsLayout->addWidget(mCopyMeetingUrlButton);
+  meetingActionsLayout->addWidget(mCopyMeetingInviteButton);
+  meetingActionsLayout->addWidget(mCopyMeetingPasscodeButton);
   meetingActionsLayout->addStretch();
   mUI->formLayout->insertRow(meetingActionsRow, QString(),
                              mMeetingActionsWidget);
@@ -427,6 +428,8 @@ void QEventDetailsWidget::initUi() {
   mUI->verticalLayout->removeItem(mUI->formLayout);
   mEditorFields = new QWidget(this);
   mEditorFields->setLayout(mUI->formLayout);
+  // A nested layout has no margins of its own; keep the dialog geometry of the base.
+  mUI->formLayout->setContentsMargins(0, 0, 0, 0);
   mUI->verticalLayout->insertWidget(0, mEditorFields);
   mInspectorSummary = new QWidget(this);
   auto *summary = new QVBoxLayout(mInspectorSummary);
@@ -481,6 +484,17 @@ void QEventDetailsWidget::initUi() {
   mInspectorSummary->hide();
 }
 
+void QEventDetailsWidget::setMeetingActionOrder(const QList<QPushButton *> &order) {
+  auto *layout = static_cast<QBoxLayout *>(mMeetingActionsWidget->layout());
+  for (auto *button : order) {
+    layout->removeWidget(button);
+  }
+  int index = 0;
+  for (auto *button : order) {
+    layout->insertWidget(index++, button);
+  }
+}
+
 void QEventDetailsWidget::setInspectorMode(bool enabled) {
   if (mInspectorMode == enabled) {
     return;
@@ -507,6 +521,9 @@ void QEventDetailsWidget::setInspectorMode(bool enabled) {
     mUI->verticalLayout->setContentsMargins(0, 0, 0, 0);
     summary->setSpacing(4);
     static_cast<QBoxLayout *>(mMeetingActionsWidget->layout())->setDirection(QBoxLayout::TopToBottom);
+    // Inspector order: Copy invite, Copy link, Copy passcode, Open.
+    setMeetingActionOrder({mCopyMeetingInviteButton, mCopyMeetingUrlButton,
+                           mCopyMeetingPasscodeButton, mOpenMeetingButton});
     // Series actions can have long translated labels. Stacking keeps all of
     // them accessible inside the narrow scrollable panel.
     mSeriesActionsLayout->setDirection(QBoxLayout::TopToBottom);
@@ -519,6 +536,8 @@ void QEventDetailsWidget::setInspectorMode(bool enabled) {
     mUI->formLayout->setWidget(meetingActionsRow, QFormLayout::FieldRole, mMeetingActionsWidget);
     mUI->formLayout->setWidget(seriesCallRow, QFormLayout::FieldRole, mSeriesCallWidget);
     static_cast<QBoxLayout *>(mMeetingActionsWidget->layout())->setDirection(QBoxLayout::LeftToRight);
+    setMeetingActionOrder({mOpenMeetingButton, mCopyMeetingUrlButton, mCopyMeetingInviteButton,
+                           mCopyMeetingPasscodeButton});
     mSeriesActionsLayout->setDirection(QBoxLayout::LeftToRight);
   }
   mEditorFields->setVisible(!enabled);
@@ -560,7 +579,7 @@ void QEventDetailsWidget::refreshInspector() {
   mFieldTime.value->setText(start.toString(QStringLiteral("HH:mm")) + QStringLiteral(" – ") +
       (start.date() == end.date() ? end.toString(QStringLiteral("HH:mm"))
                                   : locale().toString(end, QLocale::ShortFormat)));
-  mInspectorDuration->setText(tr("%1 minutes").arg(start.secsTo(end) / 60));
+  mInspectorDuration->setText(tr("%n minute(s)", nullptr, static_cast<int>(start.secsTo(end) / 60)));
   mFieldFormat.value->setText(format);
   mFieldStatus.value->setText(mUI->mEventStatusComboBox->currentText());
   const auto repeat = mRepeatTypeControl->currentData().toString();

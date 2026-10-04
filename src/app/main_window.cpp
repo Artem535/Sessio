@@ -387,7 +387,17 @@ void MainWindow::setupUtilityButtons() {
     button->setCursor(Qt::PointingHandCursor);
     button->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     button->setIconSize(QSize(16, 16));
-    // Let Qlementine supply the foreground in both light and dark themes.
+    // The colour is taken from the live palette (no hard-coded value), so it
+    // follows the light and dark Qlementine themes; a style sheet without any
+    // colour would leave the text unreadable.
+    button->setStyleSheet(
+        "QPushButton {"
+        " color: palette(window-text);"
+        " background: transparent;"
+        " border: none;"
+        " padding: 6px 10px;"
+        " text-align: left;"
+        "}");
     return button;
   };
 

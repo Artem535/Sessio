@@ -1082,10 +1082,6 @@
         <translation>Онлайн (внешняя ссылка)</translation>
     </message>
     <message>
-        <source>%1 minutes</source>
-        <translation>%1 мин.</translation>
-    </message>
-    <message>
         <source>Does not repeat</source>
         <translation>Не повторяется</translation>
     </message>
@@ -1228,6 +1224,14 @@
     <message>
         <source>Suggest free slot</source>
         <translation>Предложить свободное время</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation>
+            <numerusform>%n минута</numerusform>
+            <numerusform>%n минуты</numerusform>
+            <numerusform>%n минут</numerusform>
+        </translation>
     </message>
     <message>
         <source>Repeat end date must not be earlier than the event date.</source>

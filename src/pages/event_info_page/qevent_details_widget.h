@@ -186,6 +186,7 @@ private slots:
 
 private:
   void refreshInspector();
+  void setMeetingActionOrder(const QList<QPushButton *> &order);
   void applySeriesCallState();
   void refreshSeriesCallPanel();
   void withSeriesInvitation(const std::function<void(const QString &url, const QString &passcode)> &use);

@@ -699,6 +699,52 @@ TEST_F(CalendarLayoutTest, MonthGridBottomMeetsTheLeftColumnBottomAtAnySize) {
     }
   }
 }
+TEST_F(CalendarLayoutTest, DialogFormKeepsTheBaseInsetAndButtonOrder) {
+  QEventDetailsWidget details;
+  auto *form = details.findChild<QFormLayout *>();
+  ASSERT_NE(form, nullptr);
+  // Base (bc37801): the form was a nested layout of the vertical layout, i.e. no own margins.
+  EXPECT_EQ(form->contentsMargins(), QMargins(0, 0, 0, 0));
+  auto *open = details.findChild<QPushButton *>("openMeetingButton");
+  auto *url = details.findChild<QPushButton *>("copyMeetingUrlButton");
+  auto *invite = details.findChild<QPushButton *>("copyMeetingInviteButton");
+  auto *passcode = details.findChild<QPushButton *>("copyMeetingPasscodeButton");
+  auto *layout = static_cast<QBoxLayout *>(open->parentWidget()->layout());
+  const auto index = [layout](QWidget *w) { return layout->indexOf(w); };
+  const auto dialogOrder = [&] {
+    EXPECT_LT(index(open), index(url));
+    EXPECT_LT(index(url), index(invite));
+    EXPECT_LT(index(invite), index(passcode));
+  };
+  dialogOrder(); // original: Open, Copy link, Copy invite, Copy passcode
+  details.setInspectorMode(true);
+  EXPECT_LT(index(invite), index(url));   // inspector: Copy invite first ...
+  EXPECT_LT(index(url), index(passcode));
+  EXPECT_LT(index(passcode), index(open)); // ... Open last
+  details.setInspectorMode(false);
+  dialogOrder();
+}
+TEST_F(CalendarLayoutTest, TimelineScrollsOnlyWhenTheDisplayedDateChanges) {
+  auto event = appointment(QDate::currentDate());
+  event.start_date = QDateTime(QDate::currentDate(), QTime(16, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+  event.end_date = *event.start_date + 3600000;
+  model->addEvent(event);
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.resize(1100, 520);
+  page.show();
+  QTest::qWait(50);
+  auto *view = page.findChild<QEventView *>();
+  ASSERT_NE(view, nullptr);
+  auto *bar = view->verticalScrollBar();
+  ASSERT_GT(bar->value(), 0); // first load scrolled to the 16:00 meeting
+  bar->setValue(0);           // the user scrolls away
+  model->loadEventsForDay(QDate::currentDate()); // reload after save/delete/edit
+  QTest::qWait(50);
+  EXPECT_EQ(bar->value(), 0);
+  model->loadEventsForDay(QDate::currentDate().addDays(1)); // other date, empty -> 08:00
+  QTest::qWait(50);
+  EXPECT_GT(bar->value(), 0);
+}
 } // namespace
 int main(int argc, char **argv) {
   QTemporaryDir home;

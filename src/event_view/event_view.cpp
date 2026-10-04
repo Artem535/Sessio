@@ -65,6 +65,12 @@ void QEventView::setModel(QTimelineModel *model) {
           &QEventView::onDataChanged);
   connect(mModel, &QTimelineModel::modelReset, this, &QEventView::onModelReset);
   connect(mModel, &QTimelineModel::eventsLoaded, this, [this] {
+    // Only a new displayed date scrolls; reloads of the same day after a save,
+    // edit or delete keep the user's scroll position.
+    if (mLastScrolledDate.isValid() && mLastScrolledDate == mModel->currentDate()) {
+      return;
+    }
+    mLastScrolledDate = mModel->currentDate();
     mAutoScrollPending = true;
     QTimer::singleShot(0, this, &QEventView::scrollToDayStart);
   });

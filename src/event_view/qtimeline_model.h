@@ -44,6 +44,7 @@ public:
 
   // API
   void loadEventsForDay(const QDate &date);
+  [[nodiscard]] QDate currentDate() const { return mCurrentDate; }
   // Inclusive local dates. Returns owned copies without changing the day model.
   QVector<DuckEvent> eventsForRange(const QDate &first, const QDate &last) const;
   int64_t addEvent(const DuckEvent &event, bool allowOverlap = true);

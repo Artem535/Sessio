@@ -30,6 +30,11 @@ All notable changes to this project will be documented in this file.
 - Month mode uses the same layout as Day mode: calendar card, info panel and
   quick session slots on the left, the month grid in the centre.
 
+### Fixed
+
+- Settings/About button text colour follows the theme (padding and left alignment unchanged).
+- The day timeline no longer jumps back to the first meeting after saving, editing or deleting a meeting of the same day.
+
 ## [0.2.8] - 2026-10-02
 
 ### Added
