@@ -1,5 +1,7 @@
 #include "month_calendar_widget.h"
 
+#include "app_settings.h"
+
 #include <QApplication>
 #include <QEvent>
 #include <QGridLayout>
@@ -101,12 +103,13 @@ QString eventKey(const DuckEvent &event) {
 }
 
 // Rounded chip: leading dot, small muted time, then the (elidable) title.
-// Work meetings use the theme accent, personal events a neutral tint.
+// Work/personal colors come from the same settings as the day timeline
+// (fill = color, border = color.darker(165)); text contrasts with the fill.
 class EventButton final : public QPushButton {
 public:
   EventButton(const DuckEvent &event, const bool adjacent, QWidget *parent)
       : QPushButton(parent), mTime(eventTime(event)), mTitle(eventTitle(event)),
-        mWork(event.is_work_event || event.is_online),
+        mWork(event.is_work_event),
         mAdjacent(adjacent) {
     const auto label = eventLabel(event);
     setObjectName(QStringLiteral("monthEvent"));
@@ -116,6 +119,21 @@ public:
     setCursor(Qt::PointingHandCursor);
     setFocusPolicy(Qt::StrongFocus);
     setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    syncColors();
+  }
+
+  // Re-reads the configured colors; also published as properties for tests.
+  void syncColors() {
+    mFill = mWork ? pcm::app_settings::workEventColor() : pcm::app_settings::personalEventColor();
+    mFill.setAlpha(255);
+    mBorder = mFill.darker(165);
+    // Perceived luminance picks light or dark text.
+    const double luma = 0.299 * mFill.red() + 0.587 * mFill.green() + 0.114 * mFill.blue();
+    mText = luma > 150 ? QColor(20, 22, 28) : QColor(255, 255, 255);
+    setProperty("chipFill", mFill);
+    setProperty("chipBorder", mBorder);
+    setProperty("chipText", mText);
+    update();
   }
 
 protected:
@@ -131,23 +149,20 @@ protected:
     if (mAdjacent) {
       painter.setOpacity(0.55);
     }
-    const auto pal = palette();
-    const auto accent = pal.color(QPalette::Highlight);
-    const auto text = pal.color(QPalette::Text);
+    const auto text = mText;
     const bool hot = underMouse() || hasFocus();
-    const auto fill = mWork ? withAlpha(accent, hot ? 90 : 60) : withAlpha(text, hot ? 52 : 34);
     const QRectF box = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(fill);
+    painter.setPen(QPen(mBorder, 1));
+    painter.setBrush(hot ? mFill.lighter(112) : mFill);
     painter.drawRoundedRect(box, 6, 6);
     if (hasFocus()) {
-      painter.setPen(QPen(accent, 1.5));
+      painter.setPen(QPen(text, 1.5));
       painter.setBrush(Qt::NoBrush);
       painter.drawRoundedRect(box, 6, 6);
     }
     constexpr qreal dot = 6;
     painter.setPen(Qt::NoPen);
-    painter.setBrush(mWork ? accent : withAlpha(text, 150));
+    painter.setBrush(withAlpha(text, 210));
     auto small = font();
     small.setPointSizeF(std::max(7.0, small.pointSizeF() - 1.0));
     const QFontMetrics smallMetrics(small);
@@ -158,7 +173,7 @@ protected:
       painter.drawEllipse(QRectF(8, line1 + (line1Height - dot) / 2, dot, dot));
     }
     painter.setFont(small);
-    painter.setPen(withAlpha(text, 170));
+    painter.setPen(withAlpha(text, 200));
     const int timeX = showDot ? 8 + static_cast<int>(dot) + 5 : 8;
     const int timeWidth = std::max(0, width() - timeX - 6);
     painter.drawText(QRect(timeX, line1, timeWidth, line1Height), Qt::AlignVCenter | Qt::AlignLeft,
@@ -176,6 +191,9 @@ private:
   QString mTitle;
   bool mWork;
   bool mAdjacent;
+  QColor mFill;
+  QColor mBorder;
+  QColor mText;
 };
 
 // Day number. The text is painted explicitly: a checked QToolButton hides its
@@ -406,6 +424,12 @@ std::pair<QDate, QDate> MonthCalendarWidget::visibleRange(QDate month) {
 }
 
 int MonthCalendarWidget::rebuildCount() const { return mRebuildCount; }
+
+void MonthCalendarWidget::refreshAppearance() {
+  for (auto *button : findChildren<QPushButton *>(QStringLiteral("monthEvent"))) {
+    static_cast<EventButton *>(button)->syncColors();
+  }
+}
 
 void MonthCalendarWidget::setSelectedDate(QDate date) {
   mSelectedDate = date;
