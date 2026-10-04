@@ -1,6 +1,7 @@
 #include "month_picker_widget.h"
 
 #include "../../widgets/constants.hpp"
+#include "../../widgets/accent_color.h"
 
 #include <QEvent>
 #include <QLabel>
@@ -41,7 +42,7 @@ protected:
     const QRectF box = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
     painter.setPen(Qt::NoPen);
     if (mDisplayed) {
-      painter.setBrush(QColor(93, 123, 230));
+      painter.setBrush(pcm::widgets::accentColor(palette()));
       painter.drawRoundedRect(box, kTileRadius, kTileRadius);
     } else if (underMouse()) {
       painter.setBrush(QColor(255, 255, 255, 22));
@@ -58,12 +59,12 @@ protected:
       f.setWeight(QFont::DemiBold);
     }
     painter.setFont(f);
-    painter.setPen(mDisplayed ? QColor(Qt::white) : mCurrent
-                       ? pcm::widgets::constants::kCalendarCurrentDayForegroundColor
+    painter.setPen(mDisplayed ? pcm::widgets::onAccentColor(palette()) : mCurrent
+                       ? pcm::widgets::accentSoftColor(palette())
                        : palette().color(QPalette::Text));
     painter.drawText(rect(), Qt::AlignCenter, text());
     if (mCurrent) {
-      painter.setPen(QPen(pcm::widgets::constants::kCalendarCurrentDayUnderlineColor, 1.5));
+      painter.setPen(QPen(pcm::widgets::accentColor(palette()), 1.5));
       painter.drawLine(width() / 2 - 14, height() - 8, width() / 2 + 14, height() - 8);
     }
   }

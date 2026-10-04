@@ -1,5 +1,6 @@
 #include "event_info.h"
 #include "../../widgets/constants.hpp"
+#include "../../widgets/accent_color.h"
 #include "../../widgets/app_settings.h"
 #include "recurrence_utils.h"
 #include "series_timezone_dialog.h"
@@ -479,8 +480,8 @@ void QEventInfoPage::updateCalendarHighlights() const {
   QTextCharFormat currentDayFormat;
   currentDayFormat.setFontWeight(QFont::DemiBold);
   currentDayFormat.setUnderlineStyle(QTextCharFormat::SingleUnderline);
-  currentDayFormat.setUnderlineColor(pcm::widgets::constants::kCalendarCurrentDayUnderlineColor);
-  currentDayFormat.setForeground(pcm::widgets::constants::kCalendarCurrentDayForegroundColor);
+  currentDayFormat.setUnderlineColor(pcm::widgets::accentColor());
+  currentDayFormat.setForeground(pcm::widgets::accentSoftColor());
   mCalendarWidget->setDateTextFormat(QDate::currentDate(), currentDayFormat);
 }
 

@@ -1,4 +1,5 @@
 #include "call_page.h"
+#include "accent_color.h"
 
 #include "call_control_icons.h"
 #include "call_layout_strategy.h"
@@ -454,13 +455,16 @@ void CallPage::buildConnectedScreen() {
   // QStyleSheetStyle owns background painting and an autoFillBackground/
   // QPalette fill is never painted. Fully opaque (no alpha) because the bar
   // overlays a QOpenGLWidget video renderer.
-  // Round 40x40 buttons: dark when off, blue when on (checked), a touch lighter on hover.
+  // Round 40x40 buttons: dark when off, accent when on (checked), a touch lighter on hover.
+  // Deeper accent than the plain Highlight so the light glyphs stay readable on it.
+  const QColor checkedOn = pcm::widgets::accentColor().darker(120);
   mControlBar->setStyleSheet(QStringLiteral(
       "#controlBar { background-color: rgb(20, 20, 20); border-radius: 24px; }"
       "#controlBar QToolButton { background-color: rgb(50, 54, 65); border: none; border-radius: 20px; }"
       "#controlBar QToolButton:hover { background-color: rgb(68, 73, 87); }"
-      "#controlBar QToolButton:checked { background-color: rgb(76, 132, 255); }"
-      "#controlBar QToolButton:checked:hover { background-color: rgb(98, 148, 255); }"));
+      "#controlBar QToolButton:checked { background-color: %1; }"
+      "#controlBar QToolButton:checked:hover { background-color: %2; }")
+          .arg(pcm::widgets::cssRgba(checkedOn), pcm::widgets::cssRgba(checkedOn.lighter(115))));
   auto *controlBarLayout = new QHBoxLayout(mControlBar);
   controlBarLayout->setContentsMargins(12, 4, 12, 4);
   controlBarLayout->setSpacing(8);

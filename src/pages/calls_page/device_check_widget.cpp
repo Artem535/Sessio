@@ -1,4 +1,5 @@
 #include "device_check_widget.h"
+#include "accent_color.h"
 #include "audio_check.h"
 
 #include <QAudioSink>
@@ -214,9 +215,12 @@ DeviceCheckWidget::DeviceCheckWidget(pcm::video::DeviceManager *deviceManager, Q
   joinButton->setObjectName("joinButton");
   joinButton->setFixedHeight(40);
   joinButton->setStyleSheet(
-      "QPushButton { background-color: rgb(76, 132, 255); color: white; border: none;"
-      " border-radius: 20px; padding: 0 28px; font-weight: bold; }"
-      "QPushButton:hover { background-color: rgb(98, 148, 255); }");
+      QStringLiteral("QPushButton { background-color: %1; color: %2; border: none;"
+                     " border-radius: 20px; padding: 0 28px; font-weight: bold; }"
+                     "QPushButton:hover { background-color: %3; }")
+          .arg(pcm::widgets::cssRgba(pcm::widgets::accentColor()),
+               pcm::widgets::cssRgba(pcm::widgets::onAccentColor()),
+               pcm::widgets::cssRgba(pcm::widgets::accentColor().lighter(112))));
   connect(joinButton, &QPushButton::clicked, this, &DeviceCheckWidget::joinRequested);
   buttonLayout->addWidget(joinButton);
   layout->addWidget(buttonRow);

@@ -1,4 +1,5 @@
 #include "call_entry_widget.h"
+#include "accent_color.h"
 #include "app_settings.h"
 
 #include <QFrame>
@@ -51,7 +52,8 @@ CallEntryWidget::CallEntryWidget(const bool showOwnMeetings, QWidget *parent)
   mAvatarLabel->setFixedSize(36, 36);
   mAvatarLabel->setAlignment(Qt::AlignCenter);
   mAvatarLabel->setStyleSheet(
-      "background-color: rgba(120, 130, 220, 0.35); border-radius: 18px; font-weight: bold;");
+      QStringLiteral("background-color: %1; border-radius: 18px; font-weight: bold;")
+          .arg(pcm::widgets::cssRgba(pcm::widgets::accentColor(), 0.35)));
   nameLayout->addWidget(mAvatarLabel);
   auto *nameColumn = new QVBoxLayout();
   nameColumn->setSpacing(2);

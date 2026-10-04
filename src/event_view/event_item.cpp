@@ -2,6 +2,7 @@
 #include "../widgets/app_settings.h"
 #include "../widgets/meeting_utils.h"
 #include "../widgets/constants.hpp"
+#include "../widgets/accent_color.h"
 #include <QIcon>
 #include <QLocale>
 #include <QMenu>
@@ -539,7 +540,7 @@ void QEventItem::paint(QPainter *painter,
       return;
     }
     const QPen highlightPen(
-        pcm::widgets::constants::kCalendarCurrentDayUnderlineColor, 3);
+        pcm::widgets::accentColor(), 3);
     painter->setPen(highlightPen);
     painter->setBrush(Qt::NoBrush);
     painter->drawRoundedRect(x - 1, -1, mSize.width() + 2, mSize.height() + 2, 6,
