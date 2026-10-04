@@ -929,3 +929,17 @@ add_test(NAME BundleLiveKitLinuxDepsUsesDestdir
                  -DPCM_SOURCE_DIR=${CMAKE_SOURCE_DIR}
                  -DPCM_TEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
                  -P ${CMAKE_CURRENT_SOURCE_DIR}/bundle_livekit_linux_deps_test.cmake)
+
+# Accent colour: theme values, helper, and the widgets that must derive from it
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
+add_executable(Sessio_accent_color_tests accent_color_tests.cpp)
+target_include_directories(Sessio_accent_color_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/widgets
+    ${CMAKE_SOURCE_DIR}/src/pages/event_info_page
+)
+target_compile_definitions(Sessio_accent_color_tests PRIVATE
+    SESSIO_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+target_link_libraries(Sessio_accent_color_tests PRIVATE
+    GTest::gtest Qt6::Widgets Sessio_event_page)
+gtest_discover_tests(Sessio_accent_color_tests)
