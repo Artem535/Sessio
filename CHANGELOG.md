@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.12] - 2026-10-04
+
+### Changed
+
+- The accent colour of the interface is now purple instead of blue, taken from the
+  Sessio logo (`#a78bfa`): primary buttons, switches, checkboxes, sliders, focus
+  rings and selections. Text on the accent is dark for readable contrast.
+- The calendar's selected-day pill, today underline, month picker tiles, the
+  charts on the Analytics page and the client page, the call controls and the
+  Join button now follow the theme accent instead of hard-coded blues.
+- "Personal events" bars on the Analytics chart are now peach so they stay
+  distinguishable from the purple work bars.
+- Default event colours and user colour settings are unchanged.
+
 ## [0.2.9] - 2026-10-02
 
 ### Added
