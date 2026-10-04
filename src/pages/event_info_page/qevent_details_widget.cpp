@@ -1,4 +1,5 @@
 #include "qevent_details_widget.h"
+#include "../../widgets/accent_color.h"
 #include "../../widgets/app_settings.h"
 #include "../../widgets/meeting_utils.h"
 #include "../../widgets/sensitive_clipboard.h"
@@ -302,10 +303,12 @@ void QEventDetailsWidget::initUi() {
         " background-color: #404756;"
         "}"
         "QPushButton:checked {"
-        " color: #ffffff;"
-        " background-color: #4f83ff;"
-        " border-color: #4f83ff;"
-        "}"));
+        " color: %1;"
+        " background-color: %2;"
+        " border-color: %2;"
+        "}")
+        .arg(pcm::widgets::onAccentColor().name(),
+             pcm::widgets::accentColor().name()));
     weekdayLayout->addWidget(button);
     mWeekdayButtons.append(button);
     connect(button, &QPushButton::toggled, this, [this]() { updateButtonState(); });
