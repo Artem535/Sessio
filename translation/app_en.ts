@@ -77,6 +77,25 @@
     </message>
 </context>
 <context>
+    <name>AppRoleSwitcher</name>
+    <message>
+        <source>Invalid application mode.</source>
+        <translation>Invalid application mode.</translation>
+    </message>
+    <message>
+        <source>The settings file could not be read, so the mode was not changed.</source>
+        <translation>The settings file could not be read, so the mode was not changed.</translation>
+    </message>
+    <message>
+        <source>The settings file could not be written, so the mode was not changed.</source>
+        <translation>The settings file could not be written, so the mode was not changed.</translation>
+    </message>
+    <message>
+        <source>The mode was changed but the application could not restart. Start it again manually.</source>
+        <translation>The mode was changed but the application could not restart. Start it again manually.</translation>
+    </message>
+</context>
+<context>
     <name>AppointmentSummaryWidget</name>
     <message>
         <source>Last appointment: none</source>
@@ -416,6 +435,10 @@
     <message>
         <source>Settings</source>
         <translation>Settings</translation>
+    </message>
+    <message>
+        <source>Switch to specialist mode…</source>
+        <translation>Switch to specialist mode…</translation>
     </message>
 </context>
 <context>
@@ -1659,6 +1682,29 @@ See you!</translation>
     </message>
 </context>
 <context>
+    <name>RoleSwitchPrompt</name>
+    <message>
+        <source>Switch to specialist mode</source>
+        <translation>Switch to specialist mode</translation>
+    </message>
+    <message>
+        <source>Switch to client mode</source>
+        <translation>Switch to client mode</translation>
+    </message>
+    <message>
+        <source>Sessio will restart as the specialist application. If the specialist profile is not set up yet, the specialist first-run setup runs after the restart. An active call in this window will be ended.</source>
+        <translation>Sessio will restart as the specialist application. If the specialist profile is not set up yet, the specialist first-run setup runs after the restart. An active call in this window will be ended.</translation>
+    </message>
+    <message>
+        <source>Sessio will restart in client mode, where you can only join calls. Your specialist data (clients, events, notes and backups) stays on this computer and is NOT deleted; switch back to specialist mode at any time to see it again. The specialist windows will be closed.</source>
+        <translation>Sessio will restart in client mode, where you can only join calls. Your specialist data (clients, events, notes and backups) stays on this computer and is NOT deleted; switch back to specialist mode at any time to see it again. The specialist windows will be closed.</translation>
+    </message>
+    <message>
+        <source>Switch and restart</source>
+        <translation>Switch and restart</translation>
+    </message>
+</context>
+<context>
     <name>SeriesCallStatus</name>
     <message>
         <source>the system keychain is not available</source>
@@ -1882,6 +1928,22 @@ See you!</translation>
     <message>
         <source>Privacy &amp; Security</source>
         <translation>Privacy &amp; Security</translation>
+    </message>
+    <message>
+        <source>Application mode</source>
+        <translation>Application mode</translation>
+    </message>
+    <message>
+        <source>Switch to client mode…</source>
+        <translation>Switch to client mode…</translation>
+    </message>
+    <message>
+        <source>Client mode</source>
+        <translation>Client mode</translation>
+    </message>
+    <message>
+        <source>Restarts Sessio as a client that only joins calls. Your specialist data stays on this computer and is not deleted.</source>
+        <translation>Restarts Sessio as a client that only joins calls. Your specialist data stays on this computer and is not deleted.</translation>
     </message>
     <message>
         <source>Create a full backup (database and attachments) as a single .psybackup file, or validate an existing one.</source>

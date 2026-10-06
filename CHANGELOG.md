@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.16] - 2026-10-04
+
+### Added
+
+- Switching between application modes. Client mode has a new "Switch to specialist
+  mode…" menu action, and the specialist Settings (General) has "Switch to client
+  mode…". Both ask for confirmation, store the new mode in the settings file and
+  restart Sessio. Specialist data (clients, events, notes, backups) is never
+  deleted by the switch; if the specialist profile is not set up yet, the usual
+  first-run setup runs after the restart.
+- The settings file is now written through a temporary file and renamed, so a failed
+  write leaves the previous settings intact; a failed mode switch shows an error and
+  keeps the current mode.
+
 ## [0.2.12] - 2026-10-04
 
 ### Changed

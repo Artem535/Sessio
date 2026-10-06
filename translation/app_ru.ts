@@ -77,6 +77,25 @@
     </message>
 </context>
 <context>
+    <name>AppRoleSwitcher</name>
+    <message>
+        <source>Invalid application mode.</source>
+        <translation>Недопустимый режим приложения.</translation>
+    </message>
+    <message>
+        <source>The settings file could not be read, so the mode was not changed.</source>
+        <translation>Не удалось прочитать файл настроек, поэтому режим не изменён.</translation>
+    </message>
+    <message>
+        <source>The settings file could not be written, so the mode was not changed.</source>
+        <translation>Не удалось записать файл настроек, поэтому режим не изменён.</translation>
+    </message>
+    <message>
+        <source>The mode was changed but the application could not restart. Start it again manually.</source>
+        <translation>Режим изменён, но приложение не удалось перезапустить. Запустите его снова вручную.</translation>
+    </message>
+</context>
+<context>
     <name>AppointmentSummaryWidget</name>
     <message>
         <source>Last appointment: none</source>
@@ -416,6 +435,10 @@
     <message>
         <source>Settings</source>
         <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>Switch to specialist mode…</source>
+        <translation>Перейти в режим специалиста…</translation>
     </message>
 </context>
 <context>
@@ -1661,6 +1684,29 @@ See you!</source>
     </message>
 </context>
 <context>
+    <name>RoleSwitchPrompt</name>
+    <message>
+        <source>Switch to specialist mode</source>
+        <translation>Переход в режим специалиста</translation>
+    </message>
+    <message>
+        <source>Switch to client mode</source>
+        <translation>Переход в режим клиента</translation>
+    </message>
+    <message>
+        <source>Sessio will restart as the specialist application. If the specialist profile is not set up yet, the specialist first-run setup runs after the restart. An active call in this window will be ended.</source>
+        <translation>Sessio перезапустится как приложение специалиста. Если профиль специалиста ещё не настроен, после перезапуска начнётся обычная первичная настройка. Активный звонок в этом окне будет завершён.</translation>
+    </message>
+    <message>
+        <source>Sessio will restart in client mode, where you can only join calls. Your specialist data (clients, events, notes and backups) stays on this computer and is NOT deleted; switch back to specialist mode at any time to see it again. The specialist windows will be closed.</source>
+        <translation>Sessio перезапустится в режиме клиента, где можно только присоединяться к звонкам. Данные специалиста (клиенты, события, заметки и резервные копии) остаются на этом компьютере и НЕ удаляются; в любой момент можно вернуться в режим специалиста и увидеть их снова. Окна специалиста будут закрыты.</translation>
+    </message>
+    <message>
+        <source>Switch and restart</source>
+        <translation>Перейти и перезапустить</translation>
+    </message>
+</context>
+<context>
     <name>SeriesCallStatus</name>
     <message>
         <source>the system keychain is not available</source>
@@ -1884,6 +1930,22 @@ See you!</source>
     <message>
         <source>Privacy &amp; Security</source>
         <translation>Безопасность</translation>
+    </message>
+    <message>
+        <source>Application mode</source>
+        <translation>Режим приложения</translation>
+    </message>
+    <message>
+        <source>Switch to client mode…</source>
+        <translation>Перейти в режим клиента…</translation>
+    </message>
+    <message>
+        <source>Client mode</source>
+        <translation>Режим клиента</translation>
+    </message>
+    <message>
+        <source>Restarts Sessio as a client that only joins calls. Your specialist data stays on this computer and is not deleted.</source>
+        <translation>Перезапускает Sessio как клиент, который только присоединяется к звонкам. Данные специалиста остаются на этом компьютере и не удаляются.</translation>
     </message>
     <message>
         <source>Create a full backup (database and attachments) as a single .psybackup file, or validate an existing one.</source>

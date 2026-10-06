@@ -15,6 +15,10 @@ namespace pcm::database {
 class Database;
 }
 
+namespace pcm {
+class AppRoleSwitcher;
+}
+
 class QDialogButtonBox;
 class QComboBox;
 class QDoubleSpinBox;
@@ -49,6 +53,10 @@ public:
   // for the window frame and panels, but never exceeds the screen itself.
   static int heightForAvailableScreen(int availableHeight);
 
+  // Not owned. Enables the "Switch to client mode" button; without a switcher
+  // it stays disabled.
+  void setRoleSwitcher(const pcm::AppRoleSwitcher *switcher);
+
 private:
   void setupUi();
   void setupLiveKitSection();
@@ -78,6 +86,8 @@ private:
   QComboBox *mLanguageCombo{nullptr};
   QLabel *mDatabasePathLabel{nullptr};
   QPushButton *mOpenDatabaseFolderButton{nullptr};
+  QPushButton *mSwitchToClientModeButton{nullptr};
+  const pcm::AppRoleSwitcher *mRoleSwitcher{nullptr};
   QPushButton *mCreateBackupButton{nullptr};
   QPushButton *mValidateBackupButton{nullptr};
   QPushButton *mRestoreBackupButton{nullptr};

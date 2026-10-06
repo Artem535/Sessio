@@ -1,8 +1,10 @@
+#include "app_role_switcher.h"
 #include "client_mode_settings_dialog.h"
 #include "client_mode_window.h"
 #include "call_page.h"
 #include "fake_video_provider.h"
 #include "config.h"
+#include "role_switch_prompt.h"
 #include "token_backend_client.h"
 
 #include <QAction>
@@ -11,7 +13,9 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QLabel>
+#include <QAbstractButton>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <gtest/gtest.h>
@@ -88,6 +92,99 @@ TEST(ClientModeWindowTest, SettingsActionRetargetsTokenClientAndPersistsUrl) {
   EXPECT_EQ(tokenClient.baseUrl(), QStringLiteral("https://token.example.test"));
   EXPECT_EQ(pcm::config::Config::read_config().token_backend_base_url,
             "https://token.example.test");
+  removeConfig();
+}
+
+namespace {
+// Answers the role-switch confirmation that the menu action opens.
+void answerConfirmationLater(bool confirm, int *confirmations = nullptr) {
+  auto *timer = new QTimer;
+  timer->setInterval(5);
+  QObject::connect(timer, &QTimer::timeout, timer, [timer, confirm, confirmations]() {
+    auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+    if (box == nullptr ||
+        box->objectName() != QString::fromLatin1(pcm::kRoleSwitchConfirmationName)) {
+      return;
+    }
+    if (confirmations != nullptr) {
+      ++*confirmations;
+    }
+    if (confirm) {
+      box->findChild<QAbstractButton *>(QString::fromLatin1(pcm::kRoleSwitchConfirmButtonName))
+          ->click();
+    } else {
+      box->button(QMessageBox::Cancel)->click();
+    }
+    timer->deleteLater();
+  });
+  timer->start();
+}
+} // namespace
+
+TEST(ClientModeWindowTest, SwitchRoleActionIsPresentAndDisabledWithoutASwitcher) {
+  pcm::video::DeviceManager deviceManager;
+  pcm::tokenclient::TokenBackendClient tokenClient("");
+  ClientModeWindow window(&deviceManager, &tokenClient);
+
+  auto *action = window.findChild<QAction *>("clientModeSwitchRoleAction");
+  ASSERT_NE(action, nullptr);
+  EXPECT_EQ(action->text(), QString::fromUtf8("Switch to specialist mode\u2026"));
+  EXPECT_FALSE(action->isEnabled());
+}
+
+TEST(ClientModeWindowTest, SwitchRoleActionConfirmsStoresSpecialistAndRestartsOnce) {
+  removeConfig();
+  pcm::config::Config seed;
+  seed.app_role = "Client";
+  seed.token_backend_base_url = "https://keep.example.test";
+  pcm::config::Config::save_config(seed);
+  int restarts = 0;
+  pcm::AppRoleSwitcher switcher([&restarts]() {
+    ++restarts;
+    return true;
+  });
+  pcm::video::DeviceManager deviceManager;
+  pcm::tokenclient::TokenBackendClient tokenClient("");
+  ClientModeWindow window(&deviceManager, &tokenClient);
+  window.setRoleSwitcher(&switcher);
+
+  auto *action = window.findChild<QAction *>("clientModeSwitchRoleAction");
+  ASSERT_NE(action, nullptr);
+  ASSERT_TRUE(action->isEnabled());
+  int confirmations = 0;
+  answerConfirmationLater(true, &confirmations);
+  action->trigger();
+
+  EXPECT_EQ(confirmations, 1);
+  EXPECT_EQ(restarts, 1);
+  const auto saved = pcm::config::Config::read_config();
+  EXPECT_EQ(saved.app_role, "Specialist");
+  EXPECT_EQ(saved.token_backend_base_url, "https://keep.example.test");
+  removeConfig();
+}
+
+TEST(ClientModeWindowTest, SwitchRoleActionCancelledKeepsClientRoleAndDoesNotRestart) {
+  removeConfig();
+  pcm::config::Config seed;
+  seed.app_role = "Client";
+  pcm::config::Config::save_config(seed);
+  int restarts = 0;
+  pcm::AppRoleSwitcher switcher([&restarts]() {
+    ++restarts;
+    return true;
+  });
+  pcm::video::DeviceManager deviceManager;
+  pcm::tokenclient::TokenBackendClient tokenClient("");
+  ClientModeWindow window(&deviceManager, &tokenClient);
+  window.setRoleSwitcher(&switcher);
+
+  int confirmations = 0;
+  answerConfirmationLater(false, &confirmations);
+  window.findChild<QAction *>("clientModeSwitchRoleAction")->trigger();
+
+  EXPECT_EQ(confirmations, 1);
+  EXPECT_EQ(restarts, 0);
+  EXPECT_EQ(pcm::config::Config::read_config().app_role, "Client");
   removeConfig();
 }
 

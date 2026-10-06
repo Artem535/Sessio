@@ -12,6 +12,8 @@
 #include <memory>
 
 #include "app_role.h"
+#include "app_role_switcher.h"
+#include "application_restarter.h"
 #include "auto_backup_scheduler.h"
 #include "app_lock_controller.h"
 #include "app_lock_service.h"
@@ -82,6 +84,10 @@ private:
   // Constructed first, before any other setup, so a second launch can be
   // detected and forwarded as cheaply as possible.
   std::unique_ptr<SingleInstanceGuard> mSingleInstanceGuard;
+  // Persists a new role and relaunches the executable (releasing
+  // mSingleInstanceGuard first, see ApplicationRestarter). Handed to the
+  // client window's menu action and the specialist Settings dialog.
+  std::unique_ptr<AppRoleSwitcher> mRoleSwitcher;
 
   // Shared by both role flows. Declared before the windows so they outlive
   // the CallsPage instances that hold raw pointers to them (members are

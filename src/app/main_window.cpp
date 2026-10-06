@@ -419,6 +419,7 @@ void MainWindow::setupUtilityButtons() {
 
 void MainWindow::openSettingsDialog() {
   SettingsDialog dialog(mDb, this);
+  dialog.setRoleSwitcher(mRoleSwitcher);
   dialog.exec();
   refreshPageAppearance();
   emit settingsSaved();
