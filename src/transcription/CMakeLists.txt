@@ -22,3 +22,10 @@ add_library(${TARGET_NAME} STATIC
 )
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${TARGET_NAME} PUBLIC Threads::Threads)
+
+add_library(${TARGET_NAME}_sherpa STATIC
+  sherpa_backend.h
+  sherpa_backend.cpp
+)
+target_include_directories(${TARGET_NAME}_sherpa PRIVATE "${SESSIO_SHERPA_SOURCE_DIR}")
+target_link_libraries(${TARGET_NAME}_sherpa PUBLIC ${TARGET_NAME} PRIVATE sherpa-onnx-cxx-api)
