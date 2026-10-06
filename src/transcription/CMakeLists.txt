@@ -17,6 +17,8 @@ add_library(${TARGET_NAME} STATIC
   speech_recognizer.h
   phrase_segmenter.h
   phrase_segmenter.cpp
+  transcription_engine.h
+  transcription_engine.cpp
 )
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${TARGET_NAME} PUBLIC Threads::Threads)

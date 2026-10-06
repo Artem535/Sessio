@@ -961,6 +961,7 @@ if(SESSIO_TRANSCRIPTION_ENABLED)
       transcription_locator_tests.cpp
       transcription_resampler_tests.cpp
       transcription_segmenter_tests.cpp
+      transcription_engine_tests.cpp
       transcription_test_support.h
   )
   target_link_libraries(Sessio_transcription_tests PRIVATE
