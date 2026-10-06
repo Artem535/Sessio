@@ -5,6 +5,7 @@ version = "0.0.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "sherpa-onnx==1.13.8",
+  "sherpa-onnx-core==1.13.8",
   "soundfile>=0.12",
   "numpy>=1.26",
   "jiwer>=3.0",
