@@ -29,3 +29,20 @@ set(BUILD_SHARED_LIBS ON)
 FetchContent_MakeAvailable(sherpa_onnx)
 set(BUILD_SHARED_LIBS "${_sessio_saved_shared}")
 set(SESSIO_SHERPA_SOURCE_DIR "${sherpa_onnx_SOURCE_DIR}")
+
+set(SESSIO_MODELS_DIR "${CMAKE_BINARY_DIR}/transcription-models" CACHE PATH
+    "Where the transcription model files are downloaded to (cache this in CI)")
+set(_sessio_models_stamp "${SESSIO_MODELS_DIR}/.stamp")
+add_custom_command(
+  OUTPUT "${_sessio_models_stamp}"
+  COMMAND ${CMAKE_COMMAND} -DMODELS_DIR=${SESSIO_MODELS_DIR}
+          -P ${CMAKE_SOURCE_DIR}/cmake/FetchTranscriptionModels.cmake
+  COMMAND ${CMAKE_COMMAND} -E touch "${_sessio_models_stamp}"
+  DEPENDS ${CMAKE_SOURCE_DIR}/cmake/FetchTranscriptionModels.cmake
+  COMMENT "Fetching transcription models"
+  VERBATIM)
+add_custom_target(sessio_models ALL DEPENDS "${_sessio_models_stamp}")
+
+# Directory of ONNX Runtime fetched by sherpa-onnx.
+FetchContent_GetProperties(onnxruntime SOURCE_DIR _sessio_ort_dir)
+set(SESSIO_ONNXRUNTIME_LIB_DIR "${_sessio_ort_dir}/lib")

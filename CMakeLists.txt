@@ -272,6 +272,35 @@ else()
       DESTINATION ${CMAKE_INSTALL_DATADIR}/sessio/zoneinfo)
 endif()
 
+if(SESSIO_TRANSCRIPTION_ENABLED)
+  if(APPLE)
+    set(_sessio_models_dest Sessio.app/Contents/Resources/models)
+    set(_sessio_ml_libs_dest Sessio.app/Contents/Frameworks)
+  elseif(WIN32)
+    set(_sessio_models_dest ${CMAKE_INSTALL_BINDIR}/models)
+    set(_sessio_ml_libs_dest ${CMAKE_INSTALL_BINDIR})
+  else()
+    set(_sessio_models_dest ${CMAKE_INSTALL_DATADIR}/sessio/models)
+    set(_sessio_ml_libs_dest ${CMAKE_INSTALL_LIBDIR}/sessio)
+  endif()
+  install(DIRECTORY ${SESSIO_MODELS_DIR}/
+      DESTINATION ${_sessio_models_dest}
+      PATTERN ".stamp" EXCLUDE
+      PATTERN "test_wavs" EXCLUDE)
+  install(FILES
+      $<TARGET_FILE:sherpa-onnx-c-api>
+      $<TARGET_FILE:sherpa-onnx-cxx-api>
+      DESTINATION ${_sessio_ml_libs_dest})
+  # ONNX Runtime: libonnxruntime.so* (Linux), libonnxruntime*.dylib (macOS),
+  # onnxruntime*.dll (Windows; sherpa places the DLL next to its own DLLs).
+  file(GLOB _sessio_ort_libs
+      "${SESSIO_ONNXRUNTIME_LIB_DIR}/libonnxruntime*.so*"
+      "${SESSIO_ONNXRUNTIME_LIB_DIR}/libonnxruntime*.dylib"
+      "${SESSIO_ONNXRUNTIME_LIB_DIR}/onnxruntime*.dll"
+      "${SESSIO_ONNXRUNTIME_LIB_DIR}/../bin/onnxruntime*.dll")
+  install(FILES ${_sessio_ort_libs} DESTINATION ${_sessio_ml_libs_dest})
+endif()
+
 if(UNIX AND NOT APPLE)
   install(FILES
       ${CMAKE_SOURCE_DIR}/packaging/Sessio.desktop
