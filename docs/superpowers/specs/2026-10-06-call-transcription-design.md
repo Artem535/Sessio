@@ -17,9 +17,9 @@ limited to local processing.
 In scope: transcription engine, audio taps in the call, per-session consent,
 `Transcript`/`TranscriptPhrase` storage with backup and restore, call side-panel
 switcher with a transcript panel, a transcript page for review and editing,
-settings section, build and packaging of the engine and the model on Linux.
-Windows and macOS are verified in a later, separate pass; until then the module
-is off on those platforms.
+settings section, build and packaging of the engine and the model on Linux, Windows and macOS.
+Windows and macOS are built in CI from the start; their runtime behaviour is
+verified by hand by the practitioner/developer.
 
 Out of scope: AI summaries and agents (P2.3+), cloud recognition, languages other
 than Russian, speaker diarization (roles come from the audio track), search,
@@ -189,13 +189,12 @@ updated with no `unfinished` entries (CI requirement).
   `cmake/BundleLiveKitLinuxDeps.cmake`.
 - The prebuilt Linux sherpa-onnx tarballs use the pre-C++11 `std::string` ABI and
   do not work with the C++ wrapper (`cxx-api.h`); building from source avoids it.
-- New CMake option `SESSIO_ENABLE_TRANSCRIPTION`, default ON on Linux and OFF on
-  Windows and macOS until the build is verified there. OFF compiles the
-  application without the module and without the settings section, so the
-  existing Windows and macOS CI jobs are unaffected.
+- New CMake option `SESSIO_ENABLE_TRANSCRIPTION`, default ON on every platform.
+  OFF compiles the application without the module and without the settings
+  section (escape hatch only).
 - Model files (about 170 MB) are installed as plain data files, not as Qt
   resources: sherpa-onnx loads models by file path, and an embedded resource would
-  have to be extracted at every start. Locations: Linux `share/Sessio/models/`,
+  have to be extracted at every start. Locations: Linux `share/sessio/models/` (lowercase, as `sessio/zoneinfo`),
   macOS `Sessio.app/Contents/Resources/models`, Windows beside the executable via
   `packaging/Sessio.iss`. At build time the files are downloaded from the
   sherpa-onnx release page with pinned SHA-256 values and cached.
@@ -228,10 +227,10 @@ GoogleTest, existing conventions (no `QApplication` harness where avoidable).
 
 Each phase ends with something testable and gets its own tasks in the plan.
 
-0. *Build gate (Linux).* sherpa-onnx and the model through CMake, packaging, and a
-   smoke test on Linux, including the Linux CI job. Windows and macOS are not part
-   of this phase: they get their own verification pass later, and the option stays
-   off there until it succeeds.
+0. *Build gate (all platforms).* sherpa-onnx and the model through CMake and
+   packaging, built in the Linux, Windows and macOS CI jobs; model tests and the
+   install check run on Linux in CI. Runtime behaviour on Windows and macOS is
+   tested by hand.
 1. *Engine.* `src/transcription/` and its tests, including the ten-track load test.
 2. *Data.* Schema, repository, migration, backup and restore, cascade deletes.
 3. *Session and consent.* `TranscriptionSession`, audio sink and taps,
@@ -243,9 +242,9 @@ Each phase ends with something testable and gets its own tasks in the plan.
 
 ## Risks
 
-- Windows and macOS builds of sherpa-onnx with FetchContent are unverified. The
-  module is off there, so transcription is Linux-only until a later pass verifies
-  ONNX Runtime, packaging, and the model files on each platform.
+- Windows and macOS builds of sherpa-onnx with FetchContent are unverified until
+  their first CI run; fixing them is part of phase 0. Runtime behaviour (ONNX
+  Runtime loading, model paths, installer contents) there is verified by hand.
 - The accuracy numbers come from a studio podcast, not from a real two-person
   call; a recording of a consented test call should be re-run before the engine is
   frozen (follow-up from #116).
