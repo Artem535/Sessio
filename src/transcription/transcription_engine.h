@@ -33,6 +33,7 @@ struct EngineStats {
   uint64_t phrases = 0;
   uint64_t decode_failures = 0;
   uint64_t dropped_on_stop = 0;
+  uint64_t track_failures = 0;
   size_t queued = 0;
   bool delayed = false;
 };
@@ -75,6 +76,7 @@ class TranscriptionEngine {
     int rate = 0;
     bool closing = false;
     // Segmenter thread only:
+    bool failed = false;
     std::unique_ptr<Resampler> resampler;
     std::unique_ptr<PhraseSegmenter> segmenter;
   };
@@ -121,6 +123,7 @@ class TranscriptionEngine {
   std::atomic<uint64_t> phrases_{0};
   std::atomic<uint64_t> decode_failures_{0};
   std::atomic<uint64_t> dropped_on_stop_{0};
+  std::atomic<uint64_t> track_failures_{0};
 
   std::thread segmenter_thread_;
   std::thread decode_thread_;

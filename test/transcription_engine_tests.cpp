@@ -57,6 +57,11 @@ void push(TranscriptionEngine& e, const TrackId& id, const std::vector<int16_t>&
   e.pushAudio(id, audio.data(), audio.size(), 48000);
 }
 
+class ThrowingVad : public FakeVad {
+ public:
+  void accept(const float*, size_t) override { throw std::runtime_error("vad boom"); }
+};
+
 }  // namespace
 
 TEST(TranscriptionEngineTest, EmitsPhraseWithRoleNameAndTimes) {
@@ -211,4 +216,74 @@ TEST(TranscriptionEngineTest, PushAfterStopIsIgnored) {
   push(*engine, "alice", concat({speech(300), silence(300)}));
   std::this_thread::sleep_for(100ms);
   EXPECT_EQ(c.size(), 0u);
+}
+
+TEST(TranscriptionEngineTest, ThrowingPhraseCallbackKeepsEngineRunningAndIsNotADecodeFailure) {
+  std::atomic<int> calls{0};
+  EngineCallbacks cb;
+  cb.on_phrase = [&](const TranscribedPhrase&) {
+    ++calls;
+    throw std::runtime_error("callback boom");
+  };
+  TranscriptionEngine engine([] { return std::make_unique<FakeVad>(); },
+                             std::make_shared<FakeRecognizer>(), cb);
+  engine.addTrack({"alice", TrackRole::Participant, "Alice"}, 0);
+  for (int i = 0; i < 3; ++i) push(engine, "alice", concat({speech(300), silence(300)}));
+  engine.stop(2s);
+  EXPECT_EQ(calls.load(), 3);
+  EXPECT_EQ(engine.stats().decode_failures, 0u);
+  EXPECT_EQ(engine.stats().phrases, 0u);
+}
+
+TEST(TranscriptionEngineTest, ThrowingDelayedCallbackDoesNotCrashAndPhrasesStillArrive) {
+  Collector c;
+  auto rec = std::make_shared<FakeRecognizer>([](int, size_t) {
+    std::this_thread::sleep_for(120ms);
+    return std::string("slow");
+  });
+  EngineConfig config;
+  config.delayed_after = 50ms;
+  EngineCallbacks cb;
+  cb.on_phrase = [&c](const TranscribedPhrase& p) { c.add(p); };
+  cb.on_delayed = [](bool) { throw std::runtime_error("delayed boom"); };
+  TranscriptionEngine engine([] { return std::make_unique<FakeVad>(); }, rec, cb, config);
+  engine.addTrack({"alice", TrackRole::Participant, "Alice"}, 0);
+  for (int i = 0; i < 3; ++i) push(engine, "alice", concat({speech(200), silence(200)}));
+  ASSERT_TRUE(waitFor([&] { return c.size() == 3; }));
+}
+
+TEST(TranscriptionEngineTest, FailingTrackIsIsolatedAndCounted) {
+  Collector c;
+  EngineCallbacks cb;
+  cb.on_phrase = [&c](const TranscribedPhrase& p) { c.add(p); };
+  std::atomic<int> made{0};
+  TranscriptionEngine engine(
+      [&]() -> std::unique_ptr<IVoiceActivityDetector> {
+        if (made++ == 0) return std::make_unique<ThrowingVad>();
+        return std::make_unique<FakeVad>();
+      },
+      std::make_shared<FakeRecognizer>(), cb);
+  engine.addTrack({"bad", TrackRole::Participant, "Bad"}, 0);
+  engine.addTrack({"good", TrackRole::Participant, "Good"}, 0);
+  push(engine, "bad", concat({speech(500), silence(600)}));
+  push(engine, "bad", concat({speech(500), silence(600)}));
+  push(engine, "good", concat({speech(500), silence(600)}));
+  ASSERT_TRUE(waitFor([&] { return c.size() == 1; }));
+  engine.stop(2s);
+  EXPECT_EQ(c.snapshot().front().track_id, "good");
+  EXPECT_EQ(engine.stats().track_failures, 1u);
+}
+
+TEST(TranscriptionEngineTest, NonStdExceptionFromRecogniserIsCountedAsFailure) {
+  Collector c;
+  auto rec = std::make_shared<FakeRecognizer>([](int call, size_t) -> std::string {
+    if (call == 0) throw 42;
+    return "ok";
+  });
+  auto engine = makeEngine(c, rec);
+  engine->addTrack({"alice", TrackRole::Participant, "Alice"}, 0);
+  for (int i = 0; i < 2; ++i) push(*engine, "alice", concat({speech(300), silence(300)}));
+  engine->stop(2s);
+  EXPECT_EQ(engine->stats().decode_failures, 1u);
+  EXPECT_EQ(c.size(), 1u);
 }

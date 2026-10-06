@@ -94,6 +94,7 @@ EngineStats TranscriptionEngine::stats() const {
   s.phrases = phrases_;
   s.decode_failures = decode_failures_;
   s.dropped_on_stop = dropped_on_stop_;
+  s.track_failures = track_failures_;
   std::lock_guard lock(queue_mutex_);
   s.queued = jobs_.size();
   s.delayed = delayed_;
@@ -141,19 +142,25 @@ void TranscriptionEngine::segmenterLoop() {
 }
 
 void TranscriptionEngine::process(Track& track, const std::vector<int16_t>& samples, int rate) {
-  if (!track.resampler) {
-    try {
-      track.resampler = std::make_unique<Resampler>(rate);
-    } catch (const std::invalid_argument&) {
-      return;  // unsupported rate: the track stays silent
-    }
+  if (track.failed) return;
+  try {
+    if (!track.resampler) track.resampler = std::make_unique<Resampler>(rate);
+    const std::vector<float> audio = track.resampler->process(samples);
+    for (SpeechSegment& seg : track.segmenter->feed(audio)) enqueue(track, std::move(seg));
+  } catch (...) {
+    track.failed = true;  // the track stays silent; other tracks are unaffected
+    ++track_failures_;
   }
-  const std::vector<float> audio = track.resampler->process(samples);
-  for (SpeechSegment& seg : track.segmenter->feed(audio)) enqueue(track, std::move(seg));
 }
 
 void TranscriptionEngine::flush(Track& track) {
-  for (SpeechSegment& seg : track.segmenter->flush()) enqueue(track, std::move(seg));
+  if (track.failed) return;
+  try {
+    for (SpeechSegment& seg : track.segmenter->flush()) enqueue(track, std::move(seg));
+  } catch (...) {
+    track.failed = true;
+    ++track_failures_;
+  }
 }
 
 void TranscriptionEngine::enqueue(const Track& track, SpeechSegment&& segment) {
@@ -194,18 +201,33 @@ void TranscriptionEngine::decodeLoop() {
       delayed_changed = delayed_now != delayed_;
       delayed_ = delayed_now;
     }
-    if (delayed_changed && callbacks_.on_delayed) callbacks_.on_delayed(delayed_now);
-
-    try {
-      const std::string text = trim(recognizer_->transcribe(job.samples));
-      if (!text.empty()) {
-        TranscribedPhrase phrase{job.info.id, job.info.role, job.info.display_name,
-                                 job.start_ms, job.end_ms, text};
-        ++phrases_;
-        if (callbacks_.on_phrase) callbacks_.on_phrase(phrase);
+    if (delayed_changed && callbacks_.on_delayed) {
+      try {
+        callbacks_.on_delayed(delayed_now);
+      } catch (...) {
       }
-    } catch (const std::exception&) {
+    }
+
+    std::string text;
+    bool decoded = false;
+    try {
+      text = trim(recognizer_->transcribe(job.samples));
+      decoded = true;
+    } catch (...) {
       ++decode_failures_;
+    }
+    if (decoded && !text.empty()) {
+      TranscribedPhrase phrase{job.info.id, job.info.role, job.info.display_name,
+                               job.start_ms, job.end_ms, text};
+      if (callbacks_.on_phrase) {
+        try {
+          callbacks_.on_phrase(phrase);
+          ++phrases_;
+        } catch (...) {
+        }
+      } else {
+        ++phrases_;
+      }
     }
 
     {
