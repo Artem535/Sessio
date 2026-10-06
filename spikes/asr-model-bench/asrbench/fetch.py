@@ -42,6 +42,12 @@ def fetch_fleurs() -> None:
     tarball.unlink()
 
 
+def fetch_vad() -> None:
+    target = DEFAULT_MODELS_DIR / "silero_vad.onnx"
+    if not target.is_file():
+        _curl(f"{RELEASE}/silero_vad.onnx", target)
+
+
 def fetch_podlodka() -> None:
     for split in ("test", "validation", "train"):
         target = PODLODKA_DIR / f"{split}.parquet"
@@ -57,5 +63,7 @@ if __name__ == "__main__":
         fetch_fleurs()
     elif what == "podlodka":
         fetch_podlodka()
+    elif what == "vad":
+        fetch_vad()
     else:
-        sys.exit("usage: python -m asrbench.fetch (models [ids...] | fleurs | podlodka)")
+        sys.exit("usage: python -m asrbench.fetch (models [ids...] | fleurs | podlodka | vad)")

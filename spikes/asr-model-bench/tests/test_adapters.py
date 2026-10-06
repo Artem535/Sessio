@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from asrbench.adapters import OfflineAdapter, StreamingAdapter, pick
+from asrbench.adapters import OfflineAdapter, StreamingAdapter, VadOfflineAdapter, pick
 from asrbench.datasets import Utterance
 
 SR = 16000
@@ -149,3 +149,55 @@ def test_streaming_sets_language_and_pads():
     assert s.options == {"language": "ru"}
     assert s.finished
     assert s.chunks >= 3  # lead pad + 2 audio chunks (+ tail pad)
+
+
+# ---- VAD + offline ---------------------------------------------------------
+class FakeVad:
+    """Emits one segment (start, length in samples) once `trigger` windows were fed."""
+
+    def __init__(self, trigger, start, length):
+        self.trigger, self.start, self.length = trigger, start, length
+        self.windows = 0
+        self.queue = []
+        self.flushed = False
+
+    def accept_waveform(self, window):
+        self.windows += 1
+        if self.windows == self.trigger:
+            seg = type("Seg", (), {"start": self.start, "samples": np.ones(self.length, np.float32)})()
+            self.queue.append(seg)
+
+    def empty(self):
+        return not self.queue
+
+    @property
+    def front(self):
+        return self.queue[0]
+
+    def pop(self):
+        self.queue.pop(0)
+
+    def flush(self):
+        self.flushed = True
+
+
+def test_vad_adapter_reports_phrase_latency_from_end_of_speech():
+    clock, cpu = FakeClock(), FakeClock()
+    rec = FakeOfflineRecognizer(clock, cpu)
+    vad = FakeVad(trigger=10, start=1600, length=3200)  # speech ends at 0.3 s, VAD emits at 0.4 s
+    ad = VadOfflineAdapter(rec, lambda: (vad, 512), feed_s=0.1, clock=clock, cpu_clock=cpu)
+    t = ad.transcribe(_utt(seconds=2.0, onset=0.2))
+    assert t.text == "привет мир"
+    assert t.phrase_lags == (pytest.approx(0.61),)   # 0.4 emitted + 0.51 decode - 0.3 end of speech
+    assert t.first_text_s == pytest.approx(0.71)     # 0.91 - onset 0.2
+    assert t.final_lag_s == pytest.approx(0.0)       # decode finished long before audio ended
+    assert vad.flushed and ad.kind == "offline+vad"
+
+
+def test_vad_adapter_without_segments_returns_empty_text():
+    clock, cpu = FakeClock(), FakeClock()
+    vad = FakeVad(trigger=10 ** 9, start=0, length=1)
+    ad = VadOfflineAdapter(FakeOfflineRecognizer(clock, cpu), lambda: (vad, 512),
+                           clock=clock, cpu_clock=cpu)
+    t = ad.transcribe(_utt(seconds=1.0))
+    assert t.text == "" and t.phrase_lags == () and t.first_text_s is None

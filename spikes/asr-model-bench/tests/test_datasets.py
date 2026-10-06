@@ -81,3 +81,16 @@ def test_with_babble_keeps_refs_and_shapes_and_suffixes_ids(tmp_path):
     assert all(u.id.endswith("@babble10") for u in noisy)
     assert all(u.onset_s == c.onset_s for u, c in zip(noisy, clean))
     assert not np.array_equal(noisy[0].samples, clean[0].samples)
+
+
+def test_concat_with_gaps_joins_audio_refs_and_inserts_silence():
+    import random
+
+    from asrbench.datasets import Utterance, concat_with_gaps
+
+    a = Utterance("a", np.full(SR, 0.1, np.float32), SR, "раз", 0.0)
+    b = Utterance("b", np.full(SR, 0.1, np.float32), SR, "два", 0.0)
+    long = concat_with_gaps([a, b], "long-0", random.Random(0), gap_s=(0.5, 0.5))
+    assert long.id == "long-0" and long.ref == "раз два"
+    assert len(long.samples) == 2 * SR + SR // 2
+    assert np.all(long.samples[SR:SR + SR // 2] == 0.0)

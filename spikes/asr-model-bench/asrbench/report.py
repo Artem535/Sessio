@@ -12,6 +12,7 @@ def summarize(run: dict) -> dict:
     utts = run["utts"]
     first = [u["first_text_s"] for u in utts if u["first_text_s"] is not None]
     final = [u["final_lag_s"] for u in utts]
+    phrase = [x for u in utts for x in u.get("phrase_lags", [])]
     compute = sum(u["compute_s"] for u in utts)
     return {
         "model": run["model"], "kind": run["kind"], "dataset": run["dataset"], "n": len(utts),
@@ -21,6 +22,7 @@ def summarize(run: dict) -> dict:
         "cpu_cores": sum(u["cpu_s"] for u in utts) / compute if compute else math.nan,
         "first_p50": percentile(first, 50), "first_p95": percentile(first, 95),
         "final_p50": percentile(final, 50), "final_p95": percentile(final, 95),
+        "phrase_p50": percentile(phrase, 50), "phrase_p95": percentile(phrase, 95),
         "peak_rss_mb": run["peak_rss_mb"],
     }
 
@@ -37,8 +39,8 @@ def render_markdown(summaries: list[dict]) -> str:
     for dataset, rows in sorted(by_dataset.items()):
         parts.append(f"### {dataset}\n")
         parts.append("| model | kind | n | WER % | CER % | RTF | cores | first text p50/p95 s "
-                     "| final lag p50/p95 s | peak RSS MB |")
-        parts.append("|---|---|---|---|---|---|---|---|---|---|")
+                     "| final lag p50/p95 s | phrase lag p50/p95 s | peak RSS MB |")
+        parts.append("|---|---|---|---|---|---|---|---|---|---|---|")
         for s in sorted(rows, key=lambda r: (math.isnan(r["wer"]), r["wer"])):
             parts.append(
                 f"| {s['model']} | {s['kind']} | {s['n']} | {_fmt(s['wer'] * 100, '.1f')} "
@@ -46,6 +48,7 @@ def render_markdown(summaries: list[dict]) -> str:
                 f"| {_fmt(s['cpu_cores'], '.1f')} "
                 f"| {_fmt(s['first_p50'], '.2f')} / {_fmt(s['first_p95'], '.2f')} "
                 f"| {_fmt(s['final_p50'], '.2f')} / {_fmt(s['final_p95'], '.2f')} "
+                f"| {_fmt(s['phrase_p50'], '.2f')} / {_fmt(s['phrase_p95'], '.2f')} "
                 f"| {_fmt(s['peak_rss_mb'], '.0f')} |")
         parts.append("")
     return "\n".join(parts)

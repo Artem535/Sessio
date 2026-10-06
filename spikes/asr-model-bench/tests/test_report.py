@@ -22,6 +22,15 @@ def test_summarize_computes_corpus_metrics():
     assert s["cpu_cores"] == 3.0
     assert s["first_p50"] == 0.4 and s["final_p95"] == 0.5
     assert s["peak_rss_mb"] == 900.0
+    assert math.isnan(s["phrase_p50"])  # no VAD phrases for this run
+
+
+def test_summarize_pools_phrase_lags_across_utterances():
+    run = _run("v", "offline+vad", ["а б в г", "а б в г"])
+    run["utts"][0]["phrase_lags"] = [0.8, 1.0]
+    run["utts"][1]["phrase_lags"] = [1.2]
+    s = summarize(run)
+    assert s["phrase_p50"] == 1.0
 
 
 def test_offline_models_have_nan_first_text_latency():

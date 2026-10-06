@@ -1,0 +1,45 @@
+=== t-one podlodka 12:49:06
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/t-one__podlodka.json (63 utterances, peak RSS 504 MB)
+=== t-one fleurs-clean 12:49:51
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/t-one__fleurs-clean.json (200 utterances, peak RSS 515 MB)
+=== t-one fleurs-babble10 12:51:38
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/t-one__fleurs-babble10.json (200 utterances, peak RSS 360 MB)
+=== nemotron-160ms podlodka 12:53:25
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/nemotron-160ms__podlodka.json (63 utterances, peak RSS 946 MB)
+=== nemotron-160ms fleurs-clean 12:59:40
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/nemotron-160ms__fleurs-clean.json (200 utterances, peak RSS 939 MB)
+=== nemotron-160ms fleurs-babble10 13:13:46
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/nemotron-160ms__fleurs-babble10.json (200 utterances, peak RSS 831 MB)
+=== nemotron-560ms podlodka 13:27:44
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/nemotron-560ms__podlodka.json (63 utterances, peak RSS 946 MB)
+=== nemotron-560ms fleurs-clean 13:29:48
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/nemotron-560ms__fleurs-clean.json (200 utterances, peak RSS 941 MB)
+=== nemotron-560ms fleurs-babble10 13:34:47
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/nemotron-560ms__fleurs-babble10.json (200 utterances, peak RSS 833 MB)
+=== nemotron-1120ms podlodka 13:39:45
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/nemotron-1120ms__podlodka.json (63 utterances, peak RSS 946 MB)
+=== nemotron-1120ms fleurs-clean 13:41:07
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/nemotron-1120ms__fleurs-clean.json (200 utterances, peak RSS 932 MB)
+=== nemotron-1120ms fleurs-babble10 13:44:20
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/nemotron-1120ms__fleurs-babble10.json (200 utterances, peak RSS 797 MB)
+=== parakeet-v3 podlodka 13:47:33
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/parakeet-v3__podlodka.json (63 utterances, peak RSS 1422 MB)
+=== parakeet-v3 fleurs-clean 13:48:16
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/parakeet-v3__fleurs-clean.json (200 utterances, peak RSS 1316 MB)
+=== parakeet-v3 fleurs-babble10 13:49:55
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/parakeet-v3__fleurs-babble10.json (200 utterances, peak RSS 1134 MB)
+=== gigaam-v3-rnnt podlodka 13:51:35
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/gigaam-v3-rnnt__podlodka.json (63 utterances, peak RSS 424 MB)
+=== gigaam-v3-rnnt fleurs-clean 13:52:04
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/gigaam-v3-rnnt__fleurs-clean.json (200 utterances, peak RSS 381 MB)
+=== gigaam-v3-rnnt fleurs-babble10 13:53:13
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/gigaam-v3-rnnt__fleurs-babble10.json (200 utterances, peak RSS 223 MB)
+=== gigaam-v3-ctc podlodka 13:54:24
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/gigaam-v3-ctc__podlodka.json (63 utterances, peak RSS 412 MB)
+=== gigaam-v3-ctc fleurs-clean 13:54:52
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/gigaam-v3-ctc__fleurs-clean.json (200 utterances, peak RSS 390 MB)
+=== gigaam-v3-ctc fleurs-babble10 13:55:58
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/gigaam-v3-ctc__fleurs-babble10.json (200 utterances, peak RSS 238 MB)
+=== whisper-turbo podlodka 13:57:05
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/whisper-turbo__podlodka.json (63 utterances, peak RSS 2686 MB)
+=== whisper-turbo fleurs-clean 14:02:08

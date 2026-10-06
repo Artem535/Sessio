@@ -7,7 +7,8 @@ from pathlib import Path
 
 import psutil
 
-from asrbench.datasets import Utterance, load_fleurs, load_own, load_podlodka, with_babble
+from asrbench.datasets import (Utterance, load_fleurs, load_own, load_podlodka,
+                               load_podlodka_long, with_babble)
 from asrbench.fetch import DATA_DIR, PODLODKA_DIR
 from asrbench.models import DEFAULT_MODELS_DIR, MODEL_SPECS, build
 
@@ -53,6 +54,7 @@ def run_benchmark(adapter, utts: list[Utterance]) -> list[dict]:
             "id": utt.id, "ref": utt.ref, "hyp": t.text, "dur_s": utt.duration_s,
             "compute_s": t.compute_s, "cpu_s": t.cpu_s,
             "first_text_s": t.first_text_s, "final_lag_s": t.final_lag_s,
+            "phrase_lags": list(t.phrase_lags),
         })
     return records
 
@@ -64,6 +66,8 @@ def _dataset(name: str, n: int, own_dir: Path | None) -> list[Utterance]:
         return with_babble(load_fleurs(DATA_DIR, n=n, seed=0), snr_db=10.0, seed=0)
     if name == "podlodka":
         return load_podlodka(PODLODKA_DIR, n=n, seed=0)
+    if name == "podlodka-long":
+        return load_podlodka_long(PODLODKA_DIR)
     if name == "own":
         if own_dir is None:
             raise SystemExit("--own-dir is required for dataset 'own'")

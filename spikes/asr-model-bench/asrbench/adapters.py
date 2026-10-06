@@ -15,6 +15,7 @@ class Transcript:
     final_lag_s: float
     compute_s: float
     cpu_s: float
+    phrase_lags: tuple[float, ...] = ()  # VAD pipelines: seconds from end of speech to its text
 
 
 def pick(directory: Path, stem: str) -> str:
@@ -109,3 +110,80 @@ class StreamingAdapter:
 
         return Transcript(_text(rec, stream), first_text, max(0.0, done - audio_total),
                           compute, self._cpu() - cpu0)
+
+
+class VadOfflineAdapter:
+    """Offline recognizer behind a streaming VAD: phrases are decoded after the VAD closes them.
+
+    `vad_factory()` returns `(detector, window_size)` where `detector` follows sherpa-onnx's
+    `VoiceActivityDetector` (accept_waveform, empty, front, pop, flush). Real-time model: a phrase
+    becomes available when the VAD emits it (audio time of the chunk that closed it); decoding
+    starts when both the phrase and the decoder are free.
+    """
+
+    kind = "offline+vad"
+
+    def __init__(self, recognizer, vad_factory, *, feed_s=0.1,
+                 clock=time.perf_counter, cpu_clock=time.process_time):
+        self._rec = recognizer
+        self._vad_factory = vad_factory
+        self._feed_s = feed_s
+        self._clock = clock
+        self._cpu = cpu_clock
+
+    def transcribe(self, utt: Utterance) -> Transcript:
+        rec, sr = self._rec, utt.sr
+        vad, window = self._vad_factory()
+        pending = np.zeros(0, np.float32)
+        compute = 0.0
+        cpu0 = self._cpu()
+        done = 0.0
+        audio_end = 0.0
+        texts: list[str] = []
+        lags: list[float] = []
+        first_text: float | None = None
+
+        def drain() -> None:
+            nonlocal compute, done, first_text
+            while not vad.empty():
+                seg = vad.front
+                samples = np.asarray(seg.samples, dtype=np.float32)
+                speech_end = (seg.start + len(samples)) / sr
+                vad.pop()
+                t0 = self._clock()
+                stream = rec.create_stream()
+                stream.accept_waveform(sr, samples)
+                rec.decode_stream(stream)
+                c = self._clock() - t0
+                compute += c
+                done = max(done, audio_end) + c
+                text = stream.result.text.strip()
+                if text:
+                    texts.append(text)
+                    lags.append(done - speech_end)
+                    if first_text is None:
+                        first_text = done - utt.onset_s
+
+        step = max(1, int(self._feed_s * sr))
+        for i in range(0, len(utt.samples), step):
+            chunk = utt.samples[i:i + step]
+            audio_end += len(chunk) / sr
+            t0 = self._clock()
+            pending = np.concatenate([pending, chunk])
+            while len(pending) >= window:
+                vad.accept_waveform(pending[:window])
+                pending = pending[window:]
+            c = self._clock() - t0
+            compute += c
+            done = max(done, audio_end) + c
+            drain()
+
+        t0 = self._clock()
+        vad.flush()
+        c = self._clock() - t0
+        compute += c
+        done = max(done, audio_end) + c
+        drain()
+
+        return Transcript(" ".join(texts), first_text, max(0.0, done - audio_end), compute,
+                          self._cpu() - cpu0, tuple(lags))

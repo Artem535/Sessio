@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from asrbench.adapters import OfflineAdapter, StreamingAdapter, pick
+from asrbench.adapters import OfflineAdapter, StreamingAdapter, VadOfflineAdapter, pick
 
 DEFAULT_MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
 
@@ -27,11 +27,40 @@ MODEL_SPECS: dict[str, ModelSpec] = {s.id: s for s in [
     ModelSpec("t-one", "sherpa-onnx-streaming-t-one-russian-2025-09-08", "streaming"),
 ]}
 
+for _base in ("parakeet-v3", "gigaam-v3-rnnt", "gigaam-v3-ctc"):
+    MODEL_SPECS[f"{_base}-vad"] = ModelSpec(f"{_base}-vad", MODEL_SPECS[_base].archive, "offline+vad")
+
 DEFAULT_MODELS = list(MODEL_SPECS)
+VAD_MODEL = DEFAULT_MODELS_DIR / "silero_vad.onnx"
+VAD_MIN_SILENCE_S = 0.4
+VAD_MAX_SPEECH_S = 20.0  # force-split long speech: keeps phrases under GigaAM's 25 s limit
+
+
+def _vad_factory(threads: int = 1):
+    import sherpa_onnx
+
+    def make():
+        config = sherpa_onnx.VadModelConfig()
+        config.silero_vad.model = str(VAD_MODEL)
+        config.silero_vad.min_silence_duration = VAD_MIN_SILENCE_S
+        config.silero_vad.min_speech_duration = 0.25
+        config.silero_vad.max_speech_duration = VAD_MAX_SPEECH_S
+        config.silero_vad.threshold = 0.5
+        config.sample_rate = 16000
+        config.num_threads = threads
+        return (sherpa_onnx.VoiceActivityDetector(config, buffer_size_in_seconds=120),
+                config.silero_vad.window_size)
+
+    return make
+
 
 
 def build(model_id: str, models_dir: Path, threads: int):
     import sherpa_onnx  # imported lazily so unit tests do not need the wheel's shared libs
+
+    if model_id.endswith("-vad"):
+        base = build(model_id[: -len("-vad")], models_dir, threads)
+        return VadOfflineAdapter(base._rec, _vad_factory())
 
     spec = MODEL_SPECS[model_id]
     d = Path(models_dir) / spec.archive

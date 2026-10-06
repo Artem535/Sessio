@@ -93,3 +93,23 @@ def with_babble(utts: list[Utterance], snr_db: float, seed: int = 0) -> list[Utt
         noisy = mix_at_snr(utt.samples, babble(picks, len(utt.samples)), snr_db)
         out.append(Utterance(utt.id + tag, noisy, utt.sr, utt.ref, utt.onset_s))
     return out
+
+
+def concat_with_gaps(utts: list[Utterance], id_: str, rng: random.Random,
+                     gap_s: tuple[float, float] = (0.4, 1.0)) -> Utterance:
+    """Join clips into one long recording with random silences, to exercise a VAD."""
+    sr = utts[0].sr
+    parts: list[np.ndarray] = []
+    for i, u in enumerate(utts):
+        if i:
+            parts.append(np.zeros(int(rng.uniform(*gap_s) * sr), np.float32))
+        parts.append(u.samples)
+    samples = np.concatenate(parts)
+    return Utterance(id_, samples, sr, " ".join(u.ref for u in utts), first_speech_s(samples, sr))
+
+
+def load_podlodka_long(root: Path, clips_per: int = 6, seed: int = 0) -> list[Utterance]:
+    clips = load_podlodka(root, n=10 ** 6, seed=seed)
+    rng = random.Random(seed)
+    groups = [clips[i:i + clips_per] for i in range(0, len(clips) - clips_per + 1, clips_per)]
+    return [concat_with_gaps(g, f"long-{i}", rng) for i, g in enumerate(groups)]
