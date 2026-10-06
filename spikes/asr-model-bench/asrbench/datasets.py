@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from asrbench.audio import babble, first_speech_s, mix_at_snr, read_wav
+from asrbench.audio import babble, first_speech_s, mix_at_snr, read_wav, to_16k
 
 
 @dataclass(frozen=True)
@@ -64,7 +64,8 @@ def load_podlodka(root: Path, n: int, seed: int = 0, max_seconds: float = 25.0) 
         samples = samples[:, 0].copy()
         if len(samples) / sr > max_seconds:
             continue
-        out.append(Utterance(id_, samples, int(sr), text.strip(), first_speech_s(samples, int(sr))))
+        samples, sr = to_16k(samples, int(sr))
+        out.append(Utterance(id_, samples, sr, text.strip(), first_speech_s(samples, sr)))
         if len(out) == n:
             break
     return out

@@ -1,15 +1,48 @@
 # Throwaway spike code (issue #116) — not part of the Sessio build.
 import argparse
 import json
-import resource
+import threading
 import time
 from pathlib import Path
+
+import psutil
 
 from asrbench.datasets import Utterance, load_fleurs, load_own, load_podlodka, with_babble
 from asrbench.fetch import DATA_DIR, PODLODKA_DIR
 from asrbench.models import DEFAULT_MODELS_DIR, MODEL_SPECS, build
 
 RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
+
+
+class RssPeak:
+    """Samples this process's RSS in a thread; reports peak growth over the starting level."""
+
+    def __init__(self, interval_s: float = 0.05):
+        self._proc = psutil.Process()
+        self._interval = interval_s
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self.baseline = 0
+        self.peak = 0
+
+    def _loop(self) -> None:
+        while not self._stop.is_set():
+            self.peak = max(self.peak, self._proc.memory_info().rss)
+            self._stop.wait(self._interval)
+
+    def __enter__(self) -> "RssPeak":
+        self.baseline = self.peak = self._proc.memory_info().rss
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self._stop.set()
+        self._thread.join()
+        self.peak = max(self.peak, self._proc.memory_info().rss)
+
+    @property
+    def delta_mb(self) -> float:
+        return (self.peak - self.baseline) / (1024 * 1024)
 
 
 def run_benchmark(adapter, utts: list[Utterance]) -> list[dict]:
@@ -51,18 +84,20 @@ def main() -> None:
     if not utts:
         raise SystemExit("dataset is empty")
 
-    t0 = time.perf_counter()
-    adapter = build(args.model, DEFAULT_MODELS_DIR, args.threads)
-    load_s = time.perf_counter() - t0
+    # Dataset is already in memory here, so the sampler measures model load + decode only.
+    with RssPeak() as rss:
+        t0 = time.perf_counter()
+        adapter = build(args.model, DEFAULT_MODELS_DIR, args.threads)
+        load_s = time.perf_counter() - t0
 
-    # Warm-up on one utterance so first-call allocation does not skew compute time.
-    adapter.transcribe(utts[0])
-    records = run_benchmark(adapter, utts)
+        # Warm-up on one utterance so first-call allocation does not skew compute time.
+        adapter.transcribe(utts[0])
+        records = run_benchmark(adapter, utts)
 
     out = {
         "model": args.model, "kind": adapter.kind, "dataset": args.dataset,
         "threads": args.threads, "load_s": load_s,
-        "peak_rss_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0,
+        "peak_rss_mb": rss.delta_mb,
         "utts": records,
     }
     RESULTS_DIR.mkdir(exist_ok=True)

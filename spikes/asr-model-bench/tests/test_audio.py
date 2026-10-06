@@ -2,7 +2,7 @@
 import numpy as np
 import soundfile as sf
 
-from asrbench.audio import babble, first_speech_s, mix_at_snr, read_wav, rms
+from asrbench.audio import babble, first_speech_s, mix_at_snr, read_wav, rms, to_16k
 
 SR = 16000
 
@@ -48,3 +48,18 @@ def test_mix_at_snr_tiles_short_noise_and_keeps_length():
 def test_babble_has_requested_length():
     out = babble([_tone(0.3), _tone(0.7)], SR)
     assert out.shape == (SR,)
+
+
+def test_to_16k_resamples_48k_and_keeps_duration_and_level():
+    sr = 48000
+    t = np.arange(sr) / sr
+    tone = (0.1 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+    out, out_sr = to_16k(tone, sr)
+    assert out_sr == 16000 and out.shape == (16000,) and out.dtype == np.float32
+    assert abs(rms(out) - rms(tone)) < 5e-3
+
+
+def test_to_16k_is_identity_at_16k():
+    x = np.ones(10, np.float32)
+    out, out_sr = to_16k(x, 16000)
+    assert out is x and out_sr == 16000

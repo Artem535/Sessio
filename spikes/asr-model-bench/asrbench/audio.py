@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import soundfile as sf
+from scipy.signal import resample_poly
 
 
 def read_wav(path: Path) -> tuple[np.ndarray, int]:
@@ -53,3 +54,11 @@ def first_speech_s(samples: np.ndarray, sr: int, frame_s: float = 0.02) -> float
     if peak == 0.0:
         return 0.0
     return float(np.argmax(levels >= 0.1 * peak)) * frame_s
+
+
+def to_16k(samples: np.ndarray, sr: int) -> tuple[np.ndarray, int]:
+    """Resample once at load time so recognizers never pay for (or differ in) resampling."""
+    if sr == 16000:
+        return samples, sr
+    g = int(np.gcd(sr, 16000))
+    return resample_poly(samples, 16000 // g, sr // g).astype(np.float32), 16000
