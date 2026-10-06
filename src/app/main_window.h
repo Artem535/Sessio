@@ -88,6 +88,8 @@ public:
                     pcm::tokenclient::TokenBackendClient *tokenClient,
                     std::function<QString()> bearerCredentialProvider);
   void setDatabase(std::shared_ptr<pcm::database::Database> db);
+  // Not owned; handed to the Settings dialog for "Switch to client mode".
+  void setRoleSwitcher(const pcm::AppRoleSwitcher *switcher) { mRoleSwitcher = switcher; }
 
   /**
    * @brief Sets up all signal/slot connections between UI elements and logic.
@@ -203,6 +205,7 @@ private:
   void setupUtilityButtons();
   void openSettingsDialog();
   void openAboutDialog();
+  const pcm::AppRoleSwitcher *mRoleSwitcher = nullptr;
   [[nodiscard]] QString pageTitle(Pages page) const;
   void refreshPageAppearance();
 };

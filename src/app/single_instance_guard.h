@@ -28,10 +28,19 @@ public:
   [[nodiscard]] bool isPrimaryInstance() const { return mIsPrimary; }
   void forwardToPrimaryInstance(const QString &url);
 
+  // Gives up primacy: closes the IPC server and removes the lock so another
+  // process (the restarted application) can become primary. No-op when this
+  // guard is not primary. reacquire() takes primacy back, e.g. when the
+  // restart could not be launched; it returns whether this guard is primary.
+  void release();
+  bool reacquire();
+
 signals:
   void urlReceivedFromSecondaryInstance(QString url);
 
 private:
+  void acquire();
+
   static constexpr auto kServerName = "Sessio-single-instance";
 
   QLockFile mLockFile;

@@ -1,7 +1,14 @@
+#include "app_role_switcher.h"
+#include "config.h"
+#include "role_switch_prompt.h"
 #include "settings_dialog.h"
 #include "fake_token_backend_credential_store.h"
 
+#include <QAbstractButton>
 #include <QApplication>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QTimer>
 #include <QGroupBox>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -168,6 +175,88 @@ TEST(SettingsDialogLayoutTest, TallPagesScrollInsteadOfOverflowingTheDialog) {
   stack->setCurrentIndex(2);
   QApplication::processEvents();
   EXPECT_GT(backupPage->verticalScrollBar()->maximum(), 0);
+}
+
+namespace {
+void answerRoleConfirmationLater(const bool confirm, int *confirmations) {
+  auto *timer = new QTimer;
+  timer->setInterval(5);
+  QObject::connect(timer, &QTimer::timeout, timer, [timer, confirm, confirmations]() {
+    auto *box = qobject_cast<QMessageBox *>(QApplication::activeModalWidget());
+    if (box == nullptr ||
+        box->objectName() != QString::fromLatin1(pcm::kRoleSwitchConfirmationName)) {
+      return;
+    }
+    ++*confirmations;
+    if (confirm) {
+      box->findChild<QAbstractButton *>(QString::fromLatin1(pcm::kRoleSwitchConfirmButtonName))
+          ->click();
+    } else {
+      box->button(QMessageBox::Cancel)->click();
+    }
+    timer->deleteLater();
+  });
+  timer->start();
+}
+} // namespace
+
+TEST(SettingsDialogLayoutTest, SwitchToClientModeButtonIsOnTheGeneralPage) {
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  EXPECT_EQ(pageIndexOf(dialog, "switchToClientModeButton"), 0);
+  auto *button = dialog.findChild<QPushButton *>("switchToClientModeButton");
+  ASSERT_NE(button, nullptr);
+  EXPECT_EQ(button->text(), QString::fromUtf8("Switch to client mode\u2026"));
+  // No switcher injected (e.g. embedded without an Application): disabled.
+  EXPECT_FALSE(button->isEnabled());
+}
+
+TEST(SettingsDialogLayoutTest, SwitchToClientModeConfirmsStoresClientRoleAndRestartsOnce) {
+  pcm::config::Config seed;
+  seed.app_role = "Specialist";
+  pcm::config::Config::save_config(seed);
+  int restarts = 0;
+  pcm::AppRoleSwitcher switcher([&restarts]() {
+    ++restarts;
+    return true;
+  });
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  dialog.setRoleSwitcher(&switcher);
+  auto *button = dialog.findChild<QPushButton *>("switchToClientModeButton");
+  ASSERT_NE(button, nullptr);
+  ASSERT_TRUE(button->isEnabled());
+
+  int confirmations = 0;
+  answerRoleConfirmationLater(true, &confirmations);
+  button->click();
+
+  EXPECT_EQ(confirmations, 1);
+  EXPECT_EQ(restarts, 1);
+  EXPECT_EQ(pcm::config::Config::read_config().app_role, "Client");
+  EXPECT_EQ(dialog.result(), QDialog::Rejected); // dialog closed itself
+}
+
+TEST(SettingsDialogLayoutTest, CancellingSwitchToClientModeKeepsSpecialistRole) {
+  pcm::config::Config seed;
+  seed.app_role = "Specialist";
+  pcm::config::Config::save_config(seed);
+  int restarts = 0;
+  pcm::AppRoleSwitcher switcher([&restarts]() {
+    ++restarts;
+    return true;
+  });
+  auto *credentialStore = new FakeTokenBackendCredentialStore();
+  SettingsDialog dialog(nullptr, credentialStore);
+  dialog.setRoleSwitcher(&switcher);
+
+  int confirmations = 0;
+  answerRoleConfirmationLater(false, &confirmations);
+  dialog.findChild<QPushButton *>("switchToClientModeButton")->click();
+
+  EXPECT_EQ(confirmations, 1);
+  EXPECT_EQ(restarts, 0);
+  EXPECT_EQ(pcm::config::Config::read_config().app_role, "Specialist");
 }
 
 int main(int argc, char **argv) {

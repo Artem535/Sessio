@@ -28,6 +28,9 @@ qt_add_library(${TARGET_NAME} STATIC
         client_mode_settings_dialog.cpp
         sessio_url.cpp
         single_instance_guard.cpp
+        app_role_switcher.cpp
+        application_restarter.cpp
+        role_switch_prompt.cpp
 )
 
 target_include_directories(${TARGET_NAME} PRIVATE

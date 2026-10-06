@@ -134,13 +134,28 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
     return 0;
   }
 
+  mRoleSwitcher = std::make_unique<AppRoleSwitcher>([this]() {
+    return ApplicationRestarter::forRunningApplication(
+               mSingleInstanceGuard.get(), {},
+               [this]() {
+                 // Specialist mode shuts down through quitApplication() so a
+                 // due automatic backup still runs; Client mode just quits.
+                 if (mMainWindow) {
+                   quitApplication();
+                 } else {
+                   QApplication::quit();
+                 }
+               })
+        .restart();
+  });
+
   app.setQuitOnLastWindowClosed(false);
   migrateLegacyAppConfigDirectory(QStringLiteral("PsyClientManager"),
                                   QStringLiteral("Sessio"));
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  app.setApplicationVersion("0.2.12");
+  app.setApplicationVersion("0.2.16");
   // Installed builds ship libical's timezone data next to the executable; the
   // path compiled into the schedule engine only exists in development trees.
   pcm::meeting::configureScheduleZoneinfo(QCoreApplication::applicationDirPath());
@@ -261,6 +276,7 @@ int Application::runClientFlow(QApplication &app, const QString &launchUrl) {
   app.setQuitOnLastWindowClosed(true);
   mClientModeWindow =
       std::make_unique<ClientModeWindow>(mDeviceManager.get(), mTokenClient.get());
+  mClientModeWindow->setRoleSwitcher(mRoleSwitcher.get());
   mClientModeWindow->show();
   if (!launchUrl.isEmpty()) {
     handleJoinLink(launchUrl);
@@ -287,6 +303,7 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
       mTokenBackendBaseUrl, mBearerCredential, this);
 
   mMainWindow = std::make_unique<MainWindow>();
+  mMainWindow->setRoleSwitcher(mRoleSwitcher.get());
   mClientModel = std::make_shared<QClientModel>(mDb);
 
   // Recurring-call publishing: schedule outbox sync, permanent invitation and

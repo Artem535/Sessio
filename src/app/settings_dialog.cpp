@@ -1,4 +1,6 @@
 #include "settings_dialog.h"
+#include "app_role_switcher.h"
+#include "role_switch_prompt.h"
 
 #include "../widgets/app_settings.h"
 #include "backup_validator.h"
@@ -227,6 +229,11 @@ int SettingsDialog::heightForAvailableScreen(const int availableHeight) {
   return qMax(qMin(760, availableHeight - 80), qMin(400, availableHeight));
 }
 
+void SettingsDialog::setRoleSwitcher(const pcm::AppRoleSwitcher *switcher) {
+  mRoleSwitcher = switcher;
+  mSwitchToClientModeButton->setEnabled(switcher != nullptr);
+}
+
 void SettingsDialog::setupUi() {
   setWindowTitle(tr("Settings"));
   setModal(true);
@@ -324,6 +331,26 @@ void SettingsDialog::setupUi() {
   databaseLayout->addWidget(mDatabasePathLabel);
   databaseLayout->addWidget(mOpenDatabaseFolderButton, 0, Qt::AlignLeft);
   generalSettingsLayout->addWidget(databaseBox);
+
+  auto *appModeBox = new QGroupBox(tr("Application mode"), generalPage);
+  auto *appModeLayout = new QVBoxLayout(appModeBox);
+  appModeLayout->setContentsMargins(16, 16, 16, 16);
+  appModeLayout->setSpacing(10);
+  mSwitchToClientModeButton = new QPushButton(tr("Switch to client mode…"), appModeBox);
+  mSwitchToClientModeButton->setObjectName(QStringLiteral("switchToClientModeButton"));
+  mSwitchToClientModeButton->setEnabled(false);
+  appModeLayout->addWidget(makeSettingRow(
+      tr("Client mode"),
+      tr("Restarts Sessio as a client that only joins calls. Your specialist data stays on "
+         "this computer and is not deleted."),
+      mSwitchToClientModeButton, appModeBox));
+  connect(mSwitchToClientModeButton, &QPushButton::clicked, this, [this]() {
+    if (mRoleSwitcher != nullptr &&
+        pcm::confirmAndSwitchRole(this, *mRoleSwitcher, pcm::config::AppRole::Client)) {
+      reject(); // the application is restarting; nothing left to save here
+    }
+  });
+  generalSettingsLayout->addWidget(appModeBox);
 
   auto *backupBox = new QGroupBox(tr("Backup"), backupPage);
   auto *backupLayout = new QVBoxLayout(backupBox);

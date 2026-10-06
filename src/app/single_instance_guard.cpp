@@ -38,54 +38,76 @@ QString lockFilePath() {
 
 SingleInstanceGuard::SingleInstanceGuard(QObject *parent)
     : QObject(parent), mLockFile(lockFilePath()) {
+  connect(&mServer, &QLocalServer::newConnection, this, [this]() {
+    auto *socket = mServer.nextPendingConnection();
+    connect(socket, &QLocalSocket::readyRead, this, [this, socket]() {
+      const auto url = QString::fromUtf8(socket->readAll()).trimmed();
+      emit urlReceivedFromSecondaryInstance(url);
+    });
+    connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
+  });
+  acquire();
+}
+
+void SingleInstanceGuard::acquire() {
   // Short timeout: if another process genuinely holds the lock, we want to
   // find that out quickly and become secondary, not block startup.
   mIsPrimary = mLockFile.tryLock(200);
-
-  if (mIsPrimary) {
-    // Restrict the local socket to the current user: QLocalServer's
-    // underlying Unix domain socket file is otherwise created in a
-    // shared filesystem location (typically under /tmp) with default
-    // permissions, which would let another user on a shared multi-user
-    // Linux machine connect to it and read or spoof forwarded sessio://
-    // join URLs (which can carry a short-lived but real invitation code
-    // and passcode). Must be set before listen().
-    mServer.setSocketOptions(QLocalServer::UserAccessOption);
-
-    if (!mServer.listen(kServerName) &&
-        mServer.serverError() == QAbstractSocket::AddressInUseError) {
-      // Holding the QLockFile already guarantees no other process is
-      // genuinely primary, so an AddressInUseError here can only mean a
-      // stale local-socket file left behind by a previous crash (the
-      // process that owned it is gone, or QLockFile wouldn't have let us
-      // acquire the lock) — safe to remove and retry without probing
-      // first, unlike the old listen()-only design where AddressInUseError
-      // was ambiguous between "stale file" and "live competing primary".
-      QLocalServer::removeServer(kServerName);
-      mServer.listen(kServerName);
-    }
-
-    if (!mServer.isListening()) {
-      // Genuinely exceptional: the pipe/socket name is held by something
-      // unrelated to this app's own lifecycle. We still hold the real
-      // exclusivity lock, so this process is treated as primary for
-      // isPrimaryInstance() purposes — it just won't be able to receive
-      // URLs forwarded from later launches.
-      qWarning() << "SingleInstanceGuard: failed to start local IPC server "
-                    "despite holding the primary lock; URLs forwarded from "
-                    "later launches will not be received:"
-                 << mServer.errorString();
-    }
-
-    connect(&mServer, &QLocalServer::newConnection, this, [this]() {
-      auto *socket = mServer.nextPendingConnection();
-      connect(socket, &QLocalSocket::readyRead, this, [this, socket]() {
-        const auto url = QString::fromUtf8(socket->readAll()).trimmed();
-        emit urlReceivedFromSecondaryInstance(url);
-      });
-      connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
-    });
+  if (!mIsPrimary) {
+    return;
   }
+
+  // Restrict the local socket to the current user: QLocalServer's
+  // underlying Unix domain socket file is otherwise created in a
+  // shared filesystem location (typically under /tmp) with default
+  // permissions, which would let another user on a shared multi-user
+  // Linux machine connect to it and read or spoof forwarded sessio://
+  // join URLs (which can carry a short-lived but real invitation code
+  // and passcode). Must be set before listen().
+  mServer.setSocketOptions(QLocalServer::UserAccessOption);
+
+  if (!mServer.listen(kServerName) &&
+      mServer.serverError() == QAbstractSocket::AddressInUseError) {
+    // Holding the QLockFile already guarantees no other process is
+    // genuinely primary, so an AddressInUseError here can only mean a
+    // stale local-socket file left behind by a previous crash (the
+    // process that owned it is gone, or QLockFile wouldn't have let us
+    // acquire the lock) — safe to remove and retry without probing
+    // first, unlike the old listen()-only design where AddressInUseError
+    // was ambiguous between "stale file" and "live competing primary".
+    QLocalServer::removeServer(kServerName);
+    mServer.listen(kServerName);
+  }
+
+  if (!mServer.isListening()) {
+    // Genuinely exceptional: the pipe/socket name is held by something
+    // unrelated to this app's own lifecycle. We still hold the real
+    // exclusivity lock, so this process is treated as primary for
+    // isPrimaryInstance() purposes — it just won't be able to receive
+    // URLs forwarded from later launches.
+    qWarning() << "SingleInstanceGuard: failed to start local IPC server "
+                  "despite holding the primary lock; URLs forwarded from "
+                  "later launches will not be received:"
+               << mServer.errorString();
+  }
+}
+
+void SingleInstanceGuard::release() {
+  if (!mIsPrimary) {
+    return;
+  }
+  // Close the IPC endpoint first so a successor never forwards its launch to
+  // a process that is about to go away, then drop the lock.
+  mServer.close();
+  mLockFile.unlock();
+  mIsPrimary = false;
+}
+
+bool SingleInstanceGuard::reacquire() {
+  if (!mIsPrimary) {
+    acquire();
+  }
+  return mIsPrimary;
 }
 
 void SingleInstanceGuard::forwardToPrimaryInstance(const QString &url) {
