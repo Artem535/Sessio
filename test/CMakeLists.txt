@@ -955,3 +955,15 @@ target_compile_definitions(Sessio_accent_color_tests PRIVATE
 target_link_libraries(Sessio_accent_color_tests PRIVATE
     GTest::gtest Qt6::Widgets Sessio_event_page)
 gtest_discover_tests(Sessio_accent_color_tests)
+
+if(SESSIO_TRANSCRIPTION_ENABLED)
+  add_executable(Sessio_transcription_tests
+      transcription_resampler_tests.cpp
+  )
+  target_link_libraries(Sessio_transcription_tests PRIVATE
+      GTest::gtest
+      GTest::gtest_main
+      Sessio_transcription
+  )
+  gtest_discover_tests(Sessio_transcription_tests)
+endif()

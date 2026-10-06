@@ -9,7 +9,8 @@ find_package(Threads REQUIRED)
 
 add_library(${TARGET_NAME} STATIC
   transcription_types.h
+  resampler.h
+  resampler.cpp
 )
-set_target_properties(${TARGET_NAME} PROPERTIES LINKER_LANGUAGE CXX)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${TARGET_NAME} PUBLIC Threads::Threads)
