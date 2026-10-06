@@ -98,6 +98,20 @@ public:
   int64_t add_client_note_attachment(const DuckClientNoteAttachment &attachment);
   std::vector<DuckClientNoteAttachment> get_note_attachments(int64_t note_id);
 
+  // --- Live call transcripts (phase 2 of #118) ---
+  int64_t add_transcript(int64_t event_id, const std::string &consent_scope,
+                         const std::optional<std::string> &model_id = std::nullopt,
+                         std::optional<int64_t> consent_given_at_ms = std::nullopt);
+  std::unique_ptr<DuckTranscript> get_transcript(int64_t id);
+  std::vector<DuckTranscript> get_transcripts_for_event(int64_t event_id);
+  bool set_transcript_status(int64_t id, const std::string &status);
+  bool revoke_transcript_consent(int64_t id, std::optional<int64_t> at_ms = std::nullopt);
+  // Marks transcripts left in "recording" (crash, power loss) as drafts and
+  // returns how many were changed. Call once at application start.
+  int64_t finalize_interrupted_transcripts();
+  bool delete_transcript(int64_t id);
+  bool delete_all_transcripts();
+
   // std::vector<int64_t> get_event_ids(int64_t date);
 
   bool has_conflict(const DuckEvent &event);

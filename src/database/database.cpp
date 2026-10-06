@@ -1898,6 +1898,162 @@ bool Database::set_schedule_invitation_generation(const int64_t series_id,
                                   duckdb::Value::BIGINT(generation), nowTimestamp()});
 }
 
+// --- Live call transcripts ---
+
+int64_t Database::add_transcript(const int64_t event_id, const std::string &consent_scope,
+                                 const std::optional<std::string> &model_id,
+                                 const std::optional<int64_t> consent_given_at_ms) {
+  if (event_id <= 0) {
+    PLOG_WARNING << "Invalid event_id for Transcript: " << event_id;
+    return 0;
+  }
+  const auto now = nowMs();
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  auto result = executePrepared(
+      conn, constance::kInsertTranscriptQuery,
+      {duckdb::Value::BIGINT(event_id), duckdb::Value(consent_scope),
+       db_utils::toDuckTimestamp(consent_given_at_ms.value_or(now) * 1000),
+       db_utils::toDuckValue(model_id), db_utils::toDuckTimestamp(now * 1000),
+       db_utils::toDuckTimestamp(now * 1000)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to insert transcript (event_id=" << event_id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return 0;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) {
+    PLOG_ERROR << "Empty result from RETURNING id in add_transcript";
+    return 0;
+  }
+  return static_cast<int64_t>(chunk->GetValue(0, 0).GetValue<int32_t>());
+}
+
+std::unique_ptr<DuckTranscript> Database::get_transcript(const int64_t id) {
+  if (id <= 0) return nullptr;
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn, constance::kSelectTranscriptByIdQuery,
+                                {duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to get transcript (id=" << id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return nullptr;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) return nullptr;
+  return std::make_unique<DuckTranscript>(*chunk, 0);
+}
+
+std::vector<DuckTranscript> Database::get_transcripts_for_event(const int64_t event_id) {
+  std::vector<DuckTranscript> out;
+  if (event_id <= 0) return out;
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn, constance::kSelectTranscriptsByEventQuery,
+                                {duckdb::Value::BIGINT(event_id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to list transcripts (event_id=" << event_id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return out;
+  }
+  while (auto chunk = result->Fetch()) {
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) out.emplace_back(*chunk, i);
+  }
+  return out;
+}
+
+namespace {
+
+bool transcriptExists(duckdb::Connection &conn, const int64_t id) {
+  auto result = executePrepared(conn, constance::kTranscriptExistsQuery,
+                                {duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) return false;
+  auto chunk = result->Fetch();
+  return chunk && chunk->size() > 0;
+}
+
+}  // namespace
+
+bool Database::set_transcript_status(const int64_t id, const std::string &status) {
+  if (id <= 0 || (status != "recording" && status != "draft" && status != "reviewed")) {
+    PLOG_WARNING << "Rejected transcript status change (id=" << id << ")";
+    return false;
+  }
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  if (!transcriptExists(conn, id)) return false;
+  auto result = executePrepared(
+      conn, constance::kUpdateTranscriptStatusQuery,
+      {duckdb::Value(status), db_utils::toDuckTimestamp(nowMs() * 1000),
+       duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to update transcript status (id=" << id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  return true;
+}
+
+bool Database::revoke_transcript_consent(const int64_t id,
+                                         const std::optional<int64_t> at_ms) {
+  if (id <= 0) return false;
+  const auto now = nowMs();
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  if (!transcriptExists(conn, id)) return false;
+  auto result = executePrepared(
+      conn, constance::kRevokeTranscriptConsentQuery,
+      {db_utils::toDuckTimestamp(at_ms.value_or(now) * 1000),
+       db_utils::toDuckTimestamp(now * 1000), duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to revoke transcript consent (id=" << id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  return true;
+}
+
+int64_t Database::finalize_interrupted_transcripts() {
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  auto result = executePrepared(conn, constance::kFinalizeInterruptedTranscriptsQuery,
+                                {db_utils::toDuckTimestamp(nowMs() * 1000)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to finalize interrupted transcripts: "
+               << (result ? result->GetError() : "prepare failed");
+    return 0;
+  }
+  int64_t changed = 0;
+  while (auto chunk = result->Fetch()) changed += static_cast<int64_t>(chunk->size());
+  return changed;
+}
+
+bool Database::delete_transcript(const int64_t id) {
+  if (id <= 0) return false;
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  if (!transcriptExists(conn, id)) return false;
+  auto result = executePrepared(conn, constance::kDeleteTranscriptByIdQuery,
+                                {duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to delete transcript (id=" << id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  return true;
+}
+
+bool Database::delete_all_transcripts() {
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  auto result = executePrepared(conn, constance::kDeleteAllTranscriptsQuery, {});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to delete all transcripts: "
+               << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  return true;
+}
+
 // --- Init ---
 
 void Database::add_demo_data() {

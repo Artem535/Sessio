@@ -181,6 +181,31 @@ CREATE TABLE IF NOT EXISTS ScheduleOutbox (
     inflight_desired_revision BIGINT,
     updated_at TIMESTAMP NOT NULL
 );
+
+-- Live call transcripts. status: recording | draft | reviewed. Phrase times are
+-- milliseconds from the start of the call (not timestamps).
+CREATE TABLE IF NOT EXISTS Transcript (
+    id INTEGER PRIMARY KEY,
+    event_id INTEGER NOT NULL REFERENCES Event(id),
+    status TEXT NOT NULL,
+    consent_scope TEXT NOT NULL,
+    consent_given_at TIMESTAMP NOT NULL,
+    consent_revoked_at TIMESTAMP,
+    model_id TEXT,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS TranscriptPhrase (
+    id INTEGER PRIMARY KEY,
+    transcript_id INTEGER NOT NULL REFERENCES Transcript(id),
+    track_role TEXT NOT NULL,
+    speaker_name TEXT,
+    start_ms BIGINT NOT NULL,
+    end_ms BIGINT NOT NULL,
+    text TEXT NOT NULL,
+    edited BOOLEAN DEFAULT FALSE
+);
 )duckdb";
 
 constexpr auto kSchemaMigrations = R"duckdb(
@@ -651,6 +676,45 @@ SELECT COALESCE(MAX(id), 0) + 1, $1, $2
 FROM EventClient
 RETURNING id
 )duckdb";
+
+constexpr auto kInsertTranscriptQuery = R"duckdb(
+INSERT INTO Transcript (
+    id, event_id, status, consent_scope, consent_given_at, model_id,
+    created_at, updated_at
+)
+SELECT COALESCE(MAX(id), 0) + 1, $1, 'recording', $2, $3, $4, $5, $6
+FROM Transcript
+RETURNING id
+)duckdb";
+
+constexpr auto kSelectTranscriptByIdQuery = R"duckdb(
+SELECT id, event_id, status, consent_scope, consent_given_at,
+       consent_revoked_at, model_id, created_at, updated_at
+FROM Transcript WHERE id = $1
+)duckdb";
+
+constexpr auto kSelectTranscriptsByEventQuery = R"duckdb(
+SELECT id, event_id, status, consent_scope, consent_given_at,
+       consent_revoked_at, model_id, created_at, updated_at
+FROM Transcript WHERE event_id = $1 ORDER BY id
+)duckdb";
+
+constexpr auto kTranscriptExistsQuery = "SELECT 1 FROM Transcript WHERE id = $1";
+
+constexpr auto kUpdateTranscriptStatusQuery =
+    "UPDATE Transcript SET status = $1, updated_at = $2 WHERE id = $3";
+
+constexpr auto kRevokeTranscriptConsentQuery =
+    "UPDATE Transcript SET consent_revoked_at = $1, updated_at = $2 WHERE id = $3";
+
+constexpr auto kFinalizeInterruptedTranscriptsQuery = R"duckdb(
+UPDATE Transcript SET status = 'draft', updated_at = $1
+WHERE status = 'recording'
+RETURNING id
+)duckdb";
+
+constexpr auto kDeleteTranscriptByIdQuery = "DELETE FROM Transcript WHERE id = $1";
+constexpr auto kDeleteAllTranscriptsQuery = "DELETE FROM Transcript";
 
 constexpr auto kInsertClientNoteQuery = R"duckdb(
 INSERT INTO ClientNote (
