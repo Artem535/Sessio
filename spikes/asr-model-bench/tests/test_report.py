@@ -46,3 +46,15 @@ def test_render_markdown_sorts_by_wer_and_marks_missing_latency():
     assert "### fleurs-clean" in md
     assert "| good | offline |" in md
     assert "n/a" in md  # good has no first-text latency
+
+
+def test_render_asciidoc_emits_sorted_table_per_dataset():
+    from asrbench.report import render_asciidoc
+
+    good = summarize(_run("good", "offline", ["а б в г"]))
+    bad = summarize(_run("bad", "streaming", ["х х х х"], first=0.3))
+    adoc = render_asciidoc([bad, good], captions={"fleurs-clean": "FLEURS ru, clean"})
+    assert ".FLEURS ru, clean" in adoc
+    assert adoc.count("|===") == 2
+    assert adoc.index("|good |offline") < adoc.index("|bad |streaming")
+    assert "|model |kind |n |WER %" in adoc

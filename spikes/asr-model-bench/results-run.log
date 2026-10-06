@@ -43,3 +43,5 @@ wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/resul
 === whisper-turbo podlodka 13:57:05
 wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/whisper-turbo__podlodka.json (63 utterances, peak RSS 2686 MB)
 === whisper-turbo fleurs-clean 14:02:08
+wrote /home/a.durynin/Projects/C++/PsyClientManager/spikes/asr-model-bench/results/whisper-turbo__fleurs-clean.json (200 utterances, peak RSS 2505 MB)
+=== whisper-turbo fleurs-babble10 14:13:53
