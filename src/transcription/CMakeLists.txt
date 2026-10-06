@@ -11,6 +11,8 @@ add_library(${TARGET_NAME} STATIC
   transcription_types.h
   resampler.h
   resampler.cpp
+  model_locator.h
+  model_locator.cpp
   voice_activity.h
   speech_recognizer.h
   phrase_segmenter.h
