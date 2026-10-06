@@ -41,6 +41,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
+; The wildcard below also picks up everything the CI "Copy transcription
+; models and runtime DLLs" step stages in MySourceDir: models\ (silero_vad.onnx,
+; gigaam-v3-rnnt\*), sherpa-onnx-*.dll and onnxruntime*.dll.
 Source: "{#MySourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]

@@ -46,3 +46,18 @@ add_custom_target(sessio_models ALL DEPENDS "${_sessio_models_stamp}")
 # Directory of ONNX Runtime fetched by sherpa-onnx.
 FetchContent_GetProperties(onnxruntime SOURCE_DIR _sessio_ort_dir)
 set(SESSIO_ONNXRUNTIME_LIB_DIR "${_sessio_ort_dir}/lib")
+
+# ONNX Runtime: libonnxruntime.so* (Linux), libonnxruntime*.dylib (macOS),
+# onnxruntime*.dll (Windows; the DLL sits in lib/ or ../bin of the archive).
+file(GLOB SESSIO_ONNXRUNTIME_LIBS
+    "${SESSIO_ONNXRUNTIME_LIB_DIR}/libonnxruntime*.so*"
+    "${SESSIO_ONNXRUNTIME_LIB_DIR}/libonnxruntime*.dylib"
+    "${SESSIO_ONNXRUNTIME_LIB_DIR}/onnxruntime*.dll"
+    "${SESSIO_ONNXRUNTIME_LIB_DIR}/../bin/onnxruntime*.dll")
+if(NOT SESSIO_ONNXRUNTIME_LIBS)
+  message(FATAL_ERROR
+      "ONNX Runtime libraries not found. Searched: "
+      "${SESSIO_ONNXRUNTIME_LIB_DIR} and ${SESSIO_ONNXRUNTIME_LIB_DIR}/../bin "
+      "(patterns libonnxruntime*.so*, libonnxruntime*.dylib, onnxruntime*.dll). "
+      "sherpa-onnx may have changed where it unpacks ONNX Runtime.")
+endif()

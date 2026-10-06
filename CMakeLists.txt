@@ -291,14 +291,7 @@ if(SESSIO_TRANSCRIPTION_ENABLED)
       $<TARGET_FILE:sherpa-onnx-c-api>
       $<TARGET_FILE:sherpa-onnx-cxx-api>
       DESTINATION ${_sessio_ml_libs_dest})
-  # ONNX Runtime: libonnxruntime.so* (Linux), libonnxruntime*.dylib (macOS),
-  # onnxruntime*.dll (Windows; sherpa places the DLL next to its own DLLs).
-  file(GLOB _sessio_ort_libs
-      "${SESSIO_ONNXRUNTIME_LIB_DIR}/libonnxruntime*.so*"
-      "${SESSIO_ONNXRUNTIME_LIB_DIR}/libonnxruntime*.dylib"
-      "${SESSIO_ONNXRUNTIME_LIB_DIR}/onnxruntime*.dll"
-      "${SESSIO_ONNXRUNTIME_LIB_DIR}/../bin/onnxruntime*.dll")
-  install(FILES ${_sessio_ort_libs} DESTINATION ${_sessio_ml_libs_dest})
+  install(FILES ${SESSIO_ONNXRUNTIME_LIBS} DESTINATION ${_sessio_ml_libs_dest})
 endif()
 
 if(UNIX AND NOT APPLE)

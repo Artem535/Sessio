@@ -982,7 +982,19 @@ if(SESSIO_TRANSCRIPTION_ENABLED)
   )
   set_target_properties(Sessio_transcription_model_tests PROPERTIES
       BUILD_RPATH "${CMAKE_BINARY_DIR}/lib;${SESSIO_ONNXRUNTIME_LIB_DIR}")
+  if(WIN32)
+    # The exe needs the sherpa/ONNX Runtime DLLs beside it (no rpath on Windows).
+    add_custom_command(TARGET Sessio_transcription_model_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:sherpa-onnx-c-api>
+            $<TARGET_FILE:sherpa-onnx-cxx-api>
+            ${SESSIO_ONNXRUNTIME_LIBS}
+            $<TARGET_FILE_DIR:Sessio_transcription_model_tests>
+        VERBATIM)
+  endif()
+  # PRE_TEST: do not run the exe at build time (it needs the DLLs/models).
   gtest_discover_tests(Sessio_transcription_model_tests
+      DISCOVERY_MODE PRE_TEST
       PROPERTIES LABELS models
                  ENVIRONMENT "SESSIO_MODELS_DIR=${SESSIO_MODELS_DIR}")
   add_dependencies(Sessio_transcription_model_tests sessio_models)
