@@ -970,4 +970,20 @@ if(SESSIO_TRANSCRIPTION_ENABLED)
       Sessio_transcription
   )
   gtest_discover_tests(Sessio_transcription_tests)
+
+  add_executable(Sessio_transcription_model_tests transcription_model_tests.cpp)
+  target_include_directories(Sessio_transcription_model_tests PRIVATE "${SESSIO_SHERPA_SOURCE_DIR}")
+  target_link_libraries(Sessio_transcription_model_tests PRIVATE
+      GTest::gtest
+      GTest::gtest_main
+      Sessio_transcription
+      Sessio_transcription_sherpa
+      sherpa-onnx-cxx-api
+  )
+  set_target_properties(Sessio_transcription_model_tests PROPERTIES
+      BUILD_RPATH "${CMAKE_BINARY_DIR}/lib;${SESSIO_ONNXRUNTIME_LIB_DIR}")
+  gtest_discover_tests(Sessio_transcription_model_tests
+      PROPERTIES LABELS models
+                 ENVIRONMENT "SESSIO_MODELS_DIR=${SESSIO_MODELS_DIR}")
+  add_dependencies(Sessio_transcription_model_tests sessio_models)
 endif()
