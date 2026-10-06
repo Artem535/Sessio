@@ -34,6 +34,7 @@ struct EngineStats {
   uint64_t decode_failures = 0;
   uint64_t dropped_on_stop = 0;
   uint64_t track_failures = 0;
+  uint64_t callback_failures = 0;  // on_phrase/on_delayed threw; the phrase is lost
   size_t queued = 0;
   bool delayed = false;
 };
@@ -52,7 +53,10 @@ class TranscriptionEngine {
   TranscriptionEngine(const TranscriptionEngine&) = delete;
   TranscriptionEngine& operator=(const TranscriptionEngine&) = delete;
 
-  // Calls the VAD factory on the calling thread.
+  // Calls the VAD factory on the calling thread; exceptions from the factory
+  // propagate to the caller and no track is added. A duplicate id is ignored,
+  // including a re-add right after removeTrack() until the segmenter thread has
+  // erased the old track.
   void addTrack(const TrackInfo& info, int64_t start_offset_ms);
   // Flushes the track's open phrase. Later audio for it is ignored.
   void removeTrack(const TrackId& id);
@@ -60,7 +64,8 @@ class TranscriptionEngine {
   // seen for a track wins.
   void pushAudio(const TrackId& id, const int16_t* samples, size_t count, int sample_rate);
   // Stops accepting audio, processes what is queued, waits up to drain_timeout
-  // for decoding, drops the rest (counted). Idempotent.
+  // for decoding, drops the rest (counted). Idempotent. Must not be called from
+  // inside a callback (it would join the calling thread).
   void stop(std::chrono::milliseconds drain_timeout = std::chrono::seconds(5));
 
   EngineStats stats() const;
@@ -124,6 +129,7 @@ class TranscriptionEngine {
   std::atomic<uint64_t> decode_failures_{0};
   std::atomic<uint64_t> dropped_on_stop_{0};
   std::atomic<uint64_t> track_failures_{0};
+  std::atomic<uint64_t> callback_failures_{0};
 
   std::thread segmenter_thread_;
   std::thread decode_thread_;

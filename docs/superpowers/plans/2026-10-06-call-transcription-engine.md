@@ -48,12 +48,12 @@ src/transcription/speech_recognizer.h     ISpeechRecognizer
 src/transcription/model_locator.{h,cpp}   find model files per platform
 src/transcription/transcription_engine.{h,cpp}  tracks, threads, queues, stats
 src/transcription/sherpa_backend.{h,cpp}  sherpa VAD + recogniser (links sherpa-onnx-cxx-api)
-test/transcription_resampler_tests.cpp
-test/transcription_segmenter_tests.cpp
-test/transcription_locator_tests.cpp
-test/transcription_engine_tests.cpp       fakes, no model
-test/transcription_model_tests.cpp        real model; skipped without model; ctest label `models`
-test/transcription_test_support.h         FakeVad, FakeRecognizer, audio builders, waitFor
+test/transcription/transcription_resampler_tests.cpp
+test/transcription/transcription_segmenter_tests.cpp
+test/transcription/transcription_locator_tests.cpp
+test/transcription/transcription_engine_tests.cpp       fakes, no model
+test/transcription/transcription_model_tests.cpp        real model; skipped without model; ctest label `models`
+test/transcription/transcription_test_support.h         FakeVad, FakeRecognizer, audio builders, waitFor
 ```
 
 Modify: root `CMakeLists.txt` (include `cmake/Transcription.cmake`, `add_subdirectory(src/transcription)`, install rules), `test/CMakeLists.txt`, `.github/workflows/cmake-multi-platform.yml`, `packaging/Sessio.iss`, the spec (path, platform scope).

@@ -233,6 +233,24 @@ TEST(TranscriptionEngineTest, ThrowingPhraseCallbackKeepsEngineRunningAndIsNotAD
   EXPECT_EQ(calls.load(), 3);
   EXPECT_EQ(engine.stats().decode_failures, 0u);
   EXPECT_EQ(engine.stats().phrases, 0u);
+  EXPECT_EQ(engine.stats().callback_failures, 3u);
+}
+
+TEST(TranscriptionEngineTest, DelayedFlagClearsWhenQueueDrainsWithoutNewPhrase) {
+  Collector c;
+  auto rec = std::make_shared<FakeRecognizer>([](int, size_t) {
+    std::this_thread::sleep_for(120ms);
+    return std::string("slow");
+  });
+  EngineConfig config;
+  config.delayed_after = 50ms;
+  auto engine = makeEngine(c, rec, config);
+  engine->addTrack({"alice", TrackRole::Participant, "Alice"}, 0);
+  for (int i = 0; i < 3; ++i) push(*engine, "alice", concat({speech(200), silence(200)}));
+  ASSERT_TRUE(waitFor([&] { return c.sawDelayed(true); }));
+  ASSERT_TRUE(waitFor([&] { return c.size() == 3; }));
+  ASSERT_TRUE(waitFor([&] { return c.sawDelayed(false); }));
+  EXPECT_FALSE(engine->stats().delayed);
 }
 
 TEST(TranscriptionEngineTest, ThrowingDelayedCallbackDoesNotCrashAndPhrasesStillArrive) {
@@ -245,11 +263,17 @@ TEST(TranscriptionEngineTest, ThrowingDelayedCallbackDoesNotCrashAndPhrasesStill
   config.delayed_after = 50ms;
   EngineCallbacks cb;
   cb.on_phrase = [&c](const TranscribedPhrase& p) { c.add(p); };
-  cb.on_delayed = [](bool) { throw std::runtime_error("delayed boom"); };
+  std::atomic<int> delayed_calls{0};
+  cb.on_delayed = [&delayed_calls](bool) {
+    ++delayed_calls;
+    throw std::runtime_error("delayed boom");
+  };
   TranscriptionEngine engine([] { return std::make_unique<FakeVad>(); }, rec, cb, config);
   engine.addTrack({"alice", TrackRole::Participant, "Alice"}, 0);
   for (int i = 0; i < 3; ++i) push(engine, "alice", concat({speech(200), silence(200)}));
   ASSERT_TRUE(waitFor([&] { return c.size() == 3; }));
+  ASSERT_TRUE(waitFor([&] { return delayed_calls.load() > 0; }));
+  ASSERT_TRUE(waitFor([&] { return engine.stats().callback_failures > 0; }));
 }
 
 TEST(TranscriptionEngineTest, FailingTrackIsIsolatedAndCounted) {

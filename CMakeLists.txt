@@ -192,9 +192,18 @@ add_subdirectory(src/app)
 
 include_directories(src/app)
 
+option(SESSIO_BUILD_TRANSCRIPTION_TESTS
+    "Build only the transcription tests (used by CI; PCM_BUILD_TESTS includes them)" OFF)
+
 if(PCM_BUILD_TESTS)
   enable_testing()
   add_subdirectory(test)
+endif()
+
+# Self-contained and cheap to build: no QApplication, so CI can enable just these.
+if(SESSIO_TRANSCRIPTION_ENABLED AND (SESSIO_BUILD_TRANSCRIPTION_TESTS OR PCM_BUILD_TESTS))
+  enable_testing()
+  add_subdirectory(test/transcription)
 endif()
 
 set(PCM_APP_SOURCES
@@ -292,6 +301,28 @@ if(SESSIO_TRANSCRIPTION_ENABLED)
       $<TARGET_FILE:sherpa-onnx-cxx-api>
       DESTINATION ${_sessio_ml_libs_dest})
   install(FILES ${SESSIO_ONNXRUNTIME_LIBS} DESTINATION ${_sessio_ml_libs_dest})
+  if(UNIX AND NOT APPLE)
+    # The sherpa libs are linked in the build tree with an absolute RUNPATH into
+    # the build dir; give the installed copies a clean $ORIGIN (they sit next to
+    # libonnxruntime). macOS: not handled here, the libs go to Contents/Frameworks.
+    find_program(SESSIO_PATCHELF patchelf)
+    if(NOT SESSIO_PATCHELF)
+      message(WARNING "patchelf not found: installed sherpa-onnx libraries will keep the build RUNPATH")
+    else()
+      install(CODE "
+        file(GLOB _sherpa_libs \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_sessio_ml_libs_dest}/libsherpa-onnx-*.so*\")
+        foreach(_lib IN LISTS _sherpa_libs)
+          if(NOT IS_SYMLINK \"\${_lib}\")
+            execute_process(COMMAND \"${SESSIO_PATCHELF}\" --set-rpath \"\$ORIGIN\" \"\${_lib}\"
+                            RESULT_VARIABLE _rc)
+            if(NOT _rc EQUAL 0)
+              message(FATAL_ERROR \"patchelf --set-rpath failed on \${_lib}\")
+            endif()
+          endif()
+        endforeach()
+      ")
+    endif()
+  endif()
 endif()
 
 if(UNIX AND NOT APPLE)

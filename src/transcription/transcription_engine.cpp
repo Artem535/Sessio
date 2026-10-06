@@ -95,6 +95,7 @@ EngineStats TranscriptionEngine::stats() const {
   s.decode_failures = decode_failures_;
   s.dropped_on_stop = dropped_on_stop_;
   s.track_failures = track_failures_;
+  s.callback_failures = callback_failures_;
   std::lock_guard lock(queue_mutex_);
   s.queued = jobs_.size();
   s.delayed = delayed_;
@@ -205,6 +206,7 @@ void TranscriptionEngine::decodeLoop() {
       try {
         callbacks_.on_delayed(delayed_now);
       } catch (...) {
+        ++callback_failures_;
       }
     }
 
@@ -224,17 +226,30 @@ void TranscriptionEngine::decodeLoop() {
           callbacks_.on_phrase(phrase);
           ++phrases_;
         } catch (...) {
+          ++callback_failures_;
         }
       } else {
         ++phrases_;
       }
     }
 
+    bool clear_delayed = false;
     {
       std::lock_guard lock(queue_mutex_);
       decoding_ = false;
+      if (jobs_.empty() && delayed_) {
+        delayed_ = false;
+        clear_delayed = true;
+      }
     }
     idle_cv_.notify_all();
+    if (clear_delayed && callbacks_.on_delayed) {
+      try {
+        callbacks_.on_delayed(false);
+      } catch (...) {
+        ++callback_failures_;
+      }
+    }
   }
   {
     std::lock_guard lock(queue_mutex_);
