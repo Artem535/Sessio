@@ -255,15 +255,48 @@ Why a VAD pipeline scales better than a streaming model:
   would take about 0.4 of a core-second per second of call for 10 tracks;
   Nemotron 560 ms at RTF 0.13 would reach 1.3, which is slower than real time.
 
-Rough estimate for GigaAM (not measured): RTF 0.03 at about 4.6 busy cores is
-about 0.14 core-seconds per second of speech, so ten people speaking at once
-would need about 1.4 cores for a moment, and typical load is a fraction of that.
+*Load test.* `spikes/asr-model-bench/asrbench/loadtest.py` runs N tracks in
+real time (100 ms chunks, paced by the wall clock, one thread and one Silero VAD
+per track) into one shared GigaAM v3 RNN-T recogniser (4 ONNX threads) with a
+single decode worker and a common queue. Each track plays 60 s of a different
+Podlodka recording. "Everybody talks" is the worst case: every participant
+speaks almost continuously. "2 talk at once" mutes each track except in the
+10 s blocks where it is one of two speakers, which is closer to a real call.
 
-Not measured in the spike: ten simultaneous tracks, the cost of ten VAD
-instances (the Silero model file is 0.6 MB, so memory is expected to be small),
-and whether one recogniser may be called from several threads (the safe design
-is a single decode worker with a queue, which also keeps the order of phrases).
-Open the load test as a follow-up before the participant limit is promised.
+[cols="3,1,1,1,1,1,1,1",options="header"]
+|===
+|Scenario |Phrases |Phrase lag p50 / p95 / max, s |Queue wait p95, s |Decode work, s of 60 |Busy cores |Backlog after audio ends, s |Memory growth, MB
+|1 track |7 |0.66 / 0.90 / 0.93 |0.00 |1.6 |0.15 |0.08 |318
+|2 tracks, everybody talks |14 |0.65 / 0.86 / 0.94 |0.02 |3.4 |0.30 |0.30 |350
+|5 tracks, everybody talks |37 |0.65 / 0.92 / 1.02 |0.37 |8.2 |0.74 |0.70 |419
+|10 tracks, everybody talks |75 |0.68 / 1.75 / 2.16 |1.34 |16.6 |1.48 |2.11 |486
+|10 tracks, 2 talk at once |17 |0.58 / 0.85 / 0.90 |0.00 |3.3 |0.36 |0.29 |466
+|===
+
+Reading the numbers:
+
+* *One model serves all tracks.* Memory grows by about 19 MB per extra track
+  (VAD instance, buffers, thread), not by 340 MB: ten tracks need about 490 MB
+  in total.
+* *A realistic call with ten people (two speaking at once) behaves like a
+  one-to-one call:* phrase lag 0.58 s median and 0.85 s at the 95th percentile,
+  no queueing, 0.36 busy cores.
+* *Worst case, ten people talking non-stop:* the median stays at 0.68 s, but the
+  95th percentile rises to 1.75 s (maximum 2.16 s) because phrases queue behind
+  the single decode worker (queue wait 1.34 s at the 95th percentile), and the
+  worker finishes 2.1 s after the audio ends. Average load is 1.5 cores, close to
+  the 1.4-core estimate made from the single-track RTF. The worker was busy
+  28% of the time, so the delay comes from bursts, not from lack of capacity.
+* *Remedies if the worst case matters:* a second recogniser and worker (about
+  300 MB more), or a higher thread count for the single recogniser. Neither was
+  tried.
+
+Limits of this test: the harness is Python, so the interpreter lock may add
+delay that a C++ implementation would not have; every track starts at the same
+instant, which makes phrase bursts more likely than in a real call; the audio is
+studio-quality podcast speech; nothing else (video, UI) was running; whether one
+recogniser may be called from several threads was not tested, which is why the
+design keeps a single decode worker, and it also keeps the phrases in order.
 
 Alternative: each participant transcribes only their own microphone on their own
 machine and sends text. It scales to any group size but needs the model on every
@@ -322,7 +355,7 @@ vcpkg.
 * Psychotherapy vocabulary and emotional speech.
 * The two-pass layer (T-One draft plus GigaAM final) and the speaker-separation
   setup with two LiveKit tracks.
-* Load with many participants (for example ten tracks in one call).
+* Load with more than ten tracks, with several decode workers, or together with a running video call.
 * CPU contention with a running video call; every measurement ran alone.
 * Windows and macOS; GPU acceleration; other quantisations.
 * Small sample: `podlodka` has 63 utterances and `podlodka-long` has 10
