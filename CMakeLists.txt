@@ -370,7 +370,7 @@ elseif(UNIX AND NOT APPLE)
   set(CPACK_RPM_SPEC_MORE_DEFINE
 "%global __provides_exclude_from ^/usr/lib(64)?/sessio/.*$
 %global __requires_exclude_from ^/usr/lib(64)?/sessio/.*$
-%global __requires_exclude ^liblivekit(_ffi)?\\.so")
+%global __requires_exclude ^(liblivekit(_ffi)?\\.so|libsherpa-onnx-.*\\.so|libonnxruntime\\.so.*)")
   # Registers Sessio.desktop (via its MimeType=x-scheme-handler/sessio entry)
   # as the sessio:// URL handler and refreshes the desktop database on
   # install; see packaging/linux/register-sessio-scheme.sh. Uninstall uses a

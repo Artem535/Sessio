@@ -422,6 +422,12 @@ jobs:
             echo "::error::RPM must not Provide shared-library sonames"
             exit 1
           fi
+          # sherpa-onnx and ONNX Runtime are bundled in /usr/lib*/sessio, so rpm's
+          # autoreq must not turn them into system dependencies.
+          if rpm -qp --requires build-release/packages/*.rpm | grep -Ei 'sherpa|onnxruntime'; then
+            echo "::error::RPM must not Require the bundled sherpa-onnx/ONNX Runtime libraries"
+            exit 1
+          fi
           for dep in 'qt6-qtbase >= 6.8' qt6-qtbase-gui qt6-qtsvg qt6-qtwayland qt6-qtmultimedia qtkeychain-qt6; do
             rpm -qp --requires build-release/packages/*.rpm | grep -Fx "$dep"
           done
