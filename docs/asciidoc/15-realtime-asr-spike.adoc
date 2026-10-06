@@ -1,0 +1,324 @@
+== ADR: Real-Time Transcription Engine — Spike Results and Recommendation
+
+*Status:* Proposed
+
+*Date:* 2026-10-06
+
+*Issue:* #116 (spike code: `spikes/asr-model-bench/`, branch `spike/116-asr-model-bench`)
+
+*Recommendation:* transcribe Russian speech with *GigaAM v3 behind a voice
+activity detector (Silero VAD)*, one pipeline per audio track, producing text
+phrase by phrase about 0.65 s after a speaker stops talking. If the product
+needs words to appear while a person is still speaking, add *T-One* as a
+streaming draft layer. Do not use Nemotron 3.5 Streaming or Parakeet TDT v3 as
+the primary Russian engine. Use Whisper turbo only as an optional
+post-session or noisy-audio engine.
+
+=== Context
+
+The commercial direction is an assistant inside one-to-one video appointments
+(see issue #73 and the calls roadmap). The assistant needs a running
+transcript of both participants, produced on the specialist's machine: session
+audio is special-category personal data, so cloud speech APIs are not the
+default. The call UI (#80) already receives one audio track per participant
+from LiveKit, so speaker separation needs no diarization model.
+
+Open questions before any product work:
+
+* Which open model gives the best Russian accuracy at an acceptable CPU and
+  memory cost next to a running video call?
+* Is a true streaming model needed, or is "voice activity detector plus an
+  offline model" good enough?
+* Can the winner be embedded in the C++/Qt application?
+
+=== Candidates
+
+All models run through one runtime, `sherpa-onnx` 1.13.8 (ONNX Runtime, CPU),
+with 4 threads, so that the comparison is about the models and not the runtime.
+
+[cols="3,2,2,1,3",options="header"]
+|===
+|Model |Type |Languages |Size |Licence (verify before shipping)
+|GigaAM v3 (RNN-T and CTC) |offline |Russian |170 MB |MIT
+|NVIDIA Parakeet TDT 0.6B v3 (int8) |offline |25 European, incl. Russian |490 MB |CC-BY-4.0
+|NVIDIA Nemotron 3.5 ASR Streaming 0.6B (160, 560, 1120 ms chunks) |streaming |40 locales, incl. Russian |475 MB each |OpenMDW
+|T-One (T-Bank) |streaming |Russian |130 MB |Apache-2.0 (from memory, not checked)
+|OpenAI Whisper large-v3-turbo |offline |99 languages |560 MB |MIT
+|===
+
+Excluded: Voxtral Realtime (4B parameters, needs a GPU; the test machine has
+none), Moonshine (English only), Vosk (clearly behind on quality).
+
+=== Method
+
+*Machine.* AMD Ryzen 7 7840HS (16 threads), 27 GB RAM, Linux, no discrete GPU.
+Every run used 4 threads and ran alone on the machine.
+
+*Test sets.*
+
+* `fleurs-clean`: 200 random utterances (seed 0, at most 25 s) from the Russian
+  test split of Google FLEURS, read speech, clean.
+* `fleurs-babble10`: the same utterances mixed with speech from three other
+  utterances ("babble") at 10 dB signal-to-noise ratio.
+* `podlodka`: 63 utterances (at most 25 s) from `bond005/podlodka_speech`,
+  spontaneous speech from an IT podcast with technical vocabulary and English
+  loanwords. This is the closest available proxy for conversation.
+* `podlodka-long`: the Podlodka clips joined into 10 recordings of 59–121 s
+  with random 0.4–1.0 s pauses. This tests a VAD on continuous audio.
+
+All audio is resampled to 16 kHz once at load time. The Podlodka dataset
+declares no licence, so it is used locally and is not stored in the repository.
+
+*Metrics.*
+
+* *WER / CER*: word and character error rate, computed over the whole test
+  set. Text is lowercased, `ё` is folded to `е`, punctuation is removed. No
+  number normalisation is applied, so "2000" against "две тысячи" counts as an
+  error for every model equally.
+* *RTF*: decode time divided by audio duration; below 1 means faster than
+  real time.
+* *cores*: average number of CPU cores busy while decoding.
+* *RSS MB*: growth of process memory caused by loading and running the model.
+* *first text*: for streaming models, the moment the first non-empty partial
+  result is available minus the speech onset. Audio is fed in 100 ms chunks.
+  Compute that cannot keep up with the audio makes the latency grow, so the
+  number is honest even for slow models. Not meaningful for VAD pipelines.
+* *final lag*: time after the last audio sample until the final text exists.
+* *phrase lag*: for VAD pipelines, time from the end of a phrase (when the
+  speaker stopped) to its text. It includes the 0.4 s of silence the VAD waits
+  for before closing a phrase.
+
+=== Results
+
+Lower WER, CER, RTF, memory and latency are better. `n/a` means the metric does not apply. "First text" of the `-vad` rows is the end of the first phrase, not a latency; read their "phrase lag" instead.
+
+.Podlodka, 10 continuous recordings of 59-121 s (spontaneous speech, real VAD)
+[cols="3,2,1,1,1,1,1,2,2,2,1",options="header"]
+|===
+|model |kind |n |WER % |CER % |RTF |cores |first text p50/p95 s |final lag p50/p95 s |phrase lag p50/p95 s |RSS MB
+
+|gigaam-v3-rnnt-vad |offline+vad |10 |8.4 |5.6 |0.03 |4.6 |6.65 / 15.89 |0.23 / 0.44 |0.64 / 0.87 |337
+|gigaam-v3-ctc-vad |offline+vad |10 |9.7 |5.9 |0.03 |3.8 |6.64 / 15.88 |0.21 / 0.43 |0.62 / 0.84 |348
+|parakeet-v3-vad |offline+vad |10 |11.3 |6.0 |0.04 |4.4 |6.74 / 16.09 |0.34 / 0.65 |0.73 / 1.08 |1241
+|nemotron-1120ms |streaming |10 |15.2 |7.6 |0.09 |6.2 |1.19 / 1.32 |0.00 / 0.00 |n/a / n/a |905
+|t-one |streaming |10 |15.4 |7.4 |0.04 |4.0 |1.04 / 1.23 |0.03 / 0.03 |n/a / n/a |448
+|nemotron-560ms |streaming |10 |15.5 |7.7 |0.13 |6.6 |1.05 / 1.28 |0.00 / 0.01 |n/a / n/a |907
+|nemotron-160ms |streaming |10 |17.4 |8.1 |0.37 |6.7 |0.65 / 1.14 |0.01 / 0.06 |n/a / n/a |937
+|===
+
+.Podlodka, 63 clips (spontaneous speech)
+[cols="3,2,1,1,1,1,1,2,2,2,1",options="header"]
+|===
+|model |kind |n |WER % |CER % |RTF |cores |first text p50/p95 s |final lag p50/p95 s |phrase lag p50/p95 s |RSS MB
+
+|gigaam-v3-rnnt |offline |63 |7.5 |5.3 |0.03 |4.6 |n/a / n/a |0.45 / 0.67 |n/a / n/a |424
+|gigaam-v3-ctc |offline |63 |8.5 |5.4 |0.03 |4.0 |n/a / n/a |0.43 / 0.61 |n/a / n/a |412
+|whisper-turbo |offline |63 |9.0 |5.1 |0.31 |3.9 |n/a / n/a |4.96 / 6.98 |n/a / n/a |2686
+|parakeet-v3 |offline |63 |9.8 |5.2 |0.04 |4.4 |n/a / n/a |0.64 / 0.94 |n/a / n/a |1422
+|t-one |streaming |63 |14.0 |7.3 |0.04 |4.0 |1.05 / 1.31 |0.04 / 0.04 |n/a / n/a |504
+|nemotron-560ms |streaming |63 |17.1 |9.5 |0.13 |6.7 |1.09 / 1.59 |0.00 / 0.07 |n/a / n/a |946
+|nemotron-160ms |streaming |63 |17.8 |8.7 |0.39 |6.6 |0.74 / 1.20 |0.06 / 0.07 |n/a / n/a |946
+|nemotron-1120ms |streaming |63 |18.1 |11.0 |0.08 |6.2 |1.18 / 2.05 |0.00 / 0.09 |n/a / n/a |946
+|===
+
+.FLEURS ru, 200 clips (read speech, clean)
+[cols="3,2,1,1,1,1,1,2,2,2,1",options="header"]
+|===
+|model |kind |n |WER % |CER % |RTF |cores |first text p50/p95 s |final lag p50/p95 s |phrase lag p50/p95 s |RSS MB
+
+|whisper-turbo |offline |200 |4.0 |1.3 |0.30 |3.9 |n/a / n/a |3.31 / 5.59 |n/a / n/a |2505
+|gigaam-v3-rnnt |offline |200 |6.3 |4.1 |0.03 |4.7 |n/a / n/a |0.33 / 0.53 |n/a / n/a |381
+|gigaam-v3-ctc |offline |200 |6.7 |4.1 |0.03 |4.0 |n/a / n/a |0.32 / 0.50 |n/a / n/a |390
+|parakeet-v3 |offline |200 |7.7 |2.4 |0.04 |4.5 |n/a / n/a |0.47 / 0.74 |n/a / n/a |1316
+|nemotron-560ms |streaming |200 |13.5 |5.4 |0.13 |6.5 |0.93 / 2.87 |0.00 / 0.07 |n/a / n/a |941
+|t-one |streaming |200 |13.7 |5.6 |0.04 |4.0 |1.11 / 3.21 |0.03 / 0.04 |n/a / n/a |515
+|nemotron-160ms |streaming |200 |14.3 |5.5 |0.36 |6.6 |0.72 / 2.76 |0.04 / 0.06 |n/a / n/a |939
+|nemotron-1120ms |streaming |200 |14.5 |6.0 |0.08 |6.1 |1.50 / 3.39 |0.00 / 0.09 |n/a / n/a |932
+|===
+
+.FLEURS ru, 200 clips with babble noise at 10 dB SNR
+[cols="3,2,1,1,1,1,1,2,2,2,1",options="header"]
+|===
+|model |kind |n |WER % |CER % |RTF |cores |first text p50/p95 s |final lag p50/p95 s |phrase lag p50/p95 s |RSS MB
+
+|whisper-turbo |offline |200 |7.2 |2.9 |0.29 |3.9 |n/a / n/a |3.33 / 5.17 |n/a / n/a |2331
+|gigaam-v3-ctc |offline |200 |9.1 |5.4 |0.03 |4.0 |n/a / n/a |0.32 / 0.50 |n/a / n/a |238
+|gigaam-v3-rnnt |offline |200 |9.4 |6.4 |0.03 |4.7 |n/a / n/a |0.34 / 0.53 |n/a / n/a |223
+|parakeet-v3 |offline |200 |14.1 |6.2 |0.04 |4.5 |n/a / n/a |0.48 / 0.75 |n/a / n/a |1134
+|nemotron-1120ms |streaming |200 |23.3 |12.0 |0.08 |6.2 |1.35 / 3.39 |0.00 / 0.09 |n/a / n/a |797
+|nemotron-560ms |streaming |200 |23.4 |12.0 |0.13 |6.6 |0.91 / 2.27 |0.00 / 0.07 |n/a / n/a |833
+|nemotron-160ms |streaming |200 |26.9 |12.9 |0.35 |6.7 |0.71 / 2.16 |0.03 / 0.06 |n/a / n/a |831
+|t-one |streaming |200 |33.0 |17.5 |0.04 |4.0 |1.09 / 2.01 |0.03 / 0.04 |n/a / n/a |360
+|===
+
+
+=== Findings
+
+*Accuracy.* GigaAM v3 is the most accurate on spontaneous Russian: 7.5% WER
+on Podlodka against 9.8% for Parakeet and 14.0% for the best streaming model
+(T-One). Whisper turbo is the most accurate on clean read speech (4.0%) and in
+babble noise (7.2%), but loses to GigaAM on spontaneous speech (9.0% against
+7.5%). Parakeet degrades most in noise among the offline models (14.1% against
+9.1–9.4% for GigaAM). Streaming models are 6.5–10.6 points behind the best offline
+model on spontaneous speech and degrade strongly in noise (T-One 33.0%,
+Nemotron 23–27%).
+
+*Cost.* GigaAM is the lightest model: RTF 0.03 and 220–420 MB of memory.
+T-One is similarly cheap (RTF 0.04, 360–520 MB). Parakeet needs about 1.3 GB.
+Nemotron needs about 950 MB and keeps 6–7 cores busy although it was
+configured for 4 threads; the 160 ms variant needs RTF 0.37–0.39, close to
+the limit for a machine that also runs a video call. Whisper needs 2.3–2.7 GB
+and RTF 0.3, which means 3–5 s of delay per short phrase.
+
+*A VAD costs little accuracy.* On pre-cut clips GigaAM RNN-T scores 7.5%; on
+continuous recordings cut by the real VAD it scores 8.4%. Parakeet goes from
+9.8% to 11.3%. On the same recordings the streaming models score 15.2–17.4%.
+GigaAM therefore stays ahead of every streaming model when it runs behind a VAD.
+
+*Latency of the VAD pipeline.* Text for a phrase is available 0.62–0.64 s
+(median) and 0.84–0.87 s (95th percentile) after the speaker stops, of which
+0.4 s is the VAD's own silence window. Streaming models show first text about
+1 s after speech starts and keep updating it while the person talks.
+
+*Nemotron chunk size.* 560 ms gave the best accuracy of the three variants and
+a first-text delay of about 1.1 s. The 160 ms variant saves 0.3 s of delay and
+costs three times the CPU; the 1120 ms variant adds delay and gains nothing.
+
+=== Gates for a streaming model
+
+Gates set in the plan before the measurements. RTF, latency and memory are taken from `podlodka`; the accuracy gate is the plan's "clean WER" and uses `fleurs-clean`:
+
+[cols="3,1,1,1,1",options="header"]
+|===
+|Model |RTF at most 0.5 |First text p95 at most 1.5 s |RSS at most 2000 MB |Clean WER within 3 points of best streaming
+|T-One |yes (0.04) |yes (1.31 s) |yes (504 MB) |yes (13.7%)
+|Nemotron 560 ms |yes (0.13) |*no* (1.59 s) |yes (946 MB) |yes (13.5%, best of all streaming)
+|Nemotron 160 ms |yes (0.39) |yes (1.20 s) |yes (946 MB) |yes (14.3%)
+|Nemotron 1120 ms |yes (0.08) |*no* (2.05 s) |yes (946 MB) |yes (14.5%)
+|===
+
+Only T-One and Nemotron 160 ms pass every gate. T-One does it with a tenth of
+the CPU (RTF 0.04 against 0.39), half the memory, and it is 3.8 points more
+accurate than Nemotron 160 ms on `podlodka` (14.0% against 17.8%); it is also
+3.1–4.1 points ahead of every Nemotron variant on that set. The gates compare
+streaming models with each other, so they do not say that streaming models are
+accurate enough: they are not as accurate as GigaAM behind a VAD.
+
+=== Decision
+
+*1. Primary engine: GigaAM v3 RNN-T behind Silero VAD.* One recogniser and one
+VAD instance per audio track, a worker thread with a queue of closed phrases
+per track. VAD settings used in the spike: threshold 0.5, minimum silence
+0.4 s, minimum speech 0.25 s, maximum phrase 20 s (forces a split so that
+phrases stay under GigaAM's 25 s limit). The CTC variant is within 0.4–1.3
+points and is slightly better in noise; RNN-T is the default.
+
+*2. Live text layer only if the product needs it.* If the assistant must show
+words while a person is speaking, run T-One on the same track as a draft and
+replace the draft with GigaAM's text when the phrase closes (two-pass, as in
+the sherpa-onnx example `two-pass-speech-recognition-from-microphone.py`).
+Costs about 500 MB more memory and one more model to maintain. This layer was
+not built or measured in the spike. If the assistant only reacts to finished
+phrases, skip it.
+
+*3. Optional engine: Whisper large-v3-turbo.* Slower by a factor of ten and
+four times larger, but the best on clean read speech and in noise and the only
+candidate here that covers 99 languages. Suitable for post-session
+re-transcription or as the engine for non-Russian sessions. Needs language
+detection and a chunking strategy for audio longer than 30 s.
+
+*4. Not recommended as the primary engine:*
+
+* Nemotron 3.5 Streaming: less accurate than T-One on spontaneous Russian,
+  almost twice the memory and 6–7 busy cores; only the 160 ms variant passes
+  every gate, and it needs RTF 0.37–0.39. It remains the candidate for multilingual live
+  text, which this spike did not test.
+* Parakeet TDT v3: not streaming, more memory than GigaAM, worse in noise.
+  Its advantage is language coverage (25 European languages), which matters
+  only if non-Russian sessions are in scope.
+
+=== Integration into the C++/Qt application
+
+*Prebuilt packages do not work with the C++ wrapper.* The latest release is
+v1.13.8 (2026-09-10). Its Linux archives named `*-lib` contain only the
+libraries; the full archives (for example `shared-no-tts`) also carry the
+headers, which are identical to the ones in the source tree. In both, the
+libraries are built with the pre-C++11 `std::string` ABI (symbols such as
+`sherpa_onnx::cxx::ReadWave(std::string const&)` mangle as `...RKSs`), while a
+current GCC emits `std::__cxx11::basic_string`. The C++ wrapper `cxx-api.h`
+therefore fails to link (`undefined reference to ... ReadWave`) and, where it
+does link, would hand the library `std::string` objects with a different
+layout. Qt applications built with a modern toolchain cannot use it this way.
+
+*Two ways that work, both verified on a 106 s Podlodka recording
+(GigaAM v3 RNN-T + Silero VAD, 4 threads):*
+
+[cols="3,2,1,1,1",options="header"]
+|===
+|Integration |API |Phrases |WER % |RTF
+|Python, `sherpa-onnx` 1.13.8 wheel |Python |10 |6.7 |0.03
+|C++ against the prebuilt shared libraries |plain C API (`c-api.h`) |10 |6.7 |0.028
+|C++ with sherpa-onnx built from source through CMake `FetchContent` |C++ API (`cxx-api.h`) |10 |6.7 |0.028
+|===
+
+All three produce the same text. The recommended path for Sessio is the third
+one: add `sherpa-onnx` with `FetchContent` (tag `v1.13.8`, shared libraries;
+Python, tests, binaries, TTS, diarization, WebSocket, PortAudio and GPU
+switched off), which builds with the application's own toolchain and ABI and
+gives the type-safe C++ wrapper. The spike configured and built it in a few
+minutes with 12 parallel jobs; the resulting `lib/` directory is 84 MB. The
+plain C API against the prebuilt libraries is the fallback if build time or
+dependencies matter more than convenience. Ready code for both is in
+`spikes/asr-model-bench/cpp/` (`asr_smoke.cc`, `from-source/asr_smoke_cxx.cc`).
+
+*Model files and settings.* GigaAM v3 RNN-T is the `sherpa-onnx` package
+`sherpa-onnx-nemo-transducer-giga-am-v3-russian-2025-12-16` with
+`encoder.int8.onnx`, `decoder.onnx`, `joiner.onnx` and `tokens.txt`, loaded as
+an offline transducer with `model_type = "nemo_transducer"`. The Silero VAD
+model is `silero_vad.onnx` from the same release page. Audio must be 16 kHz
+mono; the VAD takes 512-sample windows.
+
+Not verified: building and packaging on Windows and macOS, the effect on the
+RPM package size (issue #70) and whether `sherpa-onnx` is available through
+vcpkg.
+
+=== Not covered
+
+* Real conversation between two people over a video call: microphone, Opus
+  compression, echo and network loss all change the audio. Podlodka is a
+  studio-quality podcast.
+* Psychotherapy vocabulary and emotional speech.
+* The two-pass layer (T-One draft plus GigaAM final) and the speaker-separation
+  setup with two LiveKit tracks.
+* CPU contention with a running video call; every measurement ran alone.
+* Windows and macOS; GPU acceleration; other quantisations.
+* Small sample: `podlodka` has 63 utterances and `podlodka-long` has 10
+  recordings, so differences of 1–2 points between close models are within
+  noise. FLEURS may overlap the training data of some models, so weigh the
+  Podlodka tables higher.
+* Licences were taken from model cards and memory; the OpenMDW licence of
+  Nemotron and the Apache-2.0 licence of T-One must be reviewed before shipping.
+
+=== Consequences and next steps
+
+* Open a product issue for a `TranscriptionService` in the call UI (#80):
+  per-track VAD, worker thread, phrase queue, a model download and storage
+  flow (the models are 170–500 MB and are not bundled with the application).
+* Record 20–30 minutes of conversation with consenting colleagues, over a real
+  LiveKit call, and rerun the comparison on it before the engine is frozen.
+* Decide with the product owner whether word-by-word live text is required;
+  that decides whether the T-One layer is built.
+* Keep Whisper turbo as the second engine behind the same interface for
+  multilingual and post-session use.
+
+=== Reproduction
+
+[source,bash]
+----
+cd spikes/asr-model-bench
+uv sync --python 3.12
+uv run python -m asrbench.fetch fleurs && uv run python -m asrbench.fetch podlodka
+uv run python -m asrbench.fetch vad && uv run python -m asrbench.fetch models
+./run_matrix.sh && ./run_matrix_long.sh      # about 2 hours
+uv run python -m asrbench.report --asciidoc  # regenerates the tables above
+----

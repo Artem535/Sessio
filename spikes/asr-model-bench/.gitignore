@@ -5,3 +5,6 @@ results/
 __pycache__/
 cpp/third_party/
 cpp/build/
+cpp/from-source/build/
+results-*.log
+cpp/from-source/build-*.log

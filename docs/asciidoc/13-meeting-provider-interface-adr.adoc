@@ -1,0 +1,65 @@
+== ADR: MeetingProvider — Polymorphic, Asynchronous Interface
+
+*Status:* Accepted
+
+*Date:* 2026-09-26
+
+*Decision:* `MeetingProvider` is a true polymorphic interface (virtual
+`create`/`cancel`, one subclass per `Provider Kind`), not an enum-plus-switch
+dispatch, and its methods are asynchronous and signal-based from the start —
+even though the `ExternalUrl` implementation shipped in issue #79 does no
+I/O and never actually needs to be asynchronous.
+
+=== Context
+
+Issue #79 introduces a provider-agnostic domain seam so `Event` can carry a
+`Meeting` created by one of two `Provider Kind`s: `ExternalUrl` (today's
+behavior — the practitioner types/pastes an arbitrary http(s) link, no
+network call involved) and `LiveKit` (mints a real room via the token
+backend built in issue #78 / pull request #89). Issue #79 ships
+`ExternalUrlMeetingProvider` fully working and `LiveKitMeetingProvider` as a
+non-functional stub; the real LiveKit network integration is deferred to
+issue #80, which also builds the native call UI that will actually consume
+it.
+
+This codebase's dominant idiom for "one of several kinds of X" is an enum
+plus a `switch` over free functions (e.g. `BackupContainerKind` in
+`src/backup/encrypted_container.h`), not a polymorphic class hierarchy.
+`CredentialStore` (`src/app/credential_store.h`) is the sole exception in
+the entire codebase: an abstract, signal-based interface, chosen because its
+two concerns (OS keychain access) are asynchronous and could plausibly grow
+more implementations. `MeetingProvider` needed the same two questions
+settled together, since they compound: whether to follow the dominant
+enum+switch idiom or the `CredentialStore` exception, and whether its
+methods should be synchronous or asynchronous.
+
+=== Decision
+
+*Polymorphic interface.* `LiveKit`'s real implementation (issue #80) will
+have materially different runtime behavior from `ExternalUrl` — real
+network I/O, connection failures, retries — not just a different branch of
+otherwise-identical logic. This is exactly the kind of divergence that
+justified `CredentialStore`'s exception to the enum+switch idiom elsewhere
+in this codebase, so `MeetingProvider` follows the same exception rather
+than the dominant pattern.
+
+*Asynchronous, signal-based methods.* `create`/`cancel` report completion
+through signals (e.g. `created(MeetingDescriptor)` /
+`createFailed(QString)`), mirroring `CredentialStore`'s
+`readFinished`/`writeFinished`. `ExternalUrlMeetingProvider` performs no I/O
+and emits its result synchronously within the call — but the interface
+shape does not need to change when issue #80 gives `LiveKitMeetingProvider`
+a real network client, because the asynchronous contract was already there.
+
+=== Consequences
+
+`ExternalUrlMeetingProvider` carries an asynchronous contract it does not
+internally need — some extra ceremony for a trivial implementation. This is
+accepted deliberately to avoid a breaking change to `MeetingProvider`'s
+public interface in issue #80, once `LiveKit` needs it for real.
+
+`MeetingCoordinator`, the non-Qt-UI class that selects a provider by
+`Provider Kind` and drives it on behalf of the event-editing UI, must expose
+the same asynchronous/signal-based shape to its own callers even for the
+`ExternalUrl` path, so the UI-facing contract stays uniform regardless of
+provider and does not need to change when `LiveKit` becomes real.

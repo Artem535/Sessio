@@ -1,0 +1,91 @@
+== ADR: LiveKit Meeting Invitation Security Model
+
+*Status:* Accepted
+
+*Date:* 2026-09-25
+
+*Decision:* the client invitation link stays valid for repeated token
+redemption until the meeting's scheduled window closes or it is explicitly
+invalidated — it is not single-use. To compensate, joining requires a
+second secret (a 6-digit passcode) delivered to the client through a
+different channel than the link, and the client's LiveKit identity is fixed
+per meeting so a duplicate redemption always visibly displaces the existing
+session rather than silently joining alongside it.
+
+=== Context
+
+`docs/video-roadmap.md` §5.1 calls the client invitation link "one-time"
+without defining whether that means single-redemption or single-issuance.
+Walking through concrete scenarios surfaced two conflicting needs:
+
+* A client who loses connection, closes the tab, or relaunches after their
+  short-lived JWT expires must be able to rejoin the same meeting without
+  the practitioner manually re-issuing a new invitation. This requires the
+  invitation code to remain redeemable more than once.
+* A bearer link that remains redeemable is also usable by anyone who
+  obtains it — forwarded by mistake, left in browser history, intercepted
+  in transit. §5.4/§9 explicitly rule out collecting client PII to verify
+  identity, so the backend has no way to confirm the redeemer is the
+  intended client by who they are.
+
+Neither concern can be resolved by toggling single-use vs. reusable alone:
+single-use does not stop an attacker who obtains the link before the real
+client does (first redemption wins), and it breaks legitimate reconnects.
+
+=== Decision
+
+==== Invitation code lifetime
+
+The invitation code remains valid for repeated `POST
+/v1/invitations/{code}/client-token` calls until the meeting's scheduled
+window closes (start time minus a short pre-join buffer, through end time
+plus a short grace period) or it is invalidated via `POST
+/v1/meetings/{meeting_ref}/invalidate`. "One-time" in product copy means
+one invitation is issued per meeting, not that it stops working after first
+use.
+
+==== Room passcode
+
+`POST /v1/invitations/{code}/client-token` requires an additional
+`passcode` field: a 6-digit numeric code generated alongside the invitation
+code at meeting creation, stored hashed (same treatment as the invitation
+code itself), and shown to the practitioner in the desktop app separately
+from the invitation link — never embedded in the link or sent through the
+same message as the link. The practitioner communicates it to the client
+through a separate channel (spoken at session start, a separate message,
+etc.).
+
+A wrong passcode counts against a per-invitation attempt limit of 5; on the
+6th failed attempt the invitation is invalidated the same way an explicit
+`invalidate` call would, and the practitioner must issue a new one. This is
+the actual security boundary — 6 digits alone is brute-forceable without
+it, but combined with a hard attempt cap it is not.
+
+==== Fixed participant identity
+
+The client-role JWT always carries the same LiveKit participant identity
+for a given `meeting_ref` (e.g. derived deterministically from `meeting_ref`,
+not from anything client-supplied). LiveKit's standard behavior of
+displacing an existing connection when a new one joins with the same
+identity is relied on deliberately: if the invitation code and passcode are
+both compromised and someone else redeems them while the real client is
+already connected, the real client is visibly disconnected rather than a
+silent second listener joining unnoticed. This does not prevent the
+takeover itself — it only guarantees it cannot happen silently.
+
+=== Consequences
+
+Issue #78's `client-token` endpoint contract gains a required `passcode`
+parameter and a per-invitation failed-attempt counter; issue #80's
+practitioner UI must display the passcode next to (not inside) the
+invitation link and make clear it should be sent separately. The
+`meetings`/`invitations` schema needs a scheduled-window column pair (or a
+reference to the source `Event`'s time) to compute passcode/link expiry,
+not just a flat TTL from creation time.
+
+Residual risk: if both the link and the passcode leak together (e.g. both
+forwarded in the same message, defeating the "separate channel" intent),
+this model offers no further protection beyond the visible-displacement
+signal. This is accepted for MVP given the no-client-PII constraint; a
+stronger guarantee would require verifying client identity, which is
+explicitly out of scope.

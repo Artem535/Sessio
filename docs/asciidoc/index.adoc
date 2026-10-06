@@ -15,6 +15,10 @@ include::07-testing.adoc[]
 include::08-recursive-model-migration.adoc[]
 include::09-recurring-events.adoc[]
 include::10-encrypted-backup-adr.adoc[]
+include::11-token-backend-account-model-adr.adoc[]
+include::12-invitation-security-model-adr.adoc[]
+include::13-meeting-provider-interface-adr.adoc[]
+include::15-realtime-asr-spike.adoc[]
 
 == Roadmap
 

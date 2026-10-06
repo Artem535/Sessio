@@ -1695,3 +1695,13 @@ Do not open a MR/PR and do not close the issue: the spike is an investigation, a
 - **Spec coverage:** models requested (Parakeet v3, GigaAM and its newer v3, newer Nemotron, plus T-One and Whisper baseline) are in the registry (Task 4). Metrics the user asked about are WER, CER, first-text latency, final lag, RTF, CPU cores, and peak RSS (Tasks 3, 5, 6). Quality under noise is covered by babble (Task 2). Real conversational speech is covered only if the user supplies `own` recordings and is listed under "Not covered" otherwise. The C++ requirement is covered by Task 8. The decision gate is in Task 7.
 - **Known risks recorded in the plan:** `OnlineRecognizer.from_transducer` for Nemotron and the Whisper file-name globs were checked against sherpa-onnx source examples but not run; Task 4 Step 5 is the explicit place they are verified and fixed. The OpenMDW licence of Nemotron needs a licence review before any shipping decision.
 - **Type consistency:** `Utterance`, `Transcript`, `pick`, `OfflineAdapter`, `StreamingAdapter`, `build`, `run_benchmark`, `summarize`, `render_markdown` names and signatures match across tasks. The result JSON keys written in Task 5 match those read in Task 6.
+
+## Deviations from this plan (recorded after execution)
+
+- The conversational test set is `bond005/podlodka_speech` (public, hand-transcribed) instead of team recordings; the `own` loader stays available.
+- `sherpa-onnx-core==1.13.8` is a required dependency: the `sherpa-onnx` wheel does not pull the native libraries by itself.
+- Peak memory is measured as RSS growth over the level after the dataset was loaded (`RssPeak` in `runner.py`); `ru_maxrss` included dataset decoding.
+- All audio is resampled to 16 kHz once at load time (`to_16k`), so recognizers do not pay for resampling inside the timed section.
+- Added after the first results: `VadOfflineAdapter` (offline model behind Silero VAD), the `-vad` model ids, and the `podlodka-long` dataset, to measure phrase-mode latency and accuracy on continuous audio.
+- Task 8 was done with GigaAM v3 + VAD instead of Nemotron, and found that the prebuilt Linux sherpa-onnx libraries use the old `std::string` ABI. Two working variants are in `cpp/`: the C API against the prebuilt libraries (`asr_smoke.cc`) and the C++ API with sherpa-onnx built through `FetchContent` (`from-source/`).
+- The decision document is `docs/asciidoc/15-realtime-asr-spike.adoc` (AsciiDoc, generated tables from `report --asciidoc`) instead of `docs/asr-spike-results.md`.
