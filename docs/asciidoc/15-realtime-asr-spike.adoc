@@ -206,9 +206,10 @@ accurate enough: they are not as accurate as GigaAM behind a VAD.
 
 === Decision
 
-*1. Primary engine: GigaAM v3 RNN-T behind Silero VAD.* One recogniser and one
-VAD instance per audio track, a worker thread with a queue of closed phrases
-per track. VAD settings used in the spike: threshold 0.5, minimum silence
+*1. Primary engine: GigaAM v3 RNN-T behind Silero VAD.* One shared recogniser
+for the whole call, one small VAD instance per audio track, and one worker
+(or a small pool) that decodes closed phrases from a common queue; see
+"Many participants" below. VAD settings used in the spike: threshold 0.5, minimum silence
 0.4 s, minimum speech 0.25 s, maximum phrase 20 s (forces a split so that
 phrases stay under GigaAM's 25 s limit). The CTC variant is within 0.4–1.3
 points and is slightly better in noise; RNN-T is the default.
@@ -236,6 +237,37 @@ detection and a chunking strategy for audio longer than 30 s.
 * Parakeet TDT v3: not streaming, more memory than GigaAM, worse in noise.
   Its advantage is language coverage (25 European languages), which matters
   only if non-Russian sessions are in scope.
+
+=== Many participants
+
+The recommendation does not mean one model per participant. The model weights
+(about 340 MB for GigaAM) are loaded once. A sherpa-onnx offline recogniser
+creates a cheap stream object for every phrase, so all tracks share the same
+recogniser. Per participant only the VAD state and a short audio buffer exist.
+
+Why a VAD pipeline scales better than a streaming model:
+
+* An offline model runs only on phrases. Silence costs only the VAD. Cost
+  grows with the amount of speech in the call, and in a conversation only one or
+  two people speak at a time.
+* A streaming model decodes every active stream continuously, silence included,
+  and that cost multiplies by the number of participants. T-One at RTF 0.04
+  would take about 0.4 of a core-second per second of call for 10 tracks;
+  Nemotron 560 ms at RTF 0.13 would reach 1.3, which is slower than real time.
+
+Rough estimate for GigaAM (not measured): RTF 0.03 at about 4.6 busy cores is
+about 0.14 core-seconds per second of speech, so ten people speaking at once
+would need about 1.4 cores for a moment, and typical load is a fraction of that.
+
+Not measured in the spike: ten simultaneous tracks, the cost of ten VAD
+instances (the Silero model file is 0.6 MB, so memory is expected to be small),
+and whether one recogniser may be called from several threads (the safe design
+is a single decode worker with a queue, which also keeps the order of phrases).
+Open the load test as a follow-up before the participant limit is promised.
+
+Alternative: each participant transcribes only their own microphone on their own
+machine and sends text. It scales to any group size but needs the model on every
+client, so it is not suitable for weak or shared devices and was not evaluated.
 
 === Integration into the C++/Qt application
 
@@ -290,6 +322,7 @@ vcpkg.
 * Psychotherapy vocabulary and emotional speech.
 * The two-pass layer (T-One draft plus GigaAM final) and the speaker-separation
   setup with two LiveKit tracks.
+* Load with many participants (for example ten tracks in one call).
 * CPU contention with a running video call; every measurement ran alone.
 * Windows and macOS; GPU acceleration; other quantisations.
 * Small sample: `podlodka` has 63 utterances and `podlodka-long` has 10
