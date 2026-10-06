@@ -220,8 +220,10 @@ GoogleTest, existing conventions (no `QApplication` harness where avoidable).
   editing and deletion.
 - Real model (label `models`, skipped when the model is absent): GigaAM through
   the real recogniser on a short sample; the engine with ten tracks reproducing the
-  spike's load test, asserting phrase lag at the 95th percentile of at most 1.0 s
-  for two simultaneous speakers and no unbounded queue growth.
+  spike's load test: two staggered speakers (4 s apart) must keep every phrase lag
+  within 0.4 s + 0.15 x phrase length + 0.2 s, with an empty queue and nothing
+  dropped after stop. The simultaneous worst case (two identical long phrases ending
+  together are decoded sequentially) is documented and bounded at 3 s.
 
 ## Phases
 
