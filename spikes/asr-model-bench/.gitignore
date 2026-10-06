@@ -1,0 +1,7 @@
+models/
+data/
+results/
+.venv/
+__pycache__/
+cpp/third_party/
+cpp/build/

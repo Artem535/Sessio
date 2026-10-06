@@ -16,6 +16,7 @@
 - `models/`, `data/`, `results/`, and `.venv/` are gitignored. Only code, tests, `README.md`, and `docs/asr-spike-results.md` are committed.
 - Never put real client or session audio, or transcripts of it, in the repo, in logs, or in the results document. Own test recordings come from the team reading text or talking about neutral topics, with every speaker's consent.
 - Text is normalized identically for every model before WER/CER: lowercase, `ё`→`е`, punctuation removed, whitespace collapsed. No inverse text normalization is applied, so digit-vs-word differences count as errors for every model equally. Record this limitation in the results document.
+- Conversational-style test set: `bond005/podlodka_speech` from Hugging Face (spontaneous Russian podcast speech with IT vocabulary and English loanwords, hand transcripts, 16 kHz; all three splits are pooled). It is test data only, kept under the gitignored `data/` directory, and not redistributed. No licence is declared on the dataset card, so do not commit it or its transcripts.
 - Utterances longer than 25 s are excluded (GigaAM's per-clip limit), for every model.
 - Every new file starts with a one-line comment saying it is throwaway spike code (issue number added in Task 0).
 
@@ -116,6 +117,7 @@ dependencies = [
   "numpy>=1.26",
   "jiwer>=3.0",
   "psutil>=5.9",
+  "pyarrow>=15",
 ]
 
 [dependency-groups]
@@ -303,6 +305,7 @@ git commit -m "feat(spike): scaffold ASR bench project with text normalization a
   - `first_speech_s(samples: np.ndarray, sr: int) -> float`
   - `@dataclass(frozen=True) Utterance(id: str, samples: np.ndarray, sr: int, ref: str, onset_s: float)` with property `duration_s`
   - `load_fleurs(root: Path, n: int, seed: int = 0, max_seconds: float = 25.0) -> list[Utterance]`
+  - `load_podlodka(root: Path, n: int, seed: int = 0, max_seconds: float = 25.0) -> list[Utterance]` (reads `*.parquet` in `root`; each row has `audio.bytes`, `transcription`, `episode`)
   - `load_own(root: Path, max_seconds: float = 25.0) -> list[Utterance]`
   - `with_babble(utts: list[Utterance], snr_db: float, seed: int = 0) -> list[Utterance]`
 
@@ -407,6 +410,31 @@ def test_load_fleurs_sampling_is_deterministic_and_bounded(tmp_path):
     assert len(a) == 3
 
 
+def test_load_podlodka_reads_parquet_rows_and_filters_long_clips(tmp_path):
+    import io
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from asrbench.datasets import load_podlodka
+
+    def wav_bytes(seconds):
+        buf = io.BytesIO()
+        t = np.arange(int(seconds * SR)) / SR
+        sf.write(buf, (0.1 * np.sin(2 * np.pi * 220 * t)).astype(np.float32), SR, format="WAV")
+        return buf.getvalue()
+
+    rows = [
+        {"audio": {"bytes": wav_bytes(1.0), "path": "a.wav"}, "transcription": "Первая, фраза.", "episode": 1, "title": "t"},
+        {"audio": {"bytes": wav_bytes(26.0), "path": "b.wav"}, "transcription": "Длинная.", "episode": 1, "title": "t"},
+        {"audio": {"bytes": wav_bytes(2.0), "path": "c.wav"}, "transcription": "  ", "episode": 2, "title": "t"},
+    ]
+    pq.write_table(pa.Table.from_pylist(rows), tmp_path / "test.parquet")
+    utts = load_podlodka(tmp_path, n=10, seed=0, max_seconds=25.0)
+    assert [(u.id, u.ref) for u in utts] == [("test-0", "Первая, фраза.")]
+    assert abs(utts[0].duration_s - 1.0) < 1e-3
+
+
 def test_load_own_pairs_wav_with_txt(tmp_path):
     _write(tmp_path / "s1.wav", 1.0)
     (tmp_path / "s1.txt").write_text("Первая фраза\n", encoding="utf-8")
@@ -495,6 +523,7 @@ def first_speech_s(samples: np.ndarray, sr: int, frame_s: float = 0.02) -> float
 
 ```python
 # Throwaway spike code (issue #116) — not part of the Sessio build.
+import io
 import random
 from dataclasses import dataclass
 from pathlib import Path
@@ -538,6 +567,28 @@ def load_fleurs(root: Path, n: int, seed: int = 0, max_seconds: float = 25.0) ->
         utt = _make(name, index[name], raw, max_seconds)
         if utt is not None:
             out.append(utt)
+        if len(out) == n:
+            break
+    return out
+
+
+def load_podlodka(root: Path, n: int, seed: int = 0, max_seconds: float = 25.0) -> list[Utterance]:
+    import pyarrow.parquet as pq
+
+    rows = []
+    for parquet in sorted(root.glob("*.parquet")):
+        for i, row in enumerate(pq.read_table(parquet).to_pylist()):
+            rows.append((f"{parquet.stem}-{i}", row["audio"]["bytes"], row["transcription"]))
+    random.Random(seed).shuffle(rows)
+    out: list[Utterance] = []
+    for id_, wav_bytes, text in rows:
+        if not text.strip():
+            continue
+        samples, sr = sf.read(io.BytesIO(wav_bytes), dtype="float32", always_2d=True)
+        samples = samples[:, 0].copy()
+        if len(samples) / sr > max_seconds:
+            continue
+        out.append(Utterance(id_, samples, int(sr), text.strip(), first_speech_s(samples, int(sr))))
         if len(out) == n:
             break
     return out
@@ -739,7 +790,7 @@ def test_streaming_latency_grows_when_compute_cannot_keep_up():
     ad = StreamingAdapter(rec, feed_s=0.1, clock=clock, cpu_clock=cpu)
     t = ad.transcribe(_utt(seconds=1.0, onset=0.0))
     assert t.first_text_s == pytest.approx(0.3)  # 0.1 audio + 0.2 compute
-    assert t.final_lag_s == pytest.approx(1.0)   # 10 chunks * 0.2 = 2.0 done vs 1.0 audio end
+    assert t.final_lag_s == pytest.approx(1.1)   # done = 0.3 + 9 * 0.2 = 2.1 vs 1.0 audio end
 
 
 def test_streaming_sets_language_and_pads():
@@ -917,7 +968,7 @@ Model ids and archives (all from the `asr-models` release; sizes are download si
 | `nemotron-1120ms` | `sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-1120ms-int8-2026-06-11` | streaming | 475 MB |
 | `t-one` | `sherpa-onnx-streaming-t-one-russian-2025-09-08` | streaming | 128 MB |
 
-Total about 3.0 GB, plus FLEURS ru test audio (about 0.5 GB). **Ask the user before downloading.**
+Total about 3.0 GB, plus FLEURS ru test audio (about 0.5 GB) and Podlodka (about 0.2 GB). The user approved the downloads.
 
 - [ ] **Step 1: Write `models.py`**
 
@@ -1005,6 +1056,8 @@ from asrbench.models import DEFAULT_MODELS_DIR, MODEL_SPECS
 RELEASE = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models"
 FLEURS = "https://huggingface.co/datasets/google/fleurs/resolve/main/data/ru_ru"
 DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "fleurs-ru"
+PODLODKA_DIR = Path(__file__).resolve().parents[1] / "data" / "podlodka"
+PODLODKA = "https://huggingface.co/datasets/bond005/podlodka_speech/resolve/main/data"
 
 
 def _curl(url: str, out: Path) -> None:
@@ -1037,20 +1090,29 @@ def fetch_fleurs() -> None:
     tarball.unlink()
 
 
+def fetch_podlodka() -> None:
+    for split in ("test", "validation", "train"):
+        target = PODLODKA_DIR / f"{split}.parquet"
+        if not target.is_file():
+            _curl(f"{PODLODKA}/{split}-00000-of-00001.parquet", target)
+
+
 if __name__ == "__main__":
     what, *rest = sys.argv[1:] or ["models"]
     if what == "models":
         fetch_models(rest or list(MODEL_SPECS))
     elif what == "fleurs":
         fetch_fleurs()
+    elif what == "podlodka":
+        fetch_podlodka()
     else:
-        sys.exit("usage: python -m asrbench.fetch (models [ids...] | fleurs)")
+        sys.exit("usage: python -m asrbench.fetch (models [ids...] | fleurs | podlodka)")
 ```
 
 - [ ] **Step 3: Download (after the user agrees to about 3.5 GB)**
 
 ```bash
-cd spikes/asr-model-bench && uv run python -m asrbench.fetch fleurs && uv run python -m asrbench.fetch models
+cd spikes/asr-model-bench && uv run python -m asrbench.fetch fleurs && uv run python -m asrbench.fetch podlodka && uv run python -m asrbench.fetch models
 ls models/*/ | head -60
 ```
 
@@ -1171,8 +1233,8 @@ import resource
 import time
 from pathlib import Path
 
-from asrbench.datasets import Utterance, load_fleurs, load_own, with_babble
-from asrbench.fetch import DATA_DIR
+from asrbench.datasets import Utterance, load_fleurs, load_own, load_podlodka, with_babble
+from asrbench.fetch import DATA_DIR, PODLODKA_DIR
 from asrbench.models import DEFAULT_MODELS_DIR, MODEL_SPECS, build
 
 RESULTS_DIR = Path(__file__).resolve().parents[1] / "results"
@@ -1195,6 +1257,8 @@ def _dataset(name: str, n: int, own_dir: Path | None) -> list[Utterance]:
         return load_fleurs(DATA_DIR, n=n, seed=0)
     if name == "fleurs-babble10":
         return with_babble(load_fleurs(DATA_DIR, n=n, seed=0), snr_db=10.0, seed=0)
+    if name == "podlodka":
+        return load_podlodka(PODLODKA_DIR, n=n, seed=0)
     if name == "own":
         if own_dir is None:
             raise SystemExit("--own-dir is required for dataset 'own'")
@@ -1419,6 +1483,7 @@ Compares open ASR models on Russian speech. See `docs/superpowers/plans/2026-10-
 ```bash
 uv sync --python 3.12
 uv run python -m asrbench.fetch fleurs      # ~0.5 GB
+uv run python -m asrbench.fetch podlodka    # ~0.2 GB, spontaneous podcast speech
 uv run python -m asrbench.fetch models      # ~3 GB
 uv run pytest -m "not models"               # unit tests
 uv run pytest -m models                     # real-model smoke tests
@@ -1435,18 +1500,18 @@ in a directory and pass `--dataset own --own-dir <dir>`. Never use real client s
 ```bash
 cd spikes/asr-model-bench
 for m in parakeet-v3 gigaam-v3-rnnt gigaam-v3-ctc whisper-turbo nemotron-160ms nemotron-560ms nemotron-1120ms t-one; do
-  for d in fleurs-clean fleurs-babble10; do
+  for d in fleurs-clean fleurs-babble10 podlodka; do
     uv run python -m asrbench.runner --model $m --dataset $d --n 200 --threads 4 || echo "FAILED $m $d"
   done
 done
 ```
 
-Expected: 16 `wrote ...` lines. Runtime is roughly 5 to 20 minutes per model per dataset, longest for Whisper. Any `FAILED` line: record the error in the results document and continue. If the user supplies own recordings, add `--dataset own --own-dir <dir>` runs for every model.
+Expected: 24 `wrote ...` lines. Runtime is roughly 5 to 20 minutes per model per dataset, longest for Whisper. Any `FAILED` line: record the error in the results document and continue. If the user supplies own recordings, add `--dataset own --own-dir <dir>` runs for every model.
 
 - [ ] **Step 3: Generate the table**
 
 Run: `cd spikes/asr-model-bench && uv run python -m asrbench.report | tee /tmp/asr-report.md`
-Expected: two tables (`fleurs-babble10`, `fleurs-clean`) with 8 rows each.
+Expected: three tables (`fleurs-babble10`, `fleurs-clean`, `podlodka`) with 8 rows each.
 
 - [ ] **Step 4: Write `docs/asr-spike-results.md`**
 
@@ -1474,10 +1539,10 @@ Apply these gates to the live candidate (change a gate only by writing down why)
 - first-text latency p95 ≤ 1.5 s
 - peak RSS ≤ 2000 MB
 - clean-WER within 3 points of the best streaming model
-List which gates each streaming model passes.
+List which gates each streaming model passes. Judge conversational quality mainly by the `podlodka` table (spontaneous speech), FLEURS is read speech.
 
 ## Not covered
-Real conversational speech, domain vocabulary, other OSes, GPU, Whisper via whisper.cpp, Voxtral, INT4/other quantizations, `own` recordings if not provided.
+Dialogue between two speakers over a video call (Podlodka is a podcast: studio-quality microphones, no codec), psychotherapy vocabulary, other OSes, GPU, Whisper via whisper.cpp, Voxtral, INT4/other quantizations, team-recorded `own` recordings (unused).
 
 ## Next steps
 Concrete follow-up issues (integration into the call pipeline, language auto-detect, model download UX, licence review of OpenMDW/CC-BY-4.0).
