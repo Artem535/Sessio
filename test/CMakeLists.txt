@@ -959,6 +959,8 @@ gtest_discover_tests(Sessio_accent_color_tests)
 if(SESSIO_TRANSCRIPTION_ENABLED)
   add_executable(Sessio_transcription_tests
       transcription_resampler_tests.cpp
+      transcription_segmenter_tests.cpp
+      transcription_test_support.h
   )
   target_link_libraries(Sessio_transcription_tests PRIVATE
       GTest::gtest
