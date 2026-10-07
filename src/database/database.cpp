@@ -1900,6 +1900,18 @@ bool Database::set_schedule_invitation_generation(const int64_t series_id,
 
 // --- Live call transcripts ---
 
+namespace {
+
+bool eventExists(duckdb::Connection &conn, const int64_t id) {
+  auto result = executePrepared(conn, constance::kEventExistsQuery,
+                                {duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) return false;
+  auto chunk = result->Fetch();
+  return chunk && chunk->size() > 0;
+}
+
+}  // namespace
+
 int64_t Database::add_transcript(const int64_t event_id, const std::string &consent_scope,
                                  const std::optional<std::string> &model_id,
                                  const std::optional<int64_t> consent_given_at_ms) {
@@ -1910,6 +1922,10 @@ int64_t Database::add_transcript(const int64_t event_id, const std::string &cons
   const auto now = nowMs();
   std::optional<duckdb::Connection> ownedConn;
   auto &conn = write_connection(ownedConn);
+  if (!eventExists(conn, event_id)) {
+    PLOG_WARNING << "Rejected transcript for unknown event (event_id=" << event_id << ")";
+    return 0;
+  }
   auto result = executePrepared(
       conn, constance::kInsertTranscriptQuery,
       {duckdb::Value::BIGINT(event_id), duckdb::Value(consent_scope),
@@ -2032,6 +2048,13 @@ bool Database::delete_transcript(const int64_t id) {
   std::optional<duckdb::Connection> ownedConn;
   auto &conn = write_connection(ownedConn);
   if (!transcriptExists(conn, id)) return false;
+  auto phrases = executePrepared(conn, constance::kDeletePhrasesByTranscriptIdQuery,
+                                 {duckdb::Value::BIGINT(id)});
+  if (!phrases || phrases->HasError()) {
+    PLOG_ERROR << "Failed to delete transcript phrases (transcript_id=" << id
+               << "): " << (phrases ? phrases->GetError() : "prepare failed");
+    return false;
+  }
   auto result = executePrepared(conn, constance::kDeleteTranscriptByIdQuery,
                                 {duckdb::Value::BIGINT(id)});
   if (!result || result->HasError()) {
@@ -2045,10 +2068,107 @@ bool Database::delete_transcript(const int64_t id) {
 bool Database::delete_all_transcripts() {
   std::optional<duckdb::Connection> ownedConn;
   auto &conn = write_connection(ownedConn);
+  auto phrases = executePrepared(conn, constance::kDeleteAllTranscriptPhrasesQuery, {});
+  if (!phrases || phrases->HasError()) {
+    PLOG_ERROR << "Failed to delete all transcript phrases: "
+               << (phrases ? phrases->GetError() : "prepare failed");
+    return false;
+  }
   auto result = executePrepared(conn, constance::kDeleteAllTranscriptsQuery, {});
   if (!result || result->HasError()) {
     PLOG_ERROR << "Failed to delete all transcripts: "
                << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  return true;
+}
+
+int64_t Database::add_transcript_phrase(const DuckTranscriptPhrase &phrase) {
+  if (phrase.transcript_id <= 0 || phrase.text.empty() || phrase.end_ms < phrase.start_ms) {
+    PLOG_WARNING << "Rejected invalid transcript phrase (transcript_id="
+                 << phrase.transcript_id << ")";
+    return 0;
+  }
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  auto result = executePrepared(
+      conn, constance::kInsertTranscriptPhraseQuery,
+      {duckdb::Value::BIGINT(phrase.transcript_id), duckdb::Value(phrase.track_role),
+       db_utils::toDuckValue(phrase.speaker_name), duckdb::Value::BIGINT(phrase.start_ms),
+       duckdb::Value::BIGINT(phrase.end_ms), duckdb::Value(phrase.text)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to insert transcript phrase (transcript_id=" << phrase.transcript_id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return 0;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) {
+    PLOG_ERROR << "Empty result from RETURNING id in add_transcript_phrase";
+    return 0;
+  }
+  return static_cast<int64_t>(chunk->GetValue(0, 0).GetValue<int32_t>());
+}
+
+std::vector<DuckTranscriptPhrase> Database::get_transcript_phrases(const int64_t transcript_id) {
+  std::vector<DuckTranscriptPhrase> out;
+  if (transcript_id <= 0) return out;
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn, constance::kSelectTranscriptPhrasesQuery,
+                                {duckdb::Value::BIGINT(transcript_id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to list transcript phrases (transcript_id=" << transcript_id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return out;
+  }
+  while (auto chunk = result->Fetch()) {
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) out.emplace_back(*chunk, i);
+  }
+  return out;
+}
+
+bool Database::update_transcript_phrase_text(const int64_t phrase_id, const std::string &text) {
+  if (phrase_id <= 0 || text.empty()) return false;
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  auto owner = executePrepared(conn, constance::kSelectTranscriptIdOfPhraseQuery,
+                               {duckdb::Value::BIGINT(phrase_id)});
+  if (!owner || owner->HasError()) return false;
+  auto owner_chunk = owner->Fetch();
+  if (!owner_chunk || owner_chunk->size() == 0) return false;
+  const auto transcript_id =
+      static_cast<int64_t>(owner_chunk->GetValue(0, 0).GetValue<int32_t>());
+
+  auto result = executePrepared(conn, constance::kUpdateTranscriptPhraseTextQuery,
+                                {duckdb::Value(text), duckdb::Value::BIGINT(phrase_id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to update transcript phrase (id=" << phrase_id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  auto touch = executePrepared(conn, constance::kTouchTranscriptQuery,
+                               {db_utils::toDuckTimestamp(nowMs() * 1000),
+                                duckdb::Value::BIGINT(transcript_id)});
+  if (!touch || touch->HasError()) {
+    PLOG_ERROR << "Failed to bump transcript updated_at (id=" << transcript_id << ")";
+    return false;
+  }
+  return true;
+}
+
+bool Database::delete_transcript_phrase(const int64_t phrase_id) {
+  if (phrase_id <= 0) return false;
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  auto owner = executePrepared(conn, constance::kSelectTranscriptIdOfPhraseQuery,
+                               {duckdb::Value::BIGINT(phrase_id)});
+  if (!owner || owner->HasError()) return false;
+  auto owner_chunk = owner->Fetch();
+  if (!owner_chunk || owner_chunk->size() == 0) return false;
+  auto result = executePrepared(conn, constance::kDeleteTranscriptPhraseByIdQuery,
+                                {duckdb::Value::BIGINT(phrase_id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to delete transcript phrase (id=" << phrase_id
+               << "): " << (result ? result->GetError() : "prepare failed");
     return false;
   }
   return true;

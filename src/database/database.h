@@ -111,6 +111,10 @@ public:
   int64_t finalize_interrupted_transcripts();
   bool delete_transcript(int64_t id);
   bool delete_all_transcripts();
+  int64_t add_transcript_phrase(const DuckTranscriptPhrase &phrase);
+  std::vector<DuckTranscriptPhrase> get_transcript_phrases(int64_t transcript_id);
+  bool update_transcript_phrase_text(int64_t phrase_id, const std::string &text);
+  bool delete_transcript_phrase(int64_t phrase_id);
 
   // std::vector<int64_t> get_event_ids(int64_t date);
 

@@ -454,6 +454,32 @@ struct DuckTranscript {
   }
 };
 
+// --- DuckTranscriptPhrase ---
+// start_ms / end_ms are milliseconds from the start of the call.
+struct DuckTranscriptPhrase {
+  std::int64_t id = -1;
+  std::int64_t transcript_id = -1;
+  std::string track_role;  // "practitioner" | "participant"
+  std::optional<std::string> speaker_name = std::nullopt;
+  std::int64_t start_ms = 0;
+  std::int64_t end_ms = 0;
+  std::string text;
+  bool edited = false;
+
+  DuckTranscriptPhrase() = default;
+  DuckTranscriptPhrase(const duckdb::DataChunk &chunk, duckdb::idx_t index) {
+    id = db_utils::toInt32AsInt64(chunk.GetValue(0, index));
+    transcript_id = db_utils::toInt32AsInt64(chunk.GetValue(1, index));
+    track_role = chunk.GetValue(2, index).ToString();
+    speaker_name = db_utils::toOptionalString(chunk.GetValue(3, index));
+    start_ms = chunk.GetValue(4, index).GetValue<int64_t>();
+    end_ms = chunk.GetValue(5, index).GetValue<int64_t>();
+    text = chunk.GetValue(6, index).ToString();
+    const auto edited_value = chunk.GetValue(7, index);
+    edited = !edited_value.IsNull() && db_utils::toBool(edited_value);
+  }
+};
+
 // --- DuckClientNoteAttachment ---
 struct DuckClientNoteAttachment {
   std::int64_t id = -1;

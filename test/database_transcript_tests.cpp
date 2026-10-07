@@ -158,3 +158,126 @@ TEST_F(TranscriptDbTest, DeleteTranscriptAndDeleteAll) {
   EXPECT_TRUE(db_->get_transcripts_for_event(event_id).empty());
   EXPECT_TRUE(db_->delete_all_transcripts());  // nothing to delete is not an error
 }
+
+namespace {
+
+DuckTranscriptPhrase phrase(int64_t transcript_id, const char *role, const char *speaker,
+                            int64_t start_ms, int64_t end_ms, const char *text) {
+  DuckTranscriptPhrase p;
+  p.transcript_id = transcript_id;
+  p.track_role = role;
+  p.speaker_name = std::string{speaker};
+  p.start_ms = start_ms;
+  p.end_ms = end_ms;
+  p.text = text;
+  return p;
+}
+
+}  // namespace
+
+TEST_F(TranscriptDbTest, PhrasesRoundTripAndAreOrderedByStartTime) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  const auto late = db_->add_transcript_phrase(phrase(t, "participant", "Client", 5000, 7000, "second"));
+  const auto early = db_->add_transcript_phrase(phrase(t, "practitioner", "Specialist", 1000, 3000, "first"));
+  ASSERT_GT(late, 0);
+  ASSERT_GT(early, 0);
+
+  const auto phrases = db_->get_transcript_phrases(t);
+  ASSERT_EQ(phrases.size(), 2u);
+  EXPECT_EQ(phrases[0].id, early);
+  EXPECT_EQ(phrases[0].transcript_id, t);
+  EXPECT_EQ(phrases[0].track_role, "practitioner");
+  EXPECT_EQ(phrases[0].speaker_name.value_or(""), "Specialist");
+  EXPECT_EQ(phrases[0].start_ms, 1000);
+  EXPECT_EQ(phrases[0].end_ms, 3000);
+  EXPECT_EQ(phrases[0].text, "first");
+  EXPECT_FALSE(phrases[0].edited);
+  EXPECT_EQ(phrases[1].id, late);
+}
+
+TEST_F(TranscriptDbTest, PhraseWithoutSpeakerNameAndCyrillicTextRoundTrips) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  DuckTranscriptPhrase p = phrase(t, "participant", "x", 0, 900, "Привет, как дела?");
+  p.speaker_name = std::nullopt;
+  ASSERT_GT(db_->add_transcript_phrase(p), 0);
+  const auto phrases = db_->get_transcript_phrases(t);
+  ASSERT_EQ(phrases.size(), 1u);
+  EXPECT_FALSE(phrases[0].speaker_name.has_value());
+  EXPECT_EQ(phrases[0].text, "Привет, как дела?");
+}
+
+TEST_F(TranscriptDbTest, AddPhraseRejectsInvalidInput) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  EXPECT_EQ(db_->add_transcript_phrase(phrase(0, "participant", "C", 0, 1, "x")), 0);
+  EXPECT_EQ(db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1, "")), 0);
+  EXPECT_EQ(db_->add_transcript_phrase(phrase(t, "participant", "C", 500, 100, "x")), 0);
+  EXPECT_EQ(db_->add_transcript_phrase(phrase(424242, "participant", "C", 0, 1, "x")), 0);
+  EXPECT_TRUE(db_->get_transcript_phrases(t).empty());
+}
+
+TEST_F(TranscriptDbTest, UpdatePhraseTextMarksEditedAndBumpsTranscript) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  const auto id = db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "mispelled"));
+  const auto before = db_->get_transcript(t)->updated_at;
+
+  ASSERT_TRUE(db_->update_transcript_phrase_text(id, "misspelled"));
+  const auto phrases = db_->get_transcript_phrases(t);
+  ASSERT_EQ(phrases.size(), 1u);
+  EXPECT_EQ(phrases[0].text, "misspelled");
+  EXPECT_TRUE(phrases[0].edited);
+  EXPECT_GE(db_->get_transcript(t)->updated_at, before);
+
+  EXPECT_FALSE(db_->update_transcript_phrase_text(id, ""));
+  EXPECT_FALSE(db_->update_transcript_phrase_text(31337, "x"));
+  EXPECT_EQ(db_->get_transcript_phrases(t)[0].text, "misspelled");
+}
+
+TEST_F(TranscriptDbTest, DeletePhraseRemovesOnlyThatPhrase) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  const auto a = db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "a"));
+  const auto b = db_->add_transcript_phrase(phrase(t, "participant", "C", 2000, 3000, "b"));
+  ASSERT_TRUE(db_->delete_transcript_phrase(a));
+  const auto phrases = db_->get_transcript_phrases(t);
+  ASSERT_EQ(phrases.size(), 1u);
+  EXPECT_EQ(phrases[0].id, b);
+  EXPECT_FALSE(db_->delete_transcript_phrase(a));
+}
+
+TEST_F(TranscriptDbTest, StatusUpdateWorksOnTranscriptThatHasPhrases) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "a")), 0);
+  ASSERT_TRUE(db_->set_transcript_status(t, "draft"));
+  ASSERT_TRUE(db_->revoke_transcript_consent(t));
+  EXPECT_EQ(db_->get_transcript(t)->status, "draft");
+  EXPECT_EQ(db_->get_transcript_phrases(t).size(), 1u);
+}
+
+TEST_F(TranscriptDbTest, EditingAnEventKeepsItsTranscript) {
+  const auto event_id = makeEvent();
+  const auto t = db_->add_transcript(event_id, "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "a")), 0);
+
+  auto event = db_->get_event(event_id);
+  ASSERT_NE(event, nullptr);
+  event->name = std::string{"Renamed"};
+  event->event_stat_id = 2;
+  ASSERT_TRUE(db_->update_event(*event));
+  EXPECT_NE(db_->get_transcript(t), nullptr);
+  EXPECT_EQ(db_->get_transcript_phrases(t).size(), 1u);
+}
+
+TEST_F(TranscriptDbTest, DeleteTranscriptRemovesItsPhrases) {
+  const auto event_id = makeEvent();
+  const auto keep = db_->add_transcript(event_id, "live_local_v1");
+  const auto drop = db_->add_transcript(event_id, "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(keep, "participant", "C", 0, 1000, "keep")), 0);
+  ASSERT_GT(db_->add_transcript_phrase(phrase(drop, "participant", "C", 0, 1000, "drop")), 0);
+
+  ASSERT_TRUE(db_->delete_transcript(drop));
+  EXPECT_TRUE(db_->get_transcript_phrases(drop).empty());
+  EXPECT_EQ(db_->get_transcript_phrases(keep).size(), 1u);
+
+  ASSERT_TRUE(db_->delete_all_transcripts());
+  EXPECT_TRUE(db_->get_transcript_phrases(keep).empty());
+  EXPECT_EQ(db_->get_transcript(keep), nullptr);
+}

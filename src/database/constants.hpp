@@ -184,9 +184,11 @@ CREATE TABLE IF NOT EXISTS ScheduleOutbox (
 
 -- Live call transcripts. status: recording | draft | reviewed. Phrase times are
 -- milliseconds from the start of the call (not timestamps).
+-- No foreign key on event_id: DuckDB treats updates of referenced rows as key updates
+-- (update_event would fail); Database::add_transcript checks the event exists.
 CREATE TABLE IF NOT EXISTS Transcript (
     id INTEGER PRIMARY KEY,
-    event_id INTEGER NOT NULL REFERENCES Event(id),
+    event_id INTEGER NOT NULL,
     status TEXT NOT NULL,
     consent_scope TEXT NOT NULL,
     consent_given_at TIMESTAMP NOT NULL,
@@ -699,6 +701,7 @@ SELECT id, event_id, status, consent_scope, consent_given_at,
 FROM Transcript WHERE event_id = $1 ORDER BY id
 )duckdb";
 
+constexpr auto kEventExistsQuery = "SELECT 1 FROM Event WHERE id = $1";
 constexpr auto kTranscriptExistsQuery = "SELECT 1 FROM Transcript WHERE id = $1";
 
 constexpr auto kUpdateTranscriptStatusQuery =
@@ -715,6 +718,35 @@ RETURNING id
 
 constexpr auto kDeleteTranscriptByIdQuery = "DELETE FROM Transcript WHERE id = $1";
 constexpr auto kDeleteAllTranscriptsQuery = "DELETE FROM Transcript";
+
+constexpr auto kInsertTranscriptPhraseQuery = R"duckdb(
+INSERT INTO TranscriptPhrase (
+    id, transcript_id, track_role, speaker_name, start_ms, end_ms, text, edited
+)
+SELECT COALESCE(MAX(id), 0) + 1, $1, $2, $3, $4, $5, $6, FALSE
+FROM TranscriptPhrase
+RETURNING id
+)duckdb";
+
+constexpr auto kSelectTranscriptPhrasesQuery = R"duckdb(
+SELECT id, transcript_id, track_role, speaker_name, start_ms, end_ms, text, edited
+FROM TranscriptPhrase WHERE transcript_id = $1 ORDER BY start_ms, id
+)duckdb";
+
+constexpr auto kSelectTranscriptIdOfPhraseQuery =
+    "SELECT transcript_id FROM TranscriptPhrase WHERE id = $1";
+
+constexpr auto kUpdateTranscriptPhraseTextQuery =
+    "UPDATE TranscriptPhrase SET text = $1, edited = TRUE WHERE id = $2";
+
+constexpr auto kTouchTranscriptQuery =
+    "UPDATE Transcript SET updated_at = $1 WHERE id = $2";
+
+constexpr auto kDeleteTranscriptPhraseByIdQuery =
+    "DELETE FROM TranscriptPhrase WHERE id = $1";
+constexpr auto kDeletePhrasesByTranscriptIdQuery =
+    "DELETE FROM TranscriptPhrase WHERE transcript_id = $1";
+constexpr auto kDeleteAllTranscriptPhrasesQuery = "DELETE FROM TranscriptPhrase";
 
 constexpr auto kInsertClientNoteQuery = R"duckdb(
 INSERT INTO ClientNote (
