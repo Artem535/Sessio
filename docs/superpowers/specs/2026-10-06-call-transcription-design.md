@@ -52,7 +52,8 @@ interface so it can be tested with a fake.
 | `ISpeechRecognizer` | `std::string transcribe(span<const float>)`; the sherpa-onnx implementation wraps one `OfflineRecognizer` | sherpa-onnx |
 | `TranscriptionEngine` | `addTrack(TrackInfo)`, `pushAudio(TrackId, span<const int16_t>, sampleRate)`, `removeTrack`, `stop`; signal `phraseReady(TranscribedPhrase)`; thread-safe | the three above |
 | `ModelLocator` | Resolve the GigaAM and Silero VAD files relative to the application directory per platform | nothing |
-| `TranscriptionSession` | GUI-thread QObject for one call: consent gate, owns the engine, installs and removes the audio taps, writes phrases through the `Database` transcript methods | engine, `Database`, `VideoSession` |
+| `TranscriptionSession` | GUI-thread QObject for one call (`src/call_transcription`): consent gate; the model is loaded, tracks are added/removed and the engine is stopped on its own `SerialExecutor` thread, phrases are persisted by a `PhraseWriter` thread with a private database connection; installs and removes the audio tap through a `SinkProxy` that the provider holds | engine, `Database`, `VideoProvider` |
+| `CallEventResolver` | Turns the calendar entry id a call is attached to into a real event id: positive ids are returned unchanged; a negative id (a never-edited recurring occurrence) is decoded (`julian = (enc % 1e6) + 2e6`, series = rest), an existing materialised occurrence is reused, otherwise it is persisted through `QTimelineModel::addEvent` (so published series get their schedule bookkeeping) and the series' client is linked | `Database`, `QTimelineModel` |
 | `TranscriptRepository` | Methods on `pcm::database::Database` (`add_transcript`, `add_transcript_phrase`, ...), following the existing convention; no separate class | database |
 
 `TrackInfo` carries a stable track id (the LiveKit participant identity), a role
@@ -65,7 +66,10 @@ The adapters stay free of transcription code. A small `AudioSink` interface
 `src/video/`. `AudioCaptureAdapter` (local microphone, 48 kHz mono) and
 `RemoteAudioPlayer` (remote track, read on its own thread) call the sink when one
 is set. Setting the sink is the only way audio reaches the engine, and it is set
-only after a `Transcript` row with consent exists (see Consent).
+only after a `Transcript` row with consent exists (see Consent). The provider holds
+a `SinkProxy` (not the session); `detach()` blocks until an in-flight `onAudio`
+returned, so the session can be destroyed safely. Local microphone audio is not
+forwarded while the microphone is muted.
 
 Engine threads, independent of the number of participants:
 
@@ -76,6 +80,14 @@ Engine threads, independent of the number of participants:
 3. One decode worker takes phrases in order, calls `ISpeechRecognizer`, and emits
    `phraseReady`. One worker is deliberate: the safe use of a shared recogniser
    from several threads is not established, and it keeps phrases in order.
+
+The model (recogniser and VAD) is never loaded or run on the GUI thread. Track ids
+given to the engine are the participant identity plus a generation suffix
+(`<identity>#<n>`) so a participant who leaves and rejoins gets a fresh track; a
+track that cannot be set up emits `trackFailed(participantId)` and does not stop the
+session. The session's destructor never waits for the worker threads: it detaches
+the sink and hands engine/writer teardown (and the final `draft` row) to a detached
+cleanup thread that owns the shared state.
 
 Phrase times are `start_ms`/`end_ms` from the start of the call, computed from the
 track's VAD sample offsets plus the moment the track was added.
@@ -153,7 +165,10 @@ both tables.
    is final (a crash does not lose text) and shown in the panel.
 3. *Stop.* The same as the end of a call: taps are removed, the engine drains and
    stops, the transcript becomes a `draft`; consent stays recorded for this session.
-4. *Revoke.* Taps are removed and the engine stops immediately,
+4. *Revoke.* Taps are removed and the engine stops immediately (also valid while
+   the model is loading, and while a graceful stop is still draining, which it
+   upgrades); from the moment `revoke()` returns no further phrase is written and
+   decoding in flight is discarded. The session emits `revoked`, never `finished`.
    `consent_revoked_at` is set, and a dialog offers "Delete what was recorded" or
    "Keep as draft".
 5. *End of call.* The session stops automatically; status becomes `draft`. The
@@ -165,7 +180,8 @@ both tables.
    transcripts stay until the event is deleted.
 7. *Application start.* Before any session can exist, the application calls
    `finalize_interrupted_transcripts()` (crash recovery: `recording` becomes
-   `draft`) and `purge_orphan_transcripts()`; phase 3 wires this. There is no automatic expiry in this version.
+   `draft`) and `purge_orphan_transcripts()` right after the database is opened
+   (`Application::runSpecialistFlow`), logging only the counts. There is no automatic expiry in this version.
 
 Consent is enforced structurally: with no active session there is no audio sink
 set, so no audio can reach the engine. A test asserts this.

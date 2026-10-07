@@ -10,6 +10,7 @@
 #include <QTimer>
 
 #include <memory>
+#include <optional>
 
 #include "app_role.h"
 #include "app_role_switcher.h"
@@ -24,7 +25,11 @@
 #include "database.h"
 #include "device_manager.h"
 #include "main_window.h"
+#ifdef SESSIO_CALL_TRANSCRIPTION
+#include "call_event_resolver.h"
+#endif
 #include "qclient_model.h"
+#include "qtimeline_model.h"
 #include "event_info.h"
 #include "keychain_series_invitation_store.h"
 #include "schedule_sync.h"
@@ -139,11 +144,22 @@ private:
   std::unique_ptr<pcm::meeting::SeriesInvitationService> mSeriesInvitations;
   std::unique_ptr<pcm::meeting::SeriesScheduleCommitter> mScheduleCommitter;
   std::unique_ptr<pcm::meeting::SeriesCallService> mSeriesCalls;
+  // Owned by this QObject; QPointer because the Qt parent may delete it first.
+  QPointer<QTimelineModel> mTimelineModel;
+#ifdef SESSIO_CALL_TRANSCRIPTION
+  // Declared after mDb and the timeline model so it is destroyed before either.
+  std::unique_ptr<pcm::calltranscription::CallEventResolver> mCallEventResolver;
+#endif
   bool mIsQuitting = false;
   bool mTrayCloseHintShown = false;
   config::Config mConf;
 
   void connectSignals();
+#ifdef SESSIO_CALL_TRANSCRIPTION
+  // Real event id for a calendar entry a call is attached to (materialises a
+  // virtual recurring occurrence). Used by the transcription start flow (#118 phase 4).
+  [[maybe_unused]] std::optional<int64_t> resolveCallEvent(int64_t eventId);
+#endif
 };
 
 } // namespace pcm

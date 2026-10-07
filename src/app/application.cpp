@@ -294,6 +294,17 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
 
   mDb = std::make_shared<database::Database>(mConf);
 
+  // Before any call page or transcription session exists: close transcripts a
+  // crash left in "recording" state and drop rows whose event is gone.
+  {
+    const auto interrupted = mDb->finalize_interrupted_transcripts();
+    const auto orphans = mDb->purge_orphan_transcripts();
+    if (interrupted > 0 || orphans > 0) {
+      qCInfo(logApplication) << "Transcript recovery: interrupted=" << interrupted
+                             << "orphans=" << orphans;
+    }
+  }
+
   mAutoBackupScheduler =
       std::make_unique<pcm::backup::AutoBackupScheduler>(mDb);
   mAutoBackupScheduler->start();
@@ -324,6 +335,13 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
       mMeetingCoordinator.get());
 
   auto *timelineModel = new QTimelineModel(mDb, mMeetingCoordinator.get(), this);
+  mTimelineModel = timelineModel;
+#ifdef SESSIO_CALL_TRANSCRIPTION
+  mCallEventResolver = std::make_unique<pcm::calltranscription::CallEventResolver>(
+      mDb, [this](const DuckEvent &e) {
+        return mTimelineModel ? mTimelineModel->addEvent(e, true) : int64_t{0};
+      });
+#endif
   timelineModel->setScheduleCommitter(mScheduleCommitter.get());
   mMainWindow->addEventInfoPage(timelineModel, mMeetingCoordinator.get());
   if (auto *eventPage = dynamic_cast<QEventInfoPage *>(
@@ -1075,5 +1093,12 @@ void Application::connectSignals() {
             });
   }
 }
+
+#ifdef SESSIO_CALL_TRANSCRIPTION
+std::optional<int64_t> Application::resolveCallEvent(int64_t eventId) {
+  if (!mCallEventResolver) return std::nullopt;
+  return mCallEventResolver->resolve(eventId);
+}
+#endif
 
 } // namespace pcm
