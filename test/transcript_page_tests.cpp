@@ -8,6 +8,7 @@
 #include <QSignalSpy>
 #include <QPointer>
 #include <QTemporaryDir>
+#include <oclero/qlementine/style/QlementineStyle.hpp>
 #include <gtest/gtest.h>
 
 class TranscriptPageTest : public ::testing::Test {
@@ -41,6 +42,46 @@ TEST_F(TranscriptPageTest, ShowsNewestTranscriptWithPhrasesInOrder) {
   auto labels = page->findChildren<QLabel *>("phraseText");
   ASSERT_EQ(labels.size(), 2); EXPECT_EQ(labels[0]->text(), "First");
   EXPECT_EQ(labels[1]->text(), "Second");
+  if (qEnvironmentVariableIsSet("SESSIO_TRANSCRIPT_SCREENSHOT")) {
+    db->update_transcript_phrase_text(first,
+        "На следующей встрече предлагаю вернуться к этому вопросу и обсудить, какие изменения удалось заметить за неделю.");
+    db->update_transcript_phrase_text(second, "Хорошо. Я запишу несколько примеров, чтобы мы могли обсудить их подробнее.");
+    page->reload(event, QString::fromUtf8("Тестовая сессия"));
+    page->resize(1280, 860); page->show(); QApplication::processEvents();
+    page->findChild<QWidget *>("phraseCard_" + QString::number(first))->setFocus();
+    QApplication::processEvents();
+    page->grab().save(qEnvironmentVariable("SESSIO_TRANSCRIPT_SCREENSHOT"));
+    page->resize(680, 860); QApplication::processEvents();
+    page->grab().save(qEnvironmentVariable("SESSIO_TRANSCRIPT_SCREENSHOT") + "-narrow.png");
+    page->resize(1280, 860);
+    button("editPhrase_" + QString::number(first))->click();
+    QApplication::processEvents();
+    page->grab().save(qEnvironmentVariable("SESSIO_TRANSCRIPT_SCREENSHOT") + "-edit.png");
+  }
+}
+TEST_F(TranscriptPageTest, MissingModelDoesNotLeaveAnEmptyMetadataField) {
+  const auto newer = db->add_transcript(event, "live_local_v1", std::nullopt);
+  db->set_transcript_status(newer, "draft");
+  page->reload(event, "Session");
+  EXPECT_FALSE(page->findChild<QLabel *>("transcriptMetadata")->text().contains("Model:"));
+}
+TEST_F(TranscriptPageTest, KeyboardSelectionRevealsPhraseActionsWithoutHover) {
+  page->resize(1100, 800);
+  page->show();
+  QApplication::processEvents();
+  auto *card = page->findChild<QWidget *>("phraseCard_" + QString::number(first));
+  ASSERT_NE(card, nullptr);
+  auto *actions = card->findChild<QWidget *>("phraseActions");
+  ASSERT_NE(actions, nullptr);
+  page->findChild<QPushButton *>("backToEvent")->setFocus();
+  QApplication::processEvents();
+  EXPECT_TRUE(actions->isHidden());
+  card->setFocus(Qt::TabFocusReason);
+  QApplication::processEvents();
+  EXPECT_FALSE(actions->isHidden());
+  button("editPhrase_" + QString::number(first))->click();
+  EXPECT_TRUE(page->editing());
+  ASSERT_NE(page->findChild<QPlainTextEdit *>("phraseEditor"), nullptr);
 }
 TEST_F(TranscriptPageTest, ComboListsEveryTranscriptNewestFirst) {
   auto newer = db->add_transcript(event, "live_local_v1", std::string("new model"));
@@ -159,7 +200,7 @@ TEST_F(TranscriptPageTest, PhraseTimesIncludeHours) {
   ASSERT_GT(db->add_transcript_phrase(phrase), 0);
   db->set_transcript_status(id, "draft");
   page->reload(event, "Session");
-  const auto labels = page->findChildren<QLabel *>("phraseSpeaker");
+  const auto labels = page->findChildren<QLabel *>("phraseTime");
   ASSERT_EQ(labels.size(), 3);
   EXPECT_TRUE(labels.last()->text().startsWith("1:00:01 – 1:00:02"));
 }
@@ -173,5 +214,11 @@ TEST_F(TranscriptPageTest, CancelEditKeepsOriginalPhrase) {
 int main(int argc, char **argv) {
   QTemporaryDir home; qputenv("HOME", home.path().toUtf8());
   qputenv("XDG_CONFIG_HOME", home.path().toUtf8());
-  QApplication app(argc, argv); ::testing::InitGoogleTest(&argc, argv); return RUN_ALL_TESTS();
+  QApplication app(argc, argv);
+  if (qEnvironmentVariableIsSet("SESSIO_PREVIEW_THEME")) {
+    auto *style = new oclero::qlementine::QlementineStyle(&app);
+    style->setThemeJsonPath(qEnvironmentVariable("SESSIO_PREVIEW_THEME"));
+    app.setStyle(style);
+  }
+  ::testing::InitGoogleTest(&argc, argv); return RUN_ALL_TESTS();
 }

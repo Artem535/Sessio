@@ -2464,6 +2464,10 @@ See you!</source>
         <translation>Удалить транскрипцию</translation>
     </message>
     <message>
+        <source>More actions</source>
+        <translation>Другие действия</translation>
+    </message>
+    <message>
         <source>Delete this transcript and all its phrases?</source>
         <translation>Удалить эту транскрипцию и все её реплики?</translation>
     </message>

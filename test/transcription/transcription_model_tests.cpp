@@ -125,6 +125,45 @@ TEST(TranscriptionModelTest, RecognisesRussianSample) {
   EXPECT_TRUE(hasCyrillic(text)) << "text had no Cyrillic letters";
 }
 
+TEST(TranscriptionModelTest, VadRetainsAudioBeforeAndAfterSpeechBoundaries) {
+  const auto paths = models();
+  if (!paths) GTEST_SKIP() << "models not installed";
+  std::vector<float> audio(16000, 0.0f);
+  for (auto sample : loadSample()) audio.push_back(sample / 32768.0f);
+  audio.resize(audio.size() + 16000, 0.0f);
+  sherpa_onnx::cxx::VadModelConfig config;
+  config.silero_vad.model = paths->vad.string();
+  config.silero_vad.threshold = 0.5F;
+  config.silero_vad.min_silence_duration = 0.8F;
+  config.silero_vad.min_speech_duration = 0.25F;
+  config.silero_vad.max_speech_duration = 20.0F;
+  config.silero_vad.window_size = 512;
+  config.sample_rate = 16000;
+  auto reference = sherpa_onnx::cxx::VoiceActivityDetector::Create(config, 120.0F);
+  auto actual = makeSherpaVadFactory(*paths)();
+  std::vector<SpeechSegment> segments;
+  for (size_t offset = 0; offset + 512 <= audio.size(); offset += 512) {
+    reference.AcceptWaveform(audio.data() + offset, 512);
+    actual->accept(audio.data() + offset, 512);
+    while (actual->hasSegment()) segments.push_back(actual->popSegment());
+  }
+  reference.Flush(); actual->flush();
+  while (actual->hasSegment()) segments.push_back(actual->popSegment());
+  ASSERT_FALSE(segments.empty());
+  EXPECT_EQ(segments.size(), 1u); // the source's short internal pause stays within one phrase
+  ASSERT_FALSE(reference.IsEmpty());
+  const auto raw = reference.Front();
+  EXPECT_LE(segments.front().start_sample, raw.start - 1600); // at least 100 ms of leading context
+  EXPECT_GE(segments.front().start_sample + segments.front().samples.size(),
+            raw.start + raw.samples.size() + 2400); // at least 150 ms of trailing context
+  const auto &first = segments.front();
+  ASSERT_GE(first.start_sample, 0);
+  ASSERT_LE(first.start_sample + first.samples.size(), audio.size());
+  EXPECT_TRUE(std::equal(first.samples.begin(), first.samples.end(), audio.begin() + first.start_sample));
+  for (size_t i = 1; i < segments.size(); ++i)
+    EXPECT_GE(segments[i].start_sample, segments[i - 1].start_sample + segments[i - 1].samples.size());
+}
+
 TEST(TranscriptionModelTest, EngineProducesTimedPhrasesFromSample) {
   const auto paths = models();
   if (!paths) GTEST_SKIP() << "models not installed; set SESSIO_MODELS_DIR";
@@ -155,9 +194,9 @@ TEST(TranscriptionModelTest, TwoStaggeredSpeakersAmongTenTracksKeepLagProportion
   if (!std::getenv("SESSIO_LOADTEST")) GTEST_SKIP() << "set SESSIO_LOADTEST=1 (runs in real time)";
   const auto result = runRealtime(*paths, 10, {0.0, 4.0}, loadSample());
   printPhrases(result);
-  ASSERT_GE(result.phrases.size(), 4u);  // two phrases per speaker
+  ASSERT_GE(result.phrases.size(), 2u);  // at least one phrase per speaker
   for (const auto& pl : result.phrases) {
-    EXPECT_LE(pl.lag_s, 0.4 + 0.15 * durationS(pl.phrase) + 0.2)
+    EXPECT_LE(pl.lag_s, 0.8 + 0.15 * durationS(pl.phrase) + 0.2)
         << "track " << pl.phrase.track_id << " phrase of " << durationS(pl.phrase) << " s";
   }
   EXPECT_EQ(result.stats.queued, 0u);
