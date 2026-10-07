@@ -676,6 +676,22 @@ target_link_libraries(Sessio_phrase_writer_tests PRIVATE
     GTest::gtest GTest::gtest_main Sessio_call_transcription)
 gtest_discover_tests(Sessio_phrase_writer_tests)
 
+# Call transcription session tests (QApplication main, fakes for engine and provider)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
+add_executable(Sessio_transcription_session_tests transcription_session_tests.cpp)
+target_include_directories(Sessio_transcription_session_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/test
+    ${CMAKE_SOURCE_DIR}/test/transcription)
+target_link_libraries(Sessio_transcription_session_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Qt6::Test
+    Sessio_call_transcription
+    Sessio_transcription
+    Sessio_video)
+set_target_properties(Sessio_transcription_session_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_transcription_session_tests)
+
 # Role selection dialog tests
 find_package(Qt6 REQUIRED COMPONENTS Test)
 add_executable(Sessio_role_selection_dialog_tests role_selection_dialog_tests.cpp)
