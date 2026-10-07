@@ -307,11 +307,11 @@ TEST_F(TranscriptDbTest, RemoveEventLeavesNoOrphanTranscriptsOfAnyStatus) {
   const auto recording = db_->add_transcript(event_id, "live_local_v1");
   const auto draft = db_->add_transcript(event_id, "live_local_v1");
   const auto reviewed = db_->add_transcript(event_id, "live_local_v1");
-  ASSERT_TRUE(db_->set_transcript_status(draft, "draft"));
-  ASSERT_TRUE(db_->set_transcript_status(reviewed, "reviewed"));
   for (const auto id : {recording, draft, reviewed}) {
     ASSERT_GT(db_->add_transcript_phrase(phrase(id, "participant", "C", 0, 1000, "x")), 0);
   }
+  ASSERT_TRUE(db_->set_transcript_status(draft, "draft"));
+  ASSERT_TRUE(db_->set_transcript_status(reviewed, "reviewed"));
 
   ASSERT_TRUE(db_->remove_event(event_id));
   EXPECT_TRUE(db_->get_transcripts_for_event(event_id).empty());
@@ -410,4 +410,173 @@ TEST_F(TranscriptDbTest, ExistingDataSurvivesTheTranscriptMigration) {
 
 TEST_F(TranscriptDbTest, SchemaVersionStaysOne) {
   EXPECT_EQ(db_->get_application_metadata().schema_version, 1);
+}
+
+TEST_F(TranscriptDbTest, PurgeOrphanTranscriptsRemovesTheOnesWithoutAnEventAndFreedIdsAreClean) {
+  const auto keep_event = makeEvent(1730000000000);
+  const auto doomed_event = makeEvent(1740000000000);
+  ASSERT_GT(doomed_event, keep_event);
+  const auto keep = db_->add_transcript(keep_event, "live_local_v1");
+  const auto orphan = db_->add_transcript(doomed_event, "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(keep, "participant", "C", 0, 1000, "stays")), 0);
+  ASSERT_GT(db_->add_transcript_phrase(phrase(orphan, "participant", "C", 0, 1000, "gone")), 0);
+
+  // Simulate a missed cascade: delete the event row behind the Database's back.
+  db_.reset();
+  {
+    duckdb::DuckDB raw(dir_ + "/database.db");
+    duckdb::Connection conn(raw);
+    ASSERT_FALSE(
+        conn.Query("DELETE FROM Event WHERE id = " + std::to_string(doomed_event))->HasError());
+  }
+  pcm::config::Config conf{
+      .db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
+  db_ = std::make_unique<pcm::database::Database>(conf);
+
+  EXPECT_EQ(db_->purge_orphan_transcripts(), 1);
+  EXPECT_EQ(db_->get_transcript(orphan), nullptr);
+  EXPECT_TRUE(db_->get_transcript_phrases(orphan).empty());
+  EXPECT_NE(db_->get_transcript(keep), nullptr);
+  EXPECT_EQ(db_->get_transcript_phrases(keep).size(), 1u);
+  EXPECT_EQ(db_->purge_orphan_transcripts(), 0);
+
+  const auto reused = makeEvent(1750000000000);
+  EXPECT_EQ(reused, doomed_event);  // MAX(id)+1 reuses the freed id
+  EXPECT_TRUE(db_->get_transcripts_for_event(reused).empty());
+}
+
+TEST_F(TranscriptDbTest, RemovingARecurringOccurrenceThroughCommitScheduleChangeCascades) {
+  DuckEventSeries series;
+  series.name = std::string{"Weekly"};
+  series.start_date = 1730000000000;
+  series.end_date = 1730003600000;
+  series.duration = 3600;
+  series.recurrence_rule = "FREQ=WEEKLY;INTERVAL=1;BYDAY=TU";
+  series.event_stat_id = 1;
+  series.payment_stat_id = 1;
+  const auto series_id = db_->add_event_series(series);
+  ASSERT_GT(series_id, 0);
+
+  DuckEvent occurrence;
+  occurrence.name = std::string{"Materialized occurrence"};
+  occurrence.start_date = 1730100000000;
+  occurrence.end_date = 1730103600000;
+  occurrence.duration = 3600;
+  occurrence.event_stat_id = 1;
+  occurrence.payment_stat_id = 1;
+  occurrence.series_id = series_id;
+  occurrence.original_occurrence_start = 1730100000000;
+  const auto event_id = db_->add_event(occurrence);
+  ASSERT_GT(event_id, 0);
+  const auto t = db_->add_transcript(event_id, "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "x")), 0);
+
+  // Same shape as QTimelineModel::removeEvent for a materialized occurrence.
+  const auto commit = db_->commit_schedule_change(
+      [&]() -> std::optional<int64_t> {
+        if (!db_->add_event_series_exception(series_id, *occurrence.original_occurrence_start,
+                                             "deleted")) {
+          return std::nullopt;
+        }
+        if (!db_->remove_event(event_id)) return std::nullopt;
+        return series_id;
+      },
+      "Europe/Moscow",
+      [](const pcm::database::ScheduleSource &) { return std::optional<std::string>("p"); });
+  ASSERT_TRUE(commit.has_value());
+  EXPECT_EQ(db_->get_event(event_id), nullptr);
+  EXPECT_EQ(db_->get_transcript(t), nullptr);
+  EXPECT_TRUE(db_->get_transcript_phrases(t).empty());
+}
+
+TEST_F(TranscriptDbTest, DeletePhraseBumpsTranscriptUpdatedAt) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  const auto id = db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "x"));
+  const auto before = db_->get_transcript(t)->updated_at;
+  std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  ASSERT_TRUE(db_->delete_transcript_phrase(id));
+  EXPECT_GT(db_->get_transcript(t)->updated_at, before);
+}
+
+TEST_F(TranscriptDbTest, AddPhraseRejectedAfterStatusLeavesRecording) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  ASSERT_TRUE(db_->set_transcript_status(t, "draft"));
+  EXPECT_EQ(db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "late")), 0);
+  EXPECT_EQ(db_->count_transcript_phrases(t), 0);
+}
+
+TEST_F(TranscriptDbTest, AddPhraseRejectedAfterConsentRevoked) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  ASSERT_TRUE(db_->revoke_transcript_consent(t));
+  EXPECT_EQ(db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "late")), 0);
+  EXPECT_EQ(db_->add_transcript_phrase(phrase(31337, "participant", "C", 0, 1000, "x")), 0);
+  EXPECT_EQ(db_->count_transcript_phrases(t), 0);
+}
+
+TEST_F(TranscriptDbTest, DeleteTranscriptSucceedsWithCheckpointAndStillAllowsReopen) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "x")), 0);
+  ASSERT_TRUE(db_->delete_transcript(t));
+  ASSERT_TRUE(db_->delete_all_transcripts());
+  EXPECT_EQ(db_->count_transcripts(), 0);
+}
+
+TEST_F(TranscriptDbTest, GetTranscriptsForClientFollowsEventClientLinks) {
+  DuckClient client;
+  client.name = std::string{"A"};
+  const auto client_id = db_->add_client(client);
+  DuckClient other;
+  other.name = std::string{"B"};
+  const auto other_id = db_->add_client(other);
+  ASSERT_GT(client_id, 0);
+  ASSERT_GT(other_id, 0);
+  const auto e1 = makeEvent(1730000000000);
+  const auto e2 = makeEvent(1740000000000);
+  const auto e3 = makeEvent(1750000000000);
+  ASSERT_GT(db_->add_event_client(e1, client_id), 0);
+  ASSERT_GT(db_->add_event_client(e2, client_id), 0);
+  ASSERT_GT(db_->add_event_client(e3, other_id), 0);
+  const auto t2 = db_->add_transcript(e2, "live_local_v1");
+  const auto t1 = db_->add_transcript(e1, "live_local_v1");
+  db_->add_transcript(e3, "live_local_v1");
+
+  const auto list = db_->get_transcripts_for_client(client_id);
+  ASSERT_EQ(list.size(), 2u);
+  EXPECT_EQ(list[0].id, t2);  // created first
+  EXPECT_EQ(list[1].id, t1);
+  EXPECT_TRUE(db_->get_transcripts_for_client(0).empty());
+  EXPECT_TRUE(db_->get_transcripts_for_client(31337).empty());
+}
+
+TEST_F(TranscriptDbTest, CountsTranscriptsAndPhrases) {
+  EXPECT_EQ(db_->count_transcripts(), 0);
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  db_->add_transcript(makeEvent(1750000000000), "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "a")), 0);
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "C", 1000, 2000, "b")), 0);
+  EXPECT_EQ(db_->count_transcripts(), 2);
+  EXPECT_EQ(db_->count_transcript_phrases(t), 2);
+  EXPECT_EQ(db_->count_transcript_phrases(31337), 0);
+}
+
+TEST_F(TranscriptDbTest, RenameSpeakerChangesOnlyThatRoleAndIsNotATextEdit) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "Speaker 1", 0, 1000, "a")), 0);
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "Speaker 1", 1000, 2000, "b")), 0);
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "practitioner", "Me", 2000, 3000, "c")), 0);
+  const auto before = db_->get_transcript(t)->updated_at;
+  std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+  ASSERT_TRUE(db_->rename_transcript_speaker(t, "participant", "Anna"));
+  const auto phrases = db_->get_transcript_phrases(t);
+  ASSERT_EQ(phrases.size(), 3u);
+  EXPECT_EQ(phrases[0].speaker_name.value_or(""), "Anna");
+  EXPECT_EQ(phrases[1].speaker_name.value_or(""), "Anna");
+  EXPECT_EQ(phrases[2].speaker_name.value_or(""), "Me");
+  for (const auto &p : phrases) EXPECT_FALSE(p.edited);
+  EXPECT_GT(db_->get_transcript(t)->updated_at, before);
+
+  EXPECT_TRUE(db_->rename_transcript_speaker(t, "unknown_role", "X"));  // transcript exists
+  EXPECT_FALSE(db_->rename_transcript_speaker(t, "participant", ""));
+  EXPECT_FALSE(db_->rename_transcript_speaker(31337, "participant", "X"));
 }

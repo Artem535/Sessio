@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS Transcript (
 );
 CREATE TABLE IF NOT EXISTS TranscriptPhrase (
     id INTEGER PRIMARY KEY,
-    transcript_id INTEGER NOT NULL REFERENCES Transcript(id),
+    transcript_id INTEGER NOT NULL,         -- no FK: see below
     track_role TEXT NOT NULL,          -- practitioner | participant
     speaker_name TEXT,
     start_ms BIGINT NOT NULL,          -- from the start of the call
@@ -132,7 +132,12 @@ DuckDB treats updates of referenced rows as key updates, so `update_event` faile
 while a transcript referenced the event. `Database::add_transcript` checks that
 the event exists instead, and cascades are explicit in the `Database` methods
 (`remove_event`, `delete_event_series_overrides_from`). The
-`TranscriptPhrase -> Transcript` foreign key stays. Backups (including encrypted ones) include
+`TranscriptPhrase.transcript_id` foreign key was dropped too: DuckDB counts rows
+deleted earlier in the same transaction as still referencing, so the
+phrases-then-transcript cascade failed inside `commit_schedule_change`.
+`add_transcript_phrase` checks that the transcript exists, is `recording` and has
+no revoked consent, and `purge_orphan_transcripts()` removes anything a missed
+cascade leaves behind. Backups (including encrypted ones) include
 both tables.
 
 ### Lifecycle
@@ -157,7 +162,10 @@ both tables.
 6. *Deletion.* Manual on the transcript page and from Settings ("Delete all
    transcripts"). Deleting an event (including future series overrides) deletes its
    transcripts and phrases; a client that has events is only deactivated, so its
-   transcripts stay until the event is deleted. There is no automatic expiry in this version.
+   transcripts stay until the event is deleted.
+7. *Application start.* Before any session can exist, the application calls
+   `finalize_interrupted_transcripts()` (crash recovery: `recording` becomes
+   `draft`) and `purge_orphan_transcripts()`; phase 3 wires this. There is no automatic expiry in this version.
 
 Consent is enforced structurally: with no active session there is no audio sink
 set, so no audio can reach the engine. A test asserts this.

@@ -1173,9 +1173,18 @@ TEST(RestoreServiceTest, RestoresTranscriptsAndPhrases) {
   phrase.start_ms = 1500;
   phrase.end_ms = 4200;
   phrase.text = "Привет, это тест восстановления";
-  ASSERT_GT(sourceDb.add_transcript_phrase(phrase), 0);
+  const auto editedId = sourceDb.add_transcript_phrase(phrase);
+  ASSERT_GT(editedId, 0);
+  DuckTranscriptPhrase second = phrase;
+  second.start_ms = 5000;
+  second.end_ms = 6000;
+  second.text = "Вторая фраза";
+  ASSERT_GT(sourceDb.add_transcript_phrase(second), 0);
+  ASSERT_TRUE(sourceDb.update_transcript_phrase_text(editedId, "Привет, это тест восстановления"));
   ASSERT_TRUE(sourceDb.set_transcript_status(transcriptId, "draft"));
   ASSERT_TRUE(sourceDb.revoke_transcript_consent(transcriptId, 1730000300000));
+  const auto sourceTranscript = sourceDb.get_transcript(transcriptId);
+  ASSERT_NE(sourceTranscript, nullptr);
 
   const auto backupPath = Poco::Path(Poco::Path::current())
                               .append("tmp_restore_transcript.psybackup")
@@ -1205,7 +1214,11 @@ TEST(RestoreServiceTest, RestoresTranscriptsAndPhrases) {
   ASSERT_TRUE(restored[0].consent_revoked_at.has_value());
   EXPECT_EQ(*restored[0].consent_revoked_at, 1730000300000);
   const auto phrases = restoredDb.get_transcript_phrases(restored[0].id);
-  ASSERT_EQ(phrases.size(), 1u);
+  EXPECT_EQ(restored[0].created_at, sourceTranscript->created_at);
+  EXPECT_EQ(restored[0].updated_at, sourceTranscript->updated_at);
+  ASSERT_EQ(phrases.size(), 2u);
+  EXPECT_TRUE(phrases[0].edited);
+  EXPECT_FALSE(phrases[1].edited);
   EXPECT_EQ(phrases[0].text, "Привет, это тест восстановления");
   EXPECT_EQ(phrases[0].start_ms, 1500);
   EXPECT_EQ(phrases[0].end_ms, 4200);

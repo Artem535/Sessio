@@ -186,6 +186,10 @@ CREATE TABLE IF NOT EXISTS ScheduleOutbox (
 -- milliseconds from the start of the call (not timestamps).
 -- No foreign key on event_id: DuckDB treats updates of referenced rows as key updates
 -- (update_event would fail); Database::add_transcript checks the event exists.
+-- No foreign key on TranscriptPhrase.transcript_id either: DuckDB still counts rows deleted
+-- earlier in the same transaction as referencing, so the phrases-then-transcript cascade
+-- failed inside commit_schedule_change. Integrity is kept by add_transcript_phrase (checks
+-- the transcript), the explicit cascades, and purge_orphan_transcripts() at startup.
 CREATE TABLE IF NOT EXISTS Transcript (
     id INTEGER PRIMARY KEY,
     event_id INTEGER NOT NULL,
@@ -200,7 +204,7 @@ CREATE TABLE IF NOT EXISTS Transcript (
 
 CREATE TABLE IF NOT EXISTS TranscriptPhrase (
     id INTEGER PRIMARY KEY,
-    transcript_id INTEGER NOT NULL REFERENCES Transcript(id),
+    transcript_id INTEGER NOT NULL,
     track_role TEXT NOT NULL,
     speaker_name TEXT,
     start_ms BIGINT NOT NULL,
@@ -768,6 +772,37 @@ constexpr auto kDeleteTranscriptPhraseByIdQuery =
 constexpr auto kDeletePhrasesByTranscriptIdQuery =
     "DELETE FROM TranscriptPhrase WHERE transcript_id = $1";
 constexpr auto kDeleteAllTranscriptPhrasesQuery = "DELETE FROM TranscriptPhrase";
+
+constexpr auto kPurgeOrphanTranscriptPhrasesQuery = R"duckdb(
+DELETE FROM TranscriptPhrase
+WHERE transcript_id NOT IN (SELECT id FROM Transcript)
+   OR transcript_id IN (
+       SELECT id FROM Transcript WHERE event_id NOT IN (SELECT id FROM Event))
+)duckdb";
+constexpr auto kPurgeOrphanTranscriptsQuery = R"duckdb(
+DELETE FROM Transcript WHERE event_id NOT IN (SELECT id FROM Event) RETURNING id
+)duckdb";
+
+constexpr auto kSelectTranscriptWriteStateQuery =
+    "SELECT status, consent_revoked_at IS NOT NULL FROM Transcript WHERE id = $1";
+
+constexpr auto kSelectTranscriptsByClientQuery = R"duckdb(
+SELECT t.id, t.event_id, t.status, t.consent_scope, t.consent_given_at,
+       t.consent_revoked_at, t.model_id, t.created_at, t.updated_at
+FROM Transcript t
+JOIN EventClient ec ON ec.event_id = t.event_id
+WHERE ec.client_id = $1
+ORDER BY t.created_at, t.id
+)duckdb";
+
+constexpr auto kCountTranscriptsQuery = "SELECT COUNT(*) FROM Transcript";
+constexpr auto kCountTranscriptPhrasesQuery =
+    "SELECT COUNT(*) FROM TranscriptPhrase WHERE transcript_id = $1";
+
+constexpr auto kRenameTranscriptSpeakerQuery = R"duckdb(
+UPDATE TranscriptPhrase SET speaker_name = $1
+WHERE transcript_id = $2 AND track_role = $3
+)duckdb";
 
 constexpr auto kInsertClientNoteQuery = R"duckdb(
 INSERT INTO ClientNote (
