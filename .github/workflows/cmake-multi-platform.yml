@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "devel", "devel-qt"]
+    branches: ["main", "devel", "devel-qt", "feat/118-call-transcription"]
   pull_request:
     branches: ["main", "devel", "devel-qt"]
 
@@ -381,7 +381,7 @@ jobs:
           }
           $ort | ForEach-Object { Copy-Item $_.FullName $dest -Force }
 
-          foreach ($required in "models/silero_vad.onnx", "models/gigaam-v3-rnnt/encoder.int8.onnx", "onnxruntime.dll", "sherpa-onnx-cxx-api.dll") {
+          foreach ($required in "Sessio.exe", "models/silero_vad.onnx", "models/gigaam-v3-rnnt/encoder.int8.onnx", "models/gigaam-v3-rnnt/decoder.onnx", "models/gigaam-v3-rnnt/joiner.onnx", "models/gigaam-v3-rnnt/tokens.txt", "onnxruntime.dll", "sherpa-onnx-c-api.dll", "sherpa-onnx-cxx-api.dll") {
             if (-not (Test-Path "$dest/$required")) { throw "$required missing from $dest" }
           }
 
@@ -395,8 +395,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(Sessio VERSION ([0-9.]+)' | Select-Object -First 1).Matches.Groups[1].Value
+          if (-not $version) { throw "Application version not found in CMakeLists.txt" }
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
-            "/DMyAppVersion=${{ matrix.qt_version }}" `
+            "/DMyAppVersion=$version" `
             "/DMySourceDir=${{ github.workspace }}\build-release\packages\Sessio" `
             "/DMyOutputDir=${{ github.workspace }}\build-release\packages" `
             "/DMyIconFile=${{ github.workspace }}\resources\icons\Sessio.ico" `

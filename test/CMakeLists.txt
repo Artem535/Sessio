@@ -672,6 +672,26 @@ gtest_discover_tests(Sessio_audio_tap_tests)
 
 if(SESSIO_TRANSCRIPTION_ENABLED)
 add_executable(Sessio_call_transcription_controller_tests call_transcription_controller_tests.cpp)
+add_executable(Sessio_transcription_workflow_model_tests transcription_workflow_model_tests.cpp)
+target_include_directories(Sessio_transcription_workflow_model_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/test "${SESSIO_SHERPA_SOURCE_DIR}")
+target_link_libraries(Sessio_transcription_workflow_model_tests PRIVATE
+    GTest::gtest Qt6::Test Sessio_transcription_ui Sessio_video sherpa-onnx-cxx-api)
+set_target_properties(Sessio_transcription_workflow_model_tests PROPERTIES
+    BUILD_RPATH "${CMAKE_BINARY_DIR}/lib;${SESSIO_ONNXRUNTIME_LIB_DIR}")
+add_dependencies(Sessio_transcription_workflow_model_tests sessio_models)
+if(WIN32)
+  add_custom_command(TARGET Sessio_transcription_workflow_model_tests POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:sherpa-onnx-c-api>
+          $<TARGET_FILE:sherpa-onnx-cxx-api>
+          ${SESSIO_ONNXRUNTIME_LIBS}
+          $<TARGET_FILE_DIR:Sessio_transcription_workflow_model_tests>
+      VERBATIM)
+endif()
+gtest_discover_tests(Sessio_transcription_workflow_model_tests DISCOVERY_MODE PRE_TEST
+    PROPERTIES LABELS models
+    ENVIRONMENT "SESSIO_MODELS_DIR=${SESSIO_MODELS_DIR};QT_QPA_PLATFORM=offscreen")
 target_include_directories(Sessio_call_transcription_controller_tests PRIVATE ${CMAKE_SOURCE_DIR}/test ${CMAKE_SOURCE_DIR}/test/transcription)
 target_link_libraries(Sessio_call_transcription_controller_tests PRIVATE GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui Sessio_video)
 gtest_discover_tests(Sessio_call_transcription_controller_tests)
