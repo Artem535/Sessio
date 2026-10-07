@@ -53,7 +53,7 @@ interface so it can be tested with a fake.
 | `TranscriptionEngine` | `addTrack(TrackInfo)`, `pushAudio(TrackId, span<const int16_t>, sampleRate)`, `removeTrack`, `stop`; signal `phraseReady(TranscribedPhrase)`; thread-safe | the three above |
 | `ModelLocator` | Resolve the GigaAM and Silero VAD files relative to the application directory per platform | nothing |
 | `TranscriptionSession` | GUI-thread QObject for one call: consent gate, owns the engine, installs and removes the audio taps, writes phrases through `TranscriptRepository` | engine, repository, `VideoSession` |
-| `TranscriptRepository` | CRUD for `Transcript` and `TranscriptPhrase` over `pcm::database::Database` | database |
+| `TranscriptRepository` | Methods on `pcm::database::Database` (`add_transcript`, `add_transcript_phrase`, ...), following the existing convention; no separate class | database |
 
 `TrackInfo` carries a stable track id (the LiveKit participant identity), a role
 (`Practitioner` or `Participant`), and a display name.
@@ -101,7 +101,7 @@ minimum speech 0.25 s, maximum phrase 20 s (forces a split; GigaAM accepts up to
 ```sql
 CREATE TABLE IF NOT EXISTS Transcript (
     id INTEGER PRIMARY KEY,
-    event_id INTEGER NOT NULL REFERENCES Event(id),
+    event_id INTEGER NOT NULL,         -- no FK: see below
     status TEXT NOT NULL,              -- recording | draft | reviewed
     consent_scope TEXT NOT NULL,       -- 'live_local_v1': local, audio not stored
     consent_given_at TIMESTAMP NOT NULL,
@@ -123,9 +123,16 @@ CREATE TABLE IF NOT EXISTS TranscriptPhrase (
 ```
 
 The client is found through the existing `EventClient` link. One `Transcript` is
-created per join of a call. The schema change is added to `kCreateTables` and
-`kSchemaMigrations`, raises `schema_version`, and is covered by a restore
-round-trip test, as AGENTS.md requires. Backups (including encrypted ones) include
+created per join of a call. The tables are added to `kCreateTables` (`CREATE TABLE IF NOT EXISTS`, applied
+on every open, so existing databases migrate on first start); `schema_version`
+stays 1, as for every schema addition so far, because restore rejects other
+values. A migration test and a restore round-trip test cover it, as AGENTS.md
+requires. The foreign key `Transcript.event_id REFERENCES Event(id)` was dropped:
+DuckDB treats updates of referenced rows as key updates, so `update_event` failed
+while a transcript referenced the event. `Database::add_transcript` checks that
+the event exists instead, and cascades are explicit in the `Database` methods
+(`remove_event`, `delete_event_series_overrides_from`). The
+`TranscriptPhrase -> Transcript` foreign key stays. Backups (including encrypted ones) include
 both tables.
 
 ### Lifecycle
@@ -148,8 +155,9 @@ both tables.
    transcript page lets the practitioner edit or delete phrases and mark the
    transcript `reviewed`.
 6. *Deletion.* Manual on the transcript page and from Settings ("Delete all
-   transcripts"). Deleting an event or a client deletes its transcripts and
-   phrases. There is no automatic expiry in this version.
+   transcripts"). Deleting an event (including future series overrides) deletes its
+   transcripts and phrases; a client that has events is only deactivated, so its
+   transcripts stay until the event is deleted. There is no automatic expiry in this version.
 
 Consent is enforced structurally: with no active session there is no audio sink
 set, so no audio can reach the engine. A test asserts this.

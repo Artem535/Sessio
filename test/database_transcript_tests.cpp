@@ -1,9 +1,12 @@
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <duckdb.hpp>
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "config.h"
 #include "database.h"
@@ -219,13 +222,14 @@ TEST_F(TranscriptDbTest, UpdatePhraseTextMarksEditedAndBumpsTranscript) {
   const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
   const auto id = db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "mispelled"));
   const auto before = db_->get_transcript(t)->updated_at;
+  std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
   ASSERT_TRUE(db_->update_transcript_phrase_text(id, "misspelled"));
   const auto phrases = db_->get_transcript_phrases(t);
   ASSERT_EQ(phrases.size(), 1u);
   EXPECT_EQ(phrases[0].text, "misspelled");
   EXPECT_TRUE(phrases[0].edited);
-  EXPECT_GE(db_->get_transcript(t)->updated_at, before);
+  EXPECT_GT(db_->get_transcript(t)->updated_at, before);
 
   EXPECT_FALSE(db_->update_transcript_phrase_text(id, ""));
   EXPECT_FALSE(db_->update_transcript_phrase_text(31337, "x"));
@@ -339,6 +343,17 @@ TEST_F(TranscriptDbTest, DeletingSeriesOverridesDeletesTheirTranscripts) {
   const auto event_id = db_->add_event(override_event);
   ASSERT_GT(event_id, 0);
 
+  // An override of an occurrence BEFORE the cutoff must be kept.
+  DuckEvent early_event = override_event;
+  early_event.name = std::string{"Earlier occurrence"};
+  early_event.start_date = 1729000000000;
+  early_event.end_date = 1729003600000;
+  early_event.original_occurrence_start = 1729000000000;
+  const auto early_id = db_->add_event(early_event);
+  ASSERT_GT(early_id, 0);
+  const auto early_t = db_->add_transcript(early_id, "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(early_t, "participant", "C", 0, 1000, "kept")), 0);
+
   const auto other_id = makeEvent(1750000000000);
   const auto other = db_->add_transcript(other_id, "live_local_v1");
   ASSERT_GT(db_->add_transcript_phrase(phrase(other, "participant", "C", 0, 1000, "stays")), 0);
@@ -347,9 +362,52 @@ TEST_F(TranscriptDbTest, DeletingSeriesOverridesDeletesTheirTranscripts) {
   ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "x")), 0);
 
   ASSERT_TRUE(db_->delete_event_series_overrides_from(series_id, 1730000000001));
+  EXPECT_NE(db_->get_event(early_id), nullptr);
+  EXPECT_NE(db_->get_transcript(early_t), nullptr);
+  EXPECT_EQ(db_->get_transcript_phrases(early_t).size(), 1u);
   EXPECT_EQ(db_->get_event(event_id), nullptr);
   EXPECT_EQ(db_->get_transcript(t), nullptr);
   EXPECT_TRUE(db_->get_transcript_phrases(t).empty());
   EXPECT_NE(db_->get_transcript(other), nullptr);
   EXPECT_EQ(db_->get_transcript_phrases(other).size(), 1u);
+}
+
+TEST_F(TranscriptDbTest, OpeningADatabaseWithoutTranscriptTablesCreatesThem) {
+  // Simulate a database created by an older version: remove the new tables.
+  db_.reset();
+  {
+    duckdb::DuckDB raw(dir_ + "/database.db");
+    duckdb::Connection conn(raw);
+    ASSERT_FALSE(conn.Query("DROP TABLE IF EXISTS TranscriptPhrase")->HasError());
+    ASSERT_FALSE(conn.Query("DROP TABLE IF EXISTS Transcript")->HasError());
+  }
+
+  pcm::config::Config conf{
+      .db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
+  db_ = std::make_unique<pcm::database::Database>(conf);
+
+  const auto event_id = makeEvent();
+  const auto t = db_->add_transcript(event_id, "live_local_v1");
+  ASSERT_GT(t, 0);
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "works")), 0);
+  EXPECT_EQ(db_->get_transcript_phrases(t).size(), 1u);
+}
+
+TEST_F(TranscriptDbTest, ExistingDataSurvivesTheTranscriptMigration) {
+  const auto event_id = makeEvent();
+  db_.reset();
+  {
+    duckdb::DuckDB raw(dir_ + "/database.db");
+    duckdb::Connection conn(raw);
+    ASSERT_FALSE(conn.Query("DROP TABLE IF EXISTS TranscriptPhrase")->HasError());
+    ASSERT_FALSE(conn.Query("DROP TABLE IF EXISTS Transcript")->HasError());
+  }
+  pcm::config::Config conf{
+      .db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
+  db_ = std::make_unique<pcm::database::Database>(conf);
+  EXPECT_NE(db_->get_event(event_id), nullptr);
+}
+
+TEST_F(TranscriptDbTest, SchemaVersionStaysOne) {
+  EXPECT_EQ(db_->get_application_metadata().schema_version, 1);
 }

@@ -1150,6 +1150,73 @@ TEST(RestoreServiceTest, RestoresDatabaseSnapshotIntoNewDirectory) {
       .remove(true);
 }
 
+TEST(RestoreServiceTest, RestoresTranscriptsAndPhrases) {
+  auto sourceDb = makeTestDatabase("tmp_restore_transcript_source");
+
+  DuckEvent event;
+  event.name = std::string{"Recorded session"};
+  event.start_date = 1730000000000;
+  event.end_date = 1730003600000;
+  event.duration = 3600;
+  event.event_stat_id = 1;
+  event.payment_stat_id = 1;
+  const auto eventId = sourceDb.add_event(event);
+  ASSERT_GT(eventId, 0);
+
+  const auto transcriptId = sourceDb.add_transcript(
+      eventId, "live_local_v1", std::string{"gigaam-v3-rnnt"}, 1730000100000);
+  ASSERT_GT(transcriptId, 0);
+  DuckTranscriptPhrase phrase;
+  phrase.transcript_id = transcriptId;
+  phrase.track_role = "participant";
+  phrase.speaker_name = std::string{"Client"};
+  phrase.start_ms = 1500;
+  phrase.end_ms = 4200;
+  phrase.text = "Привет, это тест восстановления";
+  ASSERT_GT(sourceDb.add_transcript_phrase(phrase), 0);
+  ASSERT_TRUE(sourceDb.set_transcript_status(transcriptId, "draft"));
+  ASSERT_TRUE(sourceDb.revoke_transcript_consent(transcriptId, 1730000300000));
+
+  const auto backupPath = Poco::Path(Poco::Path::current())
+                              .append("tmp_restore_transcript.psybackup")
+                              .toString();
+  removeIfExists(backupPath);
+  ASSERT_TRUE(pcm::backup::BackupService{}.create_backup(sourceDb, backupPath).ok);
+
+  const auto targetPath = Poco::Path(Poco::Path::current())
+                              .append("tmp_restore_transcript_target")
+                              .toString();
+  if (Poco::File(targetPath).exists()) {
+    Poco::File(targetPath).remove(true);
+  }
+  const auto restoreResult =
+      pcm::backup::RestoreService{}.restore_backup(backupPath, targetPath);
+  ASSERT_TRUE(restoreResult.ok) << restoreResult.error;
+
+  pcm::config::Config targetConfig{
+      .db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(targetPath)}};
+  pcm::database::Database restoredDb{targetConfig};
+  const auto restored = restoredDb.get_transcripts_for_event(eventId);
+  ASSERT_EQ(restored.size(), 1u);
+  EXPECT_EQ(restored[0].status, "draft");
+  EXPECT_EQ(restored[0].consent_scope, "live_local_v1");
+  EXPECT_EQ(restored[0].model_id.value_or(""), "gigaam-v3-rnnt");
+  EXPECT_EQ(restored[0].consent_given_at, 1730000100000);
+  ASSERT_TRUE(restored[0].consent_revoked_at.has_value());
+  EXPECT_EQ(*restored[0].consent_revoked_at, 1730000300000);
+  const auto phrases = restoredDb.get_transcript_phrases(restored[0].id);
+  ASSERT_EQ(phrases.size(), 1u);
+  EXPECT_EQ(phrases[0].text, "Привет, это тест восстановления");
+  EXPECT_EQ(phrases[0].start_ms, 1500);
+  EXPECT_EQ(phrases[0].end_ms, 4200);
+  EXPECT_EQ(phrases[0].speaker_name.value_or(""), "Client");
+
+  Poco::File(backupPath).remove();
+  Poco::File(targetPath).remove(true);
+  Poco::File(Poco::Path(Poco::Path::current()).append("tmp_restore_transcript_source"))
+      .remove(true);
+}
+
 TEST(RestoreServiceTest, RestoresEncryptedBackupWithCorrectPassword) {
   auto sourceDb = makeTestDatabase("tmp_restore_encrypted_source");
   DuckClient client;
