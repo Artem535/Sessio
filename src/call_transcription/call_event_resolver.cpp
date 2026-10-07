@@ -17,10 +17,15 @@ std::optional<int64_t> CallEventResolver::resolve(const int64_t eventId) {
     return std::nullopt;
   }
 
+  // Idempotency first: an occurrence materialised earlier stays resolvable even when the
+  // series was deactivated or its rule edited since.
+  if (const auto existing = pcm::recurrence::materialisedEventForVirtualId(*mDb, eventId)) {
+    return existing;
+  }
+
   auto occurrence = pcm::recurrence::virtualOccurrenceForId(*mDb, eventId);
   if (!occurrence.has_value() || !occurrence->series_id.has_value() ||
       !occurrence->start_date.has_value()) {
-    // The series may be gone but the occurrence already materialised.
     return std::nullopt;
   }
 
@@ -42,4 +47,4 @@ std::optional<int64_t> CallEventResolver::resolve(const int64_t eventId) {
   return newId;
 }
 
-}  // namespace pcm::calltranscription
+} // namespace pcm::calltranscription

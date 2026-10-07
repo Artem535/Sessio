@@ -25,7 +25,7 @@ void touch(const fs::path &p) {
   std::ofstream(p).put('x');
 }
 
-}  // namespace
+} // namespace
 
 TEST(EngineFactory, FactoryReportsMissingModelsWithoutThrowing) {
   const fs::path app = makeTempDir("missing");
@@ -70,4 +70,29 @@ TEST(EngineFactory, FactoryWithBrokenModelFilesFailsWithoutThrowing) {
     EXPECT_FALSE(error.contains(QString::fromStdString(root.string())));
   }
   fs::remove_all(root);
+}
+
+TEST(EngineFactory, SanitizeRemovesRootsContainingSpaces) {
+  const fs::path root = fs::temp_directory_path() / "John Smith" / "models";
+  const std::string what = "failed to open " + (root / "gigaam" / "encoder.onnx").string() +
+                           " at " + root.string() + " and /home/other user/x/tokens.txt";
+  const QString text = sanitizeLoadError(what.c_str(), {root, root.parent_path()});
+  EXPECT_FALSE(text.contains("John")) << text.toStdString();
+  EXPECT_FALSE(text.contains("Smith")) << text.toStdString();
+  EXPECT_FALSE(text.contains("/")) << text.toStdString();
+  EXPECT_TRUE(text.contains("encoder.onnx"));
+}
+
+TEST(EngineFactory, FactoryErrorDoesNotLeakPathWithSpaces) {
+  const fs::path root = makeTempDir("spaces") / "John Smith";
+  const fs::path dir = root / "gigaam-v3-rnnt";
+  for (const char *f : {"encoder.int8.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt"}) touch(dir / f);
+  touch(root / "silero_vad.onnx");
+  auto factory = makeProductionEngineFactory(makeTempDir("app3"), root.string());
+  QString error;
+  auto engine = factory({}, &error);
+  EXPECT_EQ(engine, nullptr);
+  EXPECT_FALSE(error.contains("John")) << error.toStdString();
+  EXPECT_FALSE(error.contains("Smith")) << error.toStdString();
+  fs::remove_all(root.parent_path());
 }

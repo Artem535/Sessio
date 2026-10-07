@@ -18,7 +18,7 @@ namespace {
 using pcm::calltranscription::CallEventResolver;
 
 class CallEventResolverTest : public ::testing::Test {
- protected:
+protected:
   void SetUp() override {
     const auto *info = ::testing::UnitTest::GetInstance()->current_test_info();
     dir_ = Poco::Path(Poco::Path::current())
@@ -84,7 +84,7 @@ class CallEventResolverTest : public ::testing::Test {
   QDateTime startLocal_;
 };
 
-}  // namespace
+} // namespace
 
 TEST_F(CallEventResolverTest, PositiveIdIsReturnedUnchanged) {
   int calls = 0;
@@ -176,4 +176,32 @@ TEST_F(CallEventResolverTest, VirtualOccurrenceForIdRoundTrip) {
   EXPECT_EQ(occurrence->series_id, std::optional<int64_t>(seriesId_));
   EXPECT_EQ(occurrence->start_date, std::optional<int64_t>(occurrenceMs(1)));
   EXPECT_FALSE(pcm::recurrence::virtualOccurrenceForId(*db_, 5).has_value());
+}
+
+TEST_F(CallEventResolverTest, ResolveAfterSeriesDeactivatedReturnsMaterialisedEvent) {
+  int calls = 0;
+  auto resolver = makeResolver(&calls);
+  const auto first = resolver.resolve(virtualId(1));
+  ASSERT_TRUE(first.has_value());
+  ASSERT_TRUE(db_->deactivate_event_series(seriesId_));
+  EXPECT_EQ(resolver.resolve(virtualId(1)), first);
+  EXPECT_EQ(calls, 1);
+}
+
+TEST_F(CallEventResolverTest, ResolveAfterRuleEditDroppingTheDayReturnsMaterialisedEvent) {
+  int calls = 0;
+  auto resolver = makeResolver(&calls);
+  const auto first = resolver.resolve(virtualId(1));
+  ASSERT_TRUE(first.has_value());
+
+  auto series = db_->get_event_series(seriesId_);
+  ASSERT_NE(series, nullptr);
+  // Move the rule to another weekday so the materialised day is no longer produced.
+  series->recurrence_rule =
+      pcm::recurrence::weeklyRuleForDate(startLocal_.date().addDays(2)).toStdString();
+  ASSERT_TRUE(db_->update_event_series(*series));
+  EXPECT_FALSE(pcm::recurrence::virtualOccurrenceForId(*db_, virtualId(1)).has_value());
+
+  EXPECT_EQ(resolver.resolve(virtualId(1)), first);
+  EXPECT_EQ(calls, 1);
 }

@@ -90,4 +90,4 @@ void PhraseWriter::run() {
   }
 }
 
-}  // namespace pcm::calltranscription
+} // namespace pcm::calltranscription

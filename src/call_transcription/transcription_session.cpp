@@ -19,13 +19,13 @@ namespace {
 constexpr std::chrono::milliseconds kGracefulTimeout{5000};
 constexpr std::chrono::milliseconds kNoWait{0};
 constexpr int kMaxConsecutiveStoreFailures = 3;
-}  // namespace
+} // namespace
 
 // Posts work to the session's QObject from any thread. After detach() (called
 // first thing in the destructor) nothing is posted, so worker threads never
 // touch a dying QObject.
 class GuiBridge {
- public:
+public:
   explicit GuiBridge(QObject *target) : target_(target) {}
   void post(std::function<void()> fn) {
     std::lock_guard lock(mutex_);
@@ -36,7 +36,7 @@ class GuiBridge {
     target_ = nullptr;
   }
 
- private:
+private:
   std::mutex mutex_;
   QObject *target_;
 };
@@ -132,7 +132,7 @@ void runShutdown(const std::shared_ptr<SessionShared> &sh) {
   c.finalised = true;
 }
 
-}  // namespace
+} // namespace
 
 TranscriptionSession::TranscriptionSession(std::shared_ptr<pcm::database::Database> db,
                                            pcm::video::VideoProvider *provider,
@@ -435,4 +435,4 @@ void TranscriptionSession::stop() { beginShutdown(true); }
 
 void TranscriptionSession::revoke() { beginShutdown(false); }
 
-}  // namespace pcm::calltranscription
+} // namespace pcm::calltranscription

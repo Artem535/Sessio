@@ -652,3 +652,29 @@ TEST_F(TranscriptDbTest, PhraseInsertWorksFromAnotherThreadDuringScheduleTransac
   ASSERT_EQ(phrases.size(), 1u);
   EXPECT_EQ(phrases[0].text, "hi");
 }
+
+TEST_F(TranscriptDbTest, StatusAndRevokeWorkFromAnotherThreadDuringScheduleTransaction) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  ASSERT_GT(t, 0);
+
+  auto &capture = errorCapture();
+  capture.begin();
+  bool statusOk = false;
+  bool revokeOk = false;
+  db_->commit_schedule_change(
+      [&]() -> std::optional<int64_t> {
+        std::thread worker([&] {
+          statusOk = db_->set_transcript_status(t, "draft");
+          revokeOk = db_->revoke_transcript_consent(t, std::nullopt);
+        });
+        worker.join();
+        return std::nullopt;
+      },
+      "Europe/Moscow",
+      [](const pcm::database::ScheduleSource &) { return std::optional<std::string>("p"); });
+  const auto errors = capture.end();
+
+  EXPECT_TRUE(statusOk);
+  EXPECT_TRUE(revokeOk);
+  EXPECT_TRUE(errors.empty()) << "unexpected error log: " << (errors.empty() ? "" : errors[0]);
+}

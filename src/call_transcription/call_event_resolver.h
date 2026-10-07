@@ -17,7 +17,7 @@ namespace pcm::calltranscription {
 // Recurring occurrences that were never edited only exist virtually (negative id);
 // a transcript needs a persisted event, so such an occurrence is materialised first.
 class CallEventResolver {
- public:
+public:
   // Persists a virtual occurrence as a real event (production: QTimelineModel::addEvent so
   // published series get their schedule bookkeeping) and returns the new id or <= 0.
   using Materialise = std::function<int64_t(const DuckEvent &)>;
@@ -29,9 +29,9 @@ class CallEventResolver {
   // the occurrence no longer exists or materialisation fails. Idempotent.
   std::optional<int64_t> resolve(int64_t eventId);
 
- private:
+private:
   std::shared_ptr<pcm::database::Database> mDb;
   Materialise mMaterialise;
 };
 
-}  // namespace pcm::calltranscription
+} // namespace pcm::calltranscription

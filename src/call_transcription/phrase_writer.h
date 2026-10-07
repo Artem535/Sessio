@@ -23,7 +23,7 @@ struct WriterStats {
 // Persists phrases on one dedicated thread, in submission order, so the decode
 // thread and the GUI thread never wait on the database. Qt-free.
 class PhraseWriter {
- public:
+public:
   // Returns the new row id, or <= 0 on failure. Runs on the writer thread.
   using Store = std::function<int64_t(const DuckTranscriptPhrase &)>;
   // Called with the stored row (id assigned) on the writer thread.
@@ -49,7 +49,7 @@ class PhraseWriter {
   void stop(std::chrono::milliseconds drain_timeout);
   WriterStats stats() const;
 
- private:
+private:
   void run();
 
   Store store_;
@@ -64,4 +64,4 @@ class PhraseWriter {
   std::thread thread_;
 };
 
-}  // namespace pcm::calltranscription
+} // namespace pcm::calltranscription

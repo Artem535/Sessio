@@ -670,6 +670,7 @@ target_include_directories(Sessio_audio_tap_tests PRIVATE ${CMAKE_SOURCE_DIR}/sr
 target_link_libraries(Sessio_audio_tap_tests PRIVATE GTest::gtest GTest::gtest_main Qt6::Core)
 gtest_discover_tests(Sessio_audio_tap_tests)
 
+if(SESSIO_TRANSCRIPTION_ENABLED)
 # Phrase writer tests (Qt-free writer thread)
 add_executable(Sessio_phrase_writer_tests phrase_writer_tests.cpp)
 target_link_libraries(Sessio_phrase_writer_tests PRIVATE
@@ -697,6 +698,7 @@ target_link_libraries(Sessio_transcription_session_tests PRIVATE
     Sessio_video)
 set_target_properties(Sessio_transcription_session_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_transcription_session_tests)
+endif()
 
 # Role selection dialog tests
 find_package(Qt6 REQUIRED COMPONENTS Test)
@@ -1001,9 +1003,11 @@ target_link_libraries(Sessio_accent_color_tests PRIVATE
     GTest::gtest Qt6::Widgets Sessio_event_page)
 gtest_discover_tests(Sessio_accent_color_tests)
 
+if(SESSIO_TRANSCRIPTION_ENABLED)
 # Call event resolver tests (materialising a recurring occurrence)
 add_executable(Sessio_call_event_resolver_tests call_event_resolver_tests.cpp)
 target_link_libraries(Sessio_call_event_resolver_tests PRIVATE
     GTest::gtest GTest::gtest_main Sessio_call_transcription Sessio_event_view
     Sessio_database Sessio_config Poco::Foundation)
 gtest_discover_tests(Sessio_call_event_resolver_tests)
+endif()

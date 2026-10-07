@@ -56,6 +56,11 @@ DuckEvent buildVirtualOccurrence(const DuckEventSeries &series,
 // or the series' rule no longer produces an occurrence on that local day.
 std::optional<DuckEvent> virtualOccurrenceForId(pcm::database::Database &db, int64_t virtualId);
 
+// The id of the already materialised event for a virtual occurrence id, found without
+// requiring the series to be active or its rule to still produce that day.
+std::optional<int64_t> materialisedEventForVirtualId(pcm::database::Database &db,
+                                                     int64_t virtualId);
+
 QVector<DuckEvent> eventsForClient(pcm::database::Database &db, int64_t clientId,
                                    const QDateTime &virtualWindowStart,
                                    const QDateTime &virtualWindowEnd);

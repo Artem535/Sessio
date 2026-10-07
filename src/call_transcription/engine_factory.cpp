@@ -1,6 +1,8 @@
 #include "engine_factory.h"
 
+#include <algorithm>
 #include <exception>
+#include <vector>
 #include <QStringList>
 #include <memory>
 
@@ -21,19 +23,32 @@ QString sanitizedLocateError(const std::string &error) {
   return text;
 }
 
-// Exception texts from the sherpa load may embed full model paths; reduce every
-// whitespace-delimited token that contains a path separator to its base name.
-QString stripPaths(const char *what) {
-  const QStringList tokens = QString::fromUtf8(what).split(QLatin1Char(' '));
+} // namespace
+
+QString sanitizeLoadError(const char *what, const std::vector<std::filesystem::path> &roots) {
+  QString text = QString::fromUtf8(what);
+  // Cut known roots first (longest first) so a path containing spaces disappears whole.
+  QStringList known;
+  for (const auto &root : roots) {
+    if (root.empty()) continue;
+    known << QString::fromStdString(root.string()) << QString::fromStdString(root.generic_string());
+  }
+  known.removeDuplicates();
+  std::sort(known.begin(), known.end(),
+            [](const QString &a, const QString &b) { return a.size() > b.size(); });
+  for (const QString &root : std::as_const(known)) {
+    if (!root.isEmpty()) text.replace(root, QString());
+  }
+  // Whatever path is left (unknown roots): reduce each separator-containing token to its
+  // base name.
   QStringList out;
-  for (const QString &token : tokens) {
-    const qsizetype cut = qMax(token.lastIndexOf(QLatin1Char('/')), token.lastIndexOf(QLatin1Char('\\')));
+  for (const QString &token : text.split(QLatin1Char(' '))) {
+    const qsizetype cut =
+        qMax(token.lastIndexOf(QLatin1Char('/')), token.lastIndexOf(QLatin1Char('\\')));
     out << (cut >= 0 ? token.mid(cut + 1) : token);
   }
   return out.join(QLatin1Char(' '));
 }
-
-}  // namespace
 
 EngineFactory makeProductionEngineFactory(std::filesystem::path appDir,
                                           std::string modelsEnvOverride) {
@@ -44,6 +59,9 @@ EngineFactory makeProductionEngineFactory(std::filesystem::path appDir,
       if (error) *error = text;
       return std::shared_ptr<pcm::transcription::TranscriptionEngine>();
     };
+    const std::vector<std::filesystem::path> roots = {
+        appDir, appDir.parent_path(), std::filesystem::path(env),
+        std::filesystem::path(env).parent_path()};
     try {
       const auto located = pcm::transcription::locateModels(
           appDir, pcm::transcription::currentPlatform(), env);
@@ -51,10 +69,13 @@ EngineFactory makeProductionEngineFactory(std::filesystem::path appDir,
       auto recognizer = pcm::transcription::makeSherpaRecognizer(*located.paths);
       if (!recognizer) return fail(QStringLiteral("Speech recogniser could not be created"));
       auto vadFactory = pcm::transcription::makeSherpaVadFactory(*located.paths);
+      // Probe once so a corrupt VAD model fails here with an error instead of the call
+      // recording with no output when the first track creates its detector.
+      if (!vadFactory || !vadFactory()) return fail(QStringLiteral("Voice activity model could not be created"));
       return std::make_shared<pcm::transcription::TranscriptionEngine>(
           std::move(vadFactory), std::move(recognizer), std::move(callbacks));
     } catch (const std::exception &e) {
-      return fail(QStringLiteral("Speech model load failed: ") + stripPaths(e.what()));
+      return fail(QStringLiteral("Speech model load failed: ") + sanitizeLoadError(e.what(), roots));
     } catch (...) {
       return fail(QStringLiteral("Speech model load failed"));
     }
@@ -74,4 +95,4 @@ bool transcriptionModelsAvailable(const std::filesystem::path &appDir, const std
   return false;
 }
 
-}  // namespace pcm::calltranscription
+} // namespace pcm::calltranscription

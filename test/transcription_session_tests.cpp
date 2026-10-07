@@ -50,7 +50,7 @@ struct Probe {
 };
 
 class SessionTest : public ::testing::Test {
- protected:
+protected:
   void SetUp() override {
     const auto *info = ::testing::UnitTest::GetInstance()->current_test_info();
     dir_ = Poco::Path(Poco::Path::current())
@@ -134,7 +134,7 @@ class SessionTest : public ::testing::Test {
   std::unique_ptr<TranscriptionSession> session_;
 };
 
-}  // namespace
+} // namespace
 
 TEST_F(SessionTest, StartCreatesRecordingTranscriptAndInstallsSink) {
   make();
@@ -428,7 +428,7 @@ std::shared_ptr<FakeRecognizer> slowRecognizer(int ms) {
     return std::string("slow");
   });
 }
-}  // namespace
+} // namespace
 
 TEST_F(SessionTest, RevokeDuringLoadingAbortsAndRevokesConsent) {
   std::atomic<bool> release{false};

@@ -73,7 +73,7 @@ bool pollUntil(Pred pred) {
   return pred();
 }
 
-}  // namespace
+} // namespace
 
 TEST(PhraseWriter, WritesInSubmissionOrder) {
   Recorder r;

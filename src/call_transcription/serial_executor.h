@@ -11,7 +11,7 @@ namespace pcm::calltranscription {
 // One worker thread running queued tasks in order. The destructor drains the
 // queue, then joins. A throwing task is contained and does not stop the worker.
 class SerialExecutor {
- public:
+public:
   SerialExecutor() : thread_([this] { run(); }) {}
 
   ~SerialExecutor() {
@@ -40,7 +40,7 @@ class SerialExecutor {
     idle_cv_.wait(lock, [this] { return queue_.empty() && !running_; });
   }
 
- private:
+private:
   void run() {
     for (;;) {
       std::function<void()> task;
@@ -74,4 +74,4 @@ class SerialExecutor {
   std::thread thread_;  // last: starts after the other members are built
 };
 
-}  // namespace pcm::calltranscription
+} // namespace pcm::calltranscription

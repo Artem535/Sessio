@@ -35,7 +35,7 @@ enum class SessionState { Idle, Loading, Recording, Stopping, Finished, Failed }
 // provider and no engine exists unless start() succeeded.
 class TranscriptionSession final : public QObject, public pcm::video::AudioSink {
   Q_OBJECT
- public:
+public:
   TranscriptionSession(std::shared_ptr<pcm::database::Database> db,
                        pcm::video::VideoProvider *provider, EngineFactory factory,
                        QObject *parent = nullptr);
@@ -72,7 +72,7 @@ class TranscriptionSession final : public QObject, public pcm::video::AudioSink 
   // Non-fatal: one participant's audio could not be set up for transcription.
   void trackFailed(QString participantId);
 
- private:
+private:
   // Held by the provider's slot; forwards to the session only while attached.
   class SinkProxy final : public pcm::video::AudioSink {
    public:
@@ -113,7 +113,7 @@ class TranscriptionSession final : public QObject, public pcm::video::AudioSink 
   std::shared_ptr<SessionShared> shared_;
 };
 
-}  // namespace pcm::calltranscription
+} // namespace pcm::calltranscription
 
 Q_DECLARE_METATYPE(pcm::calltranscription::SessionState)
 Q_DECLARE_METATYPE(DuckTranscriptPhrase)

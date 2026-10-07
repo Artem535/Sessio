@@ -2025,7 +2025,10 @@ bool Database::set_transcript_status(const int64_t id, const std::string &status
     return false;
   }
   std::optional<duckdb::Connection> ownedConn;
-  auto &conn = write_connection(ownedConn);
+  // Own connection on purpose: transcript writes run on the session's executor/cleanup
+  // thread and must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
   if (!transcriptExists(conn, id)) return false;
   auto result = executePrepared(
       conn, constance::kUpdateTranscriptStatusQuery,
@@ -2044,7 +2047,10 @@ bool Database::revoke_transcript_consent(const int64_t id,
   if (id <= 0) return false;
   const auto now = nowMs();
   std::optional<duckdb::Connection> ownedConn;
-  auto &conn = write_connection(ownedConn);
+  // Own connection on purpose: transcript writes run on the session's executor/cleanup
+  // thread and must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
   if (!transcriptExists(conn, id)) return false;
   auto result = executePrepared(
       conn, constance::kRevokeTranscriptConsentQuery,
@@ -2060,7 +2066,10 @@ bool Database::revoke_transcript_consent(const int64_t id,
 
 int64_t Database::finalize_interrupted_transcripts() {
   std::optional<duckdb::Connection> ownedConn;
-  auto &conn = write_connection(ownedConn);
+  // Own connection on purpose: transcript writes run on the session's executor/cleanup
+  // thread and must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
   auto result = executePrepared(conn, constance::kFinalizeInterruptedTranscriptsQuery,
                                 {db_utils::toDuckTimestamp(nowMs() * 1000)});
   if (!result || result->HasError()) {
@@ -2076,7 +2085,10 @@ int64_t Database::finalize_interrupted_transcripts() {
 bool Database::delete_transcript(const int64_t id) {
   if (id <= 0) return false;
   std::optional<duckdb::Connection> ownedConn;
-  auto &conn = write_connection(ownedConn);
+  // Own connection on purpose: transcript writes run on the session's executor/cleanup
+  // thread and must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
   if (!transcriptExists(conn, id)) return false;
   auto phrases = executePrepared(conn, constance::kDeletePhrasesByTranscriptIdQuery,
                                  {duckdb::Value::BIGINT(id)});
@@ -2098,7 +2110,10 @@ bool Database::delete_transcript(const int64_t id) {
 
 bool Database::delete_all_transcripts() {
   std::optional<duckdb::Connection> ownedConn;
-  auto &conn = write_connection(ownedConn);
+  // Own connection on purpose: transcript writes run on the session's executor/cleanup
+  // thread and must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
   auto phrases = executePrepared(conn, constance::kDeleteAllTranscriptPhrasesQuery, {});
   if (!phrases || phrases->HasError()) {
     PLOG_ERROR << "Failed to delete all transcript phrases: "
@@ -2237,7 +2252,10 @@ bool Database::delete_transcript_phrase(const int64_t phrase_id) {
 
 int64_t Database::purge_orphan_transcripts() {
   std::optional<duckdb::Connection> ownedConn;
-  auto &conn = write_connection(ownedConn);
+  // Own connection on purpose: transcript writes run on the session's executor/cleanup
+  // thread and must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
   auto phrases = executePrepared(conn, constance::kPurgeOrphanTranscriptPhrasesQuery, {});
   if (!phrases || phrases->HasError()) {
     PLOG_ERROR << "Failed to purge orphan transcript phrases: "
