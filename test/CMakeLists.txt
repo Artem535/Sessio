@@ -1000,3 +1000,10 @@ target_compile_definitions(Sessio_accent_color_tests PRIVATE
 target_link_libraries(Sessio_accent_color_tests PRIVATE
     GTest::gtest Qt6::Widgets Sessio_event_page)
 gtest_discover_tests(Sessio_accent_color_tests)
+
+# Call event resolver tests (materialising a recurring occurrence)
+add_executable(Sessio_call_event_resolver_tests call_event_resolver_tests.cpp)
+target_link_libraries(Sessio_call_event_resolver_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_call_transcription Sessio_event_view
+    Sessio_database Sessio_config Poco::Foundation)
+gtest_discover_tests(Sessio_call_event_resolver_tests)

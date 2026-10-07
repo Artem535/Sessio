@@ -50,6 +50,12 @@ DuckEvent buildVirtualOccurrence(const DuckEventSeries &series,
                                  const QDateTime &occurrenceStart,
                                  int64_t virtualId);
 
+// Decodes a virtual occurrence id (-(series.id*1'000'000 + julianDay)) back to its occurrence.
+// Julian days (~2.46M) overflow the stride, so the day is read from [2'000'000, 3'000'000).
+// nullopt: not a virtual id, the series is gone or inactive, the occurrence is an exception,
+// or the series' rule no longer produces an occurrence on that local day.
+std::optional<DuckEvent> virtualOccurrenceForId(pcm::database::Database &db, int64_t virtualId);
+
 QVector<DuckEvent> eventsForClient(pcm::database::Database &db, int64_t clientId,
                                    const QDateTime &virtualWindowStart,
                                    const QDateTime &virtualWindowEnd);

@@ -7,6 +7,8 @@ set(CMAKE_AUTOMOC ON)
 set(TARGET_NAME ${PROJECT_NAME}_call_transcription)
 
 add_library(${TARGET_NAME} STATIC
+  call_event_resolver.h
+  call_event_resolver.cpp
   engine_factory.h
   engine_factory.cpp
   phrase_writer.h
@@ -21,5 +23,6 @@ target_link_libraries(${TARGET_NAME} PUBLIC
   ${PROJECT_NAME}_transcription_sherpa
   ${PROJECT_NAME}_database
   ${PROJECT_NAME}_video
+  ${PROJECT_NAME}_event_view
   Qt6::Core
 )
