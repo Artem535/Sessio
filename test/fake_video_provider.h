@@ -3,6 +3,8 @@
 #include "video_provider.h"
 #include <QHash>
 #include <QPointer>
+#include <memory>
+#include <vector>
 
 namespace pcm::video::test {
 
@@ -56,6 +58,12 @@ public:
   // Test-driving methods: call these to simulate the real provider emitting
   // its outcome signals asynchronously, exactly as LiveKitVideoProvider
   // would once its own SDK callbacks fire.
+  void setAudioSink(std::shared_ptr<AudioSink> sink) override { mSink = std::move(sink); }
+  [[nodiscard]] std::shared_ptr<AudioSink> audioSink() const { return mSink; }
+  void simulateAudio(const QString &id, const std::vector<int16_t> &samples, int rate = 48000) {
+    if (mSink)
+      mSink->onAudio(id, samples.data(), samples.size(), rate);
+  }
   void simulateJoined() { emit joined(); }
   void simulateJoinFailed(const QString &reason) { emit joinFailed(reason); }
   void simulateLeft() { participants()->clear(); qDeleteAll(mSources); mSources.clear(); emit left(); }
@@ -79,6 +87,7 @@ public:
   void simulateConnectionLost(const QString &reason) { emit connectionLost(reason); }
   void simulateMediaError(const QString &reason) { emit mediaError(reason); }
 
+  std::shared_ptr<AudioSink> mSink;
   QString mLastJoinUrl;
   QString mLastJoinToken;
   int mJoinCallCount{0};

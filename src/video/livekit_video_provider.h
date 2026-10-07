@@ -47,6 +47,7 @@ public:
   [[nodiscard]] bool isCameraEnabled() const override { return mCameraEnabled; }
   void switchCamera(const QCameraDevice &device) override;
   void switchMicrophone(const QAudioDevice &device) override;
+  void setAudioSink(std::shared_ptr<AudioSink> sink) override { mSinkSlot->set(std::move(sink)); }
   void switchSpeaker(const QAudioDevice &device) override;
 
 private:
@@ -92,6 +93,8 @@ private:
   std::unique_ptr<AudioCaptureAdapter> mAudioCapture;
   std::map<QString, std::unique_ptr<ParticipantMedia>> mMedia;
   std::set<std::pair<QString, QString>> mDeparted;
+  // Shared with the taps so their lambdas stay valid independent of provider teardown.
+  std::shared_ptr<AudioSinkSlot> mSinkSlot{std::make_shared<AudioSinkSlot>()};
   QString mLocalIdentity;
   bool mMicrophoneEnabled{true};
   bool mCameraEnabled{true};

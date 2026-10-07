@@ -4,7 +4,9 @@
 #include <QString>
 #include <QAudioDevice>
 #include <QCameraDevice>
+#include "audio_sink.h"
 #include "participant_model.h"
+#include <memory>
 #include "video_frame_source.h"
 
 namespace pcm::video {
@@ -55,6 +57,10 @@ public:
   virtual void switchCamera(const QCameraDevice &device) { Q_UNUSED(device); }
   virtual void switchMicrophone(const QAudioDevice &device) { Q_UNUSED(device); }
   virtual void switchSpeaker(const QAudioDevice &device) { Q_UNUSED(device); }
+
+  // Installs (or clears, with nullptr) the receiver of call audio for
+  // transcription. Only set while a consented session exists.
+  virtual void setAudioSink(std::shared_ptr<AudioSink> sink) { Q_UNUSED(sink); }
 
 signals:
   void joined();

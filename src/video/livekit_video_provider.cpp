@@ -198,6 +198,12 @@ LiveKitVideoProvider::LiveKitVideoProvider(QObject *parent)
     : VideoProvider(parent), mDeviceManager(std::make_unique<DeviceManager>()),
       mVideoCapture(std::make_unique<VideoCaptureAdapter>()),
       mAudioCapture(std::make_unique<AudioCaptureAdapter>()) {
+  // Runs on the GUI thread (AudioCaptureAdapter::onReadyRead), so reading
+  // mLocalIdentity is safe. The tap is gated by the real microphone state.
+  mAudioCapture->tap().setCallback([slot = mSinkSlot, this](const int16_t *samples, std::size_t count, int rate) {
+    if (auto sink = slot->get()) sink->onAudio(mLocalIdentity, samples, count, rate);
+  });
+  mAudioCapture->tap().setEnabled(mMicrophoneEnabled);
   connect(mVideoCapture.get(), &VideoCaptureAdapter::captureFailed, this, &VideoProvider::mediaError);
   connect(mAudioCapture.get(), &AudioCaptureAdapter::captureFailed, this, &VideoProvider::mediaError);
   connect(mVideoCapture->previewSink(), &QVideoSink::videoFrameChanged, this,
@@ -339,6 +345,9 @@ void LiveKitVideoProvider::applyParticipant(const ParticipantSnapshot &snapshot,
     media->sid = snapshot.sid;
     media->video = std::make_unique<LiveKitVideoFrameSource>();
     media->audio = std::make_unique<RemoteAudioPlayer>();
+    media->audio->tap().setCallback([slot = mSinkSlot, id](const int16_t *samples, std::size_t count, int rate) {
+      if (auto sink = slot->get()) sink->onAudio(id, samples, count, rate);
+    });
     connect(media->audio.get(), &RemoteAudioPlayer::playbackFailed, this, &VideoProvider::mediaError);
     mMedia.emplace(id, std::move(media)); // visible to rowsInserted observers
   }
@@ -464,6 +473,7 @@ void LiveKitVideoProvider::setMicrophoneEnabled(bool enabled) {
     }
   }
   mMicrophoneEnabled = enabled;
+  mAudioCapture->tap().setEnabled(mMicrophoneEnabled);
   updateLocalState();
 }
 

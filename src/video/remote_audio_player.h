@@ -1,5 +1,7 @@
 #pragma once
 
+#include "audio_sink.h"
+
 #include <QAudioDevice>
 #include <QAudioSink>
 #include <QObject>
@@ -24,6 +26,9 @@ public:
   void attachTrack(const std::shared_ptr<livekit::Track> &track, const QAudioDevice &outputDevice);
   void detach();
 
+  // Taps decoded remote samples (mono) on the reader thread.
+  [[nodiscard]] AudioTap &tap() { return mTap; }
+
 signals:
   void playbackFailed(QString reason);
 
@@ -36,6 +41,7 @@ private:
   QPointer<QIODevice> mSinkDevice;
   std::thread mReaderThread;
   std::atomic<bool> mRunning{false};
+  AudioTap mTap;
   uint64_t mGeneration{0}; // owner-thread attachment epoch
 
   void readerLoop(uint64_t generation);

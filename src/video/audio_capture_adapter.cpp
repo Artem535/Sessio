@@ -46,6 +46,8 @@ void AudioCaptureAdapter::onReadyRead() {
   std::vector<int16_t> samples(static_cast<std::size_t>(bytes.size()) / sizeof(int16_t));
   std::memcpy(samples.data(), bytes.constData(), samples.size() * sizeof(int16_t));
 
+  mTap.push(samples.data(), samples.size(), kSampleRate);
+
   for (const auto &pcmFrame : mChunker.push(samples)) {
     try {
       auto liveKitFrame = livekit::AudioFrame::create(

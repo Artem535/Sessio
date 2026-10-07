@@ -664,6 +664,12 @@ target_link_libraries(Sessio_fake_video_provider_tests PRIVATE
 set_target_properties(Sessio_fake_video_provider_tests PROPERTIES AUTOMOC ON)
 add_test(NAME FakeVideoProviderTests COMMAND Sessio_fake_video_provider_tests)
 
+# Audio tap tests (header-only audio_sink.h)
+add_executable(Sessio_audio_tap_tests audio_tap_tests.cpp)
+target_include_directories(Sessio_audio_tap_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_audio_tap_tests PRIVATE GTest::gtest GTest::gtest_main Qt6::Core)
+gtest_discover_tests(Sessio_audio_tap_tests)
+
 # Role selection dialog tests
 find_package(Qt6 REQUIRED COMPONENTS Test)
 add_executable(Sessio_role_selection_dialog_tests role_selection_dialog_tests.cpp)

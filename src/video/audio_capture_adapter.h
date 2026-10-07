@@ -1,6 +1,7 @@
 #pragma once
 
 #include "audio_chunker.h"
+#include "audio_sink.h"
 
 #include <QAudioDevice>
 #include <QAudioSource>
@@ -29,6 +30,9 @@ public:
   [[nodiscard]] std::shared_ptr<livekit::AudioSource> audioSource() const { return mAudioSource; }
   [[nodiscard]] int framesCaptured() const { return mFramesCaptured.load(); }
 
+  // Taps the raw mic samples (before chunking). Disabled by the provider while muted.
+  [[nodiscard]] AudioTap &tap() { return mTap; }
+
   void start(const QAudioDevice &device);
   void stop();
 
@@ -51,6 +55,7 @@ private:
   QIODevice *mIoDevice{nullptr};
   AudioChunker mChunker{kSampleRate * kFrameMs / 1000, kChannels};
   std::atomic<int> mFramesCaptured{0};
+  AudioTap mTap;
 };
 
 } // namespace pcm::video
