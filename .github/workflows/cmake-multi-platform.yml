@@ -301,11 +301,19 @@ jobs:
           Copy-Item build-release/Sessio.exe build-release/packages/Sessio/
           $keychainDll = Get-ChildItem build-release/_deps/qtkeychain-build -Recurse -Filter qt6keychain.dll |
             Select-Object -First 1
-          if ($null -eq $keychainDll) {
-            throw "qt6keychain.dll was not built"
+          if ($null -ne $keychainDll) {
+            Copy-Item $keychainDll.FullName (Join-Path $env:QT_ROOT_DIR "bin") -Force
+            Copy-Item $keychainDll.FullName build-release/packages/Sessio/ -Force
+          } else {
+            # qtkeychain can be linked statically. Require a DLL only when
+            # the executable actually imports it; a .lib alone is ambiguous.
+            $dependencies = & dumpbin /DEPENDENTS build-release/Sessio.exe
+            if ($LASTEXITCODE -ne 0) { throw "Cannot inspect Sessio.exe dependencies" }
+            if ($dependencies -match 'qt6keychain\.dll') {
+              throw "Sessio.exe imports qt6keychain.dll but the DLL was not found"
+            }
+            Write-Host "qtkeychain is linked statically; no runtime DLL required"
           }
-          Copy-Item $keychainDll.FullName (Join-Path $env:QT_ROOT_DIR "bin") -Force
-          Copy-Item $keychainDll.FullName build-release/packages/Sessio/ -Force
 
           # LiveKit's prebuilt SDK ships its own runtime DLLs (not built by
           # this project, so they never land next to Sessio.exe on their
