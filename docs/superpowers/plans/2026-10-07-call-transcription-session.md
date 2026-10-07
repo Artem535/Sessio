@@ -114,11 +114,11 @@ Reason (phase-2 review I1): `write_connection()` returns the active schedule-tra
 struct WriterStats { uint64_t written = 0; uint64_t failed = 0; uint64_t dropped = 0; };
 class PhraseWriter {
  public:
-  using Store = std::function<int64_t(const pcm::database::DuckTranscriptPhrase&)>;  // returns id, <=0 on failure
-  using Written = std::function<void(const pcm::database::DuckTranscriptPhrase&)>;   // row with id; writer thread
+  using Store = std::function<int64_t(const DuckTranscriptPhrase&)>;  // returns id, <=0 on failure
+  using Written = std::function<void(const DuckTranscriptPhrase&)>;   // row with id; writer thread
   PhraseWriter(Store store, Written on_written);
   ~PhraseWriter();                       // equivalent to stop(0 ms)
-  void submit(pcm::database::DuckTranscriptPhrase phrase);  // any thread, non-blocking
+  void submit(DuckTranscriptPhrase phrase);  // any thread, non-blocking
   void stop(std::chrono::milliseconds drain_timeout);       // idempotent; joins the thread; unwritten items counted as dropped
   WriterStats stats() const;
 };
@@ -168,7 +168,7 @@ class TranscriptionSession final : public QObject, public pcm::video::AudioSink 
   void onAudio(const QString &participantId, const int16_t *samples, std::size_t count, int sampleRate) override;
  signals:
   void stateChanged(pcm::calltranscription::SessionState state);
-  void phraseAdded(pcm::database::DuckTranscriptPhrase phrase);   // GUI thread, row has id
+  void phraseAdded(DuckTranscriptPhrase phrase);   // GUI thread, row has id
   void delayedChanged(bool delayed);
   void failed(QString reason);          // model missing/load failure, writer/DB failure
   void finished(qint64 transcriptId);
@@ -225,7 +225,7 @@ class CallEventResolver {
  public:
   // materialise persists a virtual occurrence as a real event (production: QTimelineModel::addEvent
   // so published series get their schedule bookkeeping) and returns the new id or <=0.
-  using Materialise = std::function<int64_t(const pcm::database::DuckEvent &)>;
+  using Materialise = std::function<int64_t(const DuckEvent &)>;
   CallEventResolver(std::shared_ptr<pcm::database::Database> db, Materialise materialise);
   // id > 0: returned as is. id < 0: decode, reuse an already materialised occurrence
   // (get_event_by_series_occurrence), otherwise materialise, then link the series' client
