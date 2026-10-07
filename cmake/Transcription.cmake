@@ -16,6 +16,10 @@ foreach(_opt PYTHON TESTS CHECK PORTAUDIO WEBSOCKET BINARY TTS SPEAKER_DIARIZATI
 endforeach()
 set(SHERPA_ONNX_ENABLE_C_API ON CACHE BOOL "" FORCE)
 set(SHERPA_ONNX_BUILD_C_API_EXAMPLES OFF CACHE BOOL "" FORCE)
+# Match Qt and the x64-windows vcpkg triplet at the DLL boundary.
+if(MSVC)
+  set(SHERPA_ONNX_USE_STATIC_CRT OFF CACHE BOOL "" FORCE)
+endif()
 
 FetchContent_Declare(sherpa_onnx
   GIT_REPOSITORY https://github.com/k2-fsa/sherpa-onnx.git
@@ -26,7 +30,21 @@ FetchContent_Declare(sherpa_onnx
 # A normal (non-cache) variable keeps shared libraries scoped to sherpa-onnx.
 set(_sessio_saved_shared "${BUILD_SHARED_LIBS}")
 set(BUILD_SHARED_LIBS ON)
+# sherpa-onnx's sentencepiece dependency still uses std::result_of, which
+# libc++ removes in C++20. Keep its dependency tree at its supported C++17;
+# Sessio's own targets continue to use C++20.
+set(_sessio_saved_cxx_standard "${CMAKE_CXX_STANDARD}")
+set(CMAKE_CXX_STANDARD 17)
+# The upstream ONNX Runtime x64 downloader checks the Visual Studio platform
+# even with Ninja, where CMake leaves that variable empty.
+set(_sessio_saved_vs_platform "${CMAKE_VS_PLATFORM_NAME}")
+if(WIN32 AND MSVC AND NOT CMAKE_VS_PLATFORM_NAME AND
+   CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|x86_64)$")
+  set(CMAKE_VS_PLATFORM_NAME x64)
+endif()
 FetchContent_MakeAvailable(sherpa_onnx)
+set(CMAKE_VS_PLATFORM_NAME "${_sessio_saved_vs_platform}")
+set(CMAKE_CXX_STANDARD "${_sessio_saved_cxx_standard}")
 set(BUILD_SHARED_LIBS "${_sessio_saved_shared}")
 set(SESSIO_SHERPA_SOURCE_DIR "${sherpa_onnx_SOURCE_DIR}")
 
