@@ -354,6 +354,12 @@ void QEventInfoPage::openEventOnDay(const int64_t eventId, const qint64 dayMs) {
   editEventWithDialog(eventId);
 }
 
+void QEventInfoPage::showEventOnDay(const int64_t eventId, const qint64 dayMs) {
+  onCalendarClicked(
+      QDateTime::fromMSecsSinceEpoch(dayMs, QTimeZone::systemTimeZone()).date());
+  onTimelineEventSelected(eventId);
+}
+
 void QEventInfoPage::setMonthView(bool enabled) {
   const QSignalBlocker blocker(mViewSwitch);
   mViewSwitch->setChecked(enabled);

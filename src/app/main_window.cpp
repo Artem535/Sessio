@@ -209,7 +209,7 @@ void MainWindow::openTranscriptPage() { showPage(Pages::transcript, mBtnCalendar
 void MainWindow::returnToEvent(int64_t eventId, qint64 dayMs) {
   showPage(Pages::eventInfo, mBtnCalendar);
   if (auto *page = dynamic_cast<QEventInfoPage *>(getPage(Pages::eventInfo)))
-    page->openEventOnDay(eventId, dayMs);
+    page->showEventOnDay(eventId, dayMs);
 }
 
 void MainWindow::setDatabase(std::shared_ptr<pcm::database::Database> db) {

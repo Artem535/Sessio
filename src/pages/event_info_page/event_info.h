@@ -67,6 +67,8 @@ public slots:
   void onClientResolved(int64_t clientId);
   void refreshAppearance();
   void openEventOnDay(int64_t eventId, qint64 dayMs);
+  // Selects the event in the inspector without opening the editor dialog.
+  void showEventOnDay(int64_t eventId, qint64 dayMs);
 
 private slots:
   void onCalendarClicked(const QDate &date);

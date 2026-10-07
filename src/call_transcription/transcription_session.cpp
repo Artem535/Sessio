@@ -83,8 +83,10 @@ struct SessionShared {
   std::map<QString, std::string> tracks;
   uint64_t generation = 0;
 
-  // Last member: joined first. Never destroyed on its own thread: whoever drops
-  // the last reference does so on the GUI thread or the detached cleanup thread.
+  // Last member: joined first. Executor tasks hold this state, so the last
+  // reference can be dropped on the executor thread itself (the GUI deleted the
+  // session right after the shutdown task posted finishShutdown()); the
+  // executor detaches instead of joining itself then.
   SerialExecutor executor;
 
   std::shared_ptr<TranscriptionEngine> currentEngine() {

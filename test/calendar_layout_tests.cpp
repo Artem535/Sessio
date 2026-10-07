@@ -120,6 +120,24 @@ TEST_F(CalendarLayoutTest, ReloadSelectedDayReloadsFromModelAndRefreshesTranscri
   EXPECT_EQ(details->currentEvent()->getTitle(), "Changed directly in database");
   EXPECT_FALSE(details->findChild<QPushButton *>("openTranscript")->isVisibleTo(details));
 }
+TEST_F(CalendarLayoutTest, ShowEventOnDaySelectsTheEventWithoutOpeningTheEditor) {
+  const auto id = model->addEvent(appointment(QDate::currentDate()));
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  bool editorOpened = false;
+  // An editor dialog would run its own modal loop; close it from inside.
+  QTimer::singleShot(0, [&editorOpened] {
+    if (auto *modal = QApplication::activeModalWidget()) {
+      editorOpened = true;
+      modal->close();
+    }
+  });
+  page.showEventOnDay(id, QDateTime(QDate::currentDate(), QTime(0, 0)).toMSecsSinceEpoch());
+  QCoreApplication::processEvents();
+  EXPECT_FALSE(editorOpened);
+  auto *details = page.findChild<QEventDetailsWidget *>("calendarInspector");
+  ASSERT_NE(details, nullptr);
+  EXPECT_EQ(details->currentEvent()->getId(), id);
+}
 TEST_F(CalendarLayoutTest, SwitchKeepsItsNaturalWidthNextToItsLabels) {
   QEventInfoPage page(model.get(), nullptr, nullptr);
   page.resize(1500, 900);

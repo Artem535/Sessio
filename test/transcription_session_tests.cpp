@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -658,6 +659,31 @@ TEST(SerialExecutorTest, ThrowingTaskDoesNotStopWorkerAndDestructorDrains) {
     ex.post([&] { ++ran; });
   }
   EXPECT_EQ(ran, 2);
+}
+
+// The session's executor tasks capture the shared state that owns the
+// executor. When the GUI thread drops its reference first, the last one is
+// released on the executor thread while it destroys the finished task; that
+// must not join the executor's own thread (std::terminate on Windows).
+TEST(SerialExecutorTest, ExecutorReleasedByItsOwnTaskDoesNotJoinItself) {
+  struct Owner {
+    SerialExecutor executor;
+  };
+  auto owner = std::make_shared<Owner>();
+  std::weak_ptr<Owner> watch = owner;
+  std::promise<void> started;
+  std::promise<void> released;
+  auto releasedFuture = released.get_future().share();
+  owner->executor.post([keep = owner, &started, releasedFuture] {
+    started.set_value();
+    releasedFuture.wait();  // the caller has dropped its reference
+  });
+  started.get_future().wait();
+  owner.reset();
+  released.set_value();
+  for (int i = 0; i < 500 && !watch.expired(); ++i)
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  EXPECT_TRUE(watch.expired());
 }
 
 int main(int argc, char **argv) {
