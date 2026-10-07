@@ -670,6 +670,12 @@ target_include_directories(Sessio_audio_tap_tests PRIVATE ${CMAKE_SOURCE_DIR}/sr
 target_link_libraries(Sessio_audio_tap_tests PRIVATE GTest::gtest GTest::gtest_main Qt6::Core)
 gtest_discover_tests(Sessio_audio_tap_tests)
 
+# Phrase writer tests (Qt-free writer thread)
+add_executable(Sessio_phrase_writer_tests phrase_writer_tests.cpp)
+target_link_libraries(Sessio_phrase_writer_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_call_transcription)
+gtest_discover_tests(Sessio_phrase_writer_tests)
+
 # Role selection dialog tests
 find_package(Qt6 REQUIRED COMPONENTS Test)
 add_executable(Sessio_role_selection_dialog_tests role_selection_dialog_tests.cpp)
