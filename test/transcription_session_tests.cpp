@@ -279,12 +279,17 @@ TEST_F(SessionTest, ParticipantJoinedWhileLoadingGetsTrackAfterLoad) {
 TEST_F(SessionTest, LeavingParticipantFlushesOpenPhrase) {
   make();
   join("remote", "Anna", false);
-  startAndWaitRecording(1);
-  feedPhrase("remote", false);
-  QTest::qWait(200);
-  EXPECT_EQ(phraseCount(), 0);
-  provider_->simulateParticipantLeft("remote");
+  join("other", "Boris", false);
+  startAndWaitRecording(2);
+  feedPhrase("remote", false);  // stays open: no trailing silence
+  feedPhrase("other");
+  // Boris' closed phrase arriving proves the segmenter has seen Anna's audio too.
   ASSERT_TRUE(pump([&] { return phraseCount() == 1; }));
+  const auto rows = db_->get_transcript_phrases(session_->transcriptId());
+  ASSERT_EQ(rows.size(), 1u);
+  EXPECT_EQ(rows[0].speaker_name, std::optional<std::string>{"Boris"});
+  provider_->simulateParticipantLeft("remote");
+  ASSERT_TRUE(pump([&] { return phraseCount() == 2; }));
 }
 
 TEST_F(SessionTest, StopFinalisesDraftAndEmitsFinished) {
@@ -300,9 +305,29 @@ TEST_F(SessionTest, StopFinalisesDraftAndEmitsFinished) {
   EXPECT_EQ(finished.at(0).at(0).toLongLong(), session_->transcriptId());
   EXPECT_EQ(session_->state(), SessionState::Finished);
   EXPECT_EQ(db_->get_transcript(session_->transcriptId())->status, "draft");
+  // The sink is gone, so this audio cannot reach the engine at all.
+  EXPECT_EQ(provider_->audioSink(), nullptr);
   provider_->simulateAudio("remote", concat({speech(1000), silence(800)}));
-  QTest::qWait(200);
   EXPECT_EQ(phraseCount(), 1);
+}
+
+TEST_F(SessionTest, StopFinalisesWriterJoined) {
+  make();
+  join("remote", "Anna", false);
+  startAndWaitRecording(1);
+  QSignalSpy added(session_.get(), &TranscriptionSession::phraseAdded);
+  QSignalSpy finished(session_.get(), &TranscriptionSession::finished);
+  feedPhrase("remote");
+  session_->stop();
+  ASSERT_TRUE(pump([&] { return finished.count() == 1; }));
+  // finished is queued after the writer joined: every stored phrase has already
+  // been announced, and nothing is stored or announced afterwards.
+  const auto stored = phraseCount();
+  EXPECT_EQ(stored, 1);
+  EXPECT_EQ(added.count(), stored);
+  QCoreApplication::processEvents();
+  EXPECT_EQ(phraseCount(), stored);
+  EXPECT_EQ(added.count(), stored);
 }
 
 TEST_F(SessionTest, StopDrainsOpenPhraseBeforeFinishing) {
@@ -327,10 +352,9 @@ TEST_F(SessionTest, RevokeAbortsAndMarksConsentRevoked) {
   ASSERT_TRUE(pump([&] { return revoked.count() == 1; }));
   EXPECT_EQ(session_->state(), SessionState::Finished);
   EXPECT_TRUE(db_->get_transcript(session_->transcriptId())->consent_revoked_at.has_value());
-  const auto before = phraseCount();
-  provider_->simulateAudio("remote", concat({speech(1000), silence(800)}));
-  QTest::qWait(200);
-  EXPECT_EQ(phraseCount(), before);
+  const auto after = phraseCount();  // the phrase fed before revoke() may or may not have landed
+  provider_->simulateAudio("remote", concat({speech(1000), silence(800)}));  // no sink
+  EXPECT_EQ(phraseCount(), after);
 }
 
 TEST_F(SessionTest, ProviderLeftAutoStops) {
@@ -359,7 +383,8 @@ TEST_F(SessionTest, DestroyingSessionWhileRecordingFinalisesAndDoesNotCrash) {
   const auto id = session_->transcriptId();
   session_.reset();
   EXPECT_EQ(provider_->audioSink(), nullptr);
-  EXPECT_EQ(db_->get_transcript(id)->status, "draft");
+  // Finalised by the detached cleanup, not by the destructor itself.
+  ASSERT_TRUE(waitFor([&] { return db_->get_transcript(id)->status == "draft"; }));
   provider_->simulateAudio("remote", speech(100));  // no session, must be dropped
 }
 
@@ -374,7 +399,7 @@ TEST_F(SessionTest, DestroyingSessionWhileLoadingFinalises) {
   const auto id = session_->transcriptId();
   ASSERT_TRUE(pump([&] { return inFactory.load(); }));
   session_.reset();
-  EXPECT_EQ(db_->get_transcript(id)->status, "draft");
+  ASSERT_TRUE(waitFor([&] { return db_->get_transcript(id)->status == "draft"; }));
 }
 
 TEST_F(SessionTest, GuiThreadIsNotBlockedByStop) {
@@ -393,6 +418,218 @@ TEST_F(SessionTest, GuiThreadIsNotBlockedByStop) {
   EXPECT_LT(timer.elapsed(), 100);
   QSignalSpy finished(session_.get(), &TranscriptionSession::finished);
   ASSERT_TRUE(pump([&] { return finished.count() == 1; }, 10000));
+}
+
+
+namespace {
+std::shared_ptr<FakeRecognizer> slowRecognizer(int ms) {
+  return std::make_shared<FakeRecognizer>([ms](int, size_t) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+    return std::string("slow");
+  });
+}
+}  // namespace
+
+TEST_F(SessionTest, RevokeDuringLoadingAbortsAndRevokesConsent) {
+  std::atomic<bool> release{false};
+  make([this, &release](EngineCallbacks cb, QString *error) {
+    while (!release) std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    return factory()(std::move(cb), error);
+  });
+  QSignalSpy revoked(session_.get(), &TranscriptionSession::revoked);
+  QSignalSpy finished(session_.get(), &TranscriptionSession::finished);
+  ASSERT_TRUE(session_->start(eventId_, "live_local_v1"));
+  session_->revoke();
+  EXPECT_EQ(session_->state(), SessionState::Stopping);
+  release = true;
+  ASSERT_TRUE(pump([&] { return revoked.count() == 1; }));
+  EXPECT_EQ(finished.count(), 0);
+  EXPECT_EQ(session_->state(), SessionState::Finished);
+  EXPECT_TRUE(db_->get_transcript(session_->transcriptId())->consent_revoked_at.has_value());
+  EXPECT_EQ(phraseCount(), 0);
+}
+
+TEST_F(SessionTest, RevokeDuringGracefulStopUpgradesToRevoked) {
+  recognizer_ = slowRecognizer(400);
+  make();
+  join("remote", "Anna", false);
+  startAndWaitRecording(1);
+  feedPhrase("remote");
+  ASSERT_TRUE(pump([&] { return recognizer_->calls() >= 1; }));
+  QSignalSpy revoked(session_.get(), &TranscriptionSession::revoked);
+  QSignalSpy finished(session_.get(), &TranscriptionSession::finished);
+  session_->stop();
+  session_->revoke();  // the user changes their mind while the drain is running
+  ASSERT_TRUE(pump([&] { return revoked.count() == 1; }, 10000));
+  EXPECT_EQ(finished.count(), 0);
+  EXPECT_EQ(session_->state(), SessionState::Finished);
+  EXPECT_TRUE(db_->get_transcript(session_->transcriptId())->consent_revoked_at.has_value());
+  EXPECT_EQ(phraseCount(), 0);
+}
+
+TEST_F(SessionTest, NoPhraseIsWrittenOnceRevokeWasRequested) {
+  recognizer_ = slowRecognizer(300);
+  make();
+  join("remote", "Anna", false);
+  startAndWaitRecording(1);
+  feedPhrase("remote");
+  feedPhrase("remote");
+  ASSERT_TRUE(pump([&] { return recognizer_->calls() >= 1; }));  // one phrase is mid-decode
+  QSignalSpy revoked(session_.get(), &TranscriptionSession::revoked);
+  session_->revoke();
+  EXPECT_EQ(phraseCount(), 0);
+  ASSERT_TRUE(pump([&] { return revoked.count() == 1; }, 10000));
+  EXPECT_EQ(phraseCount(), 0);
+}
+
+TEST_F(SessionTest, StopDuringLoadingThenFactoryFailureEndsFinishedAsDraft) {
+  std::atomic<bool> release{false};
+  make([&release](EngineCallbacks, QString *error) {
+    while (!release) std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    *error = "model missing";
+    return std::shared_ptr<TranscriptionEngine>{};
+  });
+  QSignalSpy finished(session_.get(), &TranscriptionSession::finished);
+  QSignalSpy failed(session_.get(), &TranscriptionSession::failed);
+  ASSERT_TRUE(session_->start(eventId_, "live_local_v1"));
+  session_->stop();
+  release = true;
+  ASSERT_TRUE(pump([&] { return finished.count() == 1; }));
+  EXPECT_EQ(session_->state(), SessionState::Finished);
+  EXPECT_EQ(db_->get_transcript(session_->transcriptId())->status, "draft");
+  EXPECT_EQ(failed.count(), 0);  // the user asked to stop; the load error is not surfaced
+  EXPECT_EQ(provider_->audioSink(), nullptr);
+}
+
+TEST_F(SessionTest, DestructorDoesNotBlockOnSlowDecodeAndRowIsFinalisedLater) {
+  recognizer_ = slowRecognizer(500);
+  make();
+  join("remote", "Anna", false);
+  startAndWaitRecording(1);
+  feedPhrase("remote");
+  ASSERT_TRUE(pump([&] { return recognizer_->calls() >= 1; }));
+  const auto id = session_->transcriptId();
+  QElapsedTimer timer;
+  timer.start();
+  session_.reset();
+  EXPECT_LT(timer.elapsed(), 200);
+  ASSERT_TRUE(waitFor([&] { return db_->get_transcript(id)->status == "draft"; },
+                      std::chrono::seconds(10)));
+}
+
+TEST_F(SessionTest, DestructorDoesNotBlockOnModelLoadAndRowIsFinalisedLater) {
+  make([this](EngineCallbacks cb, QString *error) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    return factory()(std::move(cb), error);
+  });
+  ASSERT_TRUE(session_->start(eventId_, "live_local_v1"));
+  const auto id = session_->transcriptId();
+  QElapsedTimer timer;
+  timer.start();
+  session_.reset();
+  EXPECT_LT(timer.elapsed(), 200);
+  ASSERT_TRUE(waitFor([&] { return db_->get_transcript(id)->status == "draft"; },
+                      std::chrono::seconds(10)));
+}
+
+TEST_F(SessionTest, DestructorDoesNotBlockOnGracefulStopInFlight) {
+  recognizer_ = slowRecognizer(500);
+  make();
+  join("remote", "Anna", false);
+  startAndWaitRecording(1);
+  feedPhrase("remote");
+  ASSERT_TRUE(pump([&] { return recognizer_->calls() >= 1; }));
+  const auto id = session_->transcriptId();
+  session_->stop();
+  QElapsedTimer timer;
+  timer.start();
+  session_.reset();
+  EXPECT_LT(timer.elapsed(), 200);
+  ASSERT_TRUE(waitFor([&] { return db_->get_transcript(id)->status == "draft"; },
+                      std::chrono::seconds(10)));
+}
+
+TEST_F(SessionTest, RejoinWithSameIdRightAwayIsTranscribed) {
+  make();
+  join("remote", "Anna", false);
+  startAndWaitRecording(1);
+  feedPhrase("remote");
+  ASSERT_TRUE(pump([&] { return phraseCount() == 1; }));
+  provider_->simulateParticipantLeft("remote");
+  join("remote", "Anna", false);  // immediately, before the engine erased the old track
+  ASSERT_TRUE(pump([&] { return probe_.vadCount >= 2; }));
+  feedPhrase("remote");
+  ASSERT_TRUE(pump([&] { return phraseCount() == 2; }));
+  for (const auto &r : db_->get_transcript_phrases(session_->transcriptId()))
+    EXPECT_EQ(r.speaker_name, std::optional<std::string>{"Anna"});
+}
+
+TEST_F(SessionTest, DuplicateJoinSignalDoesNotAddSecondTrack) {
+  make();
+  join("remote", "Anna", false);
+  startAndWaitRecording(1);
+  emit provider_->participantJoined("remote");  // already present
+  join("other", "Boris", false);                // queued after the duplicate
+  ASSERT_TRUE(pump([&] { return probe_.vadCount >= 2; }));
+  EXPECT_EQ(probe_.vadCount, 2);
+}
+
+TEST_F(SessionTest, StoreFailuresReportFailedExactlyOnce) {
+  make();
+  join("remote", "Anna", false);
+  startAndWaitRecording(1);
+  QSignalSpy failed(session_.get(), &TranscriptionSession::failed);
+  // The database rejects phrases for a transcript that is no longer "recording".
+  ASSERT_TRUE(db_->set_transcript_status(session_->transcriptId(), "draft"));
+  for (int i = 0; i < 5; ++i) feedPhrase("remote");
+  ASSERT_TRUE(pump([&] { return recognizer_->calls() >= 5; }));
+  QSignalSpy finished(session_.get(), &TranscriptionSession::finished);
+  session_->stop();  // joins the writer, so every store attempt has happened
+  ASSERT_TRUE(pump([&] { return finished.count() == 1; }));
+  EXPECT_EQ(failed.count(), 1);
+  EXPECT_EQ(phraseCount(), 0);
+}
+
+TEST_F(SessionTest, AddTrackFailureIsReportedPerParticipantAndNotFatal) {
+  make([this](EngineCallbacks cb, QString *) {
+    return std::make_shared<TranscriptionEngine>(
+        [this]() -> std::unique_ptr<IVoiceActivityDetector> {
+          if (probe_.vadCount++ == 0) throw std::runtime_error("vad model broken");
+          return std::make_unique<FakeVad>();
+        },
+        recognizer_, std::move(cb));
+  });
+  join("bad", "Anna", false);
+  join("good", "Boris", false);
+  QSignalSpy trackFailed(session_.get(), &TranscriptionSession::trackFailed);
+  QSignalSpy failed(session_.get(), &TranscriptionSession::failed);
+  ASSERT_TRUE(session_->start(eventId_, "live_local_v1"));
+  ASSERT_TRUE(pump([&] { return trackFailed.count() == 1; }));
+  EXPECT_EQ(trackFailed.at(0).at(0).toString(), "bad");
+  EXPECT_EQ(failed.count(), 0);
+  EXPECT_EQ(session_->state(), SessionState::Recording);
+  feedPhrase("good");
+  ASSERT_TRUE(pump([&] { return phraseCount() == 1; }));
+}
+
+TEST_F(SessionTest, DelayedChangedIsEmitted) {
+  recognizer_ = slowRecognizer(250);
+  make([this](EngineCallbacks cb, QString *) {
+    EngineConfig cfg;
+    cfg.delayed_after = std::chrono::milliseconds(50);
+    return std::make_shared<TranscriptionEngine>(
+        [this] {
+          ++probe_.vadCount;
+          return std::make_unique<FakeVad>();
+        },
+        recognizer_, std::move(cb), cfg);
+  });
+  join("remote", "Anna", false);
+  QSignalSpy delayed(session_.get(), &TranscriptionSession::delayedChanged);
+  startAndWaitRecording(1);
+  for (int i = 0; i < 3; ++i) feedPhrase("remote");
+  ASSERT_TRUE(pump([&] { return delayed.count() >= 1; }, 10000));
+  EXPECT_TRUE(delayed.at(0).at(0).toBool());
 }
 
 TEST(SerialExecutorTest, RunsTasksInOrderOffTheCallingThread) {
