@@ -168,6 +168,45 @@ bool Database::update_event(const DuckEvent &event, const bool allowOverlap) {
     return false;
   }
 
+  // DuckDB executes an UPDATE of a row that is referenced by a foreign key as
+  // delete+insert, which the FK rejects. Detach EventChangeLog rows (like the
+  // EventClient links above) and put them back, keeping their ids.
+  std::vector<duckdb::vector<duckdb::Value>> changeLogRows;
+  auto changeLogSelect = executePrepared(
+      conn, constance::kSelectEventChangeLogRowsByEventIdQuery,
+      {duckdb::Value::BIGINT(event.id)});
+  if (!changeLogSelect || changeLogSelect->HasError()) {
+    PLOG_ERROR << "Failed to fetch EventChangeLog rows before event update (id="
+               << event.id << "): "
+               << (changeLogSelect ? changeLogSelect->GetError() : "prepare failed");
+    return false;
+  }
+  while (auto chunk = changeLogSelect->Fetch()) {
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) {
+      duckdb::vector<duckdb::Value> row;
+      for (duckdb::idx_t col = 0; col < chunk->ColumnCount(); ++col) {
+        row.push_back(chunk->GetValue(col, i));
+      }
+      changeLogRows.push_back(std::move(row));
+    }
+  }
+  const auto restoreChangeLogRows = [&] {
+    for (auto &row : changeLogRows) {
+      auto restore = executePrepared(conn, constance::kRestoreEventChangeLogRowQuery, row);
+      if (!restore || restore->HasError()) {
+        PLOG_ERROR << "Failed to restore EventChangeLog row for event (id=" << event.id
+                   << "): " << (restore ? restore->GetError() : "prepare failed");
+      }
+    }
+  };
+  auto changeLogDelete = executePrepared(
+      conn, constance::kDeleteEventChangeLogByEventIdQuery, {duckdb::Value::BIGINT(event.id)});
+  if (!changeLogDelete || changeLogDelete->HasError()) {
+    PLOG_ERROR << "Failed to detach EventChangeLog rows before event update (id=" << event.id
+               << "): " << (changeLogDelete ? changeLogDelete->GetError() : "prepare failed");
+    return false;
+  }
+
   duckdb::vector<duckdb::Value> values{
       db_utils::toDuckValue(event.name),
       db_utils::toDuckValue(event.description),
@@ -190,6 +229,7 @@ bool Database::update_event(const DuckEvent &event, const bool allowOverlap) {
                        event.invitation_state);
   values.push_back(duckdb::Value::BIGINT(event.id));
   auto result = executePrepared(conn, constance::kUpdateEventQuery, values);
+  restoreChangeLogRows();
 
   if (!result || result->HasError()) {
     for (const auto clientId : linkedClientIds) {

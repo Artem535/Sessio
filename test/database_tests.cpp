@@ -257,6 +257,40 @@ TEST(DatabaseTest, UpdateEventLogsStatusChange) {
   removeChangeLogTestDatabase(dirName);
 }
 
+TEST(DatabaseTest, UpdateEventSucceedsRepeatedlyOnceChangeLogRowsExist) {
+  const std::string dirName = "tmp_dir_changelog_repeated_update";
+  auto db = makeChangeLogTestDatabase(dirName);
+
+  const auto [clientId, eventId] = makeLinkedClientAndEvent(db, 1730000000000, 1730003600000);
+
+  DuckEvent updated;
+  updated.id = eventId;
+  updated.start_date = 1730000000000;
+  updated.end_date = 1730003600000;
+  updated.event_stat_id = 2;
+  updated.payment_stat_id = 1;
+
+  // 1st edit: status change.
+  ASSERT_TRUE(db.update_event(updated));
+  db.add_event_client(eventId, clientId);
+
+  // 2nd edit: payment change.
+  updated.payment_stat_id = 2;
+  ASSERT_TRUE(db.update_event(updated));
+  db.add_event_client(eventId, clientId);
+
+  // 3rd edit: reschedule.
+  updated.start_date = 1730010000000;
+  updated.end_date = 1730013600000;
+  ASSERT_TRUE(db.update_event(updated));
+  db.add_event_client(eventId, clientId);
+
+  const auto entries = db.get_event_change_log_for_client(clientId);
+  ASSERT_EQ(entries.size(), 3);
+
+  removeChangeLogTestDatabase(dirName);
+}
+
 TEST(DatabaseTest, UpdateEventLogsPaymentStatusChange) {
   const std::string dirName = "tmp_dir_changelog_payment";
   auto db = makeChangeLogTestDatabase(dirName);

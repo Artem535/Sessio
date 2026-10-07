@@ -396,6 +396,29 @@ FROM EventChangeLog
 RETURNING id
 )duckdb";
 
+// Raw rows (all columns, in table order) used by Database::update_event to
+// detach and re-attach change-log rows around an Event UPDATE.
+constexpr auto kSelectEventChangeLogRowsByEventIdQuery = R"duckdb(
+SELECT id, event_id, change_kind,
+       old_event_stat_id, new_event_stat_id,
+       old_payment_stat_id, new_payment_stat_id,
+       old_start_date, new_start_date,
+       cancellation_reason, occurred_at
+FROM EventChangeLog
+WHERE event_id = $1
+)duckdb";
+
+constexpr auto kRestoreEventChangeLogRowQuery = R"duckdb(
+INSERT INTO EventChangeLog (
+    id, event_id, change_kind,
+    old_event_stat_id, new_event_stat_id,
+    old_payment_stat_id, new_payment_stat_id,
+    old_start_date, new_start_date,
+    cancellation_reason, occurred_at
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+)duckdb";
+
 constexpr auto kDeleteEventChangeLogByEventIdQuery =
     "DELETE FROM EventChangeLog WHERE event_id = $1";
 
