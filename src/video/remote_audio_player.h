@@ -10,6 +10,7 @@
 #include <livekit/audio_stream.h>
 #include <memory>
 #include <thread>
+#include <vector>
 
 namespace pcm::video {
 
@@ -42,6 +43,7 @@ private:
   std::thread mReaderThread;
   std::atomic<bool> mRunning{false};
   AudioTap mTap;
+  std::vector<int16_t> mMonoScratch; // reader thread only
   uint64_t mGeneration{0}; // owner-thread attachment epoch
 
   void readerLoop(uint64_t generation);

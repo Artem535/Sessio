@@ -47,8 +47,8 @@ public:
   [[nodiscard]] bool isCameraEnabled() const override { return mCameraEnabled; }
   void switchCamera(const QCameraDevice &device) override;
   void switchMicrophone(const QAudioDevice &device) override;
-  void setAudioSink(std::shared_ptr<AudioSink> sink) override { mSinkSlot->set(std::move(sink)); }
   void switchSpeaker(const QAudioDevice &device) override;
+  void setAudioSink(std::shared_ptr<AudioSink> sink) override;
 
 private:
   friend struct LiveKitVideoProviderTestAccess;

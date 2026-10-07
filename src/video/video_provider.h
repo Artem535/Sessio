@@ -4,9 +4,9 @@
 #include <QString>
 #include <QAudioDevice>
 #include <QCameraDevice>
+#include <memory>
 #include "audio_sink.h"
 #include "participant_model.h"
-#include <memory>
 #include "video_frame_source.h"
 
 namespace pcm::video {
