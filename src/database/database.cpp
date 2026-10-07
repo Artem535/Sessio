@@ -2122,7 +2122,10 @@ int64_t Database::add_transcript_phrase(const DuckTranscriptPhrase &phrase) {
     return 0;
   }
   std::optional<duckdb::Connection> ownedConn;
-  auto &conn = write_connection(ownedConn);
+  // Own connection on purpose: phrases are written from a dedicated writer thread and
+  // must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
   {
     auto state = executePrepared(conn, constance::kSelectTranscriptWriteStateQuery,
                                  {duckdb::Value::BIGINT(phrase.transcript_id)});

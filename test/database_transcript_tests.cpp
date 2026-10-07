@@ -2,9 +2,13 @@
 #include <Poco/Path.h>
 #include <duckdb.hpp>
 #include <gtest/gtest.h>
+#include <plog/Appenders/IAppender.h>
+#include <plog/Log.h>
 
+#include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -579,4 +583,72 @@ TEST_F(TranscriptDbTest, RenameSpeakerChangesOnlyThatRoleAndIsNotATextEdit) {
   EXPECT_TRUE(db_->rename_transcript_speaker(t, "unknown_role", "X"));  // transcript exists
   EXPECT_FALSE(db_->rename_transcript_speaker(t, "participant", ""));
   EXPECT_FALSE(db_->rename_transcript_speaker(31337, "participant", "X"));
+}
+
+namespace {
+
+// Records error-level log lines so a test can observe the release-build
+// fallback path (asserts are compiled out there).
+class ErrorCapture : public plog::IAppender {
+ public:
+  void write(const plog::Record &record) override {
+    if (!active_ || record.getSeverity() > plog::error) return;
+    std::lock_guard lock(mutex_);
+    lines_.push_back(record.getMessage());
+  }
+  void begin() { active_ = true; }
+  std::vector<std::string> end() {
+    active_ = false;
+    std::lock_guard lock(mutex_);
+    return std::exchange(lines_, {});
+  }
+
+ private:
+  std::atomic<bool> active_{false};
+  std::mutex mutex_;
+  std::vector<std::string> lines_;
+};
+
+ErrorCapture &errorCapture() {
+  static ErrorCapture capture;
+  static const bool installed = [] {
+    if (auto *logger = plog::get<PLOG_DEFAULT_INSTANCE_ID>()) {
+      logger->addAppender(&capture);
+    } else {
+      plog::init(plog::error, &capture);
+    }
+    return true;
+  }();
+  (void)installed;
+  return capture;
+}
+
+}  // namespace
+
+TEST_F(TranscriptDbTest, PhraseInsertWorksFromAnotherThreadDuringScheduleTransaction) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  ASSERT_GT(t, 0);
+
+  auto &capture = errorCapture();
+  capture.begin();
+  int64_t id = 0;
+  // The mutation runs inside the schedule transaction on this thread; the
+  // writer thread must not join or trip over that transaction's connection.
+  db_->commit_schedule_change(
+      [&]() -> std::optional<int64_t> {
+        std::thread writer([&] {
+          id = db_->add_transcript_phrase(phrase(t, "participant", "Client", 1000, 2000, "hi"));
+        });
+        writer.join();
+        return std::nullopt;
+      },
+      "Europe/Moscow",
+      [](const pcm::database::ScheduleSource &) { return std::optional<std::string>("p"); });
+  const auto errors = capture.end();
+
+  EXPECT_GT(id, 0);
+  EXPECT_TRUE(errors.empty()) << "unexpected error log: " << (errors.empty() ? "" : errors[0]);
+  const auto phrases = db_->get_transcript_phrases(t);
+  ASSERT_EQ(phrases.size(), 1u);
+  EXPECT_EQ(phrases[0].text, "hi");
 }
