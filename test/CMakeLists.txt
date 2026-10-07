@@ -676,6 +676,12 @@ target_link_libraries(Sessio_phrase_writer_tests PRIVATE
     GTest::gtest GTest::gtest_main Sessio_call_transcription)
 gtest_discover_tests(Sessio_phrase_writer_tests)
 
+# Production engine factory tests (no model files needed)
+add_executable(Sessio_engine_factory_tests engine_factory_tests.cpp)
+target_link_libraries(Sessio_engine_factory_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_call_transcription)
+gtest_discover_tests(Sessio_engine_factory_tests)
+
 # Call transcription session tests (QApplication main, fakes for engine and provider)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
 add_executable(Sessio_transcription_session_tests transcription_session_tests.cpp)
