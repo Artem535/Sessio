@@ -35,6 +35,11 @@ set(BUILD_SHARED_LIBS ON)
 # Sessio's own targets continue to use C++20.
 set(_sessio_saved_cxx_standard "${CMAKE_CXX_STANDARD}")
 set(CMAKE_CXX_STANDARD 17)
+# Older dependency projects otherwise let option(BUILD_SHARED_LIBS) replace
+# sherpa's normal OFF variable on the first configure. That creates a hidden
+# sentencepiece DLL/dylib with no exported symbols instead of a static library.
+set(_sessio_saved_cmp0077 "${CMAKE_POLICY_DEFAULT_CMP0077}")
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 # The upstream ONNX Runtime x64 downloader checks the Visual Studio platform
 # even with Ninja, where CMake leaves that variable empty.
 set(_sessio_saved_vs_platform "${CMAKE_VS_PLATFORM_NAME}")
@@ -43,6 +48,11 @@ if(WIN32 AND MSVC AND NOT CMAKE_VS_PLATFORM_NAME AND
   set(CMAKE_VS_PLATFORM_NAME x64)
 endif()
 FetchContent_MakeAvailable(sherpa_onnx)
+if(_sessio_saved_cmp0077)
+  set(CMAKE_POLICY_DEFAULT_CMP0077 "${_sessio_saved_cmp0077}")
+else()
+  unset(CMAKE_POLICY_DEFAULT_CMP0077)
+endif()
 set(CMAKE_VS_PLATFORM_NAME "${_sessio_saved_vs_platform}")
 set(CMAKE_CXX_STANDARD "${_sessio_saved_cxx_standard}")
 set(BUILD_SHARED_LIBS "${_sessio_saved_shared}")
