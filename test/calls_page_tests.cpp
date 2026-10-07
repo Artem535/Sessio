@@ -13,6 +13,7 @@
 #include <QSignalSpy>
 #include <QStackedWidget>
 #include <QTest>
+#include <QToolButton>
 #include <gtest/gtest.h>
 
 using pcm::video::test::FakeVideoProvider;
@@ -610,6 +611,75 @@ TEST(CallsPageTest, PrefillSwitchesToEntryFormWhenNoCallIsActive) {
   page.prefillJoinCode("code-3", "111111");
   EXPECT_EQ(topStack(page)->currentWidget(), page.findChild<CallEntryWidget *>());
   EXPECT_EQ(page.findChild<QLineEdit *>("joinCodeEdit")->text(), QStringLiteral("code-3"));
+}
+
+TEST(CallsPageTest, CallSessionStartedEmittedOnJoinAndEndedOnLeave) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, R"({"endpointUrl":"wss://x", "roomName":"r", "token":"t", "expiresAt":999})");
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager devices;
+  CallsPage page(false, &devices, &client);
+  FakeVideoProvider *provider = nullptr;
+  page.setVideoProviderFactoryForTesting([&]() { return provider = new FakeVideoProvider; });
+  int starts = 0;
+  int ends = 0;
+  QObject::connect(&page, &CallsPage::callSessionStarted, &page, [&](pcm::video::VideoSession *session) {
+    EXPECT_NE(session, nullptr);
+    EXPECT_EQ(provider->mJoinCallCount, 0);
+    ++starts;
+  });
+  QObject::connect(&page, &CallsPage::callSessionEnded, &page, [&]() { ++ends; });
+  page.prefillJoinCode("code", "123456");
+  page.findChild<QPushButton *>("joinByCodeButton")->click();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return starts == 1; }, 2000));
+  page.findChild<QPushButton *>("joinButton")->click();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return provider->mJoinCallCount == 1; }, 2000));
+  provider->simulateJoined();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return page.findChild<CallPage *>()->findChild<QLabel *>("waitingLabel")->isVisibleTo(page.findChild<CallPage *>()); }, 2000));
+  page.findChild<CallPage *>()->leaveRequested();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return provider->mLeaveCallCount == 1; }, 2000));
+  provider->simulateLeft();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return ends == 1; }, 2000));
+  page.findChild<CallPage *>()->callEnded();
+  EXPECT_EQ(ends, 1);
+}
+
+TEST(CallsPageTest, TranscribeRequestedIsRelayed) {
+  FakeTokenBackendServer server;
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager devices;
+  CallsPage page(false, &devices, &client);
+  page.setTranscribeButtonVisible(true);
+  QSignalSpy spy(&page, &CallsPage::transcribeRequested);
+  page.findChild<QToolButton *>("transcribeButton")->click();
+  EXPECT_EQ(spy.count(), 1);
+}
+
+TEST(CallsPageTest, CallSessionEndsExactlyOnceOnCancellationOrJoinFailure) {
+  for (bool cancel : {true, false}) {
+    FakeTokenBackendServer server;
+    server.setNextResponse(200, R"({"endpointUrl":"wss://x", "roomName":"r", "token":"t", "expiresAt":999})");
+    pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+    pcm::video::DeviceManager devices;
+    CallsPage page(false, &devices, &client);
+    FakeVideoProvider *provider = nullptr;
+    page.setVideoProviderFactoryForTesting([&]() { return provider = new FakeVideoProvider; });
+    QSignalSpy ended(&page, &CallsPage::callSessionEnded);
+    page.prefillJoinCode("code", "123456");
+    page.findChild<QPushButton *>("joinByCodeButton")->click();
+    ASSERT_TRUE(QTest::qWaitFor([&]() { return provider != nullptr; }, 2000));
+    auto *call = page.findChild<CallPage *>();
+    if (cancel) {
+      call->deviceCheckCanceled();
+    } else {
+      page.findChild<QPushButton *>("joinButton")->click();
+      ASSERT_TRUE(QTest::qWaitFor([&]() { return provider->mJoinCallCount == 1; }, 2000));
+      provider->simulateJoinFailed("unavailable");
+    }
+    ASSERT_TRUE(QTest::qWaitFor([&]() { return ended.count() == 1; }, 2000));
+    call->callEnded();
+    EXPECT_EQ(ended.count(), 1);
+  }
 }
 
 int main(int argc, char **argv) {

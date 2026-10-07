@@ -756,6 +756,42 @@ void CallPage::setSidePanelExpandedByDefault(bool expanded) {
   }
 }
 
+void CallPage::openSidePanel() {
+  setSidePanelExpandedByDefault(true);
+}
+
+void CallPage::setTranscribeButtonVisible(bool visible) {
+  if (visible && !mTranscribeButton) {
+    mTranscribeButton = new QToolButton(mControlBar);
+    mTranscribeButton->setObjectName("transcribeButton");
+    mTranscribeButton->setCheckable(true);
+    mTranscribeButton->setFixedSize(40, 40);
+    mTranscribeButton->setIconSize(QSize(20, 20));
+    auto *layout = qobject_cast<QHBoxLayout *>(mControlBar->layout());
+    layout->insertWidget(layout->indexOf(mDevicesButton) + 1, mTranscribeButton);
+    setTranscribeButtonState(mTranscribing, mTranscribeTooltip);
+    connect(mTranscribeButton, &QToolButton::clicked, this, [this]() {
+      mTranscribeButton->setChecked(mTranscribing);
+      emit transcribeRequested();
+    });
+  } else if (!visible && mTranscribeButton) {
+    delete mTranscribeButton;
+    mTranscribeButton = nullptr;
+  }
+}
+
+void CallPage::setTranscribeButtonState(bool active, const QString &tooltip) {
+  mTranscribing = active;
+  mTranscribeTooltip = tooltip;
+  if (mTranscribeButton) {
+    mTranscribeButton->setChecked(active);
+    mTranscribeButton->setIcon(pcm::widgets::transcriptIcon(active));
+    const QString label = active ? tooltip : tr("Transcribe");
+    mTranscribeButton->setToolTip(label);
+    mTranscribeButton->setAccessibleName(label);
+  }
+}
+
 void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) {
   using pcm::video::VideoSessionState;
   mWaitingBanner->setVisible(state == VideoSessionState::WaitingForParticipants);

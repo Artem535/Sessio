@@ -8,6 +8,12 @@
 
 **Tech Stack:** C++20, Qt 6 Widgets, Qlementine (`SegmentedControl`), GoogleTest + Qt Test (`QTest`, `QSignalSpy`) with `QT_QPA_PLATFORM=offscreen`, phase 1–3 libraries.
 
+## Confirmed continuation decisions (2026-10-07)
+
+The user confirmed that saved transcripts open as a separate page inside Sessio, matching the spec. This supersedes every `TranscriptDialog`, `transcript_dialog` and dialog-specific instruction in Tasks 6–7 below: implement `TranscriptPage : QWidget` in `transcript_page.{h,cpp}`, with `transcript_page_tests.cpp`. Preserve the described editing, review, confirmation, selection and recording guards. Provide `backRequested()` and a visible Back to event button. Application opens the page through MainWindow's stacked navigation and returns to the originating calendar event on Back; it must not open a modal or modeless transcript window. Add a reusable page-registration/navigation interface to MainWindow following its existing page map; no persistent sidebar item is needed. The page must show the linked client along with event, phrase count and model as required by the spec. Dialog `close()` after deletion becomes an empty state or navigation back when no transcripts remain.
+
+Repository AGENTS requires translation generation and completed translations before committing new `tr()` strings. Keep task-specific diffs and reviews, but defer code commits until Task 8 completes the translation audit. Builds use the existing prebuilt dependency tree only.
+
 ## Global Constraints
 
 - Spec: `docs/superpowers/specs/2026-10-06-call-transcription-design.md`, sections *Lifecycle* and *UI* are binding. Phase 3 code (`src/call_transcription/`) is the API: `TranscriptionSession` (`start(eventId, consentScope)`, `stop()`, `revoke()`, signals `stateChanged`, `phraseAdded(DuckTranscriptPhrase)`, `delayedChanged(bool)`, `failed(QString)`, `trackFailed(QString)`, `finished(qint64)`, `revoked(qint64)`; states `Idle, Loading, Recording, Stopping, Finished, Failed`), `makeProductionEngineFactory`, `transcriptionModelsAvailable`, `CallEventResolver`, `Application::resolveCallEvent`.

@@ -215,6 +215,21 @@
         <source>Notes</source>
         <translation>Notes</translation>
     </message>
+    <message>
+        <source>Transcribe</source>
+        <translation>Transcribe</translation>
+    </message>
+</context>
+<context>
+    <name>CallSidePanel</name>
+    <message>
+        <source>Notes</source>
+        <translation>Notes</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
 </context>
 <context>
     <name>ClientChartsWidget</name>
@@ -835,6 +850,10 @@
         <translation>Details</translation>
     </message>
     <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
+    <message>
         <source>Page</source>
         <translation>Page</translation>
     </message>
@@ -1074,6 +1093,10 @@
     <message>
         <source>Back to day</source>
         <translation>Back to day</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
     </message>
     <message>
         <source>Date</source>
@@ -2236,6 +2259,26 @@ See you!</translation>
         <translation>Name in calls</translation>
     </message>
     <message>
+        <source>Stop transcription before deleting its data.</source>
+        <translation>Stop transcription before deleting its data.</translation>
+    </message>
+    <message>
+        <source>Transcription</source>
+        <translation>Transcription</translation>
+    </message>
+    <message>
+        <source>Delete all transcripts</source>
+        <translation>Delete all transcripts</translation>
+    </message>
+    <message>
+        <source>Delete every transcript and its phrases? This cannot be undone.</source>
+        <translation>Delete every transcript and its phrases? This cannot be undone.</translation>
+    </message>
+    <message>
+        <source>Unable to delete transcripts.</source>
+        <translation>Unable to delete transcripts.</translation>
+    </message>
+    <message>
         <source>Backup Encryption</source>
         <translation>Backup Encryption</translation>
     </message>
@@ -2401,6 +2444,271 @@ See you!</translation>
     </message>
 </context>
 <context>
+    <name>TranscriptPage</name>
+    <message>
+        <source>Back to event</source>
+        <translation>Back to event</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
+    <message>
+        <source>Mark reviewed</source>
+        <translation>Mark reviewed</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Delete transcript</translation>
+    </message>
+    <message>
+        <source>Delete this transcript and all its phrases?</source>
+        <translation>Delete this transcript and all its phrases?</translation>
+    </message>
+    <message>
+        <source>Could not update the transcript. Please try again.</source>
+        <translation>Could not update the transcript. Please try again.</translation>
+    </message>
+    <message>
+        <source>This transcript is still being recorded. Editing is unavailable.</source>
+        <translation>This transcript is still being recorded. Editing is unavailable.</translation>
+    </message>
+    <message>
+        <source>Save or cancel the current edit first.</source>
+        <translation>Save or cancel the current edit first.</translation>
+    </message>
+    <message>
+        <source>Client unavailable</source>
+        <translation>Client unavailable</translation>
+    </message>
+    <message>
+        <source>Client: %1</source>
+        <translation>Client: %1</translation>
+    </message>
+    <message>
+        <source>No transcripts for this event.</source>
+        <translation>No transcripts for this event.</translation>
+    </message>
+    <message>
+        <source>Transcript unavailable.</source>
+        <translation>Transcript unavailable.</translation>
+    </message>
+    <message>
+        <source>Recording</source>
+        <translation>Recording</translation>
+    </message>
+    <message>
+        <source>Reviewed</source>
+        <translation>Reviewed</translation>
+    </message>
+    <message>
+        <source>Draft</source>
+        <translation>Draft</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n phrases</source>
+        <translation>
+            <numerusform>%n phrase</numerusform>
+            <numerusform>%n phrases</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source> · Model: %1</source>
+        <translation> · Model: %1</translation>
+    </message>
+    <message>
+        <source>Practitioner</source>
+        <translation>Practitioner</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Participant</translation>
+    </message>
+    <message>
+        <source>Edited</source>
+        <translation>Edited</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Edit</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Delete</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Save</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Phrase text cannot be empty.</source>
+        <translation>Phrase text cannot be empty.</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptPanel</name>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
+    <message>
+        <source>Local</source>
+        <translation>Local</translation>
+    </message>
+    <message>
+        <source>Transcription is falling behind</source>
+        <translation>Transcription is falling behind</translation>
+    </message>
+    <message>
+        <source>Listening…</source>
+        <translation>Listening…</translation>
+    </message>
+    <message>
+        <source>Audio is not stored</source>
+        <translation>Audio is not stored</translation>
+    </message>
+    <message>
+        <source>Start</source>
+        <translation>Start</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Stop</translation>
+    </message>
+    <message>
+        <source>Revoke consent</source>
+        <translation>Revoke consent</translation>
+    </message>
+    <message>
+        <source>Transcription is off</source>
+        <translation>Transcription is off</translation>
+    </message>
+    <message>
+        <source>Loading speech model…</source>
+        <translation>Loading speech model…</translation>
+    </message>
+    <message>
+        <source>Transcription running</source>
+        <translation>Transcription running</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Finishing…</translation>
+    </message>
+    <message>
+        <source>Transcript saved as a draft</source>
+        <translation>Transcript saved as a draft</translation>
+    </message>
+    <message>
+        <source>Transcription stopped</source>
+        <translation>Transcription stopped</translation>
+    </message>
+    <message>
+        <source>You</source>
+        <translation>You</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Participant</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptionConsentDialog</name>
+    <message>
+        <source>Transcribe this session</source>
+        <translation>Transcribe this session</translation>
+    </message>
+    <message>
+        <source>The session is converted to text on this computer.</source>
+        <translation>The session is converted to text on this computer.</translation>
+    </message>
+    <message>
+        <source>Audio is not stored and is not sent anywhere.</source>
+        <translation>Audio is not stored and is not sent anywhere.</translation>
+    </message>
+    <message>
+        <source>The client can withdraw consent at any moment, and transcription stops immediately.</source>
+        <translation>The client can withdraw consent at any moment, and transcription stops immediately.</translation>
+    </message>
+    <message>
+        <source>The text is saved as a draft and can be edited and deleted.</source>
+        <translation>The text is saved as a draft and can be edited and deleted.</translation>
+    </message>
+    <message>
+        <source>The client has given consent to transcribing this session</source>
+        <translation>The client has given consent to transcribing this session</translation>
+    </message>
+    <message>
+        <source>Start transcription</source>
+        <translation>Start transcription</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptionFailure</name>
+    <message>
+        <source>The transcript could not be saved. Please try again.</source>
+        <translation>The transcript could not be saved. Please try again.</translation>
+    </message>
+    <message>
+        <source>The transcription models are unavailable. Please check the model installation.</source>
+        <translation>The transcription models are unavailable. Please check the model installation.</translation>
+    </message>
+    <message>
+        <source>The voice activity detector could not be started. Please check the model installation.</source>
+        <translation>The voice activity detector could not be started. Please check the model installation.</translation>
+    </message>
+    <message>
+        <source>The speech recognition model could not be loaded. Please check the model installation.</source>
+        <translation>The speech recognition model could not be loaded. Please check the model installation.</translation>
+    </message>
+    <message>
+        <source>Transcription could not be completed. Please try again.</source>
+        <translation>Transcription could not be completed. Please try again.</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptionSettingsPanel</name>
+    <message>
+        <source>Enable call transcription</source>
+        <translation>Enable call transcription</translation>
+    </message>
+    <message>
+        <source>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</source>
+        <translation>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</translation>
+    </message>
+    <message>
+        <source>Delete all transcripts…</source>
+        <translation>Delete all transcripts…</translation>
+    </message>
+    <message>
+        <source>Model: %1 — %2</source>
+        <translation>Model: %1 — %2</translation>
+    </message>
+    <message>
+        <source>installed</source>
+        <translation>installed</translation>
+    </message>
+    <message>
+        <source>not installed</source>
+        <translation>not installed</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n transcripts stored</source>
+        <translation>
+            <numerusform>%n transcript stored</numerusform>
+            <numerusform>%n transcripts stored</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>pcm::AppLockDialog</name>
     <message>
         <source>Unlock Sessio</source>
@@ -2487,6 +2795,22 @@ Your previous data was kept.</translation>
         <source>Quit</source>
         <translation>Quit</translation>
     </message>
+    <message>
+        <source>Consent withdrawn</source>
+        <translation>Consent withdrawn</translation>
+    </message>
+    <message>
+        <source>Transcription has stopped. What should happen to the recorded text?</source>
+        <translation>Transcription has stopped. What should happen to the recorded text?</translation>
+    </message>
+    <message>
+        <source>Delete what was recorded</source>
+        <translation>Delete what was recorded</translation>
+    </message>
+    <message>
+        <source>Keep as draft</source>
+        <translation>Keep as draft</translation>
+    </message>
 </context>
 <context>
     <name>pcm::eventpage::SeriesTimezoneDialog</name>
@@ -2529,6 +2853,53 @@ Your previous data was kept.</translation>
     <message>
         <source>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</source>
         <translation>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::transcriptionui::CallTranscriptionController</name>
+    <message>
+        <source>Transcription is turned off in Settings</source>
+        <translation>Transcription is turned off in Settings</translation>
+    </message>
+    <message>
+        <source>Speech models are not installed</source>
+        <translation>Speech models are not installed</translation>
+    </message>
+    <message>
+        <source>Open the call from a calendar event to transcribe it</source>
+        <translation>Open the call from a calendar event to transcribe it</translation>
+    </message>
+    <message>
+        <source>Wait for the current transcription to finish</source>
+        <translation>Wait for the current transcription to finish</translation>
+    </message>
+    <message>
+        <source>Transcribe call</source>
+        <translation>Transcribe call</translation>
+    </message>
+    <message>
+        <source>Unable to open the calendar event for transcription</source>
+        <translation>Unable to open the calendar event for transcription</translation>
+    </message>
+    <message>
+        <source>Some participant audio could not be transcribed</source>
+        <translation>Some participant audio could not be transcribed</translation>
+    </message>
+    <message>
+        <source>Unable to delete the transcript</source>
+        <translation>Unable to delete the transcript</translation>
+    </message>
+    <message>
+        <source>Unable to save the transcript</source>
+        <translation>Unable to save the transcript</translation>
+    </message>
+    <message>
+        <source>Unable to start transcription</source>
+        <translation>Unable to start transcription</translation>
+    </message>
+    <message>
+        <source>Transcription running</source>
+        <translation>Transcription running</translation>
     </message>
 </context>
 <context>

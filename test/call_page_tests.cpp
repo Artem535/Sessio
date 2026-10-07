@@ -2,6 +2,7 @@
 #include "fake_video_provider.h"
 #include "device_manager.h"
 #include "busy_spinner.h"
+#include "call_control_icons.h"
 
 #include <QApplication>
 #include <QColor>
@@ -1029,6 +1030,86 @@ TEST(CallPageTest, SetSidePanelExpandedByDefaultIsANoOpWithoutATotoggleYet) {
   // fires).
   page.setSidePanelExpandedByDefault(true);
   EXPECT_EQ(page.findChild<QToolButton *>("notesToggleButton"), nullptr);
+}
+
+TEST(CallPageTest, TranscribeButtonHiddenByDefault) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  EXPECT_EQ(page.findChild<QToolButton *>("transcribeButton"), nullptr);
+}
+
+TEST(CallPageTest, ActiveTranscriptGlyphContrastsWithAccentFillAndHoverFill) {
+  const QPalette original = QApplication::palette();
+  QPalette palette = original;
+  palette.setColor(QPalette::Highlight, QColor(30, 90, 180));
+  palette.setColor(QPalette::HighlightedText, Qt::white);
+  QApplication::setPalette(palette);
+  const QImage icon = pcm::widgets::transcriptIcon(true).pixmap(24, 24).toImage();
+  QApplication::setPalette(original);
+  int opaquePixels = 0;
+  const QColor fill = palette.color(QPalette::Highlight).darker(120);
+  const QColor hover = fill.lighter(115);
+  for (int y = 0; y < icon.height(); ++y) {
+    for (int x = 0; x < icon.width(); ++x) {
+      const QColor pixel = icon.pixelColor(x, y);
+      if (pixel.alpha() < 250) continue;
+      ++opaquePixels;
+      // White strokes retain separation from both checked backgrounds.
+      EXPECT_GE(pixel.red(), 230);
+      EXPECT_GE(pixel.green(), 230);
+      EXPECT_GE(pixel.blue(), 230);
+      EXPECT_GT(pixel.lightness() - fill.lightness(), 100);
+      EXPECT_GT(pixel.lightness() - hover.lightness(), 100);
+    }
+  }
+  EXPECT_GT(opaquePixels, 10);
+}
+
+TEST(CallPageTest, TranscribeButtonShownWhenEnabledAndEmitsSignalOnClick) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  page.setTranscribeButtonVisible(true);
+  auto *button = page.findChild<QToolButton *>("transcribeButton");
+  ASSERT_NE(button, nullptr);
+  QSignalSpy spy(&page, &CallPage::transcribeRequested);
+  button->click();
+  EXPECT_EQ(spy.count(), 1);
+  EXPECT_FALSE(button->isChecked());
+  page.setTranscribeButtonVisible(false);
+  EXPECT_EQ(page.findChild<QToolButton *>("transcribeButton"), nullptr);
+}
+
+TEST(CallPageTest, TranscribeButtonStateChangesTooltipAndCheckedLook) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  page.setTranscribeButtonVisible(true);
+  auto *button = page.findChild<QToolButton *>("transcribeButton");
+  ASSERT_NE(button, nullptr);
+  page.setTranscribeButtonState(true, "Transcribing…");
+  EXPECT_TRUE(button->isChecked());
+  EXPECT_EQ(button->toolTip(), "Transcribing…");
+  EXPECT_EQ(button->accessibleName(), button->toolTip());
+  QSignalSpy spy(&page, &CallPage::transcribeRequested);
+  button->click();
+  EXPECT_TRUE(button->isChecked());
+  EXPECT_EQ(spy.count(), 1);
+  page.setTranscribeButtonState(false, "ignored");
+  EXPECT_FALSE(button->isChecked());
+  EXPECT_EQ(button->toolTip(), CallPage::tr("Transcribe"));
+}
+
+TEST(CallPageTest, OpenSidePanelExpandsToggle) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  page.setSidePanelWidget(new QWidget);
+  auto *host = page.findChild<QWidget *>("sidePanelHost");
+  ASSERT_NE(host, nullptr);
+  page.openSidePanel();
+  EXPECT_TRUE(host->isHidden());
+  page.setSidePanelToggleVisible(true);
+  page.openSidePanel();
+  EXPECT_FALSE(host->isHidden());
+  EXPECT_TRUE(page.findChild<QToolButton *>("notesToggleButton")->isChecked());
 }
 
 int main(int argc, char **argv) {

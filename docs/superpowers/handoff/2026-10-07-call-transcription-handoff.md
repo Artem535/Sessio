@@ -2,6 +2,20 @@
 
 Written 2026-10-07 for the next agent. Read this first, then the plan for the phase you execute. Everything needed to continue is in this file or in the files it points to; nothing depends on the previous conversation.
 
+## Continuation update — 2026-10-07
+
+This update supersedes the older phase-4 "not started" status below.
+
+- Phase 4 interface is implemented and integrated: control button/settings flag, consent dialog, phrase panel, Notes/Transcript switcher, controller, editable `TranscriptPage` inside MainWindow, event entry point and transcription settings section. The user explicitly chose a separate page, not a dialog.
+- Tasks 1–4 passed independent reviews. Task 5 review found three lifecycle issues (deferred destructor clears replacement sink, consent transfers during modal call replacement, controller destruction inside revoke hook); all have regression fixes with 26 tests and 20 repeated runs (520 cases). Independent re-review and whole-phase review remain pending: the account usage limit stopped reviewers. Task 6's simultaneous-editor data loss was reproduced and fixed inline; 17 page tests pass. New integration code received root inspection, not an independent final approval.
+- Named application and relevant test builds pass with the original prebuilt vcpkg cache. Actual environment is already the Fedora host: use direct `rtk cmake`/`rtk proxy ctest`, no distrobox-host-exec needed. Manifest installation remains OFF.
+- Full isolated `ctest -LE models`: 805 registered tests, 798 passed, one backend integration skipped, six known LiveKit/libcurl targets Not Run. No new failures; calendar tests passed this run. Log `/tmp/sessio-phase4-ctest.log`. Corrected settings-layout test expects seven sections with transcription enabled and six with it disabled.
+- Translations generated and completed: 684 finished strings and zero unfinished in each language, including Russian numerus forms. `git diff --check` passes.
+- Preview application launched via `SESSIO_MODELS_DIR=$PWD/build-tr/transcription-models scripts/run-dev-isolated.sh $PWD/build-tr/Sessio`, isolated profile `/tmp/pcm-dev-home-wi0JSp`. The process was left for user interaction; this is not a real two-person call verification. Populated navigation test screenshot `/tmp/sessio-transcript-page.png` uses default Qt style, not the complete running-app theme.
+- Plan for phase 5: `docs/superpowers/plans/2026-10-07-call-transcription-release.md`. Complete independent review before pushing phase 4. Then release/version/licences/CI/packaging/manual-call checks; no PR yet.
+- Shutdown remains nonblocking and delegates to detached cleanup. Process exit may precede final database status update; startup recovery repairs rows on next start. Resolve/document bounded completion before release. Existing DB vector-return reads can hide query failures as empty data; page catches only thrown exceptions.
+- Durable progress ledger: `.superpowers/sdd/2026-10-07-call-transcription-ui/progress.md` (git-ignored). Preserve the unrelated dirty qlementine submodule.
+
 ## 1. Where things stand
 
 | Item | Value |

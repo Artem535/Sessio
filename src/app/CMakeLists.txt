@@ -87,6 +87,6 @@ target_include_directories(${TARGET_NAME} PRIVATE
 )
 
 if(SESSIO_TRANSCRIPTION_ENABLED)
-  target_link_libraries(${TARGET_NAME} PUBLIC ${PROJECT_NAME}_call_transcription)
+  target_link_libraries(${TARGET_NAME} PUBLIC ${PROJECT_NAME}_call_transcription ${PROJECT_NAME}_transcription_ui)
   target_compile_definitions(${TARGET_NAME} PUBLIC SESSIO_CALL_TRANSCRIPTION)
 endif()

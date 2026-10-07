@@ -1,4 +1,8 @@
 #include "settings_dialog.h"
+#ifdef SESSIO_CALL_TRANSCRIPTION
+#include "transcription_settings_panel.h"
+#include "engine_factory.h"
+#endif
 #include "app_role_switcher.h"
 #include "role_switch_prompt.h"
 
@@ -199,6 +203,7 @@ SettingsDialog::SettingsDialog(std::shared_ptr<pcm::database::Database> db,
   mAppLockService = std::make_unique<pcm::AppLockService>();
   setupUi();
   setupLiveKitSection();
+  setupTranscriptionSection();
   loadSettings();
   connectSignals();
 
@@ -725,6 +730,48 @@ void SettingsDialog::setupLiveKitSection() {
   liveKitPageLayout->addStretch();
 
   mSettingsStack->addWidget(makeScrollPage(liveKitPage, mSettingsStack));
+}
+
+void SettingsDialog::setTranscriptionActiveProvider(std::function<bool()> provider) {
+  mTranscriptionActive = std::move(provider);
+#ifdef SESSIO_CALL_TRANSCRIPTION
+  if (auto *panel = qobject_cast<TranscriptionSettingsPanel *>(mTranscriptionPanel))
+    panel->setDeleteAllAllowed(!mTranscriptionActive || !mTranscriptionActive(),
+                              tr("Stop transcription before deleting its data."));
+#endif
+}
+void SettingsDialog::setupTranscriptionSection() {
+#ifdef SESSIO_CALL_TRANSCRIPTION
+  auto *panel = new TranscriptionSettingsPanel(mSettingsStack);
+  mTranscriptionPanel = panel;
+  panel->setEnabledState(pcm::app_settings::transcriptionEnabled());
+  panel->setModelInfo(QStringLiteral("gigaam-v3-rnnt"),
+      pcm::calltranscription::transcriptionModelsAvailable(
+          QCoreApplication::applicationDirPath().toStdString(),
+          qEnvironmentVariable("SESSIO_MODELS_DIR").toStdString()));
+  panel->setTranscriptCount(mDb ? static_cast<int>(mDb->count_transcripts()) : 0);
+  mSettingsSections->addItem(tr("Transcription"), {}, {}, QStringLiteral("transcription"));
+  mSettingsStack->addWidget(makeScrollPage(panel, mSettingsStack));
+  connect(panel, &TranscriptionSettingsPanel::enabledToggled, this,
+          &pcm::app_settings::setTranscriptionEnabled);
+  connect(panel, &TranscriptionSettingsPanel::deleteAllRequested, this, [this, panel] {
+    if (!mDb) return;
+    if (mTranscriptionActive && mTranscriptionActive()) return;
+    if (QMessageBox::question(this, tr("Delete all transcripts"),
+        tr("Delete every transcript and its phrases? This cannot be undone."),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes) return;
+    if (mTranscriptionActive && mTranscriptionActive()) return;
+    try {
+      if (!mDb->delete_all_transcripts()) {
+        QMessageBox::warning(this, tr("Transcription"), tr("Unable to delete transcripts."));
+        return;
+      }
+      panel->setTranscriptCount(static_cast<int>(mDb->count_transcripts()));
+    } catch (...) {
+      QMessageBox::warning(this, tr("Transcription"), tr("Unable to delete transcripts."));
+    }
+  });
+#endif
 }
 
 void SettingsDialog::loadSettings() const {

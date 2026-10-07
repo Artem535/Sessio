@@ -71,8 +71,12 @@ public:
   // called); a no-op otherwise. Called by CallsPage once it knows whether
   // the current call is linked to a real client/event.
   void setSidePanelExpandedByDefault(bool expanded);
+  void setTranscribeButtonVisible(bool visible);
+  void setTranscribeButtonState(bool active, const QString &tooltip);
+  void openSidePanel();
 
 signals:
+  void transcribeRequested();
   // The call screen entered/left fullscreen: whoever hosts this page hides its surrounding
   // chrome (navigation, headers) so only the participants and the control bar remain.
   void fullscreenChanged(bool fullscreen);
@@ -154,6 +158,9 @@ private:
   QToolButton *mCameraToggleButton{nullptr};
   QToolButton *mFullscreenToggleButton{nullptr};
   QToolButton *mDevicesButton{nullptr};
+  QToolButton *mTranscribeButton{nullptr};
+  bool mTranscribing{false};
+  QString mTranscribeTooltip;
   // Owned by whichever showDevicesPopover() call last ran; the popover menu
   // deletes itself (Qt::WA_DeleteOnClose) on close, at which point these
   // dangle deliberately until the next click rebuilds them.

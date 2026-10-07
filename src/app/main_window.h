@@ -47,7 +47,7 @@ public:
   /**
    * @brief Enum to identify the available pages in the application.
    */
-  enum class Pages { clientInfo, eventInfo, analytics, clientCard, clientNotes, calls };
+  enum class Pages { clientInfo, eventInfo, analytics, clientCard, clientNotes, calls, transcript };
 
   /**
    * @brief Constructor for the MainWindow class.
@@ -88,6 +88,12 @@ public:
                     pcm::tokenclient::TokenBackendClient *tokenClient,
                     std::function<QString()> bearerCredentialProvider);
   void setDatabase(std::shared_ptr<pcm::database::Database> db);
+  void registerTranscriptPage(QWidget *page);
+  void openTranscriptPage();
+  void returnToEvent(int64_t eventId, qint64 dayMs);
+  void setTranscriptionActiveProvider(std::function<bool()> provider) {
+    mTranscriptionActive = std::move(provider);
+  }
   // Not owned; handed to the Settings dialog for "Switch to client mode".
   void setRoleSwitcher(const pcm::AppRoleSwitcher *switcher) { mRoleSwitcher = switcher; }
 
@@ -141,6 +147,7 @@ signals:
   void settingsSaved();
 
 private:
+  std::function<bool()> mTranscriptionActive;
   // Hides (or restores) everything around the page content: navigation, utility buttons,
   // title and page header, so a fullscreen call shows only the call screen.
   void setCallFullscreen(bool fullscreen);

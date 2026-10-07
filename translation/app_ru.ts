@@ -215,6 +215,21 @@
         <source>Notes</source>
         <translation>Заметки</translation>
     </message>
+    <message>
+        <source>Transcribe</source>
+        <translation>Транскрибировать</translation>
+    </message>
+</context>
+<context>
+    <name>CallSidePanel</name>
+    <message>
+        <source>Notes</source>
+        <translation>Заметки</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Транскрипция</translation>
+    </message>
 </context>
 <context>
     <name>ClientChartsWidget</name>
@@ -836,6 +851,10 @@
         <translation>Детали</translation>
     </message>
     <message>
+        <source>Transcript</source>
+        <translation>Транскрипция</translation>
+    </message>
+    <message>
         <source>Page</source>
         <translation>Страница</translation>
     </message>
@@ -1075,6 +1094,10 @@
     <message>
         <source>Back to day</source>
         <translation>К дню</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Транскрипция</translation>
     </message>
     <message>
         <source>Date</source>
@@ -2238,6 +2261,26 @@ See you!</source>
         <translation>Имя в звонках</translation>
     </message>
     <message>
+        <source>Stop transcription before deleting its data.</source>
+        <translation>Остановите транскрипцию перед удалением её данных.</translation>
+    </message>
+    <message>
+        <source>Transcription</source>
+        <translation>Транскрипция</translation>
+    </message>
+    <message>
+        <source>Delete all transcripts</source>
+        <translation>Удалить все транскрипции</translation>
+    </message>
+    <message>
+        <source>Delete every transcript and its phrases? This cannot be undone.</source>
+        <translation>Удалить все транскрипции и их реплики? Это действие нельзя отменить.</translation>
+    </message>
+    <message>
+        <source>Unable to delete transcripts.</source>
+        <translation>Не удалось удалить транскрипции.</translation>
+    </message>
+    <message>
         <source>Backup Encryption</source>
         <translation>Шифрование резервных копий</translation>
     </message>
@@ -2403,6 +2446,273 @@ See you!</source>
     </message>
 </context>
 <context>
+    <name>TranscriptPage</name>
+    <message>
+        <source>Back to event</source>
+        <translation>Вернуться к событию</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Транскрипция</translation>
+    </message>
+    <message>
+        <source>Mark reviewed</source>
+        <translation>Отметить как проверенную</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Удалить транскрипцию</translation>
+    </message>
+    <message>
+        <source>Delete this transcript and all its phrases?</source>
+        <translation>Удалить эту транскрипцию и все её реплики?</translation>
+    </message>
+    <message>
+        <source>Could not update the transcript. Please try again.</source>
+        <translation>Не удалось обновить транскрипцию. Попробуйте ещё раз.</translation>
+    </message>
+    <message>
+        <source>This transcript is still being recorded. Editing is unavailable.</source>
+        <translation>Эта транскрипция ещё записывается. Редактирование недоступно.</translation>
+    </message>
+    <message>
+        <source>Save or cancel the current edit first.</source>
+        <translation>Сначала сохраните или отмените текущую правку.</translation>
+    </message>
+    <message>
+        <source>Client unavailable</source>
+        <translation>Клиент недоступен</translation>
+    </message>
+    <message>
+        <source>Client: %1</source>
+        <translation>Клиент: %1</translation>
+    </message>
+    <message>
+        <source>No transcripts for this event.</source>
+        <translation>У этого события нет транскрипций.</translation>
+    </message>
+    <message>
+        <source>Transcript unavailable.</source>
+        <translation>Транскрипция недоступна.</translation>
+    </message>
+    <message>
+        <source>Recording</source>
+        <translation>Записывается</translation>
+    </message>
+    <message>
+        <source>Reviewed</source>
+        <translation>Проверено</translation>
+    </message>
+    <message>
+        <source>Draft</source>
+        <translation>Черновик</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n phrases</source>
+        <translation>
+            <numerusform>%n реплика</numerusform>
+            <numerusform>%n реплики</numerusform>
+            <numerusform>%n реплик</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source> · Model: %1</source>
+        <translation> · Модель: %1</translation>
+    </message>
+    <message>
+        <source>Practitioner</source>
+        <translation>Специалист</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+    <message>
+        <source>Edited</source>
+        <translation>Изменено</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Редактировать</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Удалить</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Сохранить</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <source>Phrase text cannot be empty.</source>
+        <translation>Текст реплики не может быть пустым.</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptPanel</name>
+    <message>
+        <source>Transcript</source>
+        <translation>Транскрипция</translation>
+    </message>
+    <message>
+        <source>Local</source>
+        <translation>Локально</translation>
+    </message>
+    <message>
+        <source>Transcription is falling behind</source>
+        <translation>Распознавание задерживается</translation>
+    </message>
+    <message>
+        <source>Listening…</source>
+        <translation>Слушаю…</translation>
+    </message>
+    <message>
+        <source>Audio is not stored</source>
+        <translation>Аудио не сохраняется</translation>
+    </message>
+    <message>
+        <source>Start</source>
+        <translation>Начать</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Остановить</translation>
+    </message>
+    <message>
+        <source>Revoke consent</source>
+        <translation>Отозвать согласие</translation>
+    </message>
+    <message>
+        <source>Transcription is off</source>
+        <translation>Транскрипция выключена</translation>
+    </message>
+    <message>
+        <source>Loading speech model…</source>
+        <translation>Загрузка модели распознавания речи…</translation>
+    </message>
+    <message>
+        <source>Transcription running</source>
+        <translation>Транскрипция выполняется</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Завершение…</translation>
+    </message>
+    <message>
+        <source>Transcript saved as a draft</source>
+        <translation>Транскрипция сохранена как черновик</translation>
+    </message>
+    <message>
+        <source>Transcription stopped</source>
+        <translation>Транскрипция остановлена</translation>
+    </message>
+    <message>
+        <source>You</source>
+        <translation>Вы</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptionConsentDialog</name>
+    <message>
+        <source>Transcribe this session</source>
+        <translation>Транскрибировать эту сессию</translation>
+    </message>
+    <message>
+        <source>The session is converted to text on this computer.</source>
+        <translation>Речь в сессии преобразуется в текст на этом компьютере.</translation>
+    </message>
+    <message>
+        <source>Audio is not stored and is not sent anywhere.</source>
+        <translation>Аудио не сохраняется и никуда не отправляется.</translation>
+    </message>
+    <message>
+        <source>The client can withdraw consent at any moment, and transcription stops immediately.</source>
+        <translation>Клиент может отозвать согласие в любой момент. Транскрипция немедленно остановится.</translation>
+    </message>
+    <message>
+        <source>The text is saved as a draft and can be edited and deleted.</source>
+        <translation>Текст сохраняется как черновик. Его можно редактировать и удалить.</translation>
+    </message>
+    <message>
+        <source>The client has given consent to transcribing this session</source>
+        <translation>Клиент дал согласие на транскрипцию этой сессии</translation>
+    </message>
+    <message>
+        <source>Start transcription</source>
+        <translation>Начать транскрипцию</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptionFailure</name>
+    <message>
+        <source>The transcript could not be saved. Please try again.</source>
+        <translation>Не удалось сохранить транскрипцию. Попробуйте ещё раз.</translation>
+    </message>
+    <message>
+        <source>The transcription models are unavailable. Please check the model installation.</source>
+        <translation>Модели транскрипции недоступны. Проверьте установку моделей.</translation>
+    </message>
+    <message>
+        <source>The voice activity detector could not be started. Please check the model installation.</source>
+        <translation>Не удалось запустить детектор речи. Проверьте установку модели.</translation>
+    </message>
+    <message>
+        <source>The speech recognition model could not be loaded. Please check the model installation.</source>
+        <translation>Не удалось загрузить модель распознавания речи. Проверьте установку модели.</translation>
+    </message>
+    <message>
+        <source>Transcription could not be completed. Please try again.</source>
+        <translation>Не удалось завершить транскрипцию. Попробуйте ещё раз.</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptionSettingsPanel</name>
+    <message>
+        <source>Enable call transcription</source>
+        <translation>Включить транскрипцию звонков</translation>
+    </message>
+    <message>
+        <source>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</source>
+        <translation>Транскрипция выполняется на этом компьютере. Аудио не сохраняется. Текст хранится в локальной базе вместе с другими данными и включается в резервные копии.</translation>
+    </message>
+    <message>
+        <source>Delete all transcripts…</source>
+        <translation>Удалить все транскрипции…</translation>
+    </message>
+    <message>
+        <source>Model: %1 — %2</source>
+        <translation>Модель: %1 — %2</translation>
+    </message>
+    <message>
+        <source>installed</source>
+        <translation>установлена</translation>
+    </message>
+    <message>
+        <source>not installed</source>
+        <translation>не установлена</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n transcripts stored</source>
+        <translation>
+            <numerusform>Сохранена %n транскрипция</numerusform>
+            <numerusform>Сохранены %n транскрипции</numerusform>
+            <numerusform>Сохранено %n транскрипций</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>pcm::AppLockDialog</name>
     <message>
         <source>Unlock Sessio</source>
@@ -2489,6 +2799,22 @@ Your previous data was kept.</source>
         <source>Quit</source>
         <translation>Выйти</translation>
     </message>
+    <message>
+        <source>Consent withdrawn</source>
+        <translation>Согласие отозвано</translation>
+    </message>
+    <message>
+        <source>Transcription has stopped. What should happen to the recorded text?</source>
+        <translation>Транскрипция остановлена. Что сделать с записанным текстом?</translation>
+    </message>
+    <message>
+        <source>Delete what was recorded</source>
+        <translation>Удалить записанный текст</translation>
+    </message>
+    <message>
+        <source>Keep as draft</source>
+        <translation>Оставить как черновик</translation>
+    </message>
 </context>
 <context>
     <name>pcm::eventpage::SeriesTimezoneDialog</name>
@@ -2531,6 +2857,53 @@ Your previous data was kept.</source>
     <message>
         <source>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</source>
         <translation>Некоторые встречи сместятся на другие даты или время. Выберите другой часовой пояс или отмените и оставьте серию как есть.</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::transcriptionui::CallTranscriptionController</name>
+    <message>
+        <source>Transcription is turned off in Settings</source>
+        <translation>Транскрипция выключена в настройках</translation>
+    </message>
+    <message>
+        <source>Speech models are not installed</source>
+        <translation>Модели распознавания речи не установлены</translation>
+    </message>
+    <message>
+        <source>Open the call from a calendar event to transcribe it</source>
+        <translation>Чтобы транскрибировать звонок, откройте его из события в календаре</translation>
+    </message>
+    <message>
+        <source>Wait for the current transcription to finish</source>
+        <translation>Дождитесь завершения текущей транскрипции</translation>
+    </message>
+    <message>
+        <source>Transcribe call</source>
+        <translation>Транскрибировать звонок</translation>
+    </message>
+    <message>
+        <source>Unable to open the calendar event for transcription</source>
+        <translation>Не удалось открыть событие календаря для транскрипции</translation>
+    </message>
+    <message>
+        <source>Some participant audio could not be transcribed</source>
+        <translation>Не удалось распознать часть речи участника</translation>
+    </message>
+    <message>
+        <source>Unable to delete the transcript</source>
+        <translation>Не удалось удалить транскрипцию</translation>
+    </message>
+    <message>
+        <source>Unable to save the transcript</source>
+        <translation>Не удалось сохранить транскрипцию</translation>
+    </message>
+    <message>
+        <source>Unable to start transcription</source>
+        <translation>Не удалось начать транскрипцию</translation>
+    </message>
+    <message>
+        <source>Transcription running</source>
+        <translation>Транскрипция выполняется</translation>
     </message>
 </context>
 <context>

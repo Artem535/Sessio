@@ -75,6 +75,51 @@ TEST_F(CalendarLayoutTest, RealSwitchChangesVisibleCalendarWithoutReloadingDay) 
   EXPECT_TRUE(day->isVisible());
   EXPECT_FALSE(month->isVisible());
 }
+TEST_F(CalendarLayoutTest, TranscriptButtonHiddenWhenCountIsZero) {
+  model->addEvent(appointment(QDate::currentDate()));
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.setTranscriptCountProvider([](int64_t) { return 0; });
+  page.findChild<MonthCalendarWidget *>()->eventSelected(model->events().first());
+  auto *details = page.findChild<QEventDetailsWidget *>("calendarInspector");
+  ASSERT_NE(details, nullptr);
+  auto *button = details->findChild<QPushButton *>("openTranscript");
+  ASSERT_NE(button, nullptr);
+  EXPECT_FALSE(button->isVisibleTo(details));
+}
+TEST_F(CalendarLayoutTest, TranscriptButtonShownAndRelaysEventId) {
+  const auto id = model->addEvent(appointment(QDate::currentDate()));
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  page.setTranscriptCountProvider([id](int64_t eventId) { return eventId == id ? 2 : 0; });
+  page.findChild<MonthCalendarWidget *>()->eventSelected(model->events().first());
+  auto *details = page.findChild<QEventDetailsWidget *>("calendarInspector");
+  ASSERT_NE(details, nullptr);
+  auto *button = details->findChild<QPushButton *>("openTranscript");
+  ASSERT_NE(button, nullptr);
+  EXPECT_TRUE(button->isVisibleTo(details));
+  QSignalSpy requested(&page, &QEventInfoPage::openTranscriptRequested);
+  button->click();
+  ASSERT_EQ(requested.count(), 1);
+  EXPECT_EQ(requested.first().first().toLongLong(), id);
+}
+TEST_F(CalendarLayoutTest, ReloadSelectedDayReloadsFromModelAndRefreshesTranscriptCount) {
+  const auto id = model->addEvent(appointment(QDate::currentDate()));
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  int count = 1;
+  page.setTranscriptCountProvider([&](int64_t) { return count; });
+  page.findChild<MonthCalendarWidget *>()->eventSelected(model->events().first());
+  QSignalSpy loaded(model.get(), &QTimelineModel::eventsLoaded);
+  count = 0;
+  auto event = model->events().first();
+  event.name = "Changed directly in database";
+  db->update_event(event);
+  page.reloadSelectedDay();
+  EXPECT_GE(loaded.count(), 1);
+  auto *details = page.findChild<QEventDetailsWidget *>("calendarInspector");
+  ASSERT_NE(details, nullptr);
+  EXPECT_EQ(details->currentEvent()->getId(), id);
+  EXPECT_EQ(details->currentEvent()->getTitle(), "Changed directly in database");
+  EXPECT_FALSE(details->findChild<QPushButton *>("openTranscript")->isVisibleTo(details));
+}
 TEST_F(CalendarLayoutTest, SwitchKeepsItsNaturalWidthNextToItsLabels) {
   QEventInfoPage page(model.get(), nullptr, nullptr);
   page.resize(1500, 900);

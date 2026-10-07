@@ -27,6 +27,7 @@
 #include "main_window.h"
 #ifdef SESSIO_CALL_TRANSCRIPTION
 #include "call_event_resolver.h"
+#include "call_transcription_controller.h"
 #endif
 #include "qclient_model.h"
 #include "qtimeline_model.h"
@@ -122,6 +123,10 @@ private:
   // Specialist flow only.
   QList<UpcomingMeeting> mUpcomingMeetings;
   QPointer<ClientNotesPage> mCallNotesPanel;
+#ifdef SESSIO_CALL_TRANSCRIPTION
+  QPointer<pcm::transcriptionui::CallTranscriptionController> mCallTranscription;
+  std::optional<int64_t> mCurrentCallEventId;
+#endif
 
   std::unique_ptr<MainWindow> mMainWindow;
   std::shared_ptr<database::Database> mDb;

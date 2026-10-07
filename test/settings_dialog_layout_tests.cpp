@@ -153,7 +153,11 @@ TEST(SettingsDialogLayoutTest, EveryPageIsAVerticallyScrollableScrollArea) {
   SettingsDialog dialog(nullptr, credentialStore);
   auto *stack = dialog.findChild<QStackedWidget *>();
   ASSERT_NE(stack, nullptr);
+#ifdef SESSIO_CALL_TRANSCRIPTION
+  ASSERT_EQ(stack->count(), 7);
+#else
   ASSERT_EQ(stack->count(), 6);
+#endif
   for (int i = 0; i < stack->count(); ++i) {
     auto *scrollArea = qobject_cast<QScrollArea *>(stack->widget(i));
     ASSERT_NE(scrollArea, nullptr) << "page " << i << " is not a QScrollArea";

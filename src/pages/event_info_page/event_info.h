@@ -39,6 +39,7 @@ public:
   // legacy local-only behavior.
   void setSeriesCallService(pcm::meeting::SeriesCallService *service);
   void setMonthView(bool enabled);
+  void setTranscriptCountProvider(std::function<int(int64_t)> provider);
   // Day|Month switch and the "New meeting" button. MainWindow hosts them in the
   // top row; standalone they stay in a row above the page body.
   [[nodiscard]] QWidget *headerControls() const;
@@ -48,6 +49,7 @@ public:
   [[nodiscard]] bool canDeleteFutureOccurrences(int64_t seriesId) const;
 
 signals:
+  void openTranscriptRequested(int64_t eventId);
   void provideClientEventPairSave(int64_t clientId, int64_t eventId);
   void provideFillClientComboBox(QComboBox *comboBox);
   void provideClientByEventId(int64_t eventId);
@@ -61,6 +63,7 @@ signals:
   void openLiveKitMeetingRequested(QString meetingRef);
 
 public slots:
+  void reloadSelectedDay();
   void onClientResolved(int64_t clientId);
   void refreshAppearance();
   void openEventOnDay(int64_t eventId, qint64 dayMs);
@@ -135,4 +138,5 @@ private:
 
   int64_t mClientId = 0;
   QDate mSelectedDate;
+  std::function<int(int64_t)> mTranscriptCountProvider;
 };

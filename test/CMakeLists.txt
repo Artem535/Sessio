@@ -671,6 +671,14 @@ target_link_libraries(Sessio_audio_tap_tests PRIVATE GTest::gtest GTest::gtest_m
 gtest_discover_tests(Sessio_audio_tap_tests)
 
 if(SESSIO_TRANSCRIPTION_ENABLED)
+add_executable(Sessio_call_transcription_controller_tests call_transcription_controller_tests.cpp)
+target_include_directories(Sessio_call_transcription_controller_tests PRIVATE ${CMAKE_SOURCE_DIR}/test ${CMAKE_SOURCE_DIR}/test/transcription)
+target_link_libraries(Sessio_call_transcription_controller_tests PRIVATE GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui Sessio_video)
+gtest_discover_tests(Sessio_call_transcription_controller_tests)
+add_executable(Sessio_transcript_panel_tests transcript_panel_tests.cpp)
+target_link_libraries(Sessio_transcript_panel_tests PRIVATE
+    GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_transcript_panel_tests)
 # Phrase writer tests (Qt-free writer thread)
 add_executable(Sessio_phrase_writer_tests phrase_writer_tests.cpp)
 target_link_libraries(Sessio_phrase_writer_tests PRIVATE
@@ -1004,6 +1012,35 @@ target_link_libraries(Sessio_accent_color_tests PRIVATE
 gtest_discover_tests(Sessio_accent_color_tests)
 
 if(SESSIO_TRANSCRIPTION_ENABLED)
+add_executable(Sessio_transcription_consent_dialog_tests transcription_consent_dialog_tests.cpp)
+add_executable(Sessio_transcription_settings_panel_tests transcription_settings_panel_tests.cpp)
+target_link_libraries(Sessio_transcription_settings_panel_tests PRIVATE
+    GTest::gtest Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_transcription_settings_panel_tests)
+add_executable(Sessio_call_side_panel_tests call_side_panel_tests.cpp)
+target_include_directories(Sessio_call_side_panel_tests PRIVATE
+    ${qlementine_SOURCE_DIR}/lib/include)
+target_link_libraries(Sessio_call_side_panel_tests PRIVATE
+    GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_call_side_panel_tests)
+target_include_directories(Sessio_transcription_consent_dialog_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/pages/transcript_page)
+target_link_libraries(Sessio_transcription_consent_dialog_tests PRIVATE
+    GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_transcription_consent_dialog_tests)
+
+add_executable(Sessio_transcript_page_tests transcript_page_tests.cpp)
+target_link_libraries(Sessio_transcript_page_tests PRIVATE
+    GTest::gtest Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_transcript_page_tests)
+
+add_executable(Sessio_failure_text_tests failure_text_tests.cpp)
+target_include_directories(Sessio_failure_text_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/pages/transcript_page)
+target_link_libraries(Sessio_failure_text_tests PRIVATE
+    GTest::gtest GTest::gtest_main Qt6::Core Sessio_transcription_ui)
+gtest_discover_tests(Sessio_failure_text_tests)
+
 # Call event resolver tests (materialising a recurring occurrence)
 add_executable(Sessio_call_event_resolver_tests call_event_resolver_tests.cpp)
 target_link_libraries(Sessio_call_event_resolver_tests PRIVATE

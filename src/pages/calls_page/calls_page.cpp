@@ -95,7 +95,11 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
             mTokenClient->requestSpecialistToken(mBearerCredentialProvider(), meetingRef, mEntryWidget->displayName());
           });
 
-  connect(mCallPage, &CallPage::callEnded, this, [this]() { mStack->setCurrentWidget(mEntryWidget); });
+  connect(mCallPage, &CallPage::transcribeRequested, this, &CallsPage::transcribeRequested);
+  connect(mCallPage, &CallPage::callEnded, this, [this]() {
+    endCallSession();
+    mStack->setCurrentWidget(mEntryWidget);
+  });
   connect(mCallPage, &CallPage::deviceCheckCanceled, this, [this]() {
     if (!mSession) {
       return;
@@ -106,6 +110,7 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
         state != VideoSessionState::PrejoinCheck) {
       return;
     }
+    endCallSession();
     mSession.reset();
     mPendingUrl.clear();
     mPendingToken.clear();
@@ -196,6 +201,7 @@ void CallsPage::startJoin(const QString &url, const QString &token) {
   mPendingUrl = url;
   mPendingToken = token;
   auto *provider = mVideoProviderFactory();
+  endCallSession();
   mSession = std::make_unique<pcm::video::VideoSession>(provider);
   // CallPage shows the failure reason on its ended screen, but callEnded
   // switches this page straight back to the entry form (see the
@@ -217,4 +223,19 @@ void CallsPage::startJoin(const QString &url, const QString &token) {
   if (mCurrentEventId.has_value()) {
     emit eventKnownForCurrentCall(*mCurrentEventId);
   }
+  mSessionStarted = true;
+  emit callSessionStarted(mSession.get());
 }
+
+void CallsPage::endCallSession() {
+  if (mSessionStarted) {
+    mSessionStarted = false;
+    emit callSessionEnded();
+  }
+}
+
+void CallsPage::setTranscribeButtonVisible(bool visible) { mCallPage->setTranscribeButtonVisible(visible); }
+void CallsPage::setTranscribeButtonState(bool active, const QString &tooltip) {
+  mCallPage->setTranscribeButtonState(active, tooltip);
+}
+void CallsPage::openSidePanel() { mCallPage->openSidePanel(); }

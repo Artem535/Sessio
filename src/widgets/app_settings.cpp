@@ -108,6 +108,14 @@ QString defaultAutoBackupDestinationValue() {
 } // namespace
 
 namespace pcm::app_settings {
+bool transcriptionEnabled() {
+  return QSettings().value("transcription/enabled", true).toBool();
+}
+
+void setTranscriptionEnabled(bool enabled) {
+  QSettings().setValue("transcription/enabled", enabled);
+}
+
 QString callDisplayName() {
   return QSettings().value("calls/displayName").toString().trimmed().left(64);
 }
