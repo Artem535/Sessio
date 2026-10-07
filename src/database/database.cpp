@@ -366,6 +366,16 @@ bool Database::remove_event(const int64_t &id) {
     return false;
   }
 
+  for (const auto *query : {constance::kDeletePhrasesOfEventTranscriptsQuery,
+                            constance::kDeleteTranscriptsOfEventQuery}) {
+    auto transcriptResult = executePrepared(conn, query, {duckdb::Value::BIGINT(id)});
+    if (!transcriptResult || transcriptResult->HasError()) {
+      PLOG_ERROR << "Failed to delete transcripts of event (id=" << id << "): "
+                 << (transcriptResult ? transcriptResult->GetError() : "prepare failed");
+      return false;
+    }
+  }
+
   auto result =
       executePrepared(conn, constance::kDeleteEventByIdQuery, {duckdb::Value::BIGINT(id)});
   if (!result || result->HasError()) {
@@ -530,6 +540,18 @@ bool Database::delete_event_series_overrides_from(
 
   std::optional<duckdb::Connection> ownedConn;
   auto &conn = write_connection(ownedConn);
+  const auto from = db_utils::toDuckTimestamp(std::make_optional(occurrence_start_ms * 1000));
+  for (const auto *query : {constance::kDeletePhrasesOfSeriesOverrideTranscriptsQuery,
+                            constance::kDeleteTranscriptsOfSeriesOverridesQuery}) {
+    auto transcriptResult =
+        executePrepared(conn, query, {duckdb::Value::BIGINT(series_id), from});
+    if (!transcriptResult || transcriptResult->HasError()) {
+      PLOG_ERROR << "Failed to delete transcripts of series overrides: "
+                 << (transcriptResult ? transcriptResult->GetError() : "prepare failed");
+      return false;
+    }
+  }
+
   auto result = executePrepared(
       conn, constance::kDeleteEventSeriesOverridesFromQuery,
       {duckdb::Value::BIGINT(series_id),

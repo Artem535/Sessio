@@ -550,6 +550,27 @@ SET active = FALSE,
 WHERE id = $1
 )duckdb";
 
+constexpr auto kDeletePhrasesOfEventTranscriptsQuery = R"duckdb(
+DELETE FROM TranscriptPhrase
+WHERE transcript_id IN (SELECT id FROM Transcript WHERE event_id = $1)
+)duckdb";
+constexpr auto kDeleteTranscriptsOfEventQuery =
+    "DELETE FROM Transcript WHERE event_id = $1";
+
+constexpr auto kDeletePhrasesOfSeriesOverrideTranscriptsQuery = R"duckdb(
+DELETE FROM TranscriptPhrase
+WHERE transcript_id IN (
+    SELECT t.id FROM Transcript t
+    JOIN Event e ON e.id = t.event_id
+    WHERE e.series_id = $1 AND e.original_occurrence_start >= $2)
+)duckdb";
+constexpr auto kDeleteTranscriptsOfSeriesOverridesQuery = R"duckdb(
+DELETE FROM Transcript
+WHERE event_id IN (
+    SELECT id FROM Event
+    WHERE series_id = $1 AND original_occurrence_start >= $2)
+)duckdb";
+
 constexpr auto kDeleteEventSeriesOverridesFromQuery = R"duckdb(
 DELETE FROM Event
 WHERE series_id = $1

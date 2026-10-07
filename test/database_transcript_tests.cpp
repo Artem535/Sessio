@@ -281,3 +281,75 @@ TEST_F(TranscriptDbTest, DeleteTranscriptRemovesItsPhrases) {
   EXPECT_TRUE(db_->get_transcript_phrases(keep).empty());
   EXPECT_EQ(db_->get_transcript(keep), nullptr);
 }
+
+TEST_F(TranscriptDbTest, RemoveEventDeletesItsTranscriptsAndPhrases) {
+  const auto event_id = makeEvent();
+  const auto other_id = makeEvent(1750000000000);
+  const auto t = db_->add_transcript(event_id, "live_local_v1");
+  const auto other = db_->add_transcript(other_id, "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "gone")), 0);
+  ASSERT_GT(db_->add_transcript_phrase(phrase(other, "participant", "C", 0, 1000, "stays")), 0);
+
+  ASSERT_TRUE(db_->remove_event(event_id));
+  EXPECT_EQ(db_->get_event(event_id), nullptr);
+  EXPECT_EQ(db_->get_transcript(t), nullptr);
+  EXPECT_TRUE(db_->get_transcript_phrases(t).empty());
+  EXPECT_NE(db_->get_transcript(other), nullptr);
+  EXPECT_EQ(db_->get_transcript_phrases(other).size(), 1u);
+}
+
+TEST_F(TranscriptDbTest, RemoveEventLeavesNoOrphanTranscriptsOfAnyStatus) {
+  const auto event_id = makeEvent();
+  const auto recording = db_->add_transcript(event_id, "live_local_v1");
+  const auto draft = db_->add_transcript(event_id, "live_local_v1");
+  const auto reviewed = db_->add_transcript(event_id, "live_local_v1");
+  ASSERT_TRUE(db_->set_transcript_status(draft, "draft"));
+  ASSERT_TRUE(db_->set_transcript_status(reviewed, "reviewed"));
+  for (const auto id : {recording, draft, reviewed}) {
+    ASSERT_GT(db_->add_transcript_phrase(phrase(id, "participant", "C", 0, 1000, "x")), 0);
+  }
+
+  ASSERT_TRUE(db_->remove_event(event_id));
+  EXPECT_TRUE(db_->get_transcripts_for_event(event_id).empty());
+  for (const auto id : {recording, draft, reviewed}) {
+    EXPECT_EQ(db_->get_transcript(id), nullptr);
+    EXPECT_TRUE(db_->get_transcript_phrases(id).empty());
+  }
+}
+
+TEST_F(TranscriptDbTest, DeletingSeriesOverridesDeletesTheirTranscripts) {
+  DuckEventSeries series;
+  series.name = std::string{"Weekly"};
+  series.start_date = 1730000000000;
+  series.end_date = 1730003600000;
+  series.duration = 3600;
+  series.recurrence_rule = "FREQ=WEEKLY;INTERVAL=1";
+  const auto series_id = db_->add_event_series(series);
+  ASSERT_GT(series_id, 0);
+
+  DuckEvent override_event;
+  override_event.name = std::string{"Moved occurrence"};
+  override_event.start_date = 1730100000000;
+  override_event.end_date = 1730103600000;
+  override_event.duration = 3600;
+  override_event.event_stat_id = 1;
+  override_event.payment_stat_id = 1;
+  override_event.series_id = series_id;
+  override_event.original_occurrence_start = 1730100000000;
+  const auto event_id = db_->add_event(override_event);
+  ASSERT_GT(event_id, 0);
+
+  const auto other_id = makeEvent(1750000000000);
+  const auto other = db_->add_transcript(other_id, "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(other, "participant", "C", 0, 1000, "stays")), 0);
+
+  const auto t = db_->add_transcript(event_id, "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "C", 0, 1000, "x")), 0);
+
+  ASSERT_TRUE(db_->delete_event_series_overrides_from(series_id, 1730000000001));
+  EXPECT_EQ(db_->get_event(event_id), nullptr);
+  EXPECT_EQ(db_->get_transcript(t), nullptr);
+  EXPECT_TRUE(db_->get_transcript_phrases(t).empty());
+  EXPECT_NE(db_->get_transcript(other), nullptr);
+  EXPECT_EQ(db_->get_transcript_phrases(other).size(), 1u);
+}
