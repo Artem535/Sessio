@@ -1,5 +1,7 @@
 #include "phrase_writer.h"
 
+#include <algorithm>
+#include <cassert>
 #include <utility>
 
 namespace pcm::calltranscription {
@@ -14,16 +16,20 @@ PhraseWriter::~PhraseWriter() { stop(std::chrono::milliseconds(0)); }
 void PhraseWriter::submit(DuckTranscriptPhrase phrase) {
   {
     std::lock_guard lock(mutex_);
-    if (stopping_) {
+    if (stopping_ || queue_.size() >= kMaxPending) {
       ++stats_.dropped;
       return;
     }
     queue_.push_back(std::move(phrase));
   }
-  cv_.notify_one();
+  cv_.notify_all();  // worker and a draining stop() share cv_
 }
 
 void PhraseWriter::stop(std::chrono::milliseconds drain_timeout) {
+  assert(std::this_thread::get_id() != thread_.get_id() &&
+         "PhraseWriter::stop() must not be called from Store/Written");
+  drain_timeout = std::clamp(drain_timeout, std::chrono::milliseconds(0),
+                             std::chrono::milliseconds(std::chrono::hours(1)));
   std::lock_guard stop_lock(stop_mutex_);
   {
     std::unique_lock lock(mutex_);
@@ -77,7 +83,8 @@ void PhraseWriter::run() {
     {
       std::lock_guard lock(mutex_);
       if (ok) ++stats_.written;
-      if (!ok || callback_failed) ++stats_.failed;
+      if (!ok) ++stats_.failed;
+      if (callback_failed) ++stats_.callback_failed;
       if (queue_.empty()) cv_.notify_all();  // wake a draining stop()
     }
   }

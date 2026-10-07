@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <future>
 #include <mutex>
 #include <set>
 #include <stdexcept>
@@ -46,9 +47,9 @@ struct Latch {
     }
     cv.notify_all();
   }
-  void wait() {
+  bool wait() {
     std::unique_lock lock(m);
-    cv.wait_for(lock, kWait, [&] { return open; });
+    return cv.wait_for(lock, kWait, [&] { return open; });
   }
 };
 
@@ -60,6 +61,17 @@ struct Recorder {
   std::set<std::thread::id> threads;
   int64_t next_id = 100;
 };
+
+// Polls (bounded) until `pred` holds.
+template <class Pred>
+bool pollUntil(Pred pred) {
+  const auto deadline = std::chrono::steady_clock::now() + kWait;
+  while (std::chrono::steady_clock::now() < deadline) {
+    if (pred()) return true;
+    std::this_thread::sleep_for(1ms);
+  }
+  return pred();
+}
 
 }  // namespace
 
@@ -88,7 +100,6 @@ TEST(PhraseWriter, StoreRunsOffTheCallingThread) {
       [&](const DuckTranscriptPhrase &) {
         std::lock_guard lock(r.m);
         r.threads.insert(std::this_thread::get_id());
-        r.cv.notify_all();
         return int64_t{1};
       },
       nullptr);
@@ -128,8 +139,9 @@ TEST(PhraseWriter, ThrowingStoreAndThrowingCallbackAreContained) {
   w.stop(kWait);
   const auto s = w.stats();
   EXPECT_EQ(calls.load(), 4);
-  EXPECT_EQ(s.failed, 2u);   // one throwing store, one throwing callback
-  EXPECT_EQ(s.written, 3u);  // the throwing-callback row was already stored
+  EXPECT_EQ(s.failed, 1u);           // the throwing store only
+  EXPECT_EQ(s.callback_failed, 1u);  // the throwing callback only
+  EXPECT_EQ(s.written, 3u);          // the throwing-callback row was already stored
   EXPECT_EQ(callbacks.load(), 3);
 }
 
@@ -150,23 +162,129 @@ TEST(PhraseWriter, StopWithZeroTimeoutDropsPendingAndCountsThem) {
       [&](const DuckTranscriptPhrase &) {
         ++stored;
         entered.release();
-        release.wait();
+        EXPECT_TRUE(release.wait());
         return int64_t{1};
       },
       nullptr);
   for (int i = 0; i < 5; ++i) w.submit(phrase(i));
-  entered.wait();  // first item is in Store; four remain queued
+  ASSERT_TRUE(entered.wait());  // first item is in Store; four remain queued
 
-  std::thread stopper([&] { w.stop(0ms); });
+  std::atomic<bool> stopReturned{false};
+  std::thread stopper([&] {
+    w.stop(0ms);
+    stopReturned = true;
+  });
+  ASSERT_TRUE(pollUntil([&] { return w.stats().dropped == 4; }));
   // stop() must not return before the in-flight Store finishes (join).
-  std::this_thread::sleep_for(50ms);
+  EXPECT_FALSE(stopReturned.load());
   release.release();
   stopper.join();
+  EXPECT_TRUE(stopReturned.load());
 
   EXPECT_EQ(stored.load(), 1);
   const auto s = w.stats();
   EXPECT_EQ(s.written, 1u);
   EXPECT_EQ(s.dropped, 4u);
+}
+
+TEST(PhraseWriter, NonZeroTimeoutExpiringWithBlockedStoreDropsTheRest) {
+  Latch blocked, release;
+  std::atomic<int> calls{0};
+  PhraseWriter w(
+      [&](const DuckTranscriptPhrase &) {
+        if (calls++ == 2) {
+          blocked.release();
+          EXPECT_TRUE(release.wait());
+        }
+        return int64_t{1};
+      },
+      nullptr);
+  for (int i = 0; i < 5; ++i) w.submit(phrase(i));
+  ASSERT_TRUE(blocked.wait());  // items 0,1 stored; 2 in Store; 3,4 queued
+
+  std::atomic<bool> stopReturned{false};
+  std::thread stopper([&] {
+    w.stop(100ms);
+    stopReturned = true;
+  });
+  ASSERT_TRUE(pollUntil([&] { return w.stats().dropped == 2; }));
+  EXPECT_FALSE(stopReturned.load());
+  release.release();
+  stopper.join();
+
+  const auto s = w.stats();
+  EXPECT_EQ(calls.load(), 3);
+  EXPECT_EQ(s.written, 3u);
+  EXPECT_EQ(s.dropped, 2u);
+}
+
+TEST(PhraseWriter, QueueIsCappedAndOverflowIsCountedAsDropped) {
+  Latch entered, release;
+  PhraseWriter w(
+      [&](const DuckTranscriptPhrase &) {
+        entered.release();
+        EXPECT_TRUE(release.wait());
+        return int64_t{1};
+      },
+      nullptr);
+  w.submit(phrase(0));
+  ASSERT_TRUE(entered.wait());
+  for (int i = 1; i <= 10010; ++i) w.submit(phrase(i));
+  EXPECT_GE(w.stats().dropped, 10u);
+  release.release();
+  w.stop(kWait);
+  const auto s = w.stats();
+  EXPECT_EQ(s.written + s.dropped, 10011u);
+  EXPECT_EQ(s.written, 1u + PhraseWriter::kMaxPending);
+}
+
+TEST(PhraseWriter, ConcurrentStopFromTwoThreadsIsSafe) {
+  std::atomic<int> stored{0};
+  PhraseWriter w([&](const DuckTranscriptPhrase &) { return int64_t{++stored}; }, nullptr);
+  for (int i = 0; i < 200; ++i) w.submit(phrase(i));
+  std::atomic<bool> go{false};
+  auto stopFn = [&] {
+    while (!go) std::this_thread::yield();
+    w.stop(kWait);
+  };
+  std::thread a(stopFn), b(stopFn);
+  go = true;
+  a.join();
+  b.join();
+  const auto s = w.stats();
+  EXPECT_EQ(s.written + s.dropped, 200u);
+  EXPECT_EQ(s.written, 200u);
+}
+
+TEST(PhraseWriter, DestructorWithPendingQueueDoesNotHang) {
+  auto fut = std::async(std::launch::async, [] {
+    PhraseWriter w(
+        [](const DuckTranscriptPhrase &) {
+          std::this_thread::sleep_for(2ms);
+          return int64_t{1};
+        },
+        nullptr);
+    for (int i = 0; i < 500; ++i) w.submit(phrase(i));
+  });
+  EXPECT_EQ(fut.wait_for(kWait), std::future_status::ready);
+}
+
+TEST(PhraseWriter, StopZeroOnEmptyQueueReturnsAndDropsNothing) {
+  PhraseWriter w([](const DuckTranscriptPhrase &) { return int64_t{1}; }, nullptr);
+  w.stop(0ms);
+  EXPECT_EQ(w.stats().dropped, 0u);
+  EXPECT_EQ(w.stats().written, 0u);
+}
+
+TEST(PhraseWriter, WrittenIsNotInvokedWhenStoreFails) {
+  std::atomic<int> callbacks{0};
+  PhraseWriter w([](const DuckTranscriptPhrase &) { return int64_t{0}; },
+                 [&](const DuckTranscriptPhrase &) { ++callbacks; });
+  for (int i = 0; i < 3; ++i) w.submit(phrase(i));
+  w.stop(kWait);
+  EXPECT_EQ(callbacks.load(), 0);
+  EXPECT_EQ(w.stats().failed, 3u);
+  EXPECT_EQ(w.stats().written, 0u);
 }
 
 TEST(PhraseWriter, SubmitAfterStopIsDropped) {
@@ -187,6 +305,7 @@ TEST(PhraseWriter, StopIsIdempotent) {
   w.stop(kWait);
   w.stop(0ms);
   EXPECT_EQ(w.stats().written, 1u);
+  EXPECT_EQ(w.stats().dropped, 0u);
 }
 
 TEST(PhraseWriter, WrittenCallbackReceivesAssignedId) {

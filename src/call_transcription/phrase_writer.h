@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -14,7 +15,8 @@ namespace pcm::calltranscription {
 
 struct WriterStats {
   uint64_t written = 0;
-  uint64_t failed = 0;
+  uint64_t failed = 0;           // Store returned <= 0 or threw
+  uint64_t callback_failed = 0;  // Written threw (the row still counts as written)
   uint64_t dropped = 0;
 };
 
@@ -33,10 +35,17 @@ class PhraseWriter {
   PhraseWriter(const PhraseWriter &) = delete;
   PhraseWriter &operator=(const PhraseWriter &) = delete;
 
-  // Any thread, non-blocking. After stop() the phrase is counted as dropped.
+  // At most this many phrases may be pending; further submits are counted as
+  // dropped instead of growing memory without bound.
+  static constexpr size_t kMaxPending = 10000;
+
+  // Any thread, non-blocking. After stop(), or when kMaxPending phrases are
+  // already queued, the phrase is counted as dropped.
   void submit(DuckTranscriptPhrase phrase);
   // Idempotent. Waits up to drain_timeout for the queue to empty, drops the
   // rest and joins the thread; Store is never invoked after this returns.
+  // drain_timeout is clamped to one hour. Must NOT be called from the Store or
+  // Written callbacks (it would join the calling thread).
   void stop(std::chrono::milliseconds drain_timeout);
   WriterStats stats() const;
 
