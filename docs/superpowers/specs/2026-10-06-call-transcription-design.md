@@ -52,7 +52,7 @@ interface so it can be tested with a fake.
 | `ISpeechRecognizer` | `std::string transcribe(span<const float>)`; the sherpa-onnx implementation wraps one `OfflineRecognizer` | sherpa-onnx |
 | `TranscriptionEngine` | `addTrack(TrackInfo)`, `pushAudio(TrackId, span<const int16_t>, sampleRate)`, `removeTrack`, `stop`; signal `phraseReady(TranscribedPhrase)`; thread-safe | the three above |
 | `ModelLocator` | Resolve the GigaAM and Silero VAD files relative to the application directory per platform | nothing |
-| `TranscriptionSession` | GUI-thread QObject for one call: consent gate, owns the engine, installs and removes the audio taps, writes phrases through `TranscriptRepository` | engine, repository, `VideoSession` |
+| `TranscriptionSession` | GUI-thread QObject for one call: consent gate, owns the engine, installs and removes the audio taps, writes phrases through the `Database` transcript methods | engine, `Database`, `VideoSession` |
 | `TranscriptRepository` | Methods on `pcm::database::Database` (`add_transcript`, `add_transcript_phrase`, ...), following the existing convention; no separate class | database |
 
 `TrackInfo` carries a stable track id (the LiveKit participant identity), a role
@@ -219,7 +219,7 @@ GoogleTest, existing conventions (no `QApplication` harness where avoidable).
   boundaries, forced split at 20 s, flush); `TranscriptionEngine` with a fake
   recogniser (order, several tracks, add and remove while running, stop with a
   non-empty queue, delayed notice); consent state machine; `ModelLocator`.
-- Database: create, append, edit, delete, cascade from event and client delete,
+- Database: create, append, edit, delete, cascade from event delete (including series overrides),
   migration from the previous schema, restore round-trip, backup contents.
 - Privacy: log capture contains no phrase text or names; no audio file is created;
   with no active session the audio sink is unset.
@@ -242,7 +242,7 @@ Each phase ends with something testable and gets its own tasks in the plan.
    install check run on Linux in CI. Runtime behaviour on Windows and macOS is
    tested by hand.
 1. *Engine.* `src/transcription/` and its tests, including the ten-track load test.
-2. *Data.* Schema, repository, migration, backup and restore, cascade deletes.
+2. *Data.* Schema, `Database` transcript methods, migration, backup and restore, cascade deletes.
 3. *Session and consent.* `TranscriptionSession`, audio sink and taps,
    `VideoSession` integration, consent logic.
 4. *Interface.* `CallSidePanel`, `TranscriptPanel`, consent dialog, transcript page,
