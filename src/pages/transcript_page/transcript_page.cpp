@@ -1,4 +1,5 @@
 #include "transcript_page.h"
+#include "phrase_card_paint.h"
 #include <QComboBox>
 #include <QApplication>
 #include <QFrame>
@@ -44,17 +45,7 @@ protected:
     if (event->button() == Qt::LeftButton) setFocus(Qt::MouseFocusReason);
     QFrame::mousePressEvent(event);
   }
-  void paintEvent(QPaintEvent *) override {
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
-    auto background = palette().color(QPalette::Window);
-    background = background.lightness() < 128 ? background.lighter(115) : background.darker(103);
-    auto border = palette().color(mSelected ? QPalette::Highlight : QPalette::Mid);
-    if (!mSelected) border.setAlpha(100);
-    painter.setPen(QPen(border, 1));
-    painter.setBrush(background);
-    painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 8, 8);
-  }
+  void paintEvent(QPaintEvent *) override { paintPhraseCard(this, mSelected); }
 private:
   void refreshActions() {
     const auto *focus = QApplication::focusWidget();
