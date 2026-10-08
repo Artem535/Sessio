@@ -362,6 +362,8 @@ gtest_discover_tests(Sessio_device_manager_tests)
 # plan's Task 9 lifecycle-stress acceptance criterion.
 add_executable(Sessio_video_capture_adapter_smoke_test
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/frame_convert.cpp
     video_capture_adapter_smoke_test.cpp
@@ -466,6 +468,8 @@ add_executable(Sessio_livekit_video_provider_smoke_test
     ${CMAKE_SOURCE_DIR}/src/video/livekit_video_provider.cpp
     ${CMAKE_SOURCE_DIR}/src/video/livekit_video_frame_source.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/audio_capture_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/video/audio_chunker.cpp

@@ -204,12 +204,40 @@
         <translation>Exit fullscreen</translation>
     </message>
     <message>
+        <source>Share screen</source>
+        <translation>Share screen</translation>
+    </message>
+    <message>
+        <source>You are sharing your screen</source>
+        <translation>You are sharing your screen</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Stop</translation>
+    </message>
+    <message>
         <source>Switch camera, microphone, or speaker</source>
         <translation>Switch camera, microphone, or speaker</translation>
     </message>
     <message>
         <source>Leave</source>
         <translation>Leave</translation>
+    </message>
+    <message>
+        <source>Stop sharing screen</source>
+        <translation>Stop sharing screen</translation>
+    </message>
+    <message>
+        <source>Screens</source>
+        <translation>Screens</translation>
+    </message>
+    <message>
+        <source>%1 (%2×%3)</source>
+        <translation>%1 (%2×%3)</translation>
+    </message>
+    <message>
+        <source>Windows</source>
+        <translation>Windows</translation>
     </message>
     <message>
         <source>Notes</source>
@@ -3031,8 +3059,24 @@ Your previous data was kept.</translation>
         <translation>Participant</translation>
     </message>
     <message>
+        <source>Your screen</source>
+        <translation>Your screen</translation>
+    </message>
+    <message>
+        <source>%1&apos;s screen</source>
+        <translation>%1&apos;s screen</translation>
+    </message>
+    <message>
         <source>%1 (You)</source>
         <translation>%1 (You)</translation>
+    </message>
+    <message>
+        <source>You are sharing your screen</source>
+        <translation>You are sharing your screen</translation>
+    </message>
+    <message>
+        <source>Waiting for screen...</source>
+        <translation>Waiting for screen...</translation>
     </message>
     <message>
         <source>Waiting for video...</source>
@@ -3041,6 +3085,10 @@ Your previous data was kept.</translation>
     <message>
         <source>Camera off</source>
         <translation>Camera off</translation>
+    </message>
+    <message>
+        <source>Screen sharing stopped</source>
+        <translation>Screen sharing stopped</translation>
     </message>
 </context>
 </TS>

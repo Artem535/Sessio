@@ -204,12 +204,40 @@
         <translation>Выйти из полноэкранного режима</translation>
     </message>
     <message>
+        <source>Share screen</source>
+        <translation>Показать экран</translation>
+    </message>
+    <message>
+        <source>You are sharing your screen</source>
+        <translation>Вы показываете экран</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Остановить</translation>
+    </message>
+    <message>
         <source>Switch camera, microphone, or speaker</source>
         <translation>Переключить камеру, микрофон или динамик</translation>
     </message>
     <message>
         <source>Leave</source>
         <translation>Завершить</translation>
+    </message>
+    <message>
+        <source>Stop sharing screen</source>
+        <translation>Остановить показ экрана</translation>
+    </message>
+    <message>
+        <source>Screens</source>
+        <translation>Экраны</translation>
+    </message>
+    <message>
+        <source>%1 (%2×%3)</source>
+        <translation>%1 (%2×%3)</translation>
+    </message>
+    <message>
+        <source>Windows</source>
+        <translation>Окна</translation>
     </message>
     <message>
         <source>Notes</source>
@@ -3035,8 +3063,24 @@ Your previous data was kept.</source>
         <translation>Участник</translation>
     </message>
     <message>
+        <source>Your screen</source>
+        <translation>Ваш экран</translation>
+    </message>
+    <message>
+        <source>%1&apos;s screen</source>
+        <translation>Экран: %1</translation>
+    </message>
+    <message>
         <source>%1 (You)</source>
         <translation>%1 (Вы)</translation>
+    </message>
+    <message>
+        <source>You are sharing your screen</source>
+        <translation>Вы показываете экран</translation>
+    </message>
+    <message>
+        <source>Waiting for screen...</source>
+        <translation>Ожидание экрана...</translation>
     </message>
     <message>
         <source>Waiting for video...</source>
@@ -3045,6 +3089,10 @@ Your previous data was kept.</source>
     <message>
         <source>Camera off</source>
         <translation>Камера выключена</translation>
+    </message>
+    <message>
+        <source>Screen sharing stopped</source>
+        <translation>Показ экрана остановлен</translation>
     </message>
 </context>
 </TS>

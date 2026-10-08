@@ -18,6 +18,7 @@
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QToolButton>
+#include <QTest>
 #include <QTextDocument>
 #include <gtest/gtest.h>
 #ifdef SESSIO_TEST_AUDIO_DEVICE_PRIVATE
@@ -1177,4 +1178,125 @@ int main(int argc, char **argv) {
   QApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+
+TEST(CallPageTest, EveryParticipantCanShareAScreenAtTheSameTime) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateParticipantJoined({"local", "Me", "client", true, true, false});
+  provider->simulateParticipantJoined({"first", "First"});
+  provider->simulateParticipantJoined({"second", "Second"});
+  EXPECT_EQ(page.findChild<QWidget *>("participantScreenTile_first"), nullptr);
+
+  provider->simulateScreenSharing("first", true);
+  provider->simulateScreenSharing("local", true);
+  auto *firstScreen = page.findChild<QWidget *>("participantScreenTile_first");
+  ASSERT_NE(firstScreen, nullptr);
+  EXPECT_NE(page.findChild<QWidget *>("participantScreenTile_local"), nullptr);
+  // Cameras stay: sharing never replaces the camera tile.
+  EXPECT_NE(page.findChild<QWidget *>("participantTile_first"), nullptr);
+  EXPECT_NE(page.findChild<QWidget *>("participantTile_local"), nullptr);
+  EXPECT_EQ(page.findChild<QLabel *>("participantName", Qt::FindChildrenRecursively) != nullptr, true);
+
+  provider->simulateScreenSharing("first", false);
+  EXPECT_EQ(page.findChild<QWidget *>("participantScreenTile_first"), nullptr);
+  EXPECT_NE(page.findChild<QWidget *>("participantTile_first"), nullptr);
+  EXPECT_NE(page.findChild<QWidget *>("participantScreenTile_local"), nullptr);
+}
+
+TEST(CallPageTest, DepartureRemovesTheScreenTileToo) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateParticipantJoined({"first", "First"});
+  provider->simulateScreenSharing("first", true);
+  ASSERT_NE(page.findChild<QWidget *>("participantScreenTile_first"), nullptr);
+  provider->simulateParticipantLeft("first");
+  EXPECT_EQ(page.findChild<QWidget *>("participantScreenTile_first"), nullptr);
+}
+
+TEST(CallPageTest, ScreenShareButtonStartsAndStopsSharingThroughTheProvider) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  connectSession(session, provider);
+  auto *button = page.findChild<QToolButton *>("screenShareButton");
+  ASSERT_NE(button, nullptr);
+  EXPECT_FALSE(button->isChecked());
+  // Not sharing: the click opens the chooser instead of starting anything.
+  button->click();
+  EXPECT_EQ(provider->mStartScreenShareCallCount, 0);
+  if (auto *menu = page.findChild<QMenu *>("screenShareMenu")) menu->close();
+
+  provider->startScreenShare({});
+  EXPECT_TRUE(button->isChecked());
+  button->click();
+  EXPECT_EQ(provider->mStopScreenShareCallCount, 1);
+  EXPECT_FALSE(button->isChecked());
+}
+
+TEST(CallPageTest, FeaturedScreenFillsTheStageAndEverythingElseSitsInAStrip) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateParticipantJoined({"local", "Me", "client", true, true, false});
+  provider->simulateParticipantJoined({"first", "First"});
+  provider->simulateParticipantJoined({"second", "Second"});
+  provider->simulateScreenSharing("first", true);
+  provider->simulateScreenSharing("second", true);
+  resizeAndDeliverEvent(page.findChild<QWidget *>("videoStage"), QSize(1280, 720));
+  auto *firstScreen = page.findChild<QWidget *>("participantScreenTile_first");
+  auto *secondScreen = page.findChild<QWidget *>("participantScreenTile_second");
+  auto *camera = page.findChild<QWidget *>("participantTile_first");
+  ASSERT_TRUE(firstScreen && secondScreen && camera);
+  // The latest screen is featured: bigger than everything else, which shares one row below it.
+  EXPECT_GT(secondScreen->height(), 3 * firstScreen->height() / 2);
+  EXPECT_EQ(firstScreen->y(), camera->y());
+  EXPECT_GT(firstScreen->y(), secondScreen->y() + secondScreen->height() - 1);
+
+  // Clicking a strip screen brings it onto the stage.
+  QTest::mouseClick(firstScreen, Qt::LeftButton);
+  resizeAndDeliverEvent(page.findChild<QWidget *>("videoStage"), QSize(1281, 720));
+  EXPECT_GT(firstScreen->height(), secondScreen->height());
+}
+
+TEST(CallPageTest, SharingBannerFollowsLocalScreenShare) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  connectSession(session, provider);
+  auto *banner = page.findChild<QWidget *>("sharingBanner");
+  ASSERT_NE(banner, nullptr);
+  EXPECT_TRUE(banner->isHidden());
+  provider->startScreenShare({});
+  EXPECT_FALSE(banner->isHidden());
+  page.findChild<QPushButton *>("sharingBannerStop")->click();
+  EXPECT_EQ(provider->mStopScreenShareCallCount, 1);
+  EXPECT_TRUE(banner->isHidden());
+}
+
+TEST(CallPageTest, OwnScreenIsNotFeaturedOverARemoteOne) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateParticipantJoined({"local", "Me", "client", true, true, false});
+  provider->simulateParticipantJoined({"first", "First"});
+  provider->simulateScreenSharing("first", true);
+  provider->simulateScreenSharing("local", true);
+  resizeAndDeliverEvent(page.findChild<QWidget *>("videoStage"), QSize(1280, 720));
+  EXPECT_GT(page.findChild<QWidget *>("participantScreenTile_first")->height(),
+            page.findChild<QWidget *>("participantScreenTile_local")->height());
 }
