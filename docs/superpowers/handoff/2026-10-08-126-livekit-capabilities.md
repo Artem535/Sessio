@@ -1,5 +1,13 @@
 # Screen sharing #126: LiveKit capability gate
 
+**Decision 2026-10-08: superseded.** The one-owner lease is dropped. Any
+participant may share a screen at the same time, so no permission is revoked
+mid-call and the cached-grant counterexample below no longer matters: tokens
+are issued once with the default grants (camera, microphone, screen). Nothing
+in this document needs to be enforced by the server. Limiting simultaneous
+screens, if ever needed, is a UI-level soft limit. The analysis below is kept
+as the record of why the lease was abandoned.
+
 **Result: BLOCKED.** Selective source permission updates work in the current
 connection, but a cached server-issued grant JWT restores screen permission on
 a new connection after revocation. The approved self-hosted lease design cannot
