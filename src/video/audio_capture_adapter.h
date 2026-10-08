@@ -9,8 +9,19 @@
 #include <atomic>
 #include <livekit/audio_source.h>
 #include <memory>
+#include <functional>
+#include <optional>
 
 namespace pcm::video {
+
+// Backend lifetime is independent of the published LiveKit source. Keeping this
+// small boundary injectable permits deterministic device-error/lifecycle tests.
+class AudioCaptureSource {
+public:
+  virtual ~AudioCaptureSource() = default;
+  virtual QIODevice *start() = 0;
+  virtual void stop() = 0;
+};
 
 // Captures microphone audio via Qt Multimedia and feeds fixed-size PCM
 // frames into a livekit::AudioSource. Runs entirely on the GUI thread: the
@@ -25,6 +36,8 @@ public:
   static constexpr int kFrameMs = 10;
 
   explicit AudioCaptureAdapter(QObject *parent = nullptr);
+  using SourceFactory = std::function<std::unique_ptr<AudioCaptureSource>(const QAudioDevice &)>;
+  AudioCaptureAdapter(SourceFactory factory, QObject *parent = nullptr);
   ~AudioCaptureAdapter() override;
 
   [[nodiscard]] std::shared_ptr<livekit::AudioSource> audioSource() const { return mAudioSource; }
@@ -32,13 +45,16 @@ public:
 
   // Taps the raw mic samples (before chunking). Disabled by the provider while muted.
   [[nodiscard]] AudioTap &tap() { return mTap; }
+  [[nodiscard]] std::optional<QAudioDevice> activeDevice() const { return mActiveDevice; }
 
-  void start(const QAudioDevice &device);
+  bool start(const QAudioDevice &device);
   void stop();
 
 signals:
   void frameCaptured();
   void captureFailed(QString reason);
+  void captureInterrupted();
+  void captureResumed();
 
 private slots:
   void onReadyRead();
@@ -51,11 +67,15 @@ private:
   // throw. mChunker's frame sizing below is unrelated to this argument.
   std::shared_ptr<livekit::AudioSource> mAudioSource{
       std::make_shared<livekit::AudioSource>(kSampleRate, kChannels, 0)};
-  std::unique_ptr<QAudioSource> mSource;
+  bool open(const QAudioDevice &device);
+  SourceFactory mSourceFactory;
+  std::unique_ptr<AudioCaptureSource> mSource;
+  std::optional<QAudioDevice> mActiveDevice;
   QIODevice *mIoDevice{nullptr};
   AudioChunker mChunker{kSampleRate * kFrameMs / 1000, kChannels};
   std::atomic<int> mFramesCaptured{0};
   AudioTap mTap;
+  uint64_t mCaptureGeneration{0};
 };
 
 } // namespace pcm::video

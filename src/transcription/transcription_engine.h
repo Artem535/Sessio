@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -60,6 +61,9 @@ class TranscriptionEngine {
   void addTrack(const TrackInfo& info, int64_t start_offset_ms);
   // Flushes the track's open phrase. Later audio for it is ignored.
   void removeTrack(const TrackId& id);
+  // Ordered with PCM in the track queue. Flushes the old phrase and starts a
+  // fresh VAD/resampler at call time without replacing the participant track.
+  void resetTrack(const TrackId& id, int64_t start_offset_ms);
   // Unknown, removed, or post-stop tracks are ignored. The first sample rate
   // seen for a track wins.
   void pushAudio(const TrackId& id, const int16_t* samples, size_t count, int sample_rate);
@@ -73,11 +77,17 @@ class TranscriptionEngine {
  private:
   using Clock = std::chrono::steady_clock;
 
+  struct Input {
+    std::vector<int16_t> samples;
+    int rate = 0;
+    std::optional<int64_t> reset_offset;
+  };
+
   struct Track {
     TrackInfo info;
     int64_t start_offset_ms = 0;
     // Guarded by mutex_:
-    std::vector<int16_t> pending;
+    std::deque<Input> pending;
     int rate = 0;
     bool closing = false;
     // Segmenter thread only:
@@ -96,8 +106,7 @@ class TranscriptionEngine {
 
   struct Work {
     std::shared_ptr<Track> track;
-    std::vector<int16_t> samples;
-    int rate = 0;
+    Input input;
   };
 
   void segmenterLoop();

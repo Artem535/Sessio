@@ -86,6 +86,22 @@ TEST(TranscriptPanelTest, ButtonsEmitOnlySignals) {
   EXPECT_EQ(stop.count(), 1); EXPECT_EQ(revoke.count(), 1);
   EXPECT_EQ(panel.findChild<QLabel *>("transcriptStatus")->text(), "Transcription running");
 }
+TEST(TranscriptPanelTest, AudioGapDoesNotReplaceModelErrorAndClearsOnStop) {
+  TranscriptPanel panel;
+  panel.setState(SessionState::Recording);
+  panel.setError("Model failed");
+  panel.setAudioGap(true);
+  auto *gap = panel.findChild<QLabel *>("transcriptAudioGap");
+  ASSERT_NE(gap, nullptr);
+  EXPECT_FALSE(gap->isHidden());
+  panel.setAudioGap(false);
+  EXPECT_TRUE(gap->isHidden());
+  EXPECT_EQ(panel.findChild<QLabel *>("transcriptError")->text(), "Model failed");
+  EXPECT_FALSE(panel.findChild<QLabel *>("transcriptError")->isHidden());
+  panel.setAudioGap(true);
+  panel.setState(SessionState::Stopping);
+  EXPECT_TRUE(gap->isHidden());
+}
 TEST(TranscriptPanelTest, KeepsBottomWhenAtBottomButNotWhenScrolledUp) {
   TranscriptPanel panel; panel.resize(420, 480); panel.show(); QApplication::processEvents();
   DuckTranscriptPhrase phrase; phrase.text = "A sufficiently long phrase to form a transcript row.";

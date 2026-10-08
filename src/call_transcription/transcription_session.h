@@ -66,6 +66,7 @@ public:
   void stateChanged(pcm::calltranscription::SessionState state);
   void phraseAdded(DuckTranscriptPhrase phrase);
   void delayedChanged(bool delayed);
+  void audioGapChanged(bool interrupted);
   void failed(QString reason);
   void finished(qint64 transcriptId);
   void revoked(qint64 transcriptId);

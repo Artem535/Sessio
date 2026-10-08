@@ -61,6 +61,7 @@ public:
   // Installs (or clears, with nullptr) the receiver of call audio for
   // transcription. Only set while a consented session exists.
   virtual void setAudioSink(std::shared_ptr<AudioSink> sink) { Q_UNUSED(sink); }
+  [[nodiscard]] virtual qint64 callElapsedMs() const { return 0; }
 
 signals:
   void joined();
@@ -68,6 +69,9 @@ signals:
   void left();
   void participantJoined(QString id);
   void participantLeft(QString id);
+  void audioInterrupted(QString id);
+  void audioResumed(QString id);
+  void microphoneChanged(QAudioDevice device);
   void reconnecting();
   void reconnected();
   // Terminal: the SDK has given up on the connection (whether or not it

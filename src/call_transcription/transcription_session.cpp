@@ -5,6 +5,7 @@
 #include <QMetaObject>
 #include <exception>
 #include <map>
+#include <set>
 #include <thread>
 #include <utility>
 
@@ -81,6 +82,7 @@ struct SessionShared {
   // was just removed until its segmenter erased the old track.
   std::mutex tracksMutex;
   std::map<QString, std::string> tracks;
+  std::set<QString> interruptedTracks;  // guarded by tracksMutex
   uint64_t generation = 0;
 
   // Last member: joined first. Executor tasks hold this state, so the last
@@ -152,6 +154,39 @@ TranscriptionSession::TranscriptionSession(std::shared_ptr<pcm::database::Databa
               if (state() == SessionState::Recording) removeTrackFor(id);
             });
     connect(provider_, &pcm::video::VideoProvider::left, this, [this] { stop(); });
+    connect(provider_, &pcm::video::VideoProvider::audioInterrupted, this,
+            [this](const QString &id) {
+              if (state() != SessionState::Loading && state() != SessionState::Recording) return;
+              bool changed = false;
+              {
+                std::lock_guard lock(shared_->tracksMutex);
+                changed = shared_->interruptedTracks.empty();
+                shared_->interruptedTracks.insert(id);
+              }
+              if (changed) emit audioGapChanged(true);
+            });
+    connect(provider_, &pcm::video::VideoProvider::audioResumed, this,
+            [this](const QString &id) {
+              if (state() != SessionState::Loading && state() != SessionState::Recording) return;
+              bool changed = false;
+              {
+                std::lock_guard lock(shared_->tracksMutex);
+                if (!shared_->interruptedTracks.count(id)) return;
+                const auto track = shared_->tracks.find(id);
+                // Share the PCM gate lock: reset is queued before any resumed
+                // audio, including audio arriving from a different thread.
+                if (track != shared_->tracks.end()) {
+                  if (auto engine = shared_->currentEngine()) {
+                    const auto offset = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - shared_->clockStart).count();
+                    engine->resetTrack(track->second, offset);
+                  }
+                }
+                shared_->interruptedTracks.erase(id);
+                changed = shared_->interruptedTracks.empty();
+              }
+              if (changed) emit audioGapChanged(false);
+            });
     connect(provider_, &pcm::video::VideoProvider::connectionLost, this,
             [this](const QString &) { stop(); });
   }
@@ -204,7 +239,8 @@ bool TranscriptionSession::start(int64_t eventId, const QString &consentScope) {
   if (id <= 0) return false;
   transcriptId_ = id;
   sh.transcriptId = id;
-  sh.clockStart = std::chrono::steady_clock::now();
+  sh.clockStart = std::chrono::steady_clock::now() -
+                  std::chrono::milliseconds(provider_->callElapsedMs());
 
   auto control = sh.control;
   auto bridge = sh.bridge;
@@ -374,14 +410,11 @@ void TranscriptionSession::removeTrackFor(const QString &id) {
 
 void TranscriptionSession::onAudio(const QString &participantId, const int16_t *samples,
                                    std::size_t count, int sampleRate) {
-  std::string engineId;
-  {
-    std::lock_guard lock(shared_->tracksMutex);
-    const auto it = shared_->tracks.find(participantId);
-    if (it == shared_->tracks.end()) return;
-    engineId = it->second;
-  }
-  if (auto e = shared_->currentEngine()) e->pushAudio(engineId, samples, count, sampleRate);
+  std::lock_guard lock(shared_->tracksMutex);
+  if (shared_->interruptedTracks.count(participantId)) return;
+  const auto it = shared_->tracks.find(participantId);
+  if (it == shared_->tracks.end()) return;
+  if (auto e = shared_->currentEngine()) e->pushAudio(it->second, samples, count, sampleRate);
 }
 
 void TranscriptionSession::beginShutdown(bool graceful) {

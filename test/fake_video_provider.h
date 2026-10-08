@@ -64,6 +64,8 @@ public:
     if (mSink)
       mSink->onAudio(id, samples.data(), samples.size(), rate);
   }
+  [[nodiscard]] qint64 callElapsedMs() const override { return mCallElapsedMs; }
+  qint64 mCallElapsedMs{0};
   void simulateJoined() { emit joined(); }
   void simulateJoinFailed(const QString &reason) { emit joinFailed(reason); }
   void simulateLeft() { participants()->clear(); qDeleteAll(mSources); mSources.clear(); emit left(); }

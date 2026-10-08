@@ -16,6 +16,7 @@ public:
   void addPhrase(const DuckTranscriptPhrase &phrase);
   void setDelayed(bool delayed);
   void setNotice(const QString &text);
+  void setAudioGap(bool interrupted);
   void setError(const QString &userFacingText);
   void clearPhrases();
   [[nodiscard]] int phraseCount() const;
@@ -28,6 +29,7 @@ private:
   QLabel *mReason;
   QLabel *mDelayed;
   QLabel *mNotice;
+  QLabel *mAudioGap;
   QLabel *mError;
   QLabel *mListening;
   QPushButton *mStart;

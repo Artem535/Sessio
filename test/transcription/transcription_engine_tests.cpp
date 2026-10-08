@@ -104,6 +104,47 @@ TEST(TranscriptionEngineTest, RemoveTrackFlushesOpenPhrase) {
   ASSERT_TRUE(waitFor([&] { return c.size() == 1; }));
 }
 
+TEST(TranscriptionEngineTest, ResetSeparatesSpeechAndPreservesRemoteTrack) {
+  Collector c;
+  auto engine = makeEngine(c, std::make_shared<FakeRecognizer>());
+  engine->addTrack({"local", TrackRole::Practitioner, "Local"}, 0);
+  engine->addTrack({"remote", TrackRole::Participant, "Remote"}, 0);
+  push(*engine, "local", speech(500));
+  push(*engine, "remote", speech(500));
+  engine->resetTrack("local", 20000);
+  push(*engine, "local", concat({speech(500), silence(200)}));
+  push(*engine, "remote", concat({speech(500), silence(200)}));
+  engine->stop(2s);
+  const auto phrases = c.snapshot();
+  ASSERT_EQ(phrases.size(), 3u);
+  std::vector<TranscribedPhrase> local;
+  std::vector<TranscribedPhrase> remote;
+  for (const auto &phrase : phrases)
+    (phrase.track_id == "local" ? local : remote).push_back(phrase);
+  ASSERT_EQ(local.size(), 2u);
+  EXPECT_LT(local[0].end_ms, 20000);
+  EXPECT_GE(local[1].start_ms, 20000);
+  ASSERT_EQ(remote.size(), 1u);
+  EXPECT_GT(remote[0].end_ms - remote[0].start_ms, 900);
+}
+
+TEST(TranscriptionEngineTest, ResetAcceptsReplacementSampleRateAndKeepsIdentity) {
+  Collector c;
+  auto engine = makeEngine(c, std::make_shared<FakeRecognizer>());
+  engine->addTrack({"local", TrackRole::Practitioner, "Local"}, 500);
+  push(*engine, "local", speech(500));
+  engine->resetTrack("local", 10000);
+  std::vector<int16_t> replacement(8000, 16000);
+  replacement.resize(11200, 0);
+  engine->pushAudio("local", replacement.data(), replacement.size(), 16000);
+  engine->stop(2s);
+  const auto phrases = c.snapshot();
+  ASSERT_EQ(phrases.size(), 2u);
+  EXPECT_EQ(phrases[1].track_id, "local");
+  EXPECT_EQ(phrases[1].speaker_name, "Local");
+  EXPECT_GE(phrases[1].start_ms, 10000);
+}
+
 TEST(TranscriptionEngineTest, IgnoresUnknownAndRemovedTracks) {
   Collector c;
   auto engine = makeEngine(c, std::make_shared<FakeRecognizer>());

@@ -2567,6 +2567,10 @@ See you!</source>
         <translation>Локально</translation>
     </message>
     <message>
+        <source>Microphone audio interrupted; other participants are still being transcribed</source>
+        <translation>Звук микрофона прерван; речь других участников продолжает распознаваться</translation>
+    </message>
+    <message>
         <source>Transcription is falling behind</source>
         <translation>Распознавание задерживается</translation>
     </message>

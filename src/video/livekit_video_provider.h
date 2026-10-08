@@ -9,6 +9,7 @@
 #include <mutex>
 #include <optional>
 #include <set>
+#include <QElapsedTimer>
 
 namespace pcm::video {
 
@@ -49,6 +50,7 @@ public:
   void switchMicrophone(const QAudioDevice &device) override;
   void switchSpeaker(const QAudioDevice &device) override;
   void setAudioSink(std::shared_ptr<AudioSink> sink) override;
+  [[nodiscard]] qint64 callElapsedMs() const override;
 
 private:
   friend struct LiveKitVideoProviderTestAccess;
@@ -102,6 +104,9 @@ private:
   // Chosen before joining (device-check screen); join() opens these instead of the defaults.
   std::optional<QCameraDevice> mSelectedCamera;
   std::optional<QAudioDevice> mSelectedMicrophone;
+  std::optional<QAudioDevice> mPendingMicrophone;
+  bool mMicrophoneSwitchQueued{false};
+  QElapsedTimer mCallClock;
   uint64_t mGeneration{0};
   std::mutex mCallbackMutex;
   uint64_t mNextCallback{0};

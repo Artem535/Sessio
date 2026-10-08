@@ -2564,6 +2564,10 @@ See you!</translation>
         <translation>Local</translation>
     </message>
     <message>
+        <source>Microphone audio interrupted; other participants are still being transcribed</source>
+        <translation>Microphone audio interrupted; other participants are still being transcribed</translation>
+    </message>
+    <message>
         <source>Transcription is falling behind</source>
         <translation>Transcription is falling behind</translation>
     </message>

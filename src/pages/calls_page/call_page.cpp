@@ -695,6 +695,13 @@ void CallPage::showDevicesPopover() {
                                              }
                                            }
                                          });
+  if (provider) {
+    connect(provider, &pcm::video::VideoProvider::microphoneChanged, mDeviceMicrophoneCombo,
+            [combo = mDeviceMicrophoneCombo](const QAudioDevice &device) {
+              const QSignalBlocker blocker(combo);
+              combo->setCurrentIndex(device.isNull() ? -1 : combo->findData(device.id()));
+            });
+  }
   mDeviceSpeakerCombo = addDeviceRow(QStringLiteral("deviceSpeakerCombo"), mDeviceManager->speakers(),
                                       QByteArray(), [provider](const QByteArray &id) {
                                         if (!provider) {

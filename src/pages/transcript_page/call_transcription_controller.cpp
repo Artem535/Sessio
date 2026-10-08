@@ -140,6 +140,7 @@ void CallTranscriptionController::onTranscribeRequested() {
     mPanel->setError({});
     mPanel->setNotice({});
     mPanel->setDelayed(false);
+    mPanel->setAudioGap(false);
   }
   connect(session, &TranscriptionSession::stateChanged, this,
           [this, session](SessionState state) {
@@ -158,6 +159,11 @@ void CallTranscriptionController::onTranscribeRequested() {
           [this, session](bool delayed) {
             if (mSession == session && mPanel)
               mPanel->setDelayed(delayed);
+          });
+  connect(session, &TranscriptionSession::audioGapChanged, this,
+          [this, session](bool interrupted) {
+            if (mSession == session && mPanel)
+              mPanel->setAudioGap(interrupted);
           });
   connect(session, &TranscriptionSession::trackFailed, this,
           [this, session](const QString &) {

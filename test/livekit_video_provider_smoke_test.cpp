@@ -1,5 +1,7 @@
 #include "livekit_video_provider.h"
+#include "audio_capture_adapter.h"
 
+#include <QBuffer>
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QTimer>
@@ -11,6 +13,60 @@ namespace pcm::video {
 // Exercise the same copied-value handlers used by the SDK delegate without
 // borrowing SDK callback pointers or requiring devices/network participants.
 struct LiveKitVideoProviderTestAccess {
+  static bool destructionDuringMicrophoneResumeCancelsTransition() {
+    class Source final : public AudioCaptureSource {
+    public:
+      QIODevice *start() override { buffer.open(QIODevice::ReadOnly); return &buffer; }
+      void stop() override { buffer.close(); }
+      QBuffer buffer;
+    };
+    auto provider = std::make_unique<LiveKitVideoProvider>();
+    provider->mAudioCapture = std::make_unique<AudioCaptureAdapter>([](const QAudioDevice &) {
+      return std::make_unique<Source>();
+    });
+    provider->mRoom = std::make_unique<livekit::Room>();
+    QObject::connect(provider->mAudioCapture.get(), &AudioCaptureAdapter::captureResumed,
+                     [&] { provider.reset(); });
+    provider->switchMicrophone({});
+    QCoreApplication::processEvents();
+    return !provider;
+  }
+  static bool microphoneSwitchesCoalesceAndLeaveCancelsPending() {
+    class Source final : public AudioCaptureSource {
+    public:
+      QIODevice *start() override { buffer.open(QIODevice::ReadOnly); return &buffer; }
+      void stop() override { buffer.close(); }
+      QBuffer buffer;
+    };
+    LiveKitVideoProvider provider;
+    int opens = 0;
+    provider.mAudioCapture = std::make_unique<AudioCaptureAdapter>([&](const QAudioDevice &) {
+      ++opens;
+      return std::make_unique<Source>();
+    });
+    provider.mRoom = std::make_unique<livekit::Room>();
+    provider.mLocalIdentity = QStringLiteral("local");
+    const auto published = provider.mAudioCapture->audioSource();
+    provider.setMicrophoneEnabled(false);
+    provider.switchMicrophone({});
+    provider.switchMicrophone({});
+    provider.switchMicrophone({});
+    QCoreApplication::processEvents();
+    if (opens != 1 || provider.mAudioCapture->audioSource() != published ||
+        provider.isMicrophoneEnabled() || provider.mLocalIdentity != QStringLiteral("local"))
+      return false;
+    provider.switchMicrophone({});
+    provider.leave();
+    QCoreApplication::processEvents();
+    if (opens != 1 || provider.mRoom) return false;
+    provider.mRoom = std::make_unique<livekit::Room>();
+    QObject::connect(provider.mAudioCapture.get(), &AudioCaptureAdapter::captureResumed,
+                     &provider, [&] { provider.leave(); });
+    provider.switchMicrophone({});
+    QCoreApplication::processEvents();
+    return opens == 2 && !provider.mRoom && !provider.mAudioCapture->activeDevice();
+  }
+
   static bool terminalDisconnectCancelsQueuedJoined() {
     LiveKitVideoProvider provider;
     provider.mRoom = std::make_unique<livekit::Room>();
@@ -231,6 +287,12 @@ int main(int argc, char *argv[]) {
     std::exit(1);
   });
   watchdog.start(25000);
+  if (!pcm::video::LiveKitVideoProviderTestAccess::destructionDuringMicrophoneResumeCancelsTransition())
+    return 1;
+  if (!pcm::video::LiveKitVideoProviderTestAccess::microphoneSwitchesCoalesceAndLeaveCancelsPending()) {
+    std::cerr << "microphone transition did not coalesce/preserve mute/cancel on leave\n";
+    return 1;
+  }
   if (!pcm::video::LiveKitVideoProviderTestAccess::terminalDisconnectCancelsQueuedJoined()) return 1;
   const bool participantReplacement =
       pcm::video::LiveKitVideoProviderTestAccess::replacementParticipantSidResetsMedia();

@@ -150,6 +150,62 @@ TEST_F(SessionTest, StartCreatesRecordingTranscriptAndInstallsSink) {
   EXPECT_EQ(t->event_id, eventId_);
 }
 
+TEST_F(SessionTest, AudioGapKeepsRemoteSpeechAndTranscriptIdentity) {
+  make();
+  join("local", "Local", true);
+  join("remote", "Remote", false);
+  startAndWaitRecording(2);
+  const auto transcript = session_->transcriptId();
+  QSignalSpy gaps(session_.get(), &TranscriptionSession::audioGapChanged);
+  feedPhrase("local", false);
+  emit provider_->audioInterrupted("local");
+  feedPhrase("local");  // must be rejected during the gap
+  feedPhrase("remote");
+  ASSERT_TRUE(pump([&] { return phraseCount() >= 1; }));
+  emit provider_->audioResumed("local");
+  ASSERT_EQ(gaps.count(), 2);
+  feedPhrase("local");
+  session_->stop();
+  ASSERT_TRUE(pump([&] { return session_->state() == SessionState::Finished; }));
+  EXPECT_EQ(session_->transcriptId(), transcript);
+  EXPECT_EQ(phraseCount(), 3);
+  for (const auto &row : db_->get_transcript_phrases(transcript))
+    EXPECT_LE(row.end_ms - row.start_ms, 1100);
+}
+
+TEST_F(SessionTest, LateStartUsesCallTimeOrigin) {
+  make();
+  provider_->mCallElapsedMs = 20000;
+  join("local", "Local", true);
+  startAndWaitRecording(1);
+  feedPhrase("local");
+  ASSERT_TRUE(pump([&] { return phraseCount() == 1; }));
+  const auto rows = db_->get_transcript_phrases(session_->transcriptId());
+  ASSERT_EQ(rows.size(), 1u);
+  EXPECT_GE(rows.front().start_ms, 20000);
+  emit provider_->audioInterrupted("local");
+  emit provider_->audioResumed("local");
+  feedPhrase("local");
+  ASSERT_TRUE(pump([&] { return phraseCount() == 2; }));
+  const auto resumed = db_->get_transcript_phrases(session_->transcriptId());
+  EXPECT_GE(resumed.back().start_ms, 20000);
+}
+
+TEST_F(SessionTest, LateResumeAfterRevokeCannotReopenSinkOrClearGap) {
+  make();
+  join("local", "Local", true);
+  startAndWaitRecording(1);
+  QSignalSpy gaps(session_.get(), &TranscriptionSession::audioGapChanged);
+  emit provider_->audioInterrupted("local");
+  session_->revoke();
+  emit provider_->audioResumed("local");
+  feedPhrase("local");
+  ASSERT_TRUE(pump([&] { return session_->state() == SessionState::Finished; }));
+  EXPECT_EQ(gaps.count(), 1);
+  EXPECT_FALSE(provider_->audioSink());
+  EXPECT_EQ(phraseCount(), 0);
+}
+
 TEST_F(SessionTest, StartRejectsEmptyConsentScopeAndNonPositiveEvent) {
   make();
   EXPECT_FALSE(session_->start(eventId_, ""));

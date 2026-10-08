@@ -132,6 +132,16 @@ TEST_F(ControllerTest, ConsentRejectedCreatesNoTranscriptAndNoSink) {
   EXPECT_EQ(provider->audioSink(), nullptr);
   EXPECT_EQ(resolutions, 0);
 }
+TEST_F(ControllerTest, AudioGapNoticeFollowsSessionWithoutOverwritingErrors) {
+  start();
+  ASSERT_TRUE(pump([this] { return provider->audioSink() != nullptr; }));
+  panel->setError("Model error");
+  emit provider->audioInterrupted("local");
+  EXPECT_FALSE(panel->findChild<QLabel *>("transcriptAudioGap")->isHidden());
+  emit provider->audioResumed("local");
+  EXPECT_TRUE(panel->findChild<QLabel *>("transcriptAudioGap")->isHidden());
+  EXPECT_EQ(label("transcriptError"), "Model error");
+}
 TEST_F(ControllerTest,
        ConsentAcceptedCreatesRecordingTranscriptWithScopeAndEvent) {
   start();

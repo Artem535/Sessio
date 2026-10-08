@@ -65,7 +65,21 @@ void TranscriptionEngine::pushAudio(const TrackId& id, const int16_t* samples, s
     Track& track = *it->second;
     if (track.rate == 0) track.rate = sample_rate;
     if (track.rate != sample_rate) return;
-    track.pending.insert(track.pending.end(), samples, samples + count);
+    if (track.pending.empty() || track.pending.back().reset_offset)
+      track.pending.push_back({{}, sample_rate, std::nullopt});
+    auto &pending = track.pending.back().samples;
+    pending.insert(pending.end(), samples, samples + count);
+  }
+  cv_.notify_one();
+}
+
+void TranscriptionEngine::resetTrack(const TrackId& id, int64_t start_offset_ms) {
+  {
+    std::lock_guard lock(mutex_);
+    const auto it = tracks_.find(id);
+    if (stopping_ || it == tracks_.end() || it->second->closing) return;
+    it->second->pending.push_back({{}, 0, start_offset_ms});
+    it->second->rate = 0;
   }
   cv_.notify_one();
 }
@@ -119,9 +133,9 @@ void TranscriptionEngine::segmenterLoop() {
       stopping = stopping_;
       for (auto it = tracks_.begin(); it != tracks_.end();) {
         Track& t = *it->second;
-        if (!t.pending.empty()) {
-          work.push_back({it->second, std::move(t.pending), t.rate});
-          t.pending.clear();
+        while (!t.pending.empty()) {
+          work.push_back({it->second, std::move(t.pending.front())});
+          t.pending.pop_front();
         }
         if (t.closing || stopping) {
           finished.push_back(it->second);
@@ -131,7 +145,22 @@ void TranscriptionEngine::segmenterLoop() {
         }
       }
     }
-    for (Work& w : work) process(*w.track, w.samples, w.rate);
+    for (Work& w : work) {
+      if (w.input.reset_offset) {
+        flush(*w.track);
+        try {
+          w.track->segmenter = std::make_unique<PhraseSegmenter>(vad_factory_());
+          w.track->resampler.reset();
+          w.track->start_offset_ms = *w.input.reset_offset;
+          w.track->failed = false;
+        } catch (...) {
+          w.track->failed = true;
+          ++track_failures_;
+        }
+      } else {
+        process(*w.track, w.input.samples, w.input.rate);
+      }
+    }
     for (auto& t : finished) flush(*t);
     if (stopping) break;
   }

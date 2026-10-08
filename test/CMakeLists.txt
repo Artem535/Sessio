@@ -390,7 +390,25 @@ target_link_libraries(Sessio_audio_capture_adapter_smoke_test PRIVATE
     Qt6::Multimedia
     LiveKit::livekit
 )
+if(UNIX AND NOT APPLE)
+  target_link_libraries(Sessio_audio_capture_adapter_smoke_test PRIVATE "${LIVEKIT_CURL_LIBRARY}")
+endif()
 add_test(NAME AudioCaptureAdapterSmokeTest COMMAND Sessio_audio_capture_adapter_smoke_test)
+add_executable(Sessio_audio_capture_lifecycle_tests
+    audio_capture_adapter_lifecycle_tests.cpp)
+target_link_libraries(Sessio_audio_capture_lifecycle_tests PRIVATE
+    GTest::gtest Sessio_video)
+add_test(NAME AudioCaptureLifecycleTests COMMAND Sessio_audio_capture_lifecycle_tests)
+set_tests_properties(AudioCaptureLifecycleTests PROPERTIES TIMEOUT 15)
+if(SESSIO_TRANSCRIPTION_ENABLED)
+  add_executable(Sessio_microphone_switch_runtime_smoke microphone_switch_runtime_smoke.cpp)
+  target_include_directories(Sessio_microphone_switch_runtime_smoke PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/transcription)
+  target_link_libraries(Sessio_microphone_switch_runtime_smoke PRIVATE
+      Sessio_video Sessio_transcription)
+  add_test(NAME MicrophoneSwitchRuntimeSmoke COMMAND Sessio_microphone_switch_runtime_smoke)
+  set_tests_properties(MicrophoneSwitchRuntimeSmoke PROPERTIES TIMEOUT 15 SKIP_RETURN_CODE 77)
+endif()
 set_tests_properties(AudioCaptureAdapterSmokeTest PROPERTIES TIMEOUT 30)
 
 # Remote video renderer smoke test (own main(), not GoogleTest — mirrors the
@@ -467,6 +485,11 @@ target_link_libraries(Sessio_livekit_video_provider_smoke_test PRIVATE
     LiveKit::livekit
 )
 set_target_properties(Sessio_livekit_video_provider_smoke_test PROPERTIES AUTOMOC ON)
+if(UNIX AND NOT APPLE)
+  # This smoke compiles provider sources directly instead of linking Sessio_video,
+  # so it also needs the SDK's missing exported curl dependency.
+  target_link_libraries(Sessio_livekit_video_provider_smoke_test PRIVATE "${LIVEKIT_CURL_LIBRARY}")
+endif()
 add_test(NAME LiveKitVideoProviderSmokeTest COMMAND Sessio_livekit_video_provider_smoke_test)
 set_tests_properties(LiveKitVideoProviderSmokeTest PROPERTIES TIMEOUT 40)
 

@@ -38,6 +38,7 @@ TranscriptPanel::TranscriptPanel(QWidget *parent) : QWidget(parent) {
   mReason = label({}, "transcriptStartReason", this); layout->addWidget(mReason); mReason->hide();
   mError = label({}, "transcriptError", this); mError->setFrameStyle(QFrame::StyledPanel); layout->addWidget(mError); mError->hide();
   mNotice = label({}, "transcriptNotice", this); layout->addWidget(mNotice); mNotice->hide();
+  mAudioGap = label(tr("Microphone audio interrupted; other participants are still being transcribed"), "transcriptAudioGap", this); layout->addWidget(mAudioGap); mAudioGap->hide();
   mDelayed = label(tr("Transcription is falling behind"), "transcriptDelayed", this); layout->addWidget(mDelayed); mDelayed->hide();
   mScroll = new QScrollArea(this); mScroll->setWidgetResizable(true); mScroll->setObjectName("transcriptScroll");
   auto *content = new QWidget(mScroll); mRows = new QVBoxLayout(content); mRows->setAlignment(Qt::AlignTop);
@@ -74,6 +75,7 @@ void TranscriptPanel::setState(pcm::calltranscription::SessionState state) {
   mStart->setVisible(state == SessionState::Idle || state == SessionState::Finished || state == SessionState::Failed);
   mStop->setVisible(canStop); mRevoke->setVisible(canStop || state == SessionState::Stopping);
   mListening->setVisible(state == SessionState::Recording);
+  if (!canStop) mAudioGap->hide();
 }
 void TranscriptPanel::setStartAvailable(bool available, const QString &reason) {
   mStart->setEnabled(available); message(mReason, available ? QString{} : reason);
@@ -93,6 +95,7 @@ void TranscriptPanel::addPhrase(const DuckTranscriptPhrase &phrase) {
 }
 void TranscriptPanel::setDelayed(bool delayed) { mDelayed->setVisible(delayed); }
 void TranscriptPanel::setNotice(const QString &text) { message(mNotice, text); }
+void TranscriptPanel::setAudioGap(bool interrupted) { mAudioGap->setVisible(interrupted); }
 void TranscriptPanel::setError(const QString &text) { message(mError, text); }
 void TranscriptPanel::clearPhrases() {
   while (mRows->count() > 1) { auto *item = mRows->takeAt(0); delete item->widget(); delete item; }

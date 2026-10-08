@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.17] - 2026-10-08
+
+### Fixed
+
+- Microphone capture discards stale callbacks and old audio batches during a
+  restart, including reentrant stop or destruction. Failed selection attempts
+  to restore the previous device once and keeps mute and the published source.
+- Transcription separates local speech across microphone capture gaps, continues
+  remote speech, and timestamps phrases from call join even when started later.
+  The transcript panel displays a separate microphone interruption notice.
+
 ## [0.2.16] - 2026-10-04
 
 ### Added
