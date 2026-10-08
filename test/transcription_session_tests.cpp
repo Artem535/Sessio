@@ -191,6 +191,35 @@ TEST_F(SessionTest, LateStartUsesCallTimeOrigin) {
   EXPECT_GE(resumed.back().start_ms, 20000);
 }
 
+TEST_F(SessionTest, StandaloneLateStartAndAudioGapPreserveClockAndTranscript) {
+  make();
+  provider_->mCallElapsedMs = 20000;
+  join("local", "Local", true);
+  join("remote", "Guest", false);
+  ASSERT_TRUE(session_->start(std::nullopt, "live_local_v1"));
+  ASSERT_TRUE(pump([&] { return session_->state() == SessionState::Recording; }));
+  ASSERT_TRUE(pump([&] { return probe_.vadCount >= 2; }));
+  const auto id = session_->transcriptId();
+  feedPhrase("local", false);
+  emit provider_->audioInterrupted("local");
+  feedPhrase("local");
+  feedPhrase("remote");
+  ASSERT_TRUE(pump([&] { return phraseCount() >= 1; }));
+  emit provider_->audioResumed("local");
+  feedPhrase("local");
+  session_->stop();
+  ASSERT_TRUE(pump([&] { return session_->state() == SessionState::Finished; }));
+  EXPECT_EQ(session_->transcriptId(), id);
+  EXPECT_FALSE(db_->get_transcript(id)->event_id.has_value());
+  const auto rows = db_->get_transcript_phrases(id);
+  ASSERT_EQ(rows.size(), 3u);
+  for (const auto &row : rows) {
+    EXPECT_GE(row.start_ms, 20000);
+    EXPECT_LE(row.end_ms - row.start_ms, 1100);
+  }
+  EXPECT_EQ(db_->get_transcript(id)->status, "draft");
+}
+
 TEST_F(SessionTest, LateResumeAfterRevokeCannotReopenSinkOrClearGap) {
   make();
   join("local", "Local", true);
@@ -215,6 +244,27 @@ TEST_F(SessionTest, StartRejectsEmptyConsentScopeAndNonPositiveEvent) {
   EXPECT_EQ(db_->count_transcripts(), 0);
   EXPECT_EQ(provider_->audioSink(), nullptr);
   EXPECT_FALSE(probe_.factoryCalled);
+}
+
+TEST_F(SessionTest, StandaloneSessionRecordsAndRevokesWithoutCreatingEventOrClient) {
+  make();
+  const auto events = db_->get_transcripts_for_event(eventId_).size();
+  const auto clients = db_->get_clients().size();
+  join("remote", "Guest", false);
+  ASSERT_TRUE(session_->start(std::nullopt, "live_local_v1"));
+  ASSERT_TRUE(pump([&] { return session_->state() == SessionState::Recording && probe_.vadCount == 1; }));
+  feedPhrase("remote");
+  ASSERT_TRUE(pump([&] { return phraseCount() == 1; }));
+  QSignalSpy revoked(session_.get(), &TranscriptionSession::revoked);
+  session_->revoke();
+  ASSERT_TRUE(pump([&] { return revoked.count() == 1; }));
+  const auto row = db_->get_transcript(session_->transcriptId());
+  ASSERT_NE(row, nullptr);
+  EXPECT_FALSE(row->event_id.has_value());
+  EXPECT_TRUE(row->consent_revoked_at.has_value());
+  EXPECT_EQ(provider_->audioSink(), nullptr);
+  EXPECT_EQ(db_->get_clients().size(), clients);
+  EXPECT_EQ(db_->get_transcripts_for_event(eventId_).size(), events);
 }
 
 TEST_F(SessionTest, NoSinkInstalledBeforeStartOrAfterStop) {

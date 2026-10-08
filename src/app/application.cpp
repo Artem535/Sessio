@@ -11,6 +11,7 @@
 #include "call_side_panel.h"
 #include "transcript_panel.h"
 #include "transcript_page.h"
+#include "transcript_list_page.h"
 #include "transcription_consent_dialog.h"
 #include "engine_factory.h"
 #endif
@@ -162,7 +163,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  app.setApplicationVersion("0.2.17");
+  app.setApplicationVersion("0.2.18");
   // Installed builds ship libical's timezone data next to the executable; the
   // path compiled into the schedule engine only exists in development trees.
   pcm::meeting::configureScheduleZoneinfo(QCoreApplication::applicationDirPath());
@@ -1065,8 +1066,10 @@ void Application::connectSignals() {
     connect(page, &QEventInfoPage::provideFillClientComboBox, this,
             &Application::fillClientComboBox);
     connect(page, &QEventInfoPage::provideClientByEventId, [page, this](int64_t eventId) {
-      const auto client = mDb->get_client_by_event(eventId);
-      emit page->clientResolved(client.id);
+      try {
+        const auto client = mDb->get_client_by_event(eventId);
+        emit page->clientResolved(client.id);
+      } catch (const std::exception &) { emit page->clientResolved(0); }
     });
     // Connected before preselectLiveKitMeeting so a meeting created earlier in
     // this session is already in the Calls tab's list when it gets preselected
@@ -1124,7 +1127,7 @@ void Application::connectSignals() {
     auto refreshButton = [this, callsPage, modelsAvailable] {
       mCallTranscription->refreshAvailability();
       callsPage->setTranscribeButtonVisible(pcm::app_settings::transcriptionEnabled() &&
-                                           modelsAvailable() && mCurrentCallEventId.has_value());
+                                           modelsAvailable());
     };
     connect(callsPage, &CallsPage::eventKnownForCurrentCall, this,
             [this](int64_t id) { mCurrentCallEventId = id; });
@@ -1144,8 +1147,6 @@ void Application::connectSignals() {
             callsPage, &CallsPage::setTranscribeButtonState);
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::requestOpenTranscriptTab,
             callsPage, [callsPage, sidePanel] { callsPage->openSidePanel(); sidePanel->showTranscript(); });
-    connect(controller, &pcm::transcriptionui::CallTranscriptionController::callTranscriptReady,
-            eventPage, [eventPage](int64_t, int64_t) { eventPage->reloadSelectedDay(); });
     connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, controller,
             &pcm::transcriptionui::CallTranscriptionController::shutdown);
     connect(mMainWindow.get(), &MainWindow::settingsSaved, this, refreshButton);
@@ -1156,8 +1157,24 @@ void Application::connectSignals() {
       return static_cast<int>(db->get_transcripts_for_event(id).size());
     });
     auto *reviewPage = new TranscriptPage(mDb, 0, {}, mMainWindow.get());
+    auto *listPage = new TranscriptListPage(mDb, mMainWindow.get());
+    mMainWindow->registerTranscriptListPage(listPage);
     mMainWindow->registerTranscriptPage(reviewPage);
     auto selectedEvent = std::make_shared<std::pair<int64_t, qint64>>(0, 0);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptReady,
+            listPage, [this, listPage, eventPage](qint64 id) {
+              listPage->reload();
+              const auto row = mDb->get_transcript(id);
+              if (row && row->event_id) eventPage->reloadSelectedDay();
+            });
+    connect(listPage, &TranscriptListPage::openTranscriptRequested, reviewPage,
+            [this, reviewPage, selectedEvent](qint64 id) {
+              if (!reviewPage->editing()) {
+                *selectedEvent = {0, 0};
+                reviewPage->reloadTranscript(id, tr("Transcript"));
+              }
+              mMainWindow->openTranscriptPage();
+            });
     connect(eventPage, &QEventInfoPage::openTranscriptRequested, reviewPage,
             [this, reviewPage, selectedEvent](int64_t id) {
               if (reviewPage->editing()) {
@@ -1171,8 +1188,13 @@ void Application::connectSignals() {
               mMainWindow->openTranscriptPage();
             });
     connect(reviewPage, &TranscriptPage::backRequested, mMainWindow.get(),
-            [this, selectedEvent] { mMainWindow->returnToEvent(selectedEvent->first, selectedEvent->second); });
+            [this, selectedEvent, listPage] {
+              if (selectedEvent->first) mMainWindow->returnToEvent(selectedEvent->first, selectedEvent->second);
+              else { listPage->reload(); mMainWindow->openTranscriptListPage(); }
+            });
     connect(reviewPage, &TranscriptPage::transcriptsChanged, eventPage, &QEventInfoPage::reloadSelectedDay);
+    connect(reviewPage, &TranscriptPage::transcriptsChanged, listPage, &TranscriptListPage::reload);
+    connect(listPage, &TranscriptListPage::transcriptsChanged, eventPage, &QEventInfoPage::reloadSelectedDay);
     refreshButton();
 #endif
     connect(callsPage, &CallsPage::eventKnownForCurrentCall, this,

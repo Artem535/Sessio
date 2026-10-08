@@ -5,8 +5,10 @@
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTemporaryDir>
+#include <QTableWidget>
 #ifdef SESSIO_CALL_TRANSCRIPTION
 #include "transcript_page.h"
+#include "transcript_list_page.h"
 #endif
 #include <gtest/gtest.h>
 
@@ -22,6 +24,39 @@ TEST(MainWindowCallsTabTest, AddCallsPageAddsCallsTabAndPage) {
 }
 
 #ifdef SESSIO_CALL_TRANSCRIPTION
+TEST(MainWindowCallsTabTest, StandaloneTranscriptListAndReviewNeedNoEventOrClient) {
+  QTemporaryDir storage;
+  pcm::config::Config config;
+  config.db_conf.value_.db_pth = Poco::Path(storage.path().toStdString());
+  auto db = std::make_shared<pcm::database::Database>(config);
+  const auto id = db->add_transcript(std::nullopt, "live_local_v1");
+  ASSERT_GT(id, 0);
+  ASSERT_TRUE(db->set_transcript_status(id, "draft"));
+  MainWindow window;
+  auto *list = new TranscriptListPage(db);
+  auto *review = new TranscriptPage(db, 0, {});
+  window.registerTranscriptListPage(list);
+  window.registerTranscriptPage(review);
+  window.resize(1100, 750);
+  window.show();
+  window.openTranscriptListPage();
+  QApplication::processEvents();
+  EXPECT_EQ(window.findChild<QStackedWidget *>()->currentWidget(), list);
+  auto *table = list->findChild<QTableWidget *>("transcriptList");
+  ASSERT_NE(table, nullptr);
+  ASSERT_EQ(table->rowCount(), 1);
+  EXPECT_EQ(table->item(0, 0)->data(Qt::UserRole).toLongLong(), id);
+  review->reloadTranscript(id, "Transcript");
+  window.openTranscriptPage();
+  QApplication::processEvents();
+  EXPECT_EQ(window.findChild<QStackedWidget *>()->currentWidget(), review);
+  EXPECT_EQ(review->transcriptCount(), 1);
+  EXPECT_TRUE(db->get_clients().empty());
+  EXPECT_FALSE(db->get_transcript(id)->event_id.has_value());
+  const auto screenshot = qEnvironmentVariable("SESSIO_REVIEW_SCREENSHOT");
+  if (!screenshot.isEmpty()) EXPECT_TRUE(window.grab().save(screenshot));
+}
+
 TEST(MainWindowCallsTabTest, TranscriptReviewOpensInsideMainWindowWithPopulatedData) {
   QTemporaryDir storage;
   pcm::config::DatabaseConfig databaseConfig;

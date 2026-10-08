@@ -44,8 +44,8 @@ public:
   [[nodiscard]] SessionState state() const { return state_.load(); }
   [[nodiscard]] int64_t transcriptId() const { return transcriptId_.load(); }
 
-  // GUI thread. Requires state()==Idle, eventId>0, non-empty consentScope.
-  bool start(int64_t eventId, const QString &consentScope);
+  // GUI thread. Requires state()==Idle, valid optional event, non-empty consentScope.
+  bool start(std::optional<int64_t> eventId, const QString &consentScope);
   // Graceful: drains the engine and writer (bounded), status "draft", emits
   // finished. Also valid while the model is still loading.
   void stop();

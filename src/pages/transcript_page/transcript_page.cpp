@@ -1,4 +1,7 @@
 #include "transcript_page.h"
+#include "transcript_client_dialog.h"
+#include <QFileDialog>
+#include <QSaveFile>
 #include <QComboBox>
 #include <QApplication>
 #include <QFrame>
@@ -116,6 +119,36 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
   auto *back = button(tr("Back to event"), "backToEvent", this);
   auto *navigation = new QHBoxLayout;
   navigation->addWidget(back); navigation->addStretch();
+  mAttach = button(tr("Attach clients"), "transcriptAttachClients", this);
+  navigation->addWidget(mAttach);
+  auto *exportButton = button(tr("Export text"), "transcriptExport", this);
+  navigation->addWidget(exportButton);
+  connect(exportButton, &QPushButton::clicked, this, [this] {
+    QPointer<TranscriptPage> guard(this);
+    try {
+      const auto bytes = exportText().toUtf8();
+      const auto path = QFileDialog::getSaveFileName(this, tr("Export transcript"), {}, tr("Text files (*.txt)"));
+      if (!guard || path.isEmpty()) return;
+      QSaveFile file(path);
+      if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) reportFailure();
+    } catch (...) { if (guard) reportFailure(); }
+  });
+  connect(mAttach, &QPushButton::clicked, this, [this] {
+    const auto id = mSelector->currentData().toLongLong();
+    QPointer<TranscriptPage> guard(this);
+    try {
+      if (!mayMutate(id)) return;
+      QPointer<TranscriptClientDialog> dialog = new TranscriptClientDialog(mDb, id, this);
+      const auto result = dialog->exec();
+      if (!guard || !dialog) return;
+      const auto clients = dialog->selectedClientIds();
+      dialog->deleteLater();
+      if (result != QDialog::Accepted) return;
+      if (!mayMutate(id)) return;
+      if (!mDb->set_transcript_clients(id, clients)) { reportFailure(); return; }
+      showTranscript(); emit transcriptsChanged();
+    } catch (...) { if (guard) reportFailure(); }
+  });
   auto *more = new QToolButton(this);
   more->setAccessibleName(tr("More actions"));
   more->setObjectName("transcriptMoreActions");
@@ -174,7 +207,9 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
       // The modal confirmation may process a new recording or page navigation.
       if (!mayMutate(id)) return;
       if (!mDb->delete_transcript(id)) { reportFailure(); return; }
-      reload(mEventId, mTitle->text()); emit transcriptsChanged();
+      if (mTranscriptId) reloadTranscript(*mTranscriptId, mTitle->text());
+      else reload(mEventId, mTitle->text());
+      emit transcriptsChanged();
     } catch (...) { if (guard) guard->reportFailure(); }
   });
   reload(eventId, title);
@@ -189,7 +224,7 @@ void TranscriptPage::reportFailure() {
 }
 bool TranscriptPage::mayMutate(int64_t transcriptId) {
   const auto row = mDb->get_transcript(transcriptId);
-  if (!row || row->event_id != mEventId) return false;
+  if (!row || (mTranscriptId ? row->id != *mTranscriptId : row->event_id != mEventId)) return false;
   if (row->status == "recording") {
     mNotice->setText(tr("This transcript is still being recorded. Editing is unavailable."));
     return false;
@@ -201,14 +236,8 @@ void TranscriptPage::reload(int64_t eventId, const QString &title) {
     mNotice->setText(tr("Save or cancel the current edit first."));
     return;
   }
-  mEventId = eventId; mTitle->setText(title);
-  mClient->setText(tr("Client unavailable"));
-  try {
-    const auto client = mDb->get_client_by_event(eventId);
-    const auto name = QString::fromStdString(client.name.value_or("")) + " " +
-                      QString::fromStdString(client.last_name.value_or(""));
-    if (client.id > 0 && !name.trimmed().isEmpty()) mClient->setText(tr("Client: %1").arg(name.trimmed()));
-  } catch (...) { /* Missing client is valid for an unlinked event. */ }
+  mTranscriptId.reset(); mEventId = eventId; mTitle->setText(title);
+  findChild<QPushButton *>("backToEvent")->setText(tr("Back to event"));
   mSelector->blockSignals(true); mSelector->clear();
   try {
     auto transcripts = mDb->get_transcripts_for_event(eventId);
@@ -227,19 +256,58 @@ void TranscriptPage::reload(int64_t eventId, const QString &title) {
   mSelector->blockSignals(false); mSelector->setVisible(mSelector->count() > 1);
   showTranscript();
 }
+void TranscriptPage::reloadTranscript(int64_t transcriptId, const QString &title) {
+  if (mEditing) { mNotice->setText(tr("Save or cancel the current edit first.")); return; }
+  mTranscriptId = transcriptId;
+  mEventId = 0;
+  mTitle->setText(title);
+  findChild<QPushButton *>("backToEvent")->setText(tr("Back to transcripts"));
+  mSelector->blockSignals(true); mSelector->clear();
+  try {
+    if (const auto row = mDb->get_transcript(transcriptId))
+      mSelector->addItem(QLocale().toString(QDateTime::fromMSecsSinceEpoch(row->created_at), QLocale::ShortFormat),
+                         QVariant::fromValue<qlonglong>(row->id));
+  } catch (...) { reportFailure(); }
+  mSelector->blockSignals(false); mSelector->hide();
+  showTranscript();
+}
+QString TranscriptPage::exportText() const {
+  QStringList lines;
+  if (mSelector->currentIndex() < 0) return {};
+  for (const auto &phrase : mDb->get_transcript_phrases(mSelector->currentData().toLongLong())) {
+    const auto speaker = phrase.speaker_name ? QString::fromStdString(*phrase.speaker_name) :
+        phrase.track_role == "practitioner" ? tr("Practitioner") : tr("Participant");
+    lines << timestamp(phrase.start_ms) + " " + speaker + ": " + QString::fromStdString(phrase.text);
+  }
+  return lines.join("\n") + "\n";
+}
 void TranscriptPage::showTranscript() {
   mEditing = false;
   mSelector->setEnabled(true);
   findChild<QPushButton *>("backToEvent")->setEnabled(true);
+  findChild<QPushButton *>("transcriptExport")->setEnabled(mSelector->count() > 0);
   while (auto *item = mRows->takeAt(0)) { delete item->widget(); delete item; }
   mNotice->clear(); mMetadata->clear(); mStatus->clear();
   mReview->hide(); mDelete->hide();
-  if (!mSelector->count()) { mNotice->setText(tr("No transcripts for this event.")); return; }
+  mAttach->setEnabled(false);
+  mClient->setText(tr("No clients attached"));
+  if (!mSelector->count()) {
+    mNotice->setText(mTranscriptId ? tr("Transcript unavailable.") : tr("No transcripts for this event."));
+    return;
+  }
   try {
     const auto row = mDb->get_transcript(mSelector->currentData().toLongLong());
     if (!row) { mNotice->setText(tr("Transcript unavailable.")); return; }
     const auto phrases = mDb->get_transcript_phrases(row->id);
     const bool recording = row->status == "recording";
+    QStringList names;
+    for (const auto id : mDb->get_transcript_client_ids(row->id)) {
+      if (const auto client = mDb->get_client(id))
+        names << (QString::fromStdString(client->name.value_or("")) + " " +
+                   QString::fromStdString(client->last_name.value_or(""))).trimmed();
+    }
+    if (!names.isEmpty()) mClient->setText(tr("Clients: %1").arg(names.join(", ")));
+    mAttach->setEnabled(!recording);
     mStatus->setText(recording ? tr("Recording") : row->status == "reviewed" ? tr("Reviewed") : tr("Draft"));
     auto metadata = tr("%n phrases", nullptr, static_cast<int>(phrases.size()));
     if (row->model_id && !row->model_id->empty())

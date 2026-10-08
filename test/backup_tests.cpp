@@ -1011,6 +1011,21 @@ TEST(BackupValidatorTest, RejectsUnsupportedFormatVersion) {
   EXPECT_FALSE(result.ok);
   EXPECT_FALSE(result.errors.empty());
 
+  manifest.psybackup_format_version = 1;
+  manifest.schema_version = 3;
+  ASSERT_TRUE(rfl::json::save(
+      Poco::Path(extractDir).append("manifest.json").toString(), manifest, rfl::json::pretty));
+  {
+    std::ofstream zipOut(tamperedPath, std::ios::binary | std::ios::trunc);
+    Poco::Zip::Compress compress(zipOut, true);
+    compress.addRecursive(Poco::Path(extractDir), Poco::Zip::ZipCommon::CL_MAXIMUM, true);
+    compress.close();
+  }
+  EXPECT_FALSE(validator.validate(tamperedPath).ok);
+  const auto futureTarget = extractDir + "-future-target";
+  EXPECT_FALSE(pcm::backup::RestoreService{}.restore_backup(tamperedPath, futureTarget).ok);
+  EXPECT_FALSE(Poco::File(futureTarget).exists());
+
   extractDirFile.remove(true);
   destFile.remove();
   tamperedFile.remove();
@@ -1185,6 +1200,16 @@ TEST(RestoreServiceTest, RestoresTranscriptsAndPhrases) {
   ASSERT_TRUE(sourceDb.revoke_transcript_consent(transcriptId, 1730000300000));
   const auto sourceTranscript = sourceDb.get_transcript(transcriptId);
   ASSERT_NE(sourceTranscript, nullptr);
+  const auto standaloneId = sourceDb.add_transcript(std::nullopt, "standalone_scope",
+                                                    std::string("standalone_model"), 1730000200000);
+  DuckTranscriptPhrase standalonePhrase = phrase;
+  standalonePhrase.transcript_id = standaloneId;
+  standalonePhrase.text = "Standalone text";
+  ASSERT_GT(sourceDb.add_transcript_phrase(standalonePhrase), 0);
+  ASSERT_TRUE(sourceDb.set_transcript_status(standaloneId, "draft"));
+  DuckClient attached; attached.name = "Existing client";
+  const auto attachedId = sourceDb.add_client(attached);
+  ASSERT_TRUE(sourceDb.set_transcript_clients(standaloneId, {attachedId}));
 
   const auto backupPath = Poco::Path(Poco::Path::current())
                               .append("tmp_restore_transcript.psybackup")
@@ -1223,11 +1248,72 @@ TEST(RestoreServiceTest, RestoresTranscriptsAndPhrases) {
   EXPECT_EQ(phrases[0].start_ms, 1500);
   EXPECT_EQ(phrases[0].end_ms, 4200);
   EXPECT_EQ(phrases[0].speaker_name.value_or(""), "Client");
+  const auto standalone = restoredDb.get_transcript(standaloneId);
+  ASSERT_NE(standalone, nullptr);
+  EXPECT_FALSE(standalone->event_id.has_value());
+  EXPECT_EQ(standalone->consent_scope, "standalone_scope");
+  EXPECT_EQ(standalone->model_id.value_or(""), "standalone_model");
+  EXPECT_EQ(restoredDb.get_transcript_client_ids(standaloneId), std::vector<int64_t>{attachedId});
+  ASSERT_EQ(restoredDb.get_transcript_phrases(standaloneId).size(), 1);
+  EXPECT_EQ(restoredDb.get_transcript_phrases(standaloneId)[0].text, "Standalone text");
 
   Poco::File(backupPath).remove();
   Poco::File(targetPath).remove(true);
   Poco::File(Poco::Path(Poco::Path::current()).append("tmp_restore_transcript_source"))
       .remove(true);
+}
+
+TEST(RestoreServiceTest, RestoresLegacySchemaOneAndBackfillsTranscriptClientsBeforeReplacement) {
+  const auto root = Poco::Path(Poco::Path::current()).append("tmp_legacy_transcript_source").toString();
+  auto source = makeTestDatabase("tmp_legacy_transcript_source");
+  DuckClient client; client.name = "Legacy client";
+  const auto clientId = source.add_client(client);
+  DuckEvent event; event.name = "Legacy event"; event.start_date = 1730000000000;
+  event.end_date = 1730003600000; event.duration = 3600; event.event_stat_id = 1; event.payment_stat_id = 1;
+  const auto eventId = source.add_event(event);
+  ASSERT_GT(source.add_event_client(eventId, clientId), 0);
+  const auto id = source.add_transcript(eventId, "legacy_scope", std::string("legacy_model"), 1730000100000);
+  DuckTranscriptPhrase phrase; phrase.transcript_id = id; phrase.track_role = "participant";
+  phrase.text = "Legacy phrase"; phrase.end_ms = 100;
+  const auto phraseId = source.add_transcript_phrase(phrase);
+  ASSERT_GT(phraseId, 0);
+  ASSERT_TRUE(source.set_transcript_status(id, "draft"));
+  const auto before = *source.get_transcript(id);
+  {
+    duckdb::DuckDB raw(root + "/database.db"); duckdb::Connection conn(raw);
+    ASSERT_FALSE(conn.Query("DROP TABLE TranscriptClient; "
+                           "ALTER TABLE Transcript ALTER COLUMN event_id SET NOT NULL; "
+                           "UPDATE ApplicationMetadata SET schema_version=1")->HasError());
+  }
+  const auto backup = root + ".psybackup";
+  removeIfExists(backup);
+  ASSERT_TRUE(pcm::backup::BackupService{}.create_backup(source, backup).ok);
+  ASSERT_TRUE(pcm::backup::BackupValidator{}.validate(backup).ok);
+  const auto target = root + "-target";
+  if (Poco::File(target).exists()) Poco::File(target).remove(true);
+  const auto result = pcm::backup::RestoreService{}.restore_backup(backup, target);
+  ASSERT_TRUE(result.ok) << result.error;
+  {
+    // Restore migrates the staged database before moving it into place.
+    duckdb::DuckDB raw(target + "/database.db"); duckdb::Connection conn(raw);
+    auto version = conn.Query("SELECT schema_version FROM ApplicationMetadata");
+    ASSERT_FALSE(version->HasError());
+    EXPECT_EQ(version->Fetch()->GetValue(0, 0).GetValue<int32_t>(), 2);
+  }
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(target)}};
+  {
+    pcm::database::Database restored(conf);
+    const auto row = restored.get_transcript(id);
+    ASSERT_NE(row, nullptr);
+    EXPECT_EQ(row->event_id, eventId); EXPECT_EQ(row->consent_scope, before.consent_scope);
+    EXPECT_EQ(row->model_id, before.model_id); EXPECT_EQ(row->created_at, before.created_at);
+    EXPECT_EQ(row->updated_at, before.updated_at); EXPECT_EQ(row->consent_given_at, before.consent_given_at);
+    EXPECT_EQ(restored.get_transcript_client_ids(id), std::vector<int64_t>{clientId});
+    ASSERT_EQ(restored.get_transcript_phrases(id).size(), 1);
+    EXPECT_EQ(restored.get_transcript_phrases(id)[0].id, phraseId);
+    EXPECT_EQ(restored.get_transcript_phrases(id)[0].text, "Legacy phrase");
+  }
+  Poco::File(backup).remove(); Poco::File(target).remove(true); Poco::File(root).remove(true);
 }
 
 TEST(RestoreServiceTest, RestoresEncryptedBackupWithCorrectPassword) {

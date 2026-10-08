@@ -47,7 +47,7 @@ public:
   /**
    * @brief Enum to identify the available pages in the application.
    */
-  enum class Pages { clientInfo, eventInfo, analytics, clientCard, clientNotes, calls, transcript };
+  enum class Pages { clientInfo, eventInfo, analytics, clientCard, clientNotes, calls, transcript, transcriptList };
 
   /**
    * @brief Constructor for the MainWindow class.
@@ -89,6 +89,8 @@ public:
                     std::function<QString()> bearerCredentialProvider);
   void setDatabase(std::shared_ptr<pcm::database::Database> db);
   void registerTranscriptPage(QWidget *page);
+  void registerTranscriptListPage(QWidget *page);
+  void openTranscriptListPage();
   void openTranscriptPage();
   void returnToEvent(int64_t eventId, qint64 dayMs);
   void setTranscriptionActiveProvider(std::function<bool()> provider) {
@@ -169,6 +171,7 @@ private:
   TabButton *mBtnProfile{nullptr};
   TabButton *mBtnNotes{nullptr};
   TabButton *mBtnCalls{nullptr};
+  TabButton *mBtnTranscripts{nullptr};
   QWidget *mClientPageActions{nullptr};
   oclero::qlementine::LineEdit *mClientSearchInput{nullptr};
   oclero::qlementine::Switch *mShowInactiveClientsSwitch{nullptr};
