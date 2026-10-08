@@ -549,6 +549,7 @@ void LiveKitVideoProvider::switchMicrophone(const QAudioDevice &device) {
     } else {
       mSelectedMicrophone.reset();
       setMicrophoneEnabled(false);
+      if (!self || generation != mGeneration || !mRoom) return;
       emit microphoneChanged(QAudioDevice{});
     }
   }, Qt::QueuedConnection);
@@ -556,6 +557,11 @@ void LiveKitVideoProvider::switchMicrophone(const QAudioDevice &device) {
 
 qint64 LiveKitVideoProvider::callElapsedMs() const {
   return mCallClock.isValid() ? mCallClock.elapsed() : 0;
+}
+
+QAudioDevice LiveKitVideoProvider::selectedMicrophone() const {
+  if (mRoom) return mAudioCapture->activeDevice().value_or(QAudioDevice{});
+  return mSelectedMicrophone.value_or(QAudioDevice{});
 }
 
 void LiveKitVideoProvider::setAudioSink(std::shared_ptr<AudioSink> sink) {

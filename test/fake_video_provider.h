@@ -49,6 +49,12 @@ public:
   void switchMicrophone(const QAudioDevice &device) override {
     mLastSwitchedMicrophone = device;
     ++mSwitchMicrophoneCallCount;
+    simulateMicrophoneChanged(device);
+  }
+  [[nodiscard]] QAudioDevice selectedMicrophone() const override { return mSelectedMicrophone; }
+  void simulateMicrophoneChanged(const QAudioDevice &device) {
+    mSelectedMicrophone = device;
+    emit microphoneChanged(device);
   }
   void switchSpeaker(const QAudioDevice &device) override {
     mLastSwitchedSpeaker = device;
@@ -107,6 +113,7 @@ public:
   int mSwitchSpeakerCallCount{0};
   QCameraDevice mLastSwitchedCamera;
   QAudioDevice mLastSwitchedMicrophone;
+  QAudioDevice mSelectedMicrophone;
   QAudioDevice mLastSwitchedSpeaker;
 };
 

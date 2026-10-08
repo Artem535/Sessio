@@ -13,6 +13,41 @@ namespace pcm::video {
 // Exercise the same copied-value handlers used by the SDK delegate without
 // borrowing SDK callback pointers or requiring devices/network participants.
 struct LiveKitVideoProviderTestAccess {
+  static bool failureMuteNotificationCancelsCompletion(bool destroy) {
+    class Source final : public AudioCaptureSource {
+    public:
+      bool fails = false;
+      QIODevice *start() override {
+        buffer.open(QIODevice::ReadOnly);
+        return fails ? nullptr : &buffer;
+      }
+      void stop() override { buffer.close(); }
+      QBuffer buffer;
+    };
+    auto provider = std::make_unique<LiveKitVideoProvider>();
+    int opens = 0;
+    provider->mAudioCapture = std::make_unique<AudioCaptureAdapter>([&](const QAudioDevice &) {
+      auto source = std::make_unique<Source>();
+      source->fails = ++opens > 1;
+      return source;
+    });
+    if (!provider->mAudioCapture->start({})) return false;
+    provider->mRoom = std::make_unique<livekit::Room>();
+    provider->mLocalIdentity = QStringLiteral("local");
+    provider->participants()->upsert({QStringLiteral("local"), {}, {}, true});
+    int completions = 0, notifications = 0;
+    QObject::connect(provider.get(), &VideoProvider::microphoneChanged,
+                     [&](const QAudioDevice &) { ++completions; });
+    QObject::connect(provider->participants(), &QAbstractItemModel::dataChanged, [&] {
+      ++notifications;
+      if (destroy) provider.reset();
+      else provider->leave();
+    });
+    provider->switchMicrophone({});
+    QCoreApplication::processEvents();
+    return opens == 3 && notifications == 1 && completions == 0 &&
+           (destroy ? !provider : !provider->mRoom);
+  }
   static bool destructionDuringMicrophoneResumeCancelsTransition() {
     class Source final : public AudioCaptureSource {
     public:
@@ -280,6 +315,18 @@ int main(int argc, char *argv[]) {
   // No QApplication: constructing a QWidget here aborts, proving the production
   // provider no longer owns either local or remote presentation.
   QCoreApplication app(argc, argv);
+  if (!pcm::video::LiveKitVideoProviderTestAccess::failureMuteNotificationCancelsCompletion(false)) {
+    std::cerr << "failure-path mute notification emitted stale completion after leave\n";
+    return 1;
+  }
+  if (!pcm::video::LiveKitVideoProviderTestAccess::failureMuteNotificationCancelsCompletion(true)) {
+    std::cerr << "failure-path mute notification did not cancel provider destruction\n";
+    return 1;
+  }
+  if (app.arguments().contains(QStringLiteral("--microphone-failure-only"))) {
+    std::cout << "failure-path leave and destruction passed\n";
+    return 0;
+  }
   QTimer watchdog;
   watchdog.setSingleShot(true);
   QObject::connect(&watchdog, &QTimer::timeout, [] {

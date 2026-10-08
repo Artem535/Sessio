@@ -683,18 +683,24 @@ void CallPage::showDevicesPopover() {
                                          }
                                        }
                                      });
+  const auto microphone = provider ? provider->selectedMicrophone() : QAudioDevice{};
   mDeviceMicrophoneCombo = addDeviceRow(QStringLiteral("deviceMicrophoneCombo"), mDeviceManager->microphones(),
-                                         QByteArray(), [provider](const QByteArray &id) {
+                                         microphone.id(), [provider, devices = mDeviceManager](const QByteArray &id) {
                                            if (!provider) {
                                              return;
                                            }
-                                           for (const auto &device : QMediaDevices::audioInputs()) {
+                                           for (const auto &device : devices->microphones()) {
                                              if (device.id() == id) {
                                                provider->switchMicrophone(device);
                                                return;
                                              }
                                            }
                                          });
+  {
+    const QSignalBlocker blocker(mDeviceMicrophoneCombo);
+    mDeviceMicrophoneCombo->setCurrentIndex(
+        microphone.isNull() ? -1 : mDeviceMicrophoneCombo->findData(microphone.id()));
+  }
   if (provider) {
     connect(provider, &pcm::video::VideoProvider::microphoneChanged, mDeviceMicrophoneCombo,
             [combo = mDeviceMicrophoneCombo](const QAudioDevice &device) {

@@ -62,6 +62,9 @@ public:
   // transcription. Only set while a consented session exists.
   virtual void setAudioSink(std::shared_ptr<AudioSink> sink) { Q_UNUSED(sink); }
   [[nodiscard]] virtual qint64 callElapsedMs() const { return 0; }
+  // During a call this is the confirmed capture device, including recovery.
+  // A null device means that no microphone source is active.
+  [[nodiscard]] virtual QAudioDevice selectedMicrophone() const { return {}; }
 
 signals:
   void joined();

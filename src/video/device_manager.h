@@ -40,7 +40,7 @@ public:
   ~DeviceManager() override;
 
   [[nodiscard]] QList<QCameraDevice> cameras() const;
-  [[nodiscard]] QList<QAudioDevice> microphones() const;
+  [[nodiscard]] virtual QList<QAudioDevice> microphones() const;
   [[nodiscard]] QList<QAudioDevice> speakers() const;
 
   [[nodiscard]] std::optional<QCameraDevice> defaultCamera() const;

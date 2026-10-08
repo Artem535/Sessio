@@ -103,3 +103,66 @@ The pre-existing dirty qlementine submodule was preserved and is excluded from
 issue commits. The host full build used that existing dependency state; it is
 not evidence of a pristine package build. Nothing was pushed, merged or deployed;
 issue 123 remains open pending review and real-device release gates.
+
+## Review fix wave 1
+
+Base for this wave: `d1d3835`. Both P2 findings in the scoped review are addressed.
+
+- `VideoProvider::selectedMicrophone()` exposes the confirmed capture device
+  during a call (null when no input is active), and the selected device before
+  joining. The fake provider retains and signals the confirmed outcome. The
+  microphone popover initializes from this state under a signal blocker, including
+  a null/absent device. Its selection callback re-queries DeviceManager's current
+  inputs; camera and speaker behavior is unchanged.
+- `switchMicrophone` rechecks QPointer, call generation and room after complete
+  failure mutes the microphone. A synchronous model/error notification cannot
+  produce a stale completion after leave or provider destruction.
+
+RED evidence before the fixes: the new Qt selector test reported all three
+incorrect reopened states (A instead of B after selection, A instead of B after
+simulated recovery, index 0 instead of -1 after complete failure). The new provider
+failure/leave regression returned exit 1 because `microphoneChanged` was emitted
+after the direct mute-state listener left the call.
+
+GREEN evidence after the fixes:
+
+- `Sessio_call_page_tests` and `Sessio_livekit_video_provider_smoke_test` rebuilt.
+- Four focused CallPage tests passed: accessible device button, three popover
+  combos, device selection dispatch, and reopened selection/recovery/no-input.
+  The synthetic A/B test executed on host Qt 6.11.2 and was **not skipped**.
+- `--microphone-failure-only` passed both complete-failure variants: direct
+  participant mute notification leaves the call or destroys the provider. Each
+  has exactly three opening attempts, one mute notification and zero completions.
+- The same failure/leave/destruction variants passed with all provider smoke
+  translation units instrumented by Clang ASan/UBSan. No memory/UB diagnostics;
+  leak detection disabled, external Qt and SDK binaries remain uninstrumented.
+- `git diff --check` passed. No new `tr()` strings; translation files unchanged.
+
+Focused commands:
+
+```bash
+rtk cmake --build build-host --target Sessio_call_page_tests \
+  Sessio_livekit_video_provider_smoke_test --parallel 4
+rtk proxy env QT_QPA_PLATFORM=offscreen \
+  LD_LIBRARY_PATH=/home/a.durynin/.local/share/sessio-dev/curl \
+  build-host/test/Sessio_call_page_tests \
+  --gtest_filter=CallPageTest.ReopenedMicrophoneSelectorShowsConfirmedSelectionRecoveryAndNoInput:CallPageTest.SelectingADeviceCallsSwitchOnTheAttachedProvider:CallPageTest.DevicesButtonHasAccessibleLabel:CallPageTest.DevicesButtonOpensPopoverWithThreeCombos
+rtk proxy env LD_LIBRARY_PATH=/home/a.durynin/.local/share/sessio-dev/curl \
+  build-host/test/Sessio_livekit_video_provider_smoke_test --microphone-failure-only
+rtk proxy python3 scripts/test-microphone-provider-sanitized.py build-host \
+  /home/a.durynin/.local/share/sessio-dev/curl/libcurl.so.4
+```
+
+The optional Qt6MultimediaPrivate >= 6.11 package is used only by the selector
+test to construct synthetic device descriptors. Older/minimal Qt installations
+explicitly skip that test; production has no private Qt dependency. DeviceManager
+input enumeration is virtual to permit those descriptors without hardware.
+The sanitizer runner uses the configured Ninja build's compile database and MOC
+output (`CMAKE_EXPORT_COMPILE_COMMANDS=ON`); it drops GCC module-scanner flags
+because these test sources contain ordinary C++ translation units.
+
+This wave reran the focused cases only. Earlier full Debug/134 CTest results are
+the previous implementation evidence, rather than a claim of a repeated full
+suite on this wave. Original two-input crash, real 30-minute call, package/Windows
+and CI gates remain unchanged. Dirty qlementine is preserved and excluded; no
+push, merge or deployment.

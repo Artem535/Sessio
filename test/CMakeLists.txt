@@ -886,6 +886,13 @@ target_link_libraries(Sessio_call_page_tests PRIVATE
     Sessio_widgets
 )
 target_include_directories(Sessio_call_page_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/widgets)
+find_package(Qt6MultimediaPrivate 6.11 QUIET CONFIG)
+if(TARGET Qt6::MultimediaPrivate)
+  # Only the test creates synthetic QAudioDevice descriptors; production uses
+  # the public Qt API. Older/minimal Qt installations explicitly skip this case.
+  target_link_libraries(Sessio_call_page_tests PRIVATE Qt6::MultimediaPrivate)
+  target_compile_definitions(Sessio_call_page_tests PRIVATE SESSIO_TEST_AUDIO_DEVICE_PRIVATE=1)
+endif()
 set_target_properties(Sessio_call_page_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_call_page_tests)
 

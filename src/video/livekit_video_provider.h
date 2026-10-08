@@ -51,6 +51,7 @@ public:
   void switchSpeaker(const QAudioDevice &device) override;
   void setAudioSink(std::shared_ptr<AudioSink> sink) override;
   [[nodiscard]] qint64 callElapsedMs() const override;
+  [[nodiscard]] QAudioDevice selectedMicrophone() const override;
 
 private:
   friend struct LiveKitVideoProviderTestAccess;

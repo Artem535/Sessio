@@ -10,6 +10,7 @@
 #include <QImage>
 #include <QLabel>
 #include <QLayout>
+#include <QMenu>
 #include <QPointer>
 #include <QPushButton>
 #include <QResizeEvent>
@@ -19,6 +20,9 @@
 #include <QToolButton>
 #include <QTextDocument>
 #include <gtest/gtest.h>
+#ifdef SESSIO_TEST_AUDIO_DEVICE_PRIVATE
+#include <QtMultimedia/private/qaudiodevice_p.h>
+#endif
 
 using pcm::video::test::FakeVideoProvider;
 using pcm::video::VideoSession;
@@ -1008,6 +1012,63 @@ TEST(CallPageTest, SelectingADeviceCallsSwitchOnTheAttachedProvider) {
     microphoneCombo->setCurrentIndex(microphoneCombo->currentIndex() == 0 ? 1 : 0);
     EXPECT_EQ(provider->mSwitchMicrophoneCallCount, 1);
   }
+}
+
+TEST(CallPageTest, ReopenedMicrophoneSelectorShowsConfirmedSelectionRecoveryAndNoInput) {
+#ifdef SESSIO_TEST_AUDIO_DEVICE_PRIVATE
+  const auto makeDevice = [](const QByteArray &id) {
+    return QAudioDevicePrivate::createQAudioDevice(std::make_unique<QAudioDevicePrivate>(
+        id, QAudioDevice::Input, QString::fromLatin1(id), false,
+        QAudioDevicePrivate::AudioDeviceFormat{}));
+  };
+  class Devices final : public pcm::video::DeviceManager {
+  public:
+    QList<QAudioDevice> inputs;
+    QList<QAudioDevice> microphones() const override { return inputs; }
+  } devices;
+  const auto a = makeDevice("A");
+  const auto b = makeDevice("B");
+  devices.inputs = {a, b};
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider;
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateMicrophoneChanged(a);
+  auto *button = page.findChild<QToolButton *>("devicesButton");
+  const auto open = [&] {
+    button->click();
+    return page.findChild<QComboBox *>("deviceMicrophoneCombo");
+  };
+  const auto close = [](QComboBox *combo) {
+    auto *menu = combo->window();
+    menu->close();
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+  };
+  auto *combo = open();
+  ASSERT_NE(combo, nullptr);
+  combo->setCurrentIndex(combo->findData(b.id()));
+  EXPECT_EQ(provider->mSwitchMicrophoneCallCount, 1);
+  EXPECT_EQ(provider->selectedMicrophone(), b);
+  close(combo);
+  combo = open();
+  ASSERT_NE(combo, nullptr);
+  EXPECT_EQ(combo->currentData().toByteArray(), b.id());
+  combo->setCurrentIndex(combo->findData(a.id()));
+  EXPECT_EQ(provider->mSwitchMicrophoneCallCount, 2);
+  provider->simulateMicrophoneChanged(b);  // failed A opening, recovery to B
+  close(combo);
+  combo = open();
+  ASSERT_NE(combo, nullptr);
+  EXPECT_EQ(combo->currentData().toByteArray(), b.id());
+  provider->simulateMicrophoneChanged({});  // both attempts failed
+  close(combo);
+  combo = open();
+  ASSERT_NE(combo, nullptr);
+  EXPECT_EQ(combo->currentIndex(), -1);
+  close(combo);
+#else
+  GTEST_SKIP() << "Synthetic audio descriptors require Qt >= 6.11 MultimediaPrivate";
+#endif
 }
 
 TEST(CallPageTest, SetSidePanelExpandedByDefaultChecksTheNotesToggle) {
