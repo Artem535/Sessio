@@ -1,0 +1,23 @@
+name: Browser call
+on:
+  pull_request:
+    paths: ['web/call-client/**', '.github/workflows/browser-call.yml']
+  workflow_dispatch:
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/call-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/call-client/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

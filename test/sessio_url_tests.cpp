@@ -2,6 +2,13 @@
 
 #include <gtest/gtest.h>
 
+TEST(SessioUrl, TrustedHttpsFragmentInvitation) {
+  const auto link = parseSessioJoinUrl("https://calls.sessio-pcm.ru/join#code=abc&passcode=123");
+  ASSERT_TRUE(link);
+  EXPECT_EQ(link->code, "abc");
+  EXPECT_FALSE(parseSessioJoinUrl("https://evil.test/join#code=abc&passcode=123"));
+}
+
 TEST(SessioUrlTest, ParsesCodeAndPasscode) {
   const auto link = parseSessioJoinUrl("sessio://join?code=abc-123&passcode=654321");
   ASSERT_TRUE(link.has_value());

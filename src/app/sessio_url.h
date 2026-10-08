@@ -14,4 +14,6 @@ struct SessioJoinLink {
 
 // Parses sessio://join?code=...&passcode=...[&backend=<percent-encoded URL>].
 // `code` and `passcode` are required; `backend` is optional.
+// HTTPS /join fragment links are accepted only from SESSIO_CALL_HOST
+// (default calls.sessio-pcm.ru), never with a backend override.
 [[nodiscard]] std::optional<SessioJoinLink> parseSessioJoinUrl(const QString &url);

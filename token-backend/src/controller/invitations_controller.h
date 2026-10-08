@@ -4,6 +4,7 @@
 #include "controller/meetings_controller.h" // for statusForError
 #include "controller/request_log.h"
 #include "service/meeting_service.h"
+#include "service/display_name.h"
 #include "controller/series_controller.h"
 
 #include "oatpp/web/server/api/ApiController.hpp"
@@ -52,8 +53,16 @@ public:
     }
 
     Result<TokenResult> result;
+    const auto kind = toStdString(body->clientKind);
+    const auto name = normaliseDisplayName(toStdString(body->displayName), kind == "web");
+    if ((!kind.empty() && kind != "web" && kind != "native") || !name) {
+      auto err = ErrorResponseDto::createShared();
+      err->error = !name ? "invalid_display_name" : "invalid_request";
+      auto response = createDtoResponse(Status::CODE_400, err);
+      response->putHeader("Cache-Control", "no-store"); return response;
+    }
     try {
-      result = service_.issueClientToken(toStdString(code), toStdString(body->passcode), toStdString(body->displayName));
+      result = service_.issueClientToken(toStdString(code), toStdString(body->passcode), *name);
     } catch (...) {
       auto response = createResponse(Status::CODE_500, "{\"error\":\"internal_error\"}");
       response->putHeader("Cache-Control", "no-store"); response->putHeader("Content-Type", "application/json"); return response;

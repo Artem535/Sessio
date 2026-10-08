@@ -4,6 +4,12 @@
 
 namespace pcm::tokenbackend {
 
+TEST(InvitationUrlTest, EscapesFragmentValues) {
+  EXPECT_EQ(formatInvitationUrl("https://calls.example.test/join#code={0}&passcode={1}",
+                               "a&b", "a b"),
+            "https://calls.example.test/join#code=a%26b&passcode=a%20b");
+}
+
 TEST(InvitationUrlTest, ExpandsCodeAndPasscodeWithStandardFormatTemplate) {
   EXPECT_EQ(formatInvitationUrl(
                 "sessio://join?code={}&passcode={}&backend=https%3A%2F%2Flivekit.sessio-pcm.ru",
