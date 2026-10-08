@@ -65,8 +65,8 @@ void CallTranscriptionController::refreshAvailability() {
     reason = tr("Transcription is turned off in Settings");
   else if (!models)
     reason = tr("Speech models are not installed");
-  else if (!mCall || !mCallEvent)
-    reason = tr("Open the call from a calendar event to transcribe it");
+  else if (!mCall)
+    reason = tr("Open a call to transcribe it");
   else if (mSession)
     reason = tr("Wait for the current transcription to finish");
   mStartAvailable = !mShutdown && reason.isEmpty();
@@ -101,7 +101,7 @@ void CallTranscriptionController::onTranscribeRequested() {
   if (!mStartAvailable || !mHooks.askConsent)
     return;
   const auto generation = mAttachmentGeneration;
-  const auto original = *mCallEvent;
+  const auto original = mCallEvent;
   QPointer<CallTranscriptionController> self(this);
   const auto consentHook = mHooks.askConsent;
   if (!consentHook() || !self)
@@ -111,18 +111,17 @@ void CallTranscriptionController::onTranscribeRequested() {
   if (!mStartAvailable || generation != mAttachmentGeneration)
     return;
   const auto resolveHook = mHooks.resolveEvent;
-  const auto event =
-      resolveHook ? resolveHook(original) : std::nullopt;
+  const auto event = original && resolveHook ? resolveHook(*original) : std::nullopt;
   if (!self || generation != mAttachmentGeneration || mShutdown)
     return;
-  if (!event || *event <= 0) {
+  if (original && (!event || *event <= 0)) {
     if (mPanel)
       mPanel->setError(
           tr("Unable to open the calendar event for transcription"));
     return;
   }
   const auto materialisedHook = mHooks.eventMaterialised;
-  if (original < 0 && materialisedHook)
+  if (original && *original < 0 && materialisedHook)
     materialisedHook(*event);
   if (!self || generation != mAttachmentGeneration || !mCall || mShutdown)
     return;
@@ -190,13 +189,13 @@ void CallTranscriptionController::onTranscribeRequested() {
             }
           });
   connect(session, &TranscriptionSession::finished, this,
-          [this, session, eventId = *event](qint64 id) {
+          [this, session](qint64 id) {
             if (mSession != session)
               return;
             if (mPanel)
               mPanel->setDelayed(false);
             releaseSession(session);
-            emit callTranscriptReady(eventId, id);
+            emit transcriptReady(id);
           });
   connect(session, &TranscriptionSession::revoked, this,
           [this, session](qint64 id) {
@@ -241,7 +240,7 @@ void CallTranscriptionController::onTranscribeRequested() {
               mPanel->setDelayed(false);
             releaseSession(session);
           });
-  if (!session->start(*event, "live_local_v1")) {
+  if (!session->start(event, "live_local_v1")) {
     if (mPanel)
       mPanel->setError(tr("Unable to start transcription"));
     releaseSession(session);

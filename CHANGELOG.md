@@ -2,13 +2,52 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.2.21] - 2026-10-08
+## [0.2.23] - 2026-10-08
 
 ### Changed
 
 - The live transcript in a call shows phrases as the same rounded cards as the
   transcript window: speaker marker, bold speaker name, time range and larger
   text.
+
+## [0.2.22] - 2026-10-08
+
+### Added
+
+- Any participant can share a screen at the same time as others, from the app
+  (whole screen or a single window) and from the browser guest page. Shared
+  screens appear as their own tiles; camera, microphone and transcription are
+  unaffected. The one-owner lease design for screen sharing is dropped.
+- In the call window the featured screen fills the stage and the other screens
+  and cameras sit in a strip below it; click a screen in the strip to feature
+  it. A banner with a Stop button shows while you share.
+
+## [0.2.20] - 2026-10-08
+
+### Added
+
+- An isolated screen-sharing permission diagnostic and verification report.
+  Screen sharing remains unavailable pending a fix for cached LiveKit grant
+  tokens restoring screen publishing after permission revocation.
+
+## [0.2.19] - 2026-10-08
+
+### Added
+
+- Browser guest call client with required name, device preview and direct LiveKit
+  room entry; HTTPS fragment invitations and same-origin deployment template.
+- Guest names use a shared 80 Unicode scalar limit. Legacy native empty names
+  remain accepted; recurring guests now receive independent participant identities.
+
+## [0.2.18] - 2026-10-08
+
+### Added
+- Call transcription without a calendar event or client card, with the same consent and revocation controls.
+- A durable Transcripts page with review by transcript ID, text export, and manual assignment to existing client cards.
+
+### Changed
+- Deleting events or client cards preserves transcript text and removes only the corresponding link.
+- Schema 2 migrates legacy transcript/client links once; backups retain format 1 and legacy backups migrate before restoration.
 
 ## [0.2.17] - 2026-10-08
 

@@ -204,12 +204,40 @@
         <translation>Exit fullscreen</translation>
     </message>
     <message>
+        <source>Share screen</source>
+        <translation>Share screen</translation>
+    </message>
+    <message>
+        <source>You are sharing your screen</source>
+        <translation>You are sharing your screen</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Stop</translation>
+    </message>
+    <message>
         <source>Switch camera, microphone, or speaker</source>
         <translation>Switch camera, microphone, or speaker</translation>
     </message>
     <message>
         <source>Leave</source>
         <translation>Leave</translation>
+    </message>
+    <message>
+        <source>Stop sharing screen</source>
+        <translation>Stop sharing screen</translation>
+    </message>
+    <message>
+        <source>Screens</source>
+        <translation>Screens</translation>
+    </message>
+    <message>
+        <source>%1 (%2×%3)</source>
+        <translation>%1 (%2×%3)</translation>
+    </message>
+    <message>
+        <source>Windows</source>
+        <translation>Windows</translation>
     </message>
     <message>
         <source>Notes</source>
@@ -275,6 +303,10 @@
     <message>
         <source>Delete %1? This action cannot be undone.</source>
         <translation>Delete %1? This action cannot be undone.</translation>
+    </message>
+    <message>
+        <source>The transcript will be kept.</source>
+        <translation>The transcript will be kept.</translation>
     </message>
 </context>
 <context>
@@ -812,6 +844,10 @@
     <message>
         <source>Calls</source>
         <translation>Calls</translation>
+    </message>
+    <message>
+        <source>Transcripts</source>
+        <translation>Transcripts</translation>
     </message>
     <message>
         <source>Back to clients</source>
@@ -1376,6 +1412,10 @@
         <source>: EVENT_DELETE_CONFIRMATION</source>
         <translation>Are you sure you want to delete this event?</translation>
     </message>
+    <message>
+        <source>The transcript will be kept.</source>
+        <translation>The transcript will be kept.</translation>
+    </message>
 </context>
 <context>
     <name>QEventItem</name>
@@ -1597,6 +1637,10 @@ See you!</translation>
     <message>
         <source>What do you want to delete?</source>
         <translation>What do you want to delete?</translation>
+    </message>
+    <message>
+        <source>The transcript will be kept.</source>
+        <translation>The transcript will be kept.</translation>
     </message>
     <message>
         <source>This and future events</source>
@@ -2444,6 +2488,80 @@ See you!</translation>
     </message>
 </context>
 <context>
+    <name>TranscriptClientDialog</name>
+    <message>
+        <source>Attach clients</source>
+        <translation>Attach clients</translation>
+    </message>
+    <message>
+        <source>Select existing clients. Guest names are never matched automatically.</source>
+        <translation>Select existing clients. Guest names are never matched automatically.</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptListPage</name>
+    <message>
+        <source>Transcripts</source>
+        <translation>Transcripts</translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>Date</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Status</translation>
+    </message>
+    <message>
+        <source>Clients</source>
+        <translation>Clients</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Open transcript</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Delete transcript</translation>
+    </message>
+    <message>
+        <source>This transcript is still being recorded. Editing is unavailable.</source>
+        <translation>This transcript is still being recorded. Editing is unavailable.</translation>
+    </message>
+    <message>
+        <source>Delete this transcript and all its phrases?</source>
+        <translation>Delete this transcript and all its phrases?</translation>
+    </message>
+    <message>
+        <source>Could not update the transcript. Please try again.</source>
+        <translation>Could not update the transcript. Please try again.</translation>
+    </message>
+    <message>
+        <source>Recording</source>
+        <translation>Recording</translation>
+    </message>
+    <message>
+        <source>Reviewed</source>
+        <translation>Reviewed</translation>
+    </message>
+    <message>
+        <source>Draft</source>
+        <translation>Draft</translation>
+    </message>
+    <message>
+        <source>No clients attached</source>
+        <translation>No clients attached</translation>
+    </message>
+    <message>
+        <source>No transcripts yet.</source>
+        <translation>No transcripts yet.</translation>
+    </message>
+    <message>
+        <source>Could not load transcripts. Please try again.</source>
+        <translation>Could not load transcripts. Please try again.</translation>
+    </message>
+</context>
+<context>
     <name>TranscriptPage</name>
     <message>
         <source>Back to event</source>
@@ -2460,6 +2578,22 @@ See you!</translation>
     <message>
         <source>Delete transcript</source>
         <translation>Delete transcript</translation>
+    </message>
+    <message>
+        <source>Attach clients</source>
+        <translation>Attach clients</translation>
+    </message>
+    <message>
+        <source>Export text</source>
+        <translation>Export text</translation>
+    </message>
+    <message>
+        <source>Export transcript</source>
+        <translation>Export transcript</translation>
+    </message>
+    <message>
+        <source>Text files (*.txt)</source>
+        <translation>Text files (*.txt)</translation>
     </message>
     <message>
         <source>More actions</source>
@@ -2482,12 +2616,12 @@ See you!</translation>
         <translation>Save or cancel the current edit first.</translation>
     </message>
     <message>
-        <source>Client unavailable</source>
-        <translation>Client unavailable</translation>
+        <source>Back to transcripts</source>
+        <translation>Back to transcripts</translation>
     </message>
     <message>
-        <source>Client: %1</source>
-        <translation>Client: %1</translation>
+        <source>No clients attached</source>
+        <translation>No clients attached</translation>
     </message>
     <message>
         <source>No transcripts for this event.</source>
@@ -2496,6 +2630,10 @@ See you!</translation>
     <message>
         <source>Transcript unavailable.</source>
         <translation>Transcript unavailable.</translation>
+    </message>
+    <message>
+        <source>Clients: %1</source>
+        <translation>Clients: %1</translation>
     </message>
     <message>
         <source>Recording</source>
@@ -2819,6 +2957,10 @@ Your previous data was kept.</translation>
         <source>Keep as draft</source>
         <translation>Keep as draft</translation>
     </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
 </context>
 <context>
     <name>pcm::eventpage::SeriesTimezoneDialog</name>
@@ -2874,8 +3016,8 @@ Your previous data was kept.</translation>
         <translation>Speech models are not installed</translation>
     </message>
     <message>
-        <source>Open the call from a calendar event to transcribe it</source>
-        <translation>Open the call from a calendar event to transcribe it</translation>
+        <source>Open a call to transcribe it</source>
+        <translation>Open a call to transcribe it</translation>
     </message>
     <message>
         <source>Wait for the current transcription to finish</source>
@@ -2917,8 +3059,24 @@ Your previous data was kept.</translation>
         <translation>Participant</translation>
     </message>
     <message>
+        <source>Your screen</source>
+        <translation>Your screen</translation>
+    </message>
+    <message>
+        <source>%1&apos;s screen</source>
+        <translation>%1&apos;s screen</translation>
+    </message>
+    <message>
         <source>%1 (You)</source>
         <translation>%1 (You)</translation>
+    </message>
+    <message>
+        <source>You are sharing your screen</source>
+        <translation>You are sharing your screen</translation>
+    </message>
+    <message>
+        <source>Waiting for screen...</source>
+        <translation>Waiting for screen...</translation>
     </message>
     <message>
         <source>Waiting for video...</source>
@@ -2927,6 +3085,10 @@ Your previous data was kept.</translation>
     <message>
         <source>Camera off</source>
         <translation>Camera off</translation>
+    </message>
+    <message>
+        <source>Screen sharing stopped</source>
+        <translation>Screen sharing stopped</translation>
     </message>
 </context>
 </TS>

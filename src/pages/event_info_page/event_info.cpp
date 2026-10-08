@@ -99,6 +99,7 @@ RecurringDeleteScope askRecurringDeleteScope(QWidget *parent, bool allowFuture) 
   QMessageBox messageBox(parent);
   messageBox.setWindowTitle(QObject::tr("Recurring event"));
   messageBox.setText(QObject::tr("What do you want to delete?"));
+  messageBox.setInformativeText(QObject::tr("The transcript will be kept."));
   const auto singleButton =
       messageBox.addButton(QObject::tr("Only this event"), QMessageBox::AcceptRole);
   QAbstractButton *futureButton = nullptr;
@@ -108,7 +109,8 @@ RecurringDeleteScope askRecurringDeleteScope(QWidget *parent, bool allowFuture) 
   } else {
     messageBox.setInformativeText(
         QObject::tr("\"This and future events\" is not available for a series with a "
-                    "permanent call link. Delete only this event or the whole series."));
+                    "permanent call link. Delete only this event or the whole series.") + "\n" +
+            QObject::tr("The transcript will be kept."));
   }
   const auto seriesButton =
       messageBox.addButton(QObject::tr("Whole series"), QMessageBox::DestructiveRole);
@@ -730,7 +732,7 @@ void QEventInfoPage::onTimelineEventDeleteRequested(const int64_t eventId) {
   if (pcm::app_settings::confirmEventDeletion()) {
     const auto reply =
         QMessageBox::question(this, tr(": EVENT_DELETE_TITLE"),
-                              tr(": EVENT_DELETE_CONFIRMATION"),
+                              tr(": EVENT_DELETE_CONFIRMATION") + "\n" + tr("The transcript will be kept."),
                               QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 
     if (reply != QMessageBox::Yes) {

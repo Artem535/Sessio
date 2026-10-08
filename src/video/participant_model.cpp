@@ -23,6 +23,7 @@ QVariant ParticipantModel::data(const QModelIndex &index, int role) const {
   case IsLocalRole: return p.isLocal;
   case MicrophoneEnabledRole: return p.microphoneEnabled;
   case CameraEnabledRole: return p.cameraEnabled;
+  case ScreenSharingRole: return p.screenSharing;
   default: return {};
   }
 }
@@ -30,7 +31,7 @@ QVariant ParticipantModel::data(const QModelIndex &index, int role) const {
 QHash<int, QByteArray> ParticipantModel::roleNames() const {
   return {{IdRole, "id"}, {DisplayNameRole, "displayName"}, {ParticipantRole, "role"},
           {IsLocalRole, "isLocal"}, {MicrophoneEnabledRole, "microphoneEnabled"},
-          {CameraEnabledRole, "cameraEnabled"}};
+          {CameraEnabledRole, "cameraEnabled"}, {ScreenSharingRole, "screenSharing"}};
 }
 
 void ParticipantModel::updateRemoteCount(int previous) {
@@ -51,7 +52,8 @@ void ParticipantModel::upsert(const Participant &participant) {
     mParticipants[row] = participant;
     updateRemoteCount(previous);
     emit dataChanged(index(row), index(row), {DisplayNameRole, ParticipantRole, IsLocalRole,
-                                            MicrophoneEnabledRole, CameraEnabledRole, Qt::DisplayRole});
+                                            MicrophoneEnabledRole, CameraEnabledRole, ScreenSharingRole,
+                                            Qt::DisplayRole});
     return;
   }
   const int row = rowCount();

@@ -14,6 +14,7 @@ struct Participant {
   bool isLocal{false};
   bool microphoneEnabled{true};
   bool cameraEnabled{true};
+  bool screenSharing{false};
   bool operator==(const Participant &) const = default;
 };
 
@@ -28,6 +29,7 @@ public:
     IsLocalRole,
     MicrophoneEnabledRole,
     CameraEnabledRole,
+    ScreenSharingRole,
   };
   Q_ENUM(Role)
   explicit ParticipantModel(QObject *parent = nullptr);

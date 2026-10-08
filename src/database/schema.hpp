@@ -431,7 +431,7 @@ inline std::ostream &operator<<(std::ostream &os, const DuckClientNote &note) {
 // status: "recording" | "draft" | "reviewed". Times are epoch milliseconds.
 struct DuckTranscript {
   std::int64_t id = -1;
-  std::int64_t event_id = -1;
+  std::optional<std::int64_t> event_id = std::nullopt;
   std::string status;
   std::string consent_scope;
   std::int64_t consent_given_at = 0;
@@ -443,7 +443,7 @@ struct DuckTranscript {
   DuckTranscript() = default;
   DuckTranscript(const duckdb::DataChunk &chunk, duckdb::idx_t index) {
     id = db_utils::toInt32AsInt64(chunk.GetValue(0, index));
-    event_id = db_utils::toInt32AsInt64(chunk.GetValue(1, index));
+    event_id = db_utils::toOptionalInt32AsInt64(chunk.GetValue(1, index));
     status = chunk.GetValue(2, index).ToString();
     consent_scope = chunk.GetValue(3, index).ToString();
     consent_given_at = db_utils::toOptionalTimestampMs(chunk.GetValue(4, index)).value_or(0);

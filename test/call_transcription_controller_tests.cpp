@@ -81,7 +81,7 @@ protected:
   void TearDown() override {
     controller.reset();
     EXPECT_TRUE(pump([this] {
-      for (auto &row : db->get_transcripts_for_event(eventId))
+      for (auto &row : db->get_transcripts())
         if (row.status == "recording")
           return false;
       return true;
@@ -178,12 +178,41 @@ TEST_F(ControllerTest, MissingModelsBlockStartWithReason) {
   EXPECT_EQ(consents, 0);
   EXPECT_EQ(label("transcriptStartReason"), "Speech models are not installed");
 }
-TEST_F(ControllerTest, CallWithoutEventBlocksStart) {
+TEST_F(ControllerTest, CallWithoutEventStartsStandaloneTranscript) {
   make();
   controller->attachCall(video.get(), std::nullopt);
   controller->onTranscribeRequested();
-  EXPECT_FALSE(controller->startAvailable());
-  EXPECT_EQ(consents, 0);
+  EXPECT_EQ(consents, 1);
+  ASSERT_EQ(db->get_transcripts().size(), 1);
+  EXPECT_FALSE(db->get_transcripts().front().event_id.has_value());
+  EXPECT_NE(provider->audioSink(), nullptr);
+  EXPECT_EQ(resolutions, 0);
+}
+
+TEST_F(ControllerTest, StandaloneConsentRejectedCreatesNoTranscript) {
+  consent = false; make();
+  controller->attachCall(video.get(), std::nullopt);
+  controller->onTranscribeRequested();
+  EXPECT_EQ(consents, 1); EXPECT_EQ(resolutions, 0);
+  EXPECT_TRUE(db->get_transcripts().empty());
+  EXPECT_EQ(provider->audioSink(), nullptr);
+}
+
+TEST_F(ControllerTest, StandaloneStopEmitsTranscriptIdAndKeepsGuestSeparateFromClients) {
+  make(); controller->attachCall(video.get(), std::nullopt);
+  const auto clients = db->get_clients().size();
+  controller->onTranscribeRequested();
+  ASSERT_EQ(db->get_transcripts().size(), 1);
+  const auto id = db->get_transcripts()[0].id;
+  phrase();
+  QSignalSpy ready(controller.get(), &CallTranscriptionController::transcriptReady);
+  panel->stopRequested();
+  ASSERT_TRUE(pump([&] { return ready.count() == 1; }));
+  EXPECT_EQ(ready.at(0).at(0).toLongLong(), id);
+  EXPECT_EQ(db->get_transcript(id)->status, "draft");
+  EXPECT_FALSE(db->get_transcript(id)->event_id.has_value());
+  EXPECT_TRUE(db->get_transcript_client_ids(id).empty());
+  EXPECT_EQ(db->get_clients().size(), clients);
 }
 TEST_F(ControllerTest, AvailabilityRefreshTracksSettingsModelsAndEvent) {
   make();
@@ -209,11 +238,11 @@ TEST_F(ControllerTest, PhrasesReachThePanelAndTheDatabase) {
 TEST_F(ControllerTest, StopFinishesAsDraftAndEmitsReady) {
   start();
   QSignalSpy ready(controller.get(),
-                   &CallTranscriptionController::callTranscriptReady);
+                   &CallTranscriptionController::transcriptReady);
   panel->stopRequested();
   ASSERT_TRUE(pump([&] { return ready.count() == 1; }));
   EXPECT_EQ(db->get_transcript(transcriptId())->status, "draft");
-  EXPECT_EQ(ready.at(0).at(0).toLongLong(), eventId);
+  EXPECT_EQ(ready.at(0).at(0).toLongLong(), transcriptId());
 }
 TEST_F(ControllerTest, RevokeAskedChoiceDelete) {
   start();
@@ -260,7 +289,7 @@ TEST_F(ControllerTest, NonterminalFailureStopsBeforeAllowingRestart) {
 TEST_F(ControllerTest, LeavingCallStopsTranscriptionWithoutProviderLeft) {
   start();
   QSignalSpy ready(controller.get(),
-                   &CallTranscriptionController::callTranscriptReady);
+                   &CallTranscriptionController::transcriptReady);
   video->stateChanged(pcm::video::VideoSessionState::Leaving);
   EXPECT_EQ(provider->audioSink(), nullptr);
   ASSERT_TRUE(pump([&] { return ready.count() == 1; }));
@@ -287,9 +316,9 @@ TEST_F(ControllerTest, OldSessionSignalsCannotUpdateReplacement) {
   QPointer<pcm::calltranscription::TranscriptionSession> old =
       controller->findChild<pcm::calltranscription::TranscriptionSession *>();
   QSignalSpy ready(controller.get(),
-                   &CallTranscriptionController::callTranscriptReady);
-  QObject::connect(controller.get(), &CallTranscriptionController::callTranscriptReady,
-          controller.get(), [this, old](int64_t, int64_t) {
+                   &CallTranscriptionController::transcriptReady);
+  QObject::connect(controller.get(), &CallTranscriptionController::transcriptReady,
+          controller.get(), [this, old](qint64) {
             EXPECT_FALSE(controller->startAvailable());
             controller->onTranscribeRequested();
             EXPECT_EQ(db->count_transcripts(), 1);
@@ -383,7 +412,7 @@ TEST_F(ControllerTest, CallEndedStopsSessionAndKeepsResultVisible) {
   start();
   phrase();
   QSignalSpy ready(controller.get(),
-                   &CallTranscriptionController::callTranscriptReady);
+                   &CallTranscriptionController::transcriptReady);
   controller->detachCall();
   ASSERT_TRUE(pump([&] { return ready.count() == 1; }));
   EXPECT_EQ(panel->phraseCount(), 1);

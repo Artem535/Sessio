@@ -192,7 +192,7 @@ CREATE TABLE IF NOT EXISTS ScheduleOutbox (
 -- the transcript), the explicit cascades, and purge_orphan_transcripts() at startup.
 CREATE TABLE IF NOT EXISTS Transcript (
     id INTEGER PRIMARY KEY,
-    event_id INTEGER NOT NULL,
+    event_id INTEGER,
     status TEXT NOT NULL,
     consent_scope TEXT NOT NULL,
     consent_given_at TIMESTAMP NOT NULL,
@@ -554,22 +554,11 @@ SET active = FALSE,
 WHERE id = $1
 )duckdb";
 
-constexpr auto kDeletePhrasesOfEventTranscriptsQuery = R"duckdb(
-DELETE FROM TranscriptPhrase
-WHERE transcript_id IN (SELECT id FROM Transcript WHERE event_id = $1)
-)duckdb";
-constexpr auto kDeleteTranscriptsOfEventQuery =
-    "DELETE FROM Transcript WHERE event_id = $1";
+constexpr auto kDetachTranscriptsOfEventQuery =
+    "UPDATE Transcript SET event_id = NULL WHERE event_id = $1";
 
-constexpr auto kDeletePhrasesOfSeriesOverrideTranscriptsQuery = R"duckdb(
-DELETE FROM TranscriptPhrase
-WHERE transcript_id IN (
-    SELECT t.id FROM Transcript t
-    JOIN Event e ON e.id = t.event_id
-    WHERE e.series_id = $1 AND e.original_occurrence_start >= $2)
-)duckdb";
-constexpr auto kDeleteTranscriptsOfSeriesOverridesQuery = R"duckdb(
-DELETE FROM Transcript
+constexpr auto kDetachTranscriptsOfSeriesOverridesQuery = R"duckdb(
+UPDATE Transcript SET event_id = NULL
 WHERE event_id IN (
     SELECT id FROM Event
     WHERE series_id = $1 AND original_occurrence_start >= $2)
@@ -776,11 +765,9 @@ constexpr auto kDeleteAllTranscriptPhrasesQuery = "DELETE FROM TranscriptPhrase"
 constexpr auto kPurgeOrphanTranscriptPhrasesQuery = R"duckdb(
 DELETE FROM TranscriptPhrase
 WHERE transcript_id NOT IN (SELECT id FROM Transcript)
-   OR transcript_id IN (
-       SELECT id FROM Transcript WHERE event_id NOT IN (SELECT id FROM Event))
 )duckdb";
 constexpr auto kPurgeOrphanTranscriptsQuery = R"duckdb(
-DELETE FROM Transcript WHERE event_id NOT IN (SELECT id FROM Event) RETURNING id
+UPDATE Transcript SET event_id = NULL WHERE event_id NOT IN (SELECT id FROM Event) RETURNING id
 )duckdb";
 
 constexpr auto kSelectTranscriptWriteStateQuery =
@@ -790,7 +777,8 @@ constexpr auto kSelectTranscriptsByClientQuery = R"duckdb(
 SELECT t.id, t.event_id, t.status, t.consent_scope, t.consent_given_at,
        t.consent_revoked_at, t.model_id, t.created_at, t.updated_at
 FROM Transcript t
-JOIN EventClient ec ON ec.event_id = t.event_id
+JOIN TranscriptClient ec ON ec.transcript_id = t.id
+JOIN Client c ON c.id = ec.client_id
 WHERE ec.client_id = $1
 ORDER BY t.created_at, t.id
 )duckdb";

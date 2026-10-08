@@ -223,9 +223,9 @@ void TranscriptionSession::detachSink() {
   if (provider_) provider_->setAudioSink(nullptr);
 }
 
-bool TranscriptionSession::start(int64_t eventId, const QString &consentScope) {
+bool TranscriptionSession::start(std::optional<int64_t> eventId, const QString &consentScope) {
   auto &sh = *shared_;
-  if (state() != SessionState::Idle || eventId <= 0 || consentScope.isEmpty() || !sh.db ||
+  if (state() != SessionState::Idle || (eventId && *eventId <= 0) || consentScope.isEmpty() || !sh.db ||
       !provider_ || !sh.factory)
     return false;
 

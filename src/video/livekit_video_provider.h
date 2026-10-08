@@ -14,6 +14,7 @@
 namespace pcm::video {
 
 class VideoCaptureAdapter;
+class ScreenCaptureAdapter;
 class AudioCaptureAdapter;
 class LiveKitVideoFrameSource;
 class RemoteAudioPlayer;
@@ -31,6 +32,7 @@ struct TrackSnapshot {
   livekit::TrackKind kind;
   bool muted;
   std::shared_ptr<livekit::Track> track;
+  bool screen{false};
 };
 
 class LiveKitVideoProvider final : public VideoProvider {
@@ -42,10 +44,14 @@ public:
   void join(const QString &url, const QString &token) override;
   void leave() override;
   VideoFrameSource *frameSource(const QString &id) override;
+  VideoFrameSource *screenSource(const QString &id) override;
   void setMicrophoneEnabled(bool enabled) override;
   void setCameraEnabled(bool enabled) override;
   [[nodiscard]] bool isMicrophoneEnabled() const override { return mMicrophoneEnabled; }
   [[nodiscard]] bool isCameraEnabled() const override { return mCameraEnabled; }
+  void startScreenShare(const ScreenCaptureTarget &target) override;
+  void stopScreenShare() override;
+  [[nodiscard]] bool isScreenSharing() const override { return mScreenTrack != nullptr; }
   void switchCamera(const QCameraDevice &device) override;
   void switchMicrophone(const QAudioDevice &device) override;
   void switchSpeaker(const QAudioDevice &device) override;
@@ -59,6 +65,10 @@ private:
   struct ParticipantMedia {
     QString sid;
     std::unique_ptr<LiveKitVideoFrameSource> video;
+    std::unique_ptr<LiveKitVideoFrameSource> screen;
+    QString screenSid;
+    QString lastScreenSid;
+    std::set<QString> retiredScreenSids;
     std::unique_ptr<RemoteAudioPlayer> audio;
     QString videoSid;
     QString audioSid;
@@ -93,6 +103,7 @@ private:
 
   std::unique_ptr<DeviceManager> mDeviceManager;
   std::unique_ptr<VideoCaptureAdapter> mVideoCapture;
+  std::unique_ptr<ScreenCaptureAdapter> mScreenCapture;
   std::unique_ptr<AudioCaptureAdapter> mAudioCapture;
   std::map<QString, std::unique_ptr<ParticipantMedia>> mMedia;
   std::set<std::pair<QString, QString>> mDeparted;
@@ -119,6 +130,7 @@ private:
   std::unique_ptr<livekit::Room> mRoom;
   std::shared_ptr<livekit::LocalAudioTrack> mAudioTrack;
   std::shared_ptr<livekit::LocalVideoTrack> mVideoTrack;
+  std::shared_ptr<livekit::LocalVideoTrack> mScreenTrack;
 };
 
 } // namespace pcm::video

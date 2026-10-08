@@ -31,7 +31,7 @@ template <typename Predicate> bool await(Predicate predicate, int timeoutMs = 15
 }
 }
 
-TEST(TranscriptionWorkflowModelTest, RealSpeechPersistsBothSpeakersAndCanBeReviewedEditedAndDeleted) {
+void runRealSpeechWorkflow(bool standalone) {
   const auto root = qEnvironmentVariable("SESSIO_MODELS_DIR");
   if (root.isEmpty() || !pcm::calltranscription::transcriptionModelsAvailable(
           QCoreApplication::applicationDirPath().toStdString(), root.toStdString()))
@@ -57,8 +57,8 @@ TEST(TranscriptionWorkflowModelTest, RealSpeechPersistsBothSpeakersAndCanBeRevie
   event.duration = 3600;
   event.event_stat_id = 1;
   event.payment_stat_id = 1;
-  const auto eventId = db->add_event(event);
-  ASSERT_GT(eventId, 0);
+  const std::optional<int64_t> eventId = standalone ? std::nullopt : std::optional<int64_t>(db->add_event(event));
+  if (eventId) ASSERT_GT(*eventId, 0);
   auto *provider = new pcm::video::test::FakeVideoProvider;
   pcm::video::VideoSession call(provider);
   provider->simulateParticipantJoined({"specialist", "Specialist", "", true});
@@ -68,7 +68,7 @@ TEST(TranscriptionWorkflowModelTest, RealSpeechPersistsBothSpeakersAndCanBeRevie
   pcm::transcriptionui::ControllerHooks hooks;
   bool consent = false;
   hooks.askConsent = [&] { return consent; };
-  hooks.resolveEvent = [=](int64_t) { return std::optional<int64_t>(eventId); };
+  hooks.resolveEvent = [=](int64_t) { return eventId; };
   hooks.transcriptionEnabled = [] { return true; };
   hooks.modelsAvailable = [] { return true; };
   hooks.engineFactory = [=] {
@@ -99,14 +99,17 @@ TEST(TranscriptionWorkflowModelTest, RealSpeechPersistsBothSpeakersAndCanBeRevie
   });
   source.start(100);
   ASSERT_TRUE(await([&] { return !source.isActive(); }, 25000));
-  QSignalSpy ready(&controller, &pcm::transcriptionui::CallTranscriptionController::callTranscriptReady);
+  QSignalSpy ready(&controller, &pcm::transcriptionui::CallTranscriptionController::transcriptReady);
   panel->findChild<QPushButton *>("transcriptStop")->click();
   ASSERT_TRUE(await([&] { return ready.count() == 1 && !controller.active(); }));
   EXPECT_EQ(provider->audioSink(), nullptr);
-  const auto rows = db->get_transcripts_for_event(eventId);
+  const auto rows = db->get_transcripts();
   ASSERT_EQ(rows.size(), 1);
   EXPECT_EQ(rows.front().status, "draft");
   EXPECT_EQ(rows.front().consent_scope, "live_local_v1");
+  EXPECT_EQ(rows.front().event_id, eventId);
+  EXPECT_TRUE(db->get_transcript_client_ids(rows.front().id).empty());
+  EXPECT_TRUE(db->get_clients().empty());
   const auto phrases = db->get_transcript_phrases(rows.front().id);
   ASSERT_GE(phrases.size(), 2);
   EXPECT_EQ(panel->phraseCount(), phrases.size());
@@ -115,7 +118,8 @@ TEST(TranscriptionWorkflowModelTest, RealSpeechPersistsBothSpeakersAndCanBeRevie
       return phrase.track_role == role && !phrase.text.empty() && phrase.end_ms > phrase.start_ms;
     }));
   }
-  TranscriptPage review(db, eventId, "Synthetic speech workflow");
+  TranscriptPage review(db, eventId.value_or(0), "Synthetic speech workflow");
+  if (standalone) review.reloadTranscript(rows.front().id, "Synthetic speech workflow");
   const auto firstId = phrases.front().id;
   review.findChild<QPushButton *>("editPhrase_" + QString::number(firstId))->click();
   review.findChild<QPlainTextEdit *>("phraseEditor")->setPlainText("Исправленная тестовая реплика");
@@ -127,6 +131,13 @@ TEST(TranscriptionWorkflowModelTest, RealSpeechPersistsBothSpeakersAndCanBeRevie
   review.findChild<QPushButton *>("deleteTranscript")->click();
   EXPECT_EQ(db->count_transcripts(), 0);
   EXPECT_TRUE(db->get_transcript_phrases(rows.front().id).empty());
+}
+
+TEST(TranscriptionWorkflowModelTest, RealSpeechPersistsBothSpeakersAndCanBeReviewedEditedAndDeleted) {
+  runRealSpeechWorkflow(false);
+}
+TEST(TranscriptionWorkflowModelTest, StandaloneRealSpeechPersistsWithoutEventOrClient) {
+  runRealSpeechWorkflow(true);
 }
 
 int main(int argc, char **argv) {

@@ -35,7 +35,7 @@ public slots:
 signals:
   void transcribeButtonState(bool active, QString tooltip);
   void requestOpenTranscriptTab();
-  void callTranscriptReady(int64_t eventId, int64_t transcriptId);
+  void transcriptReady(qint64 transcriptId);
 
 private:
   void releaseSession(pcm::calltranscription::TranscriptionSession *session);

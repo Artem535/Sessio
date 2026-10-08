@@ -14,9 +14,22 @@ namespace {
 std::pair<QString, QString> joinCredentialsFromInput(const QString &codeOrLink,
                                                       const QString &passcode) {
   const QUrl url(codeOrLink.trimmed());
-  if (url.isValid() && url.scheme() == QStringLiteral("sessio") &&
-      url.host() == QStringLiteral("join")) {
-    const QUrlQuery query(url);
+  const bool browser = url.scheme() == QStringLiteral("https") &&
+      url.host() == qEnvironmentVariable("SESSIO_CALL_HOST", "calls.sessio-pcm.ru") &&
+      url.path() == QStringLiteral("/join") && url.userInfo().isEmpty() &&
+      (url.port() == -1 || url.port() == 443) && url.query().isEmpty();
+  if (url.isValid() && (browser || (url.scheme() == QStringLiteral("sessio") &&
+      url.host() == QStringLiteral("join")))) {
+    const QUrlQuery query = browser ? QUrlQuery(url.fragment(QUrl::FullyEncoded)) : QUrlQuery(url);
+    if (browser) {
+      int codes = 0, passcodes = 0;
+      for (const auto &item : query.queryItems()) {
+        if (item.first == "code") ++codes;
+        if (item.first == "passcode") ++passcodes;
+        if (item.first == "backend") return {codeOrLink, passcode};
+      }
+      if (codes != 1 || passcodes != 1) return {codeOrLink, passcode};
+    }
     const QString invitationCode = query.queryItemValue(QStringLiteral("code"));
     const QString invitationPasscode = query.queryItemValue(QStringLiteral("passcode"));
     if (!invitationCode.isEmpty() && !invitationPasscode.isEmpty()) {

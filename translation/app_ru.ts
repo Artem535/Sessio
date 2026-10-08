@@ -204,12 +204,40 @@
         <translation>Выйти из полноэкранного режима</translation>
     </message>
     <message>
+        <source>Share screen</source>
+        <translation>Показать экран</translation>
+    </message>
+    <message>
+        <source>You are sharing your screen</source>
+        <translation>Вы показываете экран</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Остановить</translation>
+    </message>
+    <message>
         <source>Switch camera, microphone, or speaker</source>
         <translation>Переключить камеру, микрофон или динамик</translation>
     </message>
     <message>
         <source>Leave</source>
         <translation>Завершить</translation>
+    </message>
+    <message>
+        <source>Stop sharing screen</source>
+        <translation>Остановить показ экрана</translation>
+    </message>
+    <message>
+        <source>Screens</source>
+        <translation>Экраны</translation>
+    </message>
+    <message>
+        <source>%1 (%2×%3)</source>
+        <translation>%1 (%2×%3)</translation>
+    </message>
+    <message>
+        <source>Windows</source>
+        <translation>Окна</translation>
     </message>
     <message>
         <source>Notes</source>
@@ -275,6 +303,10 @@
     <message>
         <source>Delete %1? This action cannot be undone.</source>
         <translation>Удалить %1? Это действие нельзя отменить.</translation>
+    </message>
+    <message>
+        <source>The transcript will be kept.</source>
+        <translation>Транскрипт сохранится.</translation>
     </message>
 </context>
 <context>
@@ -813,6 +845,10 @@
     <message>
         <source>Calls</source>
         <translation>Звонки</translation>
+    </message>
+    <message>
+        <source>Transcripts</source>
+        <translation>Транскрипты</translation>
     </message>
     <message>
         <source>Back to clients</source>
@@ -1378,6 +1414,10 @@
         <source>: EVENT_DELETE_CONFIRMATION</source>
         <translation>Вы уверены, что хотите удалить это событие?</translation>
     </message>
+    <message>
+        <source>The transcript will be kept.</source>
+        <translation>Транскрипт сохранится.</translation>
+    </message>
 </context>
 <context>
     <name>QEventItem</name>
@@ -1599,6 +1639,10 @@ See you!</source>
     <message>
         <source>What do you want to delete?</source>
         <translation>Что вы хотите удалить?</translation>
+    </message>
+    <message>
+        <source>The transcript will be kept.</source>
+        <translation>Транскрипт сохранится.</translation>
     </message>
     <message>
         <source>This and future events</source>
@@ -2446,6 +2490,80 @@ See you!</source>
     </message>
 </context>
 <context>
+    <name>TranscriptClientDialog</name>
+    <message>
+        <source>Attach clients</source>
+        <translation>Привязать клиентов</translation>
+    </message>
+    <message>
+        <source>Select existing clients. Guest names are never matched automatically.</source>
+        <translation>Выберите существующие карточки клиентов. Имена гостей никогда не сопоставляются автоматически.</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptListPage</name>
+    <message>
+        <source>Transcripts</source>
+        <translation>Транскрипты</translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>Дата</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Статус</translation>
+    </message>
+    <message>
+        <source>Clients</source>
+        <translation>Клиенты</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Открыть транскрипт</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Удалить транскрипцию</translation>
+    </message>
+    <message>
+        <source>This transcript is still being recorded. Editing is unavailable.</source>
+        <translation>Эта транскрипция ещё записывается. Редактирование недоступно.</translation>
+    </message>
+    <message>
+        <source>Delete this transcript and all its phrases?</source>
+        <translation>Удалить эту транскрипцию и все её реплики?</translation>
+    </message>
+    <message>
+        <source>Could not update the transcript. Please try again.</source>
+        <translation>Не удалось обновить транскрипцию. Попробуйте ещё раз.</translation>
+    </message>
+    <message>
+        <source>Recording</source>
+        <translation>Записывается</translation>
+    </message>
+    <message>
+        <source>Reviewed</source>
+        <translation>Проверено</translation>
+    </message>
+    <message>
+        <source>Draft</source>
+        <translation>Черновик</translation>
+    </message>
+    <message>
+        <source>No clients attached</source>
+        <translation>Клиенты не привязаны</translation>
+    </message>
+    <message>
+        <source>No transcripts yet.</source>
+        <translation>Транскриптов пока нет.</translation>
+    </message>
+    <message>
+        <source>Could not load transcripts. Please try again.</source>
+        <translation>Не удалось загрузить транскрипты. Попробуйте ещё раз.</translation>
+    </message>
+</context>
+<context>
     <name>TranscriptPage</name>
     <message>
         <source>Back to event</source>
@@ -2462,6 +2580,22 @@ See you!</source>
     <message>
         <source>Delete transcript</source>
         <translation>Удалить транскрипцию</translation>
+    </message>
+    <message>
+        <source>Attach clients</source>
+        <translation>Привязать клиентов</translation>
+    </message>
+    <message>
+        <source>Export text</source>
+        <translation>Экспорт текста</translation>
+    </message>
+    <message>
+        <source>Export transcript</source>
+        <translation>Экспорт транскрипта</translation>
+    </message>
+    <message>
+        <source>Text files (*.txt)</source>
+        <translation>Текстовые файлы (*.txt)</translation>
     </message>
     <message>
         <source>More actions</source>
@@ -2484,12 +2618,12 @@ See you!</source>
         <translation>Сначала сохраните или отмените текущую правку.</translation>
     </message>
     <message>
-        <source>Client unavailable</source>
-        <translation>Клиент недоступен</translation>
+        <source>Back to transcripts</source>
+        <translation>К транскриптам</translation>
     </message>
     <message>
-        <source>Client: %1</source>
-        <translation>Клиент: %1</translation>
+        <source>No clients attached</source>
+        <translation>Клиенты не привязаны</translation>
     </message>
     <message>
         <source>No transcripts for this event.</source>
@@ -2498,6 +2632,10 @@ See you!</source>
     <message>
         <source>Transcript unavailable.</source>
         <translation>Транскрипция недоступна.</translation>
+    </message>
+    <message>
+        <source>Clients: %1</source>
+        <translation>Клиенты: %1</translation>
     </message>
     <message>
         <source>Recording</source>
@@ -2823,6 +2961,10 @@ Your previous data was kept.</source>
         <source>Keep as draft</source>
         <translation>Оставить как черновик</translation>
     </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Транскрипт</translation>
+    </message>
 </context>
 <context>
     <name>pcm::eventpage::SeriesTimezoneDialog</name>
@@ -2878,8 +3020,8 @@ Your previous data was kept.</source>
         <translation>Модели распознавания речи не установлены</translation>
     </message>
     <message>
-        <source>Open the call from a calendar event to transcribe it</source>
-        <translation>Чтобы транскрибировать звонок, откройте его из события в календаре</translation>
+        <source>Open a call to transcribe it</source>
+        <translation>Откройте звонок, чтобы начать транскрипцию</translation>
     </message>
     <message>
         <source>Wait for the current transcription to finish</source>
@@ -2921,8 +3063,24 @@ Your previous data was kept.</source>
         <translation>Участник</translation>
     </message>
     <message>
+        <source>Your screen</source>
+        <translation>Ваш экран</translation>
+    </message>
+    <message>
+        <source>%1&apos;s screen</source>
+        <translation>Экран: %1</translation>
+    </message>
+    <message>
         <source>%1 (You)</source>
         <translation>%1 (Вы)</translation>
+    </message>
+    <message>
+        <source>You are sharing your screen</source>
+        <translation>Вы показываете экран</translation>
+    </message>
+    <message>
+        <source>Waiting for screen...</source>
+        <translation>Ожидание экрана...</translation>
     </message>
     <message>
         <source>Waiting for video...</source>
@@ -2931,6 +3089,10 @@ Your previous data was kept.</source>
     <message>
         <source>Camera off</source>
         <translation>Камера выключена</translation>
+    </message>
+    <message>
+        <source>Screen sharing stopped</source>
+        <translation>Показ экрана остановлен</translation>
     </message>
 </context>
 </TS>

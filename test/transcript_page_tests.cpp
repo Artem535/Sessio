@@ -170,14 +170,20 @@ TEST_F(TranscriptPageTest, BackRequestsEventAndReloadSupportsAnotherEvent) {
   button("backToEvent")->click(); EXPECT_EQ(spy.count(), 1);
   page->reload(-1, "Missing"); EXPECT_EQ(page->transcriptCount(), 0);
 }
-TEST_F(TranscriptPageTest, HeaderShowsLinkedClientAndSafeMissingClientFallback) {
-  EXPECT_EQ(page->findChild<QLabel *>("transcriptClient")->text(), "Client unavailable");
+TEST_F(TranscriptPageTest, HeaderShowsIndependentTranscriptClientsAndSafeEmptyFallback) {
+  EXPECT_EQ(page->findChild<QLabel *>("transcriptClient")->text(), "No clients attached");
   DuckClient client;
   client.name = "Test"; client.last_name = "Client";
   const auto clientId = db->add_client(client);
   db->add_event_client(event, clientId);
   page->reload(event, "Session");
-  EXPECT_EQ(page->findChild<QLabel *>("transcriptClient")->text(), "Client: Test Client");
+  EXPECT_EQ(page->findChild<QLabel *>("transcriptClient")->text(), "No clients attached");
+  ASSERT_TRUE(db->set_transcript_clients(id, {clientId}));
+  page->reload(event, "Session");
+  EXPECT_EQ(page->findChild<QLabel *>("transcriptClient")->text(), "Clients: Test Client");
+  ASSERT_TRUE(db->set_transcript_clients(id, {}));
+  page->reload(event, "Session");
+  EXPECT_EQ(page->findChild<QLabel *>("transcriptClient")->text(), "No clients attached");
 }
 TEST_F(TranscriptPageTest, ConfirmationMayDestroyPageWithoutMutation) {
   auto *raw = page.release();

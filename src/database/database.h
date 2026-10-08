@@ -99,12 +99,15 @@ public:
   std::vector<DuckClientNoteAttachment> get_note_attachments(int64_t note_id);
 
   // --- Live call transcripts (phase 2 of #118) ---
-  int64_t add_transcript(int64_t event_id, const std::string &consent_scope,
+  int64_t add_transcript(std::optional<int64_t> event_id, const std::string &consent_scope,
                          const std::optional<std::string> &model_id = std::nullopt,
                          std::optional<int64_t> consent_given_at_ms = std::nullopt);
   std::unique_ptr<DuckTranscript> get_transcript(int64_t id);
   std::vector<DuckTranscript> get_transcripts_for_event(int64_t event_id);
   std::vector<DuckTranscript> get_transcripts_for_client(int64_t client_id);
+  std::vector<DuckTranscript> get_transcripts();
+  bool set_transcript_clients(int64_t transcript_id, const std::vector<int64_t> &client_ids);
+  std::vector<int64_t> get_transcript_client_ids(int64_t transcript_id);
   int64_t count_transcripts();
   int64_t count_transcript_phrases(int64_t transcript_id);
   // Callers of set_transcript_status, revoke_transcript_consent,
@@ -117,9 +120,8 @@ public:
   // returns how many were changed. Call once at application start, together
   // with purge_orphan_transcripts(), before any session can exist.
   int64_t finalize_interrupted_transcripts();
-  // Deletes phrases and transcripts whose event no longer exists (a missed
-  // cascade); event ids are MAX(id)+1, so an orphan would otherwise attach
-  // itself to a later unrelated event. Returns the number of transcripts deleted.
+  // Detaches missing events, preserves standalone rows and removes dangling
+  // phrases/client links. Returns the number of event links detached.
   int64_t purge_orphan_transcripts();
   // Stop and join the engine/writer first (see above). Runs a best-effort
   // CHECKPOINT afterwards so deleted text leaves the database file.

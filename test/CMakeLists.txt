@@ -362,6 +362,8 @@ gtest_discover_tests(Sessio_device_manager_tests)
 # plan's Task 9 lifecycle-stress acceptance criterion.
 add_executable(Sessio_video_capture_adapter_smoke_test
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/frame_convert.cpp
     video_capture_adapter_smoke_test.cpp
@@ -466,6 +468,8 @@ add_executable(Sessio_livekit_video_provider_smoke_test
     ${CMAKE_SOURCE_DIR}/src/video/livekit_video_provider.cpp
     ${CMAKE_SOURCE_DIR}/src/video/livekit_video_frame_source.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/audio_capture_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/video/audio_chunker.cpp
@@ -910,6 +914,9 @@ add_executable(Sessio_fake_client fake_client.cpp)
 target_link_libraries(Sessio_fake_client PRIVATE
     Qt6::Gui Qt6::Network Sessio_token_client LiveKit::livekit
 )
+if(UNIX AND NOT APPLE)
+  target_link_libraries(Sessio_fake_client PRIVATE "${LIVEKIT_CURL_LIBRARY}")
+endif()
 
 # CallsPage tests
 #
@@ -1083,6 +1090,16 @@ add_executable(Sessio_transcript_page_tests transcript_page_tests.cpp)
 target_link_libraries(Sessio_transcript_page_tests PRIVATE
     GTest::gtest Qt6::Test Sessio_transcription_ui)
 gtest_discover_tests(Sessio_transcript_page_tests)
+
+add_executable(Sessio_transcript_list_page_tests transcript_list_page_tests.cpp)
+set_target_properties(Sessio_transcript_list_page_tests PROPERTIES AUTOMOC ON)
+target_link_libraries(Sessio_transcript_list_page_tests PRIVATE GTest::gtest Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_transcript_list_page_tests)
+
+add_executable(Sessio_transcript_client_dialog_tests transcript_client_dialog_tests.cpp)
+set_target_properties(Sessio_transcript_client_dialog_tests PROPERTIES AUTOMOC ON)
+target_link_libraries(Sessio_transcript_client_dialog_tests PRIVATE GTest::gtest Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_transcript_client_dialog_tests)
 
 add_executable(Sessio_failure_text_tests failure_text_tests.cpp)
 target_include_directories(Sessio_failure_text_tests PRIVATE
