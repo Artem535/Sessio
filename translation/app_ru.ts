@@ -208,6 +208,14 @@
         <translation>Показать экран</translation>
     </message>
     <message>
+        <source>You are sharing your screen</source>
+        <translation>Вы показываете экран</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Остановить</translation>
+    </message>
+    <message>
         <source>Switch camera, microphone, or speaker</source>
         <translation>Переключить камеру, микрофон или динамик</translation>
     </message>

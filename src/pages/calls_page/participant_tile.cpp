@@ -3,6 +3,7 @@
 
 #include <QLabel>
 #include <QRegion>
+#include <QMouseEvent>
 #include <QResizeEvent>
 #include <QTextDocument>
 #include <algorithm>
@@ -96,6 +97,12 @@ void ParticipantTile::applyCornerMask() {
   region += QRegion(QRect(0, height() - d, d, d), QRegion::Ellipse);
   region += QRegion(QRect(width() - d, height() - d, d, d), QRegion::Ellipse);
   setMask(region);
+}
+
+void ParticipantTile::mouseReleaseEvent(QMouseEvent *event) {
+  QWidget::mouseReleaseEvent(event);
+  if (event->button() == Qt::LeftButton && rect().contains(event->position().toPoint()))
+    emit clicked();
 }
 
 void ParticipantTile::resizeEvent(QResizeEvent *event) {

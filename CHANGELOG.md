@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
   (whole screen or a single window) and from the browser guest page. Shared
   screens appear as their own tiles; camera, microphone and transcription are
   unaffected. The one-owner lease design for screen sharing is dropped.
+- In the call window the featured screen fills the stage and the other screens
+  and cameras sit in a strip below it; click a screen in the strip to feature
+  it. A banner with a Stop button shows while you share.
 
 ## [0.2.20] - 2026-10-08
 

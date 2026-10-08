@@ -208,6 +208,14 @@
         <translation>Share screen</translation>
     </message>
     <message>
+        <source>You are sharing your screen</source>
+        <translation>You are sharing your screen</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Stop</translation>
+    </message>
+    <message>
         <source>Switch camera, microphone, or speaker</source>
         <translation>Switch camera, microphone, or speaker</translation>
     </message>

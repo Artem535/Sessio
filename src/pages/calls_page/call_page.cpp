@@ -82,6 +82,20 @@ void VideoStage::setWaitingBanner(QWidget *widget) {
   layoutChildren();
 }
 
+void VideoStage::setSharingBanner(QWidget *widget) {
+  if (mSharingBanner == widget) return;
+  if (mSharingBanner) mSharingBanner->setParent(nullptr);
+  mSharingBanner = widget;
+  if (mSharingBanner) mSharingBanner->setParent(this);
+  layoutChildren();
+}
+
+void VideoStage::setFeaturedScreen(const QString &key) {
+  if (mFeaturedScreen == key) return;
+  mFeaturedScreen = key;
+  layoutChildren();
+}
+
 void VideoStage::setNotesToggleWidget(QWidget *widget) {
   if (mNotesToggleWidget == widget) {
     return;
@@ -132,6 +146,41 @@ void VideoStage::layoutChildren() {
   const bool fullBleed = solo && mTiles.size() == 2;
   const QRect available = fullBleed ? rect() :
       QRect(12, top, std::max(0, width() - 24), std::max(0, height() - top - kBottomReserved));
+  ParticipantTile *featured = nullptr;
+  for (auto *tile : mTiles)
+    if (tile->isScreen() && (!featured || tile->key() == mFeaturedScreen))
+      featured = tile;
+  if (featured && !fullBleed) {
+    constexpr int kGap = 8;
+    constexpr int kTileCornerRadius = 12;
+    QVector<ParticipantTile *> strip;
+    for (auto *tile : mTiles)
+      if (tile != featured) strip.append(tile);
+    mTileHost->setGeometry(available);
+    int stripHeight = 0;
+    if (!strip.isEmpty())
+      stripHeight = std::clamp(available.height() / 5, 80, 150);
+    const int stageHeight = std::max(0, available.height() - (strip.isEmpty() ? 0 : stripHeight + kGap));
+    featured->setParent(mTileHost);
+    featured->setFixedSize(available.width(), stageHeight);
+    featured->setCornerRadius(kTileCornerRadius);
+    featured->move(0, 0);
+    featured->show();
+    if (!strip.isEmpty()) {
+      const int count = strip.size();
+      const int width = std::max(0, std::min(stripHeight * 16 / 9, (available.width() - (count - 1) * kGap) / count));
+      const int total = count * width + (count - 1) * kGap;
+      int x = std::max(0, (available.width() - total) / 2);
+      for (auto *tile : strip) {
+        tile->setParent(mTileHost);
+        tile->setFixedSize(width, stripHeight);
+        tile->setCornerRadius(kTileCornerRadius);
+        tile->move(x, stageHeight + kGap);
+        tile->show();
+        x += width + kGap;
+      }
+    }
+  } else {
   auto strategy = CallLayoutStrategy::select(mTiles.size(), local != nullptr, available.size());
   if (solo) strategy.tileSize = available.size();
   constexpr int kTileCornerRadius = 12;
@@ -168,6 +217,12 @@ void VideoStage::layoutChildren() {
   for (int column = 0; column < strategy.columns * 2; ++column)
     mTileGrid->setColumnMinimumWidth(column, std::max(0, (strategy.tileSize.width() - 8) / 2));
   mTileGrid->activate();
+  }
+  if (mSharingBanner && !mSharingBanner->isHidden()) {
+    const QSize hint = mSharingBanner->sizeHint();
+    mSharingBanner->setGeometry((width() - hint.width()) / 2, 12, hint.width(), hint.height());
+    mSharingBanner->raise();
+  }
   if (mControlBarWidget) {
     const QSize hint = mControlBarWidget->sizeHint();
     const int barWidth = std::min(width(), hint.width() > 0 ? hint.width() : mControlBarWidget->width());
@@ -461,6 +516,25 @@ void CallPage::buildConnectedScreen() {
     showScreenShareMenu();
   });
 
+  mSharingBanner = new QWidget(mConnectedView);
+  mSharingBanner->setObjectName("sharingBanner");
+  mSharingBanner->setStyleSheet("#sharingBanner { background: #534AB7; border-radius: 8px; } QLabel { color: white; } "
+                                "QPushButton { color: white; border: none; text-decoration: underline; background: transparent; }");
+  auto *sharingLayout = new QHBoxLayout(mSharingBanner);
+  sharingLayout->setContentsMargins(12, 5, 12, 5);
+  auto *sharingLabel = new QLabel(tr("You are sharing your screen"), mSharingBanner);
+  sharingLabel->setTextFormat(Qt::PlainText);
+  auto *stopSharing = new QPushButton(tr("Stop"), mSharingBanner);
+  stopSharing->setObjectName("sharingBannerStop");
+  stopSharing->setCursor(Qt::PointingHandCursor);
+  connect(stopSharing, &QPushButton::clicked, this, [this] {
+    if (mSession && mSession->provider()) mSession->provider()->stopScreenShare();
+  });
+  sharingLayout->addWidget(sharingLabel);
+  sharingLayout->addWidget(stopSharing);
+  mSharingBanner->hide();
+  mVideoStage->setSharingBanner(mSharingBanner);
+
   mDevicesButton = new QToolButton(mConnectedView);
   mDevicesButton->setObjectName("devicesButton");
   mDevicesButton->setIcon(pcm::widgets::devicesIcon());
@@ -591,6 +665,10 @@ void CallPage::refreshMediaButtons() {
     const QString label = sharing ? tr("Stop sharing screen") : tr("Share screen");
     mScreenShareButton->setToolTip(label);
     mScreenShareButton->setAccessibleName(label);
+    if (mSharingBanner) {
+      mSharingBanner->setVisible(sharing);
+      if (mVideoStage) mVideoStage->refreshLayout();
+    }
   }
 }
 
@@ -660,6 +738,7 @@ void CallPage::syncParticipants() {
     if (participant->screenSharing) {
       present.insert(screenKey);
       auto *screenTile = mTiles.value(screenKey);
+      const bool newScreen = screenTile == nullptr;
       if (!screenTile) {
         screenTile = new pcm::video::ParticipantTile(*participant, mVideoStage,
                                                      pcm::video::ParticipantTile::Kind::Screen);
@@ -668,6 +747,18 @@ void CallPage::syncParticipants() {
         screenTile->updateParticipant(*participant);
       }
       screenTile->attachSource(provider->screenSource(id));
+      if (newScreen) {
+        // The most recently started remote screen is what the call is about right now;
+        // your own screen is only featured when nobody else shares.
+        if (!participant->isLocal || mFeaturedScreenKey.isEmpty()) {
+          mFeaturedScreenKey = screenKey;
+          mVideoStage->setFeaturedScreen(screenKey);
+        }
+        connect(screenTile, &pcm::video::ParticipantTile::clicked, this, [this, screenKey] {
+          mFeaturedScreenKey = screenKey;
+          mVideoStage->setFeaturedScreen(screenKey);
+        });
+      }
       ordered.append(screenTile);
     }
   }
@@ -684,6 +775,10 @@ void CallPage::syncParticipants() {
   mVideoStage->setTiles(ordered);
   for (auto it = mTiles.begin(); it != mTiles.end();) {
     if (!present.contains(it.key())) {
+      if (it.key() == mFeaturedScreenKey) {
+        mFeaturedScreenKey.clear();
+        mVideoStage->setFeaturedScreen({});
+      }
       delete it.value();
       it = mTiles.erase(it);
     } else {

@@ -21,12 +21,19 @@ public:
   [[nodiscard]] bool isLocal() const { return mKind == Kind::Camera && mParticipant.isLocal; }
   [[nodiscard]] bool isScreen() const { return mKind == Kind::Screen; }
   [[nodiscard]] QString identity() const { return mParticipant.id; }
+  // Unique among tiles: a participant's screen has its own tile next to the camera one.
+  [[nodiscard]] QString key() const { return mKind == Kind::Screen ? mParticipant.id + QStringLiteral("#screen") : mParticipant.id; }
   // Rounds the tile's corners (clipping the video and placeholder inside it); 0 = square.
   void setCornerRadius(int radius);
   [[nodiscard]] int cornerRadius() const { return mCornerRadius; }
 
+signals:
+  // A press-and-release on the tile; used to bring a screen onto the stage.
+  void clicked();
+
 protected:
   void resizeEvent(QResizeEvent *event) override;
+  void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
   void refreshMedia();

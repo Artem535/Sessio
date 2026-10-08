@@ -35,6 +35,12 @@ public:
   // its visibility is the caller's to manage.
   void setWaitingBanner(QWidget *widget);
   void setNotesToggleWidget(QWidget *widget);
+  // "You are sharing your screen" pill pinned to the top centre; visibility is the caller's.
+  void setSharingBanner(QWidget *widget);
+  // While any screen is shared, the featured one fills the stage and every other tile
+  // (screens and cameras) sits in a strip underneath. Empty or unknown: the first screen.
+  void setFeaturedScreen(const QString &key);
+  void refreshLayout() { layoutChildren(); }
 
 protected:
   void resizeEvent(QResizeEvent *event) override;
@@ -48,6 +54,8 @@ private:
   QPointer<QWidget> mControlBarWidget;
   QPointer<QWidget> mNotesToggleWidget;
   QPointer<QWidget> mWaitingBanner;
+  QPointer<QWidget> mSharingBanner;
+  QString mFeaturedScreen;
 };
 
 } // namespace pcm::video::detail
@@ -160,6 +168,8 @@ private:
   QToolButton *mFullscreenToggleButton{nullptr};
   QToolButton *mDevicesButton{nullptr};
   QToolButton *mScreenShareButton{nullptr};
+  QWidget *mSharingBanner{nullptr};
+  QString mFeaturedScreenKey;
   QToolButton *mTranscribeButton{nullptr};
   bool mTranscribing{false};
   QString mTranscribeTooltip;
