@@ -179,10 +179,10 @@ ValidationResult BackupValidator::validate(
     }
     const auto &manifest = manifestResult.value();
 
-    if (manifest.psybackup_format_version != 1) {
+    if (manifest.psybackup_format_version != 1 || manifest.backup_format_version != 1 ||
+        manifest.schema_version < 1 || manifest.schema_version > 2) {
       result.errors.push_back(
-          "unsupported psybackup_format_version: " +
-          std::to_string(manifest.psybackup_format_version));
+          "unsupported backup format or schema version");
       return result;
     }
 

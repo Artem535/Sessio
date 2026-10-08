@@ -1084,6 +1084,16 @@ target_link_libraries(Sessio_transcript_page_tests PRIVATE
     GTest::gtest Qt6::Test Sessio_transcription_ui)
 gtest_discover_tests(Sessio_transcript_page_tests)
 
+add_executable(Sessio_transcript_list_page_tests transcript_list_page_tests.cpp)
+set_target_properties(Sessio_transcript_list_page_tests PROPERTIES AUTOMOC ON)
+target_link_libraries(Sessio_transcript_list_page_tests PRIVATE GTest::gtest Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_transcript_list_page_tests)
+
+add_executable(Sessio_transcript_client_dialog_tests transcript_client_dialog_tests.cpp)
+set_target_properties(Sessio_transcript_client_dialog_tests PROPERTIES AUTOMOC ON)
+target_link_libraries(Sessio_transcript_client_dialog_tests PRIVATE GTest::gtest Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_transcript_client_dialog_tests)
+
 add_executable(Sessio_failure_text_tests failure_text_tests.cpp)
 target_include_directories(Sessio_failure_text_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/src/pages/transcript_page)

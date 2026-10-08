@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.18] - 2026-10-08
+
+### Added
+- Call transcription without a calendar event or client card, with the same consent and revocation controls.
+- A durable Transcripts page with review by transcript ID, text export, and manual assignment to existing client cards.
+
+### Changed
+- Deleting events or client cards preserves transcript text and removes only the corresponding link.
+- Schema 2 migrates legacy transcript/client links once; backups retain format 1 and legacy backups migrate before restoration.
+
 ## [0.2.17] - 2026-10-08
 
 ### Fixed

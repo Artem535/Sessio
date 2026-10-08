@@ -58,6 +58,8 @@ MainWindow::MainWindow(QWidget *parent)
       new TabButton(QIcon(":/icons/notes.svg"), tr("Notes"), this);
   mBtnCalls =
       new TabButton(QIcon(":/icons/video-solid-full.svg"), tr("Calls"), this);
+  mBtnTranscripts = new TabButton(QIcon(":/icons/notes.svg"), tr("Transcripts"), this);
+  mBtnTranscripts->hide();
 
   // Add buttons to the vertical layout
   mUi->verticalLayout->addWidget(mBtnCalendar);
@@ -66,6 +68,7 @@ MainWindow::MainWindow(QWidget *parent)
   mUi->verticalLayout->addWidget(mBtnProfile);
   mUi->verticalLayout->addWidget(mBtnNotes);
   mUi->verticalLayout->addWidget(mBtnCalls);
+  mUi->verticalLayout->addWidget(mBtnTranscripts);
   mBtnProfile->hide();
   mBtnNotes->hide();
 
@@ -206,6 +209,14 @@ void MainWindow::registerTranscriptPage(QWidget *page) {
   mPagesIndex.insertOrAssign(Pages::transcript, mUi->stackedWidget->addWidget(page));
 }
 void MainWindow::openTranscriptPage() { showPage(Pages::transcript, mBtnCalendar); }
+void MainWindow::registerTranscriptListPage(QWidget *page) {
+  if (mPages.contains(Pages::transcriptList)) return;
+  mPages.insertOrAssign(Pages::transcriptList, page);
+  mPagesIndex.insertOrAssign(Pages::transcriptList, mUi->stackedWidget->addWidget(page));
+  mBtnTranscripts->show();
+  connect(mBtnTranscripts, &QPushButton::clicked, this, &MainWindow::openTranscriptListPage);
+}
+void MainWindow::openTranscriptListPage() { showPage(Pages::transcriptList, mBtnTranscripts); }
 void MainWindow::returnToEvent(int64_t eventId, qint64 dayMs) {
   showPage(Pages::eventInfo, mBtnCalendar);
   if (auto *page = dynamic_cast<QEventInfoPage *>(getPage(Pages::eventInfo)))
@@ -337,6 +348,7 @@ void MainWindow::checkButton(QPushButton *btn) const {
   mBtnProfile->setChecked(false);
   mBtnNotes->setChecked(false);
   mBtnCalls->setChecked(false);
+  mBtnTranscripts->setChecked(false);
   btn->setChecked(true);
 }
 
@@ -467,6 +479,8 @@ QString MainWindow::pageTitle(const Pages page) const {
       return tr("Calls");
     case Pages::transcript:
       return tr("Transcript");
+    case Pages::transcriptList:
+      return tr("Transcripts");
   }
 
   return tr("Page");

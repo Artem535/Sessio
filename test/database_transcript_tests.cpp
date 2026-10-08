@@ -78,6 +78,22 @@ TEST_F(TranscriptDbTest, AddTranscriptStartsRecordingWithConsentTimes) {
   EXPECT_EQ(t->updated_at, t->created_at);
 }
 
+TEST_F(TranscriptDbTest, StandaloneTranscriptSurvivesCleanup) {
+  const auto id = db_->add_transcript(std::nullopt, "live_local_v1");
+  ASSERT_GT(id, 0);
+  ASSERT_NE(db_->get_transcript(id), nullptr);
+  EXPECT_FALSE(db_->get_transcript(id)->event_id.has_value());
+  db_->purge_orphan_transcripts();
+  ASSERT_NE(db_->get_transcript(id), nullptr);
+  EXPECT_EQ(db_->get_transcripts().size(), 1);
+}
+
+TEST_F(TranscriptDbTest, EventWithoutClientAllowsTranscription) {
+  const auto id = db_->add_transcript(makeEvent(), "live_local_v1");
+  ASSERT_GT(id, 0);
+  EXPECT_TRUE(db_->get_transcript_client_ids(id).empty());
+}
+
 TEST_F(TranscriptDbTest, AddTranscriptRejectsInvalidAndUnknownEvent) {
   EXPECT_EQ(db_->add_transcript(0, "live_local_v1"), 0);
   EXPECT_EQ(db_->add_transcript(-5, "live_local_v1"), 0);
@@ -290,7 +306,7 @@ TEST_F(TranscriptDbTest, DeleteTranscriptRemovesItsPhrases) {
   EXPECT_EQ(db_->get_transcript(keep), nullptr);
 }
 
-TEST_F(TranscriptDbTest, RemoveEventDeletesItsTranscriptsAndPhrases) {
+TEST_F(TranscriptDbTest, RemoveEventPreservesItsTranscriptsAndPhrases) {
   const auto event_id = makeEvent();
   const auto other_id = makeEvent(1750000000000);
   const auto t = db_->add_transcript(event_id, "live_local_v1");
@@ -300,8 +316,9 @@ TEST_F(TranscriptDbTest, RemoveEventDeletesItsTranscriptsAndPhrases) {
 
   ASSERT_TRUE(db_->remove_event(event_id));
   EXPECT_EQ(db_->get_event(event_id), nullptr);
-  EXPECT_EQ(db_->get_transcript(t), nullptr);
-  EXPECT_TRUE(db_->get_transcript_phrases(t).empty());
+  ASSERT_NE(db_->get_transcript(t), nullptr);
+  EXPECT_FALSE(db_->get_transcript(t)->event_id.has_value());
+  EXPECT_EQ(db_->get_transcript_phrases(t).size(), 1u);
   EXPECT_NE(db_->get_transcript(other), nullptr);
   EXPECT_EQ(db_->get_transcript_phrases(other).size(), 1u);
 }
@@ -320,12 +337,13 @@ TEST_F(TranscriptDbTest, RemoveEventLeavesNoOrphanTranscriptsOfAnyStatus) {
   ASSERT_TRUE(db_->remove_event(event_id));
   EXPECT_TRUE(db_->get_transcripts_for_event(event_id).empty());
   for (const auto id : {recording, draft, reviewed}) {
-    EXPECT_EQ(db_->get_transcript(id), nullptr);
-    EXPECT_TRUE(db_->get_transcript_phrases(id).empty());
+    ASSERT_NE(db_->get_transcript(id), nullptr);
+    EXPECT_FALSE(db_->get_transcript(id)->event_id.has_value());
+    EXPECT_EQ(db_->get_transcript_phrases(id).size(), 1u);
   }
 }
 
-TEST_F(TranscriptDbTest, DeletingSeriesOverridesDeletesTheirTranscripts) {
+TEST_F(TranscriptDbTest, DeletingSeriesOverridesPreservesTheirTranscripts) {
   DuckEventSeries series;
   series.name = std::string{"Weekly"};
   series.start_date = 1730000000000;
@@ -370,8 +388,9 @@ TEST_F(TranscriptDbTest, DeletingSeriesOverridesDeletesTheirTranscripts) {
   EXPECT_NE(db_->get_transcript(early_t), nullptr);
   EXPECT_EQ(db_->get_transcript_phrases(early_t).size(), 1u);
   EXPECT_EQ(db_->get_event(event_id), nullptr);
-  EXPECT_EQ(db_->get_transcript(t), nullptr);
-  EXPECT_TRUE(db_->get_transcript_phrases(t).empty());
+  ASSERT_NE(db_->get_transcript(t), nullptr);
+  EXPECT_FALSE(db_->get_transcript(t)->event_id.has_value());
+  EXPECT_EQ(db_->get_transcript_phrases(t).size(), 1u);
   EXPECT_NE(db_->get_transcript(other), nullptr);
   EXPECT_EQ(db_->get_transcript_phrases(other).size(), 1u);
 }
@@ -412,11 +431,193 @@ TEST_F(TranscriptDbTest, ExistingDataSurvivesTheTranscriptMigration) {
   EXPECT_NE(db_->get_event(event_id), nullptr);
 }
 
-TEST_F(TranscriptDbTest, SchemaVersionStaysOne) {
-  EXPECT_EQ(db_->get_application_metadata().schema_version, 1);
+TEST_F(TranscriptDbTest, SchemaVersionIsTwo) {
+  EXPECT_EQ(db_->get_application_metadata().schema_version, 2);
 }
 
-TEST_F(TranscriptDbTest, PurgeOrphanTranscriptsRemovesTheOnesWithoutAnEventAndFreedIdsAreClean) {
+TEST_F(TranscriptDbTest, LegacyMigrationBackfillsOnceAndPreservesManualUnlinkAfterReopen) {
+  DuckClient client; client.name = "Migration client";
+  const auto clientId = db_->add_client(client);
+  const auto eventId = makeEvent();
+  ASSERT_GT(db_->add_event_client(eventId, clientId), 0);
+  const auto id = db_->add_transcript(eventId, "legacy_scope", std::string("legacy_model"), 1730000100000);
+  const auto phraseId = db_->add_transcript_phrase(phrase(id, "participant", "Guest", 12, 100, "preserved"));
+  ASSERT_GT(phraseId, 0);
+  ASSERT_TRUE(db_->set_transcript_status(id, "draft"));
+  ASSERT_TRUE(db_->revoke_transcript_consent(id, 1730000300000));
+  const auto before = *db_->get_transcript(id);
+  db_.reset();
+  {
+    duckdb::DuckDB raw(dir_ + "/database.db"); duckdb::Connection conn(raw);
+    ASSERT_FALSE(conn.Query("DROP TABLE TranscriptClient; "
+                           "ALTER TABLE Transcript ALTER COLUMN event_id SET NOT NULL; "
+                           "UPDATE ApplicationMetadata SET schema_version=1")->HasError());
+  }
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
+  db_ = std::make_unique<pcm::database::Database>(conf);
+  EXPECT_EQ(db_->get_application_metadata().schema_version, 2);
+  EXPECT_EQ(db_->get_transcript_client_ids(id), std::vector<int64_t>{clientId});
+  const auto migrated = db_->get_transcript(id);
+  ASSERT_NE(migrated, nullptr);
+  EXPECT_EQ(migrated->id, before.id); EXPECT_EQ(migrated->event_id, before.event_id);
+  EXPECT_EQ(migrated->status, before.status); EXPECT_EQ(migrated->consent_scope, before.consent_scope);
+  EXPECT_EQ(migrated->consent_given_at, before.consent_given_at);
+  EXPECT_EQ(migrated->consent_revoked_at, before.consent_revoked_at);
+  EXPECT_EQ(migrated->model_id, before.model_id);
+  EXPECT_EQ(migrated->created_at, before.created_at); EXPECT_EQ(migrated->updated_at, before.updated_at);
+  ASSERT_EQ(db_->get_transcript_phrases(id).size(), 1);
+  EXPECT_EQ(db_->get_transcript_phrases(id)[0].id, phraseId);
+  ASSERT_TRUE(db_->set_transcript_clients(id, {}));
+  db_.reset(); db_ = std::make_unique<pcm::database::Database>(conf);
+  EXPECT_TRUE(db_->get_transcript_client_ids(id).empty());
+  EXPECT_GT(db_->add_transcript(std::nullopt, "standalone"), 0);
+}
+
+TEST_F(TranscriptDbTest, ManualBindingDeduplicatesAndInvalidReplacementIsAtomic) {
+  DuckClient client; client.name = "Client";
+  const auto clientId = db_->add_client(client);
+  const auto id = db_->add_transcript(std::nullopt, "scope");
+  ASSERT_TRUE(db_->set_transcript_status(id, "draft"));
+  ASSERT_TRUE(db_->set_transcript_clients(id, {clientId, clientId}));
+  ASSERT_TRUE(db_->set_transcript_clients(id, {clientId, clientId}));
+  EXPECT_EQ(db_->get_transcript_client_ids(id), std::vector<int64_t>{clientId});
+  const auto updated = db_->get_transcript(id)->updated_at;
+  EXPECT_FALSE(db_->set_transcript_clients(id, {clientId, 987654}));
+  EXPECT_EQ(db_->get_transcript_client_ids(id), std::vector<int64_t>{clientId});
+  EXPECT_EQ(db_->get_transcript(id)->updated_at, updated);
+  EXPECT_FALSE(db_->set_transcript_clients(987654, {clientId}));
+  ASSERT_TRUE(db_->remove_client(clientId));
+  ASSERT_NE(db_->get_transcript(id), nullptr);
+  EXPECT_TRUE(db_->get_transcript_client_ids(id).empty());
+}
+
+TEST_F(TranscriptDbTest, ClientAssociationIsIndependentOfCalendarChangesAndDeletion) {
+  DuckClient client; client.name = "Original";
+  const auto original = db_->add_client(client);
+  client.name = "Other"; const auto other = db_->add_client(client);
+  const auto event = makeEvent();
+  ASSERT_GT(db_->add_event_client(event, original), 0);
+  const auto id = db_->add_transcript(event, "scope");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(id, "participant", "Guest", 0, 100, "Keep text")), 0);
+  ASSERT_GT(db_->add_event_client(event, other), 0);
+  EXPECT_EQ(db_->get_transcript_client_ids(id), std::vector<int64_t>{original});
+  EXPECT_EQ(db_->get_transcripts_for_client(original).size(), 1);
+  EXPECT_TRUE(db_->get_transcripts_for_client(other).empty());
+  ASSERT_TRUE(db_->remove_event(event));
+  EXPECT_EQ(db_->get_transcripts_for_client(original).size(), 1);
+  ASSERT_TRUE(db_->remove_client(original));
+  EXPECT_TRUE(db_->get_transcript_client_ids(id).empty());
+  ASSERT_NE(db_->get_transcript(id), nullptr);
+  EXPECT_EQ(db_->get_transcript_phrases(id).at(0).text, "Keep text");
+}
+
+TEST_F(TranscriptDbTest, DeleteEventLinkedClientDetachesTranscriptsAndKeepsOtherClientsAndText) {
+  DuckClient client; client.name = "Removed";
+  const auto removed = db_->add_client(client);
+  client.name = "Retained";
+  const auto retained = db_->add_client(client);
+  const auto event = makeEvent();
+  ASSERT_GT(db_->add_event_client(event, removed), 0);
+  const auto id = db_->add_transcript(event, "scope");
+  const auto phraseId = db_->add_transcript_phrase(phrase(id, "participant", "Guest", 0, 100, "Keep text"));
+  ASSERT_GT(phraseId, 0);
+  ASSERT_TRUE(db_->set_transcript_status(id, "draft"));
+  ASSERT_TRUE(db_->set_transcript_clients(id, {removed, retained}));
+  ASSERT_TRUE(db_->remove_client(removed));
+  ASSERT_NE(db_->get_client(removed), nullptr);  // Event history retains the card.
+  EXPECT_EQ(db_->get_transcript_client_ids(id), std::vector<int64_t>{retained});
+  EXPECT_TRUE(db_->get_transcripts_for_client(removed).empty());
+  EXPECT_EQ(db_->get_transcripts_for_client(retained).size(), 1);
+  ASSERT_NE(db_->get_event(event), nullptr);
+  ASSERT_NE(db_->get_transcript(id), nullptr);
+  EXPECT_EQ(db_->get_transcript(id)->event_id, event);
+  EXPECT_EQ(db_->get_transcript(id)->status, "draft");
+  const auto rows = db_->get_transcript_phrases(id);
+  ASSERT_EQ(rows.size(), 1);
+  EXPECT_EQ(rows.front().id, phraseId);
+  EXPECT_EQ(rows.front().text, "Keep text");
+}
+
+TEST_F(TranscriptDbTest, DeleteStandaloneClientDetachesOnlyItsLinksAndKeepsText) {
+  DuckClient client; client.name = "Removed";
+  const auto removed = db_->add_client(client);
+  client.name = "Retained";
+  const auto retained = db_->add_client(client);
+  const auto id = db_->add_transcript(std::nullopt, "scope");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(id, "participant", "Guest", 0, 100, "Keep text")), 0);
+  ASSERT_TRUE(db_->set_transcript_status(id, "draft"));
+  ASSERT_TRUE(db_->set_transcript_clients(id, {removed, retained}));
+  ASSERT_TRUE(db_->remove_client(removed));
+  EXPECT_EQ(db_->get_client(removed), nullptr);
+  EXPECT_EQ(db_->get_transcript_client_ids(id), std::vector<int64_t>{retained});
+  EXPECT_TRUE(db_->get_transcripts_for_client(removed).empty());
+  ASSERT_NE(db_->get_transcript(id), nullptr);
+  EXPECT_EQ(db_->get_transcript_phrases(id).at(0).text, "Keep text");
+}
+
+TEST_F(TranscriptDbTest, FailedClientDeletionRollsBackTranscriptDetachment) {
+  DuckClient client; client.name = "Retained";
+  const auto clientId = db_->add_client(client);
+  const auto id = db_->add_transcript(std::nullopt, "scope");
+  ASSERT_TRUE(db_->set_transcript_status(id, "draft"));
+  ASSERT_TRUE(db_->set_transcript_clients(id, {clientId}));
+  db_.reset();
+  {
+    duckdb::DuckDB raw(dir_ + "/database.db");
+    duckdb::Connection conn(raw);
+    ASSERT_FALSE(conn.Query("CREATE TABLE ClientDeletionGuard (client_id INTEGER REFERENCES Client(id))")->HasError());
+    ASSERT_FALSE(conn.Query("INSERT INTO ClientDeletionGuard VALUES (" + std::to_string(clientId) + ")")->HasError());
+  }
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
+  db_ = std::make_unique<pcm::database::Database>(conf);
+  EXPECT_FALSE(db_->remove_client(clientId));
+  ASSERT_NE(db_->get_client(clientId), nullptr);
+  EXPECT_EQ(db_->get_transcript_client_ids(id), std::vector<int64_t>{clientId});
+  EXPECT_EQ(db_->get_transcripts_for_client(clientId).size(), 1);
+}
+
+TEST_F(TranscriptDbTest, StandaloneTranscriptOrderIsNewestFirstAndRecordingCannotBeRebound) {
+  const auto first = db_->add_transcript(std::nullopt, "scope");
+  const auto second = db_->add_transcript(std::nullopt, "scope");
+  ASSERT_EQ(db_->get_transcripts().size(), 2);
+  EXPECT_EQ(db_->get_transcripts()[0].id, second);
+  EXPECT_EQ(db_->get_transcripts()[1].id, first);
+  EXPECT_FALSE(db_->set_transcript_clients(first, {}));
+}
+
+TEST_F(TranscriptDbTest, FailedLegacyBackfillRollsBackDDLAndMetadata) {
+  const auto id = db_->add_transcript(makeEvent(), "scope");
+  db_.reset();
+  {
+    duckdb::DuckDB raw(dir_ + "/database.db"); duckdb::Connection conn(raw);
+    ASSERT_FALSE(conn.Query("DROP TABLE TranscriptClient; CREATE TABLE TranscriptClient (invalid INTEGER); "
+                           "ALTER TABLE Transcript ALTER COLUMN event_id SET NOT NULL; "
+                           "UPDATE ApplicationMetadata SET schema_version=1")->HasError());
+  }
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
+  EXPECT_THROW(db_ = std::make_unique<pcm::database::Database>(conf), std::runtime_error);
+  {
+    duckdb::DuckDB raw(dir_ + "/database.db"); duckdb::Connection conn(raw);
+    EXPECT_EQ(conn.Query("SELECT schema_version FROM ApplicationMetadata")->Fetch()->GetValue(0, 0).GetValue<int32_t>(), 1);
+    EXPECT_EQ(conn.Query("SELECT is_nullable FROM information_schema.columns WHERE table_name='Transcript' "
+                        "AND column_name='event_id'")->Fetch()->GetValue(0, 0).ToString(), "NO");
+    EXPECT_EQ(conn.Query("SELECT id FROM Transcript")->Fetch()->GetValue(0, 0).GetValue<int32_t>(), id);
+  }
+}
+
+TEST_F(TranscriptDbTest, FutureSchemaIsRejectedWithoutResettingVersion) {
+  db_.reset();
+  {
+    duckdb::DuckDB raw(dir_ + "/database.db"); duckdb::Connection conn(raw);
+    ASSERT_FALSE(conn.Query("UPDATE ApplicationMetadata SET schema_version=999")->HasError());
+  }
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
+  EXPECT_THROW(db_ = std::make_unique<pcm::database::Database>(conf), std::runtime_error);
+  duckdb::DuckDB raw(dir_ + "/database.db"); duckdb::Connection conn(raw);
+  EXPECT_EQ(conn.Query("SELECT schema_version FROM ApplicationMetadata")->Fetch()->GetValue(0, 0).GetValue<int32_t>(), 999);
+}
+
+TEST_F(TranscriptDbTest, CleanupDetachesMissingEventsAndFreedIdsAreClean) {
   const auto keep_event = makeEvent(1730000000000);
   const auto doomed_event = makeEvent(1740000000000);
   ASSERT_GT(doomed_event, keep_event);
@@ -438,8 +639,9 @@ TEST_F(TranscriptDbTest, PurgeOrphanTranscriptsRemovesTheOnesWithoutAnEventAndFr
   db_ = std::make_unique<pcm::database::Database>(conf);
 
   EXPECT_EQ(db_->purge_orphan_transcripts(), 1);
-  EXPECT_EQ(db_->get_transcript(orphan), nullptr);
-  EXPECT_TRUE(db_->get_transcript_phrases(orphan).empty());
+  ASSERT_NE(db_->get_transcript(orphan), nullptr);
+  EXPECT_FALSE(db_->get_transcript(orphan)->event_id.has_value());
+  EXPECT_EQ(db_->get_transcript_phrases(orphan).size(), 1u);
   EXPECT_NE(db_->get_transcript(keep), nullptr);
   EXPECT_EQ(db_->get_transcript_phrases(keep).size(), 1u);
   EXPECT_EQ(db_->purge_orphan_transcripts(), 0);
@@ -489,8 +691,9 @@ TEST_F(TranscriptDbTest, RemovingARecurringOccurrenceThroughCommitScheduleChange
       [](const pcm::database::ScheduleSource &) { return std::optional<std::string>("p"); });
   ASSERT_TRUE(commit.has_value());
   EXPECT_EQ(db_->get_event(event_id), nullptr);
-  EXPECT_EQ(db_->get_transcript(t), nullptr);
-  EXPECT_TRUE(db_->get_transcript_phrases(t).empty());
+  ASSERT_NE(db_->get_transcript(t), nullptr);
+  EXPECT_FALSE(db_->get_transcript(t)->event_id.has_value());
+  EXPECT_EQ(db_->get_transcript_phrases(t).size(), 1u);
 }
 
 TEST_F(TranscriptDbTest, DeletePhraseBumpsTranscriptUpdatedAt) {
