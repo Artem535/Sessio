@@ -16,8 +16,8 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: web/call-client/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npm test
-      - run: npx playwright install --with-deps chromium
+      - run: ./node_modules/.bin/playwright install --with-deps chromium
       - run: npm run test:e2e
