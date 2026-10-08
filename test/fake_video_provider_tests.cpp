@@ -60,3 +60,36 @@ int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+namespace {
+class RecordingSink final : public pcm::video::AudioSink {
+public:
+  void onAudio(const QString &id, const int16_t *samples, std::size_t count, int rate) override {
+    ++calls;
+    lastId = id;
+    lastSamples.assign(samples, samples + count);
+    lastRate = rate;
+  }
+  int calls{0};
+  QString lastId;
+  std::vector<int16_t> lastSamples;
+  int lastRate{0};
+};
+} // namespace
+
+TEST(FakeVideoProviderTest, FakeProviderForwardsSimulatedAudioToSink) {
+  FakeVideoProvider provider;
+  auto sink = std::make_shared<RecordingSink>();
+  provider.setAudioSink(sink);
+  provider.simulateAudio("p1", {1, 2, 3}, 48000);
+  EXPECT_EQ(sink->calls, 1);
+  EXPECT_EQ(sink->lastId, "p1");
+  EXPECT_EQ(sink->lastSamples, (std::vector<int16_t>{1, 2, 3}));
+  EXPECT_EQ(sink->lastRate, 48000);
+}
+
+TEST(FakeVideoProviderTest, FakeProviderWithoutSinkDropsAudio) {
+  FakeVideoProvider provider;
+  provider.simulateAudio("p1", {1, 2, 3}, 48000);
+  EXPECT_EQ(provider.audioSink(), nullptr);
+}

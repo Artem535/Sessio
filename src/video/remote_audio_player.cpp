@@ -2,6 +2,7 @@
 
 #include <QAudioFormat>
 #include <QMetaObject>
+#include <vector>
 
 namespace pcm::video {
 
@@ -62,6 +63,12 @@ void RemoteAudioPlayer::readerLoop(uint64_t generation) {
                      static_cast<qsizetype>(samples.size() * sizeof(int16_t)));
     const int sampleRate = frame.sampleRate();
     const int numChannels = frame.numChannels();
+
+    if (numChannels > 0 && mTap.active()) {
+      const auto channels = static_cast<std::size_t>(numChannels);
+      downmixToMono(samples.data(), samples.size() / channels, numChannels, mMonoScratch);
+      mTap.push(mMonoScratch.data(), mMonoScratch.size(), sampleRate);
+    }
 
     QMetaObject::invokeMethod(
         this,

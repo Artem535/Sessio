@@ -427,6 +427,59 @@ inline std::ostream &operator<<(std::ostream &os, const DuckClientNote &note) {
   return os;
 }
 
+// --- DuckTranscript ---
+// status: "recording" | "draft" | "reviewed". Times are epoch milliseconds.
+struct DuckTranscript {
+  std::int64_t id = -1;
+  std::int64_t event_id = -1;
+  std::string status;
+  std::string consent_scope;
+  std::int64_t consent_given_at = 0;
+  std::optional<std::int64_t> consent_revoked_at = std::nullopt;
+  std::optional<std::string> model_id = std::nullopt;
+  std::int64_t created_at = 0;
+  std::int64_t updated_at = 0;
+
+  DuckTranscript() = default;
+  DuckTranscript(const duckdb::DataChunk &chunk, duckdb::idx_t index) {
+    id = db_utils::toInt32AsInt64(chunk.GetValue(0, index));
+    event_id = db_utils::toInt32AsInt64(chunk.GetValue(1, index));
+    status = chunk.GetValue(2, index).ToString();
+    consent_scope = chunk.GetValue(3, index).ToString();
+    consent_given_at = db_utils::toOptionalTimestampMs(chunk.GetValue(4, index)).value_or(0);
+    consent_revoked_at = db_utils::toOptionalTimestampMs(chunk.GetValue(5, index));
+    model_id = db_utils::toOptionalString(chunk.GetValue(6, index));
+    created_at = db_utils::toOptionalTimestampMs(chunk.GetValue(7, index)).value_or(0);
+    updated_at = db_utils::toOptionalTimestampMs(chunk.GetValue(8, index)).value_or(0);
+  }
+};
+
+// --- DuckTranscriptPhrase ---
+// start_ms / end_ms are milliseconds from the start of the call.
+struct DuckTranscriptPhrase {
+  std::int64_t id = -1;
+  std::int64_t transcript_id = -1;
+  std::string track_role;  // "practitioner" | "participant"
+  std::optional<std::string> speaker_name = std::nullopt;
+  std::int64_t start_ms = 0;
+  std::int64_t end_ms = 0;
+  std::string text;
+  bool edited = false;
+
+  DuckTranscriptPhrase() = default;
+  DuckTranscriptPhrase(const duckdb::DataChunk &chunk, duckdb::idx_t index) {
+    id = db_utils::toInt32AsInt64(chunk.GetValue(0, index));
+    transcript_id = db_utils::toInt32AsInt64(chunk.GetValue(1, index));
+    track_role = chunk.GetValue(2, index).ToString();
+    speaker_name = db_utils::toOptionalString(chunk.GetValue(3, index));
+    start_ms = chunk.GetValue(4, index).GetValue<int64_t>();
+    end_ms = chunk.GetValue(5, index).GetValue<int64_t>();
+    text = chunk.GetValue(6, index).ToString();
+    const auto edited_value = chunk.GetValue(7, index);
+    edited = !edited_value.IsNull() && db_utils::toBool(edited_value);
+  }
+};
+
 // --- DuckClientNoteAttachment ---
 struct DuckClientNoteAttachment {
   std::int64_t id = -1;

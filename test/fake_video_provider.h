@@ -3,6 +3,8 @@
 #include "video_provider.h"
 #include <QHash>
 #include <QPointer>
+#include <memory>
+#include <vector>
 
 namespace pcm::video::test {
 
@@ -47,6 +49,12 @@ public:
   void switchMicrophone(const QAudioDevice &device) override {
     mLastSwitchedMicrophone = device;
     ++mSwitchMicrophoneCallCount;
+    simulateMicrophoneChanged(device);
+  }
+  [[nodiscard]] QAudioDevice selectedMicrophone() const override { return mSelectedMicrophone; }
+  void simulateMicrophoneChanged(const QAudioDevice &device) {
+    mSelectedMicrophone = device;
+    emit microphoneChanged(device);
   }
   void switchSpeaker(const QAudioDevice &device) override {
     mLastSwitchedSpeaker = device;
@@ -56,6 +64,14 @@ public:
   // Test-driving methods: call these to simulate the real provider emitting
   // its outcome signals asynchronously, exactly as LiveKitVideoProvider
   // would once its own SDK callbacks fire.
+  void setAudioSink(std::shared_ptr<AudioSink> sink) override { mSink = std::move(sink); }
+  [[nodiscard]] std::shared_ptr<AudioSink> audioSink() const { return mSink; }
+  void simulateAudio(const QString &id, const std::vector<int16_t> &samples, int rate = 48000) {
+    if (mSink)
+      mSink->onAudio(id, samples.data(), samples.size(), rate);
+  }
+  [[nodiscard]] qint64 callElapsedMs() const override { return mCallElapsedMs; }
+  qint64 mCallElapsedMs{0};
   void simulateJoined() { emit joined(); }
   void simulateJoinFailed(const QString &reason) { emit joinFailed(reason); }
   void simulateLeft() { participants()->clear(); qDeleteAll(mSources); mSources.clear(); emit left(); }
@@ -79,6 +95,7 @@ public:
   void simulateConnectionLost(const QString &reason) { emit connectionLost(reason); }
   void simulateMediaError(const QString &reason) { emit mediaError(reason); }
 
+  std::shared_ptr<AudioSink> mSink;
   QString mLastJoinUrl;
   QString mLastJoinToken;
   int mJoinCallCount{0};
@@ -96,6 +113,7 @@ public:
   int mSwitchSpeakerCallCount{0};
   QCameraDevice mLastSwitchedCamera;
   QAudioDevice mLastSwitchedMicrophone;
+  QAudioDevice mSelectedMicrophone;
   QAudioDevice mLastSwitchedSpeaker;
 };
 

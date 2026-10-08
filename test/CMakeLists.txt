@@ -28,6 +28,17 @@ target_link_libraries(Sessio_database_tests PRIVATE
 )
 gtest_discover_tests(Sessio_database_tests)
 
+# Transcript data layer tests
+add_executable(Sessio_database_transcript_tests database_transcript_tests.cpp)
+target_link_libraries(Sessio_database_transcript_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_config
+    Sessio_database
+    Poco::Foundation
+)
+gtest_discover_tests(Sessio_database_transcript_tests)
+
 # Schedule identity / transactional outbox tests
 add_executable(Sessio_schedule_outbox_tests schedule_outbox_tests.cpp)
 target_link_libraries(Sessio_schedule_outbox_tests PRIVATE
@@ -379,7 +390,25 @@ target_link_libraries(Sessio_audio_capture_adapter_smoke_test PRIVATE
     Qt6::Multimedia
     LiveKit::livekit
 )
+if(UNIX AND NOT APPLE)
+  target_link_libraries(Sessio_audio_capture_adapter_smoke_test PRIVATE "${LIVEKIT_CURL_LIBRARY}")
+endif()
 add_test(NAME AudioCaptureAdapterSmokeTest COMMAND Sessio_audio_capture_adapter_smoke_test)
+add_executable(Sessio_audio_capture_lifecycle_tests
+    audio_capture_adapter_lifecycle_tests.cpp)
+target_link_libraries(Sessio_audio_capture_lifecycle_tests PRIVATE
+    GTest::gtest Sessio_video)
+add_test(NAME AudioCaptureLifecycleTests COMMAND Sessio_audio_capture_lifecycle_tests)
+set_tests_properties(AudioCaptureLifecycleTests PROPERTIES TIMEOUT 15)
+if(SESSIO_TRANSCRIPTION_ENABLED)
+  add_executable(Sessio_microphone_switch_runtime_smoke microphone_switch_runtime_smoke.cpp)
+  target_include_directories(Sessio_microphone_switch_runtime_smoke PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/transcription)
+  target_link_libraries(Sessio_microphone_switch_runtime_smoke PRIVATE
+      Sessio_video Sessio_transcription)
+  add_test(NAME MicrophoneSwitchRuntimeSmoke COMMAND Sessio_microphone_switch_runtime_smoke)
+  set_tests_properties(MicrophoneSwitchRuntimeSmoke PROPERTIES TIMEOUT 15 SKIP_RETURN_CODE 77)
+endif()
 set_tests_properties(AudioCaptureAdapterSmokeTest PROPERTIES TIMEOUT 30)
 
 # Remote video renderer smoke test (own main(), not GoogleTest — mirrors the
@@ -456,6 +485,11 @@ target_link_libraries(Sessio_livekit_video_provider_smoke_test PRIVATE
     LiveKit::livekit
 )
 set_target_properties(Sessio_livekit_video_provider_smoke_test PROPERTIES AUTOMOC ON)
+if(UNIX AND NOT APPLE)
+  # This smoke compiles provider sources directly instead of linking Sessio_video,
+  # so it also needs the SDK's missing exported curl dependency.
+  target_link_libraries(Sessio_livekit_video_provider_smoke_test PRIVATE "${LIVEKIT_CURL_LIBRARY}")
+endif()
 add_test(NAME LiveKitVideoProviderSmokeTest COMMAND Sessio_livekit_video_provider_smoke_test)
 set_tests_properties(LiveKitVideoProviderSmokeTest PROPERTIES TIMEOUT 40)
 
@@ -653,6 +687,70 @@ target_link_libraries(Sessio_fake_video_provider_tests PRIVATE
 set_target_properties(Sessio_fake_video_provider_tests PROPERTIES AUTOMOC ON)
 add_test(NAME FakeVideoProviderTests COMMAND Sessio_fake_video_provider_tests)
 
+# Audio tap tests (header-only audio_sink.h)
+add_executable(Sessio_audio_tap_tests audio_tap_tests.cpp)
+target_include_directories(Sessio_audio_tap_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_audio_tap_tests PRIVATE GTest::gtest GTest::gtest_main Qt6::Core)
+gtest_discover_tests(Sessio_audio_tap_tests)
+
+if(SESSIO_TRANSCRIPTION_ENABLED)
+add_executable(Sessio_call_transcription_controller_tests call_transcription_controller_tests.cpp)
+add_executable(Sessio_transcription_workflow_model_tests transcription_workflow_model_tests.cpp)
+target_include_directories(Sessio_transcription_workflow_model_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/test "${SESSIO_SHERPA_SOURCE_DIR}")
+target_link_libraries(Sessio_transcription_workflow_model_tests PRIVATE
+    GTest::gtest Qt6::Test Sessio_transcription_ui Sessio_video sherpa-onnx-cxx-api)
+set_target_properties(Sessio_transcription_workflow_model_tests PROPERTIES
+    BUILD_RPATH "${CMAKE_BINARY_DIR}/lib;${SESSIO_ONNXRUNTIME_LIB_DIR}")
+add_dependencies(Sessio_transcription_workflow_model_tests sessio_models)
+if(WIN32)
+  add_custom_command(TARGET Sessio_transcription_workflow_model_tests POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          $<TARGET_FILE:sherpa-onnx-c-api>
+          $<TARGET_FILE:sherpa-onnx-cxx-api>
+          ${SESSIO_ONNXRUNTIME_LIBS}
+          $<TARGET_FILE_DIR:Sessio_transcription_workflow_model_tests>
+      VERBATIM)
+endif()
+gtest_discover_tests(Sessio_transcription_workflow_model_tests DISCOVERY_MODE PRE_TEST
+    PROPERTIES LABELS models
+    ENVIRONMENT "SESSIO_MODELS_DIR=${SESSIO_MODELS_DIR};QT_QPA_PLATFORM=offscreen")
+target_include_directories(Sessio_call_transcription_controller_tests PRIVATE ${CMAKE_SOURCE_DIR}/test ${CMAKE_SOURCE_DIR}/test/transcription)
+target_link_libraries(Sessio_call_transcription_controller_tests PRIVATE GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui Sessio_video)
+gtest_discover_tests(Sessio_call_transcription_controller_tests)
+add_executable(Sessio_transcript_panel_tests transcript_panel_tests.cpp)
+target_link_libraries(Sessio_transcript_panel_tests PRIVATE
+    GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_transcript_panel_tests)
+# Phrase writer tests (Qt-free writer thread)
+add_executable(Sessio_phrase_writer_tests phrase_writer_tests.cpp)
+target_link_libraries(Sessio_phrase_writer_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_call_transcription)
+gtest_discover_tests(Sessio_phrase_writer_tests)
+
+# Production engine factory tests (no model files needed)
+add_executable(Sessio_engine_factory_tests engine_factory_tests.cpp)
+target_link_libraries(Sessio_engine_factory_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_call_transcription)
+gtest_discover_tests(Sessio_engine_factory_tests)
+
+# Call transcription session tests (QApplication main, fakes for engine and provider)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
+add_executable(Sessio_transcription_session_tests transcription_session_tests.cpp)
+target_include_directories(Sessio_transcription_session_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/test
+    ${CMAKE_SOURCE_DIR}/test/transcription)
+target_link_libraries(Sessio_transcription_session_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Qt6::Test
+    Sessio_call_transcription
+    Sessio_transcription
+    Sessio_video)
+set_target_properties(Sessio_transcription_session_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_transcription_session_tests)
+endif()
+
 # Role selection dialog tests
 find_package(Qt6 REQUIRED COMPONENTS Test)
 add_executable(Sessio_role_selection_dialog_tests role_selection_dialog_tests.cpp)
@@ -788,6 +886,13 @@ target_link_libraries(Sessio_call_page_tests PRIVATE
     Sessio_widgets
 )
 target_include_directories(Sessio_call_page_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/widgets)
+find_package(Qt6MultimediaPrivate 6.11 QUIET CONFIG)
+if(TARGET Qt6::MultimediaPrivate)
+  # Only the test creates synthetic QAudioDevice descriptors; production uses
+  # the public Qt API. Older/minimal Qt installations explicitly skip this case.
+  target_link_libraries(Sessio_call_page_tests PRIVATE Qt6::MultimediaPrivate)
+  target_compile_definitions(Sessio_call_page_tests PRIVATE SESSIO_TEST_AUDIO_DEVICE_PRIVATE=1)
+endif()
 set_target_properties(Sessio_call_page_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_call_page_tests)
 
@@ -955,3 +1060,41 @@ target_compile_definitions(Sessio_accent_color_tests PRIVATE
 target_link_libraries(Sessio_accent_color_tests PRIVATE
     GTest::gtest Qt6::Widgets Sessio_event_page)
 gtest_discover_tests(Sessio_accent_color_tests)
+
+if(SESSIO_TRANSCRIPTION_ENABLED)
+add_executable(Sessio_transcription_consent_dialog_tests transcription_consent_dialog_tests.cpp)
+add_executable(Sessio_transcription_settings_panel_tests transcription_settings_panel_tests.cpp)
+target_link_libraries(Sessio_transcription_settings_panel_tests PRIVATE
+    GTest::gtest Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_transcription_settings_panel_tests)
+add_executable(Sessio_call_side_panel_tests call_side_panel_tests.cpp)
+target_include_directories(Sessio_call_side_panel_tests PRIVATE
+    ${qlementine_SOURCE_DIR}/lib/include)
+target_link_libraries(Sessio_call_side_panel_tests PRIVATE
+    GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_call_side_panel_tests)
+target_include_directories(Sessio_transcription_consent_dialog_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/pages/transcript_page)
+target_link_libraries(Sessio_transcription_consent_dialog_tests PRIVATE
+    GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_transcription_consent_dialog_tests)
+
+add_executable(Sessio_transcript_page_tests transcript_page_tests.cpp)
+target_link_libraries(Sessio_transcript_page_tests PRIVATE
+    GTest::gtest Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_transcript_page_tests)
+
+add_executable(Sessio_failure_text_tests failure_text_tests.cpp)
+target_include_directories(Sessio_failure_text_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/pages/transcript_page)
+target_link_libraries(Sessio_failure_text_tests PRIVATE
+    GTest::gtest GTest::gtest_main Qt6::Core Sessio_transcription_ui)
+gtest_discover_tests(Sessio_failure_text_tests)
+
+# Call event resolver tests (materialising a recurring occurrence)
+add_executable(Sessio_call_event_resolver_tests call_event_resolver_tests.cpp)
+target_link_libraries(Sessio_call_event_resolver_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_call_transcription Sessio_event_view
+    Sessio_database Sessio_config Poco::Foundation)
+gtest_discover_tests(Sessio_call_event_resolver_tests)
+endif()

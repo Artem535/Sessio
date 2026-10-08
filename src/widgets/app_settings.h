@@ -7,6 +7,8 @@
 #include "notification_text.h"
 
 namespace pcm::app_settings {
+bool transcriptionEnabled();
+void setTranscriptionEnabled(bool enabled);
 QString callDisplayName();
 void setCallDisplayName(const QString &name);
 

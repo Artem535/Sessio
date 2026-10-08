@@ -9,6 +9,7 @@
 #include <mutex>
 #include <optional>
 #include <set>
+#include <QElapsedTimer>
 
 namespace pcm::video {
 
@@ -48,6 +49,9 @@ public:
   void switchCamera(const QCameraDevice &device) override;
   void switchMicrophone(const QAudioDevice &device) override;
   void switchSpeaker(const QAudioDevice &device) override;
+  void setAudioSink(std::shared_ptr<AudioSink> sink) override;
+  [[nodiscard]] qint64 callElapsedMs() const override;
+  [[nodiscard]] QAudioDevice selectedMicrophone() const override;
 
 private:
   friend struct LiveKitVideoProviderTestAccess;
@@ -92,6 +96,8 @@ private:
   std::unique_ptr<AudioCaptureAdapter> mAudioCapture;
   std::map<QString, std::unique_ptr<ParticipantMedia>> mMedia;
   std::set<std::pair<QString, QString>> mDeparted;
+  // Shared with the taps so their lambdas stay valid independent of provider teardown.
+  std::shared_ptr<AudioSinkSlot> mSinkSlot{std::make_shared<AudioSinkSlot>()};
   QString mLocalIdentity;
   bool mMicrophoneEnabled{true};
   bool mCameraEnabled{true};
@@ -99,6 +105,9 @@ private:
   // Chosen before joining (device-check screen); join() opens these instead of the defaults.
   std::optional<QCameraDevice> mSelectedCamera;
   std::optional<QAudioDevice> mSelectedMicrophone;
+  std::optional<QAudioDevice> mPendingMicrophone;
+  bool mMicrophoneSwitchQueued{false};
+  QElapsedTimer mCallClock;
   uint64_t mGeneration{0};
   std::mutex mCallbackMutex;
   uint64_t mNextCallback{0};

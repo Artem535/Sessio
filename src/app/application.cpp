@@ -7,6 +7,13 @@
 #include "../backup/restore_service.h"
 #include "../event_view/recurrence_utils.h"
 #include "../widgets/app_settings.h"
+#ifdef SESSIO_CALL_TRANSCRIPTION
+#include "call_side_panel.h"
+#include "transcript_panel.h"
+#include "transcript_page.h"
+#include "transcription_consent_dialog.h"
+#include "engine_factory.h"
+#endif
 
 #include <Poco/Path.h>
 #include <QDate>
@@ -155,7 +162,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  app.setApplicationVersion("0.2.16");
+  app.setApplicationVersion("0.2.17");
   // Installed builds ship libical's timezone data next to the executable; the
   // path compiled into the schedule engine only exists in development trees.
   pcm::meeting::configureScheduleZoneinfo(QCoreApplication::applicationDirPath());
@@ -294,6 +301,17 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
 
   mDb = std::make_shared<database::Database>(mConf);
 
+  // Before any call page or transcription session exists: close transcripts a
+  // crash left in "recording" state and drop rows whose event is gone.
+  {
+    const auto interrupted = mDb->finalize_interrupted_transcripts();
+    const auto orphans = mDb->purge_orphan_transcripts();
+    if (interrupted > 0 || orphans > 0) {
+      qCInfo(logApplication) << "Transcript recovery: interrupted=" << interrupted
+                             << "orphans=" << orphans;
+    }
+  }
+
   mAutoBackupScheduler =
       std::make_unique<pcm::backup::AutoBackupScheduler>(mDb);
   mAutoBackupScheduler->start();
@@ -324,6 +342,13 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
       mMeetingCoordinator.get());
 
   auto *timelineModel = new QTimelineModel(mDb, mMeetingCoordinator.get(), this);
+  mTimelineModel = timelineModel;
+#ifdef SESSIO_CALL_TRANSCRIPTION
+  mCallEventResolver = std::make_unique<pcm::calltranscription::CallEventResolver>(
+      mDb, [this](const DuckEvent &e) {
+        return mTimelineModel ? mTimelineModel->addEvent(e, true) : int64_t{0};
+      });
+#endif
   timelineModel->setScheduleCommitter(mScheduleCommitter.get());
   mMainWindow->addEventInfoPage(timelineModel, mMeetingCoordinator.get());
   if (auto *eventPage = dynamic_cast<QEventInfoPage *>(
@@ -1058,6 +1083,98 @@ void Application::connectSignals() {
   // replaced panel without deleting it).
   {
     auto *callsPage = dynamic_cast<CallsPage *>(mMainWindow->getPage(MainWindow::Pages::calls));
+#ifdef SESSIO_CALL_TRANSCRIPTION
+    auto *eventPage = dynamic_cast<QEventInfoPage *>(mMainWindow->getPage(MainWindow::Pages::eventInfo));
+    auto *panel = new TranscriptPanel;
+    mCallNotesPanel = new ClientNotesPage(mDb);
+    auto *sidePanel = new CallSidePanel(mCallNotesPanel, panel, callsPage);
+    callsPage->setSidePanelWidget(sidePanel);
+    pcm::transcriptionui::ControllerHooks hooks;
+    hooks.resolveEvent = [this](int64_t id) { return resolveCallEvent(id); };
+    hooks.askConsent = [this] {
+      TranscriptionConsentDialog dialog(mMainWindow.get());
+      return dialog.exec() == QDialog::Accepted;
+    };
+    hooks.askRevokeChoice = [this] {
+      QMessageBox box(QMessageBox::Question, tr("Consent withdrawn"),
+                      tr("Transcription has stopped. What should happen to the recorded text?"),
+                      QMessageBox::NoButton, mMainWindow.get());
+      auto *remove = box.addButton(tr("Delete what was recorded"), QMessageBox::DestructiveRole);
+      box.addButton(tr("Keep as draft"), QMessageBox::RejectRole);
+      box.exec();
+      return box.clickedButton() == remove
+          ? pcm::transcriptionui::ControllerHooks::RevokeChoice::DeleteRecorded
+          : pcm::transcriptionui::ControllerHooks::RevokeChoice::KeepAsDraft;
+    };
+    hooks.engineFactory = [] {
+      return pcm::calltranscription::makeProductionEngineFactory(
+          QCoreApplication::applicationDirPath().toStdString(),
+          qEnvironmentVariable("SESSIO_MODELS_DIR").toStdString());
+    };
+    auto modelsAvailable = [] {
+      return pcm::calltranscription::transcriptionModelsAvailable(
+          QCoreApplication::applicationDirPath().toStdString(),
+          qEnvironmentVariable("SESSIO_MODELS_DIR").toStdString());
+    };
+    hooks.modelsAvailable = modelsAvailable;
+    hooks.transcriptionEnabled = &pcm::app_settings::transcriptionEnabled;
+    hooks.eventMaterialised = [eventPage](int64_t) { eventPage->reloadSelectedDay(); };
+    mCallTranscription = new pcm::transcriptionui::CallTranscriptionController(mDb, panel, sidePanel, std::move(hooks), this);
+    auto *controller = mCallTranscription.data();
+    auto refreshButton = [this, callsPage, modelsAvailable] {
+      mCallTranscription->refreshAvailability();
+      callsPage->setTranscribeButtonVisible(pcm::app_settings::transcriptionEnabled() &&
+                                           modelsAvailable() && mCurrentCallEventId.has_value());
+    };
+    connect(callsPage, &CallsPage::eventKnownForCurrentCall, this,
+            [this](int64_t id) { mCurrentCallEventId = id; });
+    connect(callsPage, &CallsPage::callSessionStarted, this,
+            [this, controller, refreshButton](pcm::video::VideoSession *session) {
+              controller->attachCall(session, mCurrentCallEventId);
+              refreshButton();
+            });
+    connect(callsPage, &CallsPage::callSessionEnded, this, [this, controller, refreshButton] {
+      controller->detachCall();
+      mCurrentCallEventId.reset();
+      refreshButton();
+    });
+    connect(callsPage, &CallsPage::transcribeRequested, controller,
+            &pcm::transcriptionui::CallTranscriptionController::onTranscribeRequested);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcribeButtonState,
+            callsPage, &CallsPage::setTranscribeButtonState);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::requestOpenTranscriptTab,
+            callsPage, [callsPage, sidePanel] { callsPage->openSidePanel(); sidePanel->showTranscript(); });
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::callTranscriptReady,
+            eventPage, [eventPage](int64_t, int64_t) { eventPage->reloadSelectedDay(); });
+    connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, controller,
+            &pcm::transcriptionui::CallTranscriptionController::shutdown);
+    connect(mMainWindow.get(), &MainWindow::settingsSaved, this, refreshButton);
+    mMainWindow->setTranscriptionActiveProvider([guard = mCallTranscription] {
+      return guard && guard->active();
+    });
+    eventPage->setTranscriptCountProvider([db = mDb](int64_t id) {
+      return static_cast<int>(db->get_transcripts_for_event(id).size());
+    });
+    auto *reviewPage = new TranscriptPage(mDb, 0, {}, mMainWindow.get());
+    mMainWindow->registerTranscriptPage(reviewPage);
+    auto selectedEvent = std::make_shared<std::pair<int64_t, qint64>>(0, 0);
+    connect(eventPage, &QEventInfoPage::openTranscriptRequested, reviewPage,
+            [this, reviewPage, selectedEvent](int64_t id) {
+              if (reviewPage->editing()) {
+                mMainWindow->openTranscriptPage();
+                return;
+              }
+              const auto event = mDb->get_event(id);
+              if (!event) return;
+              *selectedEvent = {id, event->start_date.value_or(0)};
+              reviewPage->reload(id, QString::fromStdString(event->name.value_or("")));
+              mMainWindow->openTranscriptPage();
+            });
+    connect(reviewPage, &TranscriptPage::backRequested, mMainWindow.get(),
+            [this, selectedEvent] { mMainWindow->returnToEvent(selectedEvent->first, selectedEvent->second); });
+    connect(reviewPage, &TranscriptPage::transcriptsChanged, eventPage, &QEventInfoPage::reloadSelectedDay);
+    refreshButton();
+#endif
     connect(callsPage, &CallsPage::eventKnownForCurrentCall, this,
             [this, callsPage](const int64_t eventId) {
               std::optional<DuckClient> client;
@@ -1075,5 +1192,12 @@ void Application::connectSignals() {
             });
   }
 }
+
+#ifdef SESSIO_CALL_TRANSCRIPTION
+std::optional<int64_t> Application::resolveCallEvent(int64_t eventId) {
+  if (!mCallEventResolver) return std::nullopt;
+  return mCallEventResolver->resolve(eventId);
+}
+#endif
 
 } // namespace pcm

@@ -683,18 +683,31 @@ void CallPage::showDevicesPopover() {
                                          }
                                        }
                                      });
+  const auto microphone = provider ? provider->selectedMicrophone() : QAudioDevice{};
   mDeviceMicrophoneCombo = addDeviceRow(QStringLiteral("deviceMicrophoneCombo"), mDeviceManager->microphones(),
-                                         QByteArray(), [provider](const QByteArray &id) {
+                                         microphone.id(), [provider, devices = mDeviceManager](const QByteArray &id) {
                                            if (!provider) {
                                              return;
                                            }
-                                           for (const auto &device : QMediaDevices::audioInputs()) {
+                                           for (const auto &device : devices->microphones()) {
                                              if (device.id() == id) {
                                                provider->switchMicrophone(device);
                                                return;
                                              }
                                            }
                                          });
+  {
+    const QSignalBlocker blocker(mDeviceMicrophoneCombo);
+    mDeviceMicrophoneCombo->setCurrentIndex(
+        microphone.isNull() ? -1 : mDeviceMicrophoneCombo->findData(microphone.id()));
+  }
+  if (provider) {
+    connect(provider, &pcm::video::VideoProvider::microphoneChanged, mDeviceMicrophoneCombo,
+            [combo = mDeviceMicrophoneCombo](const QAudioDevice &device) {
+              const QSignalBlocker blocker(combo);
+              combo->setCurrentIndex(device.isNull() ? -1 : combo->findData(device.id()));
+            });
+  }
   mDeviceSpeakerCombo = addDeviceRow(QStringLiteral("deviceSpeakerCombo"), mDeviceManager->speakers(),
                                       QByteArray(), [provider](const QByteArray &id) {
                                         if (!provider) {
@@ -753,6 +766,42 @@ void CallPage::setSidePanelToggleVisible(bool visible) {
 void CallPage::setSidePanelExpandedByDefault(bool expanded) {
   if (mNotesToggleButton) {
     mNotesToggleButton->setChecked(expanded);
+  }
+}
+
+void CallPage::openSidePanel() {
+  setSidePanelExpandedByDefault(true);
+}
+
+void CallPage::setTranscribeButtonVisible(bool visible) {
+  if (visible && !mTranscribeButton) {
+    mTranscribeButton = new QToolButton(mControlBar);
+    mTranscribeButton->setObjectName("transcribeButton");
+    mTranscribeButton->setCheckable(true);
+    mTranscribeButton->setFixedSize(40, 40);
+    mTranscribeButton->setIconSize(QSize(20, 20));
+    auto *layout = qobject_cast<QHBoxLayout *>(mControlBar->layout());
+    layout->insertWidget(layout->indexOf(mDevicesButton) + 1, mTranscribeButton);
+    setTranscribeButtonState(mTranscribing, mTranscribeTooltip);
+    connect(mTranscribeButton, &QToolButton::clicked, this, [this]() {
+      mTranscribeButton->setChecked(mTranscribing);
+      emit transcribeRequested();
+    });
+  } else if (!visible && mTranscribeButton) {
+    delete mTranscribeButton;
+    mTranscribeButton = nullptr;
+  }
+}
+
+void CallPage::setTranscribeButtonState(bool active, const QString &tooltip) {
+  mTranscribing = active;
+  mTranscribeTooltip = tooltip;
+  if (mTranscribeButton) {
+    mTranscribeButton->setChecked(active);
+    mTranscribeButton->setIcon(pcm::widgets::transcriptIcon(active));
+    const QString label = active ? tooltip : tr("Transcribe");
+    mTranscribeButton->setToolTip(label);
+    mTranscribeButton->setAccessibleName(label);
   }
 }
 

@@ -41,6 +41,9 @@ public:
   void prefillJoinCode(const QString &code, const QString &passcode);
   void setSidePanelWidget(QWidget *panel);
   void setSidePanelExpandedByDefault(bool expanded);
+  void setTranscribeButtonVisible(bool visible);
+  void setTranscribeButtonState(bool active, const QString &tooltip);
+  void openSidePanel();
 
   // Testing seam only: overrides the VideoProvider constructed for
   // subsequent joins. Production callers (MainWindow/ClientModeWindow) never
@@ -52,6 +55,9 @@ public:
   void setVideoProviderFactoryForTesting(std::function<pcm::video::VideoProvider *()> factory);
 
 signals:
+  void transcribeRequested();
+  void callSessionStarted(pcm::video::VideoSession *session);
+  void callSessionEnded();
   void eventKnownForCurrentCall(int64_t eventId);
   // Relayed from CallPage: hide/show the surrounding application chrome.
   void fullscreenChanged(bool fullscreen);
@@ -62,6 +68,7 @@ private:
   // that only happens once the user confirms on the device-check screen
   // (CallPage::joinConfirmed), via the constructor-time connection below.
   void startJoin(const QString &url, const QString &token);
+  void endCallSession();
   // True while a call is in progress: a session exists and is past
   // NoMeeting but not yet Ended/Failed. preselectOwnMeeting()/
   // prefillJoinCode() are ignored then, so they never hide a live call.
@@ -75,6 +82,7 @@ private:
   CallEntryWidget *mEntryWidget{nullptr};
   CallPage *mCallPage{nullptr};
   std::unique_ptr<pcm::video::VideoSession> mSession;
+  bool mSessionStarted{false};
   QList<UpcomingMeeting> mUpcomingMeetings;
   std::optional<int64_t> mCurrentEventId;
   // The url/token from the most recent tokenReceived() are held here rather

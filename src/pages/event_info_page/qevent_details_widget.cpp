@@ -453,6 +453,12 @@ void QEventDetailsWidget::initUi() {
   connect(back, &QPushButton::clicked, this, &QEventDetailsWidget::backRequested);
   headingRow->addWidget(back, 0, Qt::AlignTop);
   summary->addLayout(headingRow);
+  mTranscriptButton = new QPushButton(tr("Transcript"), mInspectorSummary);
+  mTranscriptButton->setObjectName(QStringLiteral("openTranscript"));
+  mTranscriptButton->hide();
+  summary->addWidget(mTranscriptButton);
+  connect(mTranscriptButton, &QPushButton::clicked, this,
+          &QEventDetailsWidget::openTranscriptRequested);
   mInspectorTitle = new QLabel(mInspectorSummary);
   mInspectorTitle->setObjectName(QStringLiteral("inspectorTitle"));
   mInspectorTitle->setWordWrap(true);
@@ -549,7 +555,13 @@ void QEventDetailsWidget::setInspectorMode(bool enabled) {
   refreshInspector();
 }
 
+void QEventDetailsWidget::setTranscriptCount(int count) {
+  mTranscriptCount = count;
+  mTranscriptButton->setVisible(mInspectorMode && mCurrentEvent && count > 0);
+}
+
 void QEventDetailsWidget::refreshInspector() {
+  mTranscriptButton->setVisible(mInspectorMode && mCurrentEvent && mTranscriptCount > 0);
   if (!mInspectorMode) {
     return;
   }

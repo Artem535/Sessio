@@ -98,6 +98,47 @@ public:
   int64_t add_client_note_attachment(const DuckClientNoteAttachment &attachment);
   std::vector<DuckClientNoteAttachment> get_note_attachments(int64_t note_id);
 
+  // --- Live call transcripts (phase 2 of #118) ---
+  int64_t add_transcript(int64_t event_id, const std::string &consent_scope,
+                         const std::optional<std::string> &model_id = std::nullopt,
+                         std::optional<int64_t> consent_given_at_ms = std::nullopt);
+  std::unique_ptr<DuckTranscript> get_transcript(int64_t id);
+  std::vector<DuckTranscript> get_transcripts_for_event(int64_t event_id);
+  std::vector<DuckTranscript> get_transcripts_for_client(int64_t client_id);
+  int64_t count_transcripts();
+  int64_t count_transcript_phrases(int64_t transcript_id);
+  // Callers of set_transcript_status, revoke_transcript_consent,
+  // delete_transcript and delete_all_transcripts must first stop and join the
+  // transcription engine/writer: a phrase inserted between the child delete and
+  // the parent delete would be left orphaned (purge_orphan_transcripts() removes it).
+  bool set_transcript_status(int64_t id, const std::string &status);
+  bool revoke_transcript_consent(int64_t id, std::optional<int64_t> at_ms = std::nullopt);
+  // Marks transcripts left in "recording" (crash, power loss) as drafts and
+  // returns how many were changed. Call once at application start, together
+  // with purge_orphan_transcripts(), before any session can exist.
+  int64_t finalize_interrupted_transcripts();
+  // Deletes phrases and transcripts whose event no longer exists (a missed
+  // cascade); event ids are MAX(id)+1, so an orphan would otherwise attach
+  // itself to a later unrelated event. Returns the number of transcripts deleted.
+  int64_t purge_orphan_transcripts();
+  // Stop and join the engine/writer first (see above). Runs a best-effort
+  // CHECKPOINT afterwards so deleted text leaves the database file.
+  bool delete_transcript(int64_t id);
+  bool delete_all_transcripts();
+  // Single writer thread invariant: ids are allocated as MAX(id)+1, so only
+  // one thread may add phrases at a time. Rejects (returns 0) when the
+  // transcript is not in "recording" status or its consent was revoked.
+  int64_t add_transcript_phrase(const DuckTranscriptPhrase &phrase);
+  std::vector<DuckTranscriptPhrase> get_transcript_phrases(int64_t transcript_id);
+  bool update_transcript_phrase_text(int64_t phrase_id, const std::string &text);
+  bool delete_transcript_phrase(int64_t phrase_id);
+  // Sets speaker_name on every phrase of the transcript with that track role
+  // (not a text edit: `edited` is untouched) and bumps updated_at. Returns true
+  // iff the transcript exists, even when no phrase matched; false for an empty
+  // name or an unknown transcript.
+  bool rename_transcript_speaker(int64_t transcript_id, const std::string &track_role,
+                                 const std::string &new_name);
+
   // std::vector<int64_t> get_event_ids(int64_t date);
 
   bool has_conflict(const DuckEvent &event);

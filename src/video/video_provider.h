@@ -4,6 +4,8 @@
 #include <QString>
 #include <QAudioDevice>
 #include <QCameraDevice>
+#include <memory>
+#include "audio_sink.h"
 #include "participant_model.h"
 #include "video_frame_source.h"
 
@@ -56,12 +58,23 @@ public:
   virtual void switchMicrophone(const QAudioDevice &device) { Q_UNUSED(device); }
   virtual void switchSpeaker(const QAudioDevice &device) { Q_UNUSED(device); }
 
+  // Installs (or clears, with nullptr) the receiver of call audio for
+  // transcription. Only set while a consented session exists.
+  virtual void setAudioSink(std::shared_ptr<AudioSink> sink) { Q_UNUSED(sink); }
+  [[nodiscard]] virtual qint64 callElapsedMs() const { return 0; }
+  // During a call this is the confirmed capture device, including recovery.
+  // A null device means that no microphone source is active.
+  [[nodiscard]] virtual QAudioDevice selectedMicrophone() const { return {}; }
+
 signals:
   void joined();
   void joinFailed(QString reason);
   void left();
   void participantJoined(QString id);
   void participantLeft(QString id);
+  void audioInterrupted(QString id);
+  void audioResumed(QString id);
+  void microphoneChanged(QAudioDevice device);
   void reconnecting();
   void reconnected();
   // Terminal: the SDK has given up on the connection (whether or not it

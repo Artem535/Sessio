@@ -1,4 +1,6 @@
 #include "livekit_video_provider.h"
+#include <QPointer>
+#include <utility>
 
 #include "audio_capture_adapter.h"
 #include "device_manager.h"
@@ -198,8 +200,28 @@ LiveKitVideoProvider::LiveKitVideoProvider(QObject *parent)
     : VideoProvider(parent), mDeviceManager(std::make_unique<DeviceManager>()),
       mVideoCapture(std::make_unique<VideoCaptureAdapter>()),
       mAudioCapture(std::make_unique<AudioCaptureAdapter>()) {
+  // Runs on the GUI thread (AudioCaptureAdapter::onReadyRead), so reading
+  // mLocalIdentity is safe. The tap is gated by the real microphone state.
+  mAudioCapture->tap().setCallback(
+      [slot = mSinkSlot, this](const int16_t *samples, std::size_t count, int rate) {
+        const QString identity = mLocalIdentity;
+        if (identity.isEmpty()) {
+          return;
+        }
+        if (auto sink = slot->get()) {
+          sink->onAudio(identity, samples, count, rate);
+        }
+      });
+  mAudioCapture->tap().setSinkActive(false);
+  mAudioCapture->tap().setEnabled(mMicrophoneEnabled);
   connect(mVideoCapture.get(), &VideoCaptureAdapter::captureFailed, this, &VideoProvider::mediaError);
   connect(mAudioCapture.get(), &AudioCaptureAdapter::captureFailed, this, &VideoProvider::mediaError);
+  connect(mAudioCapture.get(), &AudioCaptureAdapter::captureInterrupted, this, [this] {
+    if (mRoom && !mLocalIdentity.isEmpty()) emit audioInterrupted(mLocalIdentity);
+  });
+  connect(mAudioCapture.get(), &AudioCaptureAdapter::captureResumed, this, [this] {
+    if (mRoom && !mLocalIdentity.isEmpty()) emit audioResumed(mLocalIdentity);
+  });
   connect(mVideoCapture->previewSink(), &QVideoSink::videoFrameChanged, this,
           [this](const QVideoFrame &frame) {
     if (!mCameraEnabled) return;
@@ -244,7 +266,8 @@ void LiveKitVideoProvider::join(const QString &url, const QString &token) {
   const auto camera = mSelectedCamera ? mSelectedCamera : mDeviceManager->defaultCamera();
   if (camera) mVideoCapture->start(*camera);
   const auto microphone = mSelectedMicrophone ? mSelectedMicrophone : mDeviceManager->defaultMicrophone();
-  if (microphone) mAudioCapture->start(*microphone);
+  if (microphone && mAudioCapture->start(*microphone))
+    mSelectedMicrophone = mAudioCapture->activeDevice();
 
   mRoom = std::make_unique<livekit::Room>();
   mDelegate = std::make_unique<CallbackDelegate>(*this, *mRoom, generation);
@@ -270,6 +293,7 @@ void LiveKitVideoProvider::join(const QString &url, const QString &token) {
     return;
   }
 
+  mCallClock.start();
   snapshotParticipants();
   // Token metadata is display-only. Older tokens simply yield an empty role.
   const auto payload = QJsonDocument::fromJson(QByteArray::fromBase64(
@@ -339,6 +363,13 @@ void LiveKitVideoProvider::applyParticipant(const ParticipantSnapshot &snapshot,
     media->sid = snapshot.sid;
     media->video = std::make_unique<LiveKitVideoFrameSource>();
     media->audio = std::make_unique<RemoteAudioPlayer>();
+    media->audio->tap().setCallback(
+        [slot = mSinkSlot, id](const int16_t *samples, std::size_t count, int rate) {
+          if (auto sink = slot->get()) {
+            sink->onAudio(id, samples, count, rate);
+          }
+        });
+    media->audio->tap().setSinkActive(mSinkSlot->hasSink());
     connect(media->audio.get(), &RemoteAudioPlayer::playbackFailed, this, &VideoProvider::mediaError);
     mMedia.emplace(id, std::move(media)); // visible to rowsInserted observers
   }
@@ -464,6 +495,7 @@ void LiveKitVideoProvider::setMicrophoneEnabled(bool enabled) {
     }
   }
   mMicrophoneEnabled = enabled;
+  mAudioCapture->tap().setEnabled(mMicrophoneEnabled);
   updateLocalState();
 }
 
@@ -495,8 +527,50 @@ void LiveKitVideoProvider::switchCamera(const QCameraDevice &device) {
 }
 
 void LiveKitVideoProvider::switchMicrophone(const QAudioDevice &device) {
-  mSelectedMicrophone = device;
-  if (mRoom) mAudioCapture->start(device);
+  if (!mRoom) {
+    mSelectedMicrophone = device;
+    return;
+  }
+  mPendingMicrophone = device;
+  if (mMicrophoneSwitchQueued) return;
+  mMicrophoneSwitchQueued = true;
+  const auto generation = mGeneration;
+  QMetaObject::invokeMethod(this, [this, generation] {
+    if (generation != mGeneration || !mRoom) return;
+    mMicrophoneSwitchQueued = false;
+    const auto selected = std::exchange(mPendingMicrophone, std::nullopt);
+    if (!selected) return;
+    const QPointer<LiveKitVideoProvider> self(this);
+    const bool opened = mAudioCapture->start(*selected);
+    if (!self || generation != mGeneration || !mRoom) return;
+    if (opened) {
+      mSelectedMicrophone = mAudioCapture->activeDevice();
+      emit microphoneChanged(*mSelectedMicrophone);
+    } else {
+      mSelectedMicrophone.reset();
+      setMicrophoneEnabled(false);
+      if (!self || generation != mGeneration || !mRoom) return;
+      emit microphoneChanged(QAudioDevice{});
+    }
+  }, Qt::QueuedConnection);
+}
+
+qint64 LiveKitVideoProvider::callElapsedMs() const {
+  return mCallClock.isValid() ? mCallClock.elapsed() : 0;
+}
+
+QAudioDevice LiveKitVideoProvider::selectedMicrophone() const {
+  if (mRoom) return mAudioCapture->activeDevice().value_or(QAudioDevice{});
+  return mSelectedMicrophone.value_or(QAudioDevice{});
+}
+
+void LiveKitVideoProvider::setAudioSink(std::shared_ptr<AudioSink> sink) {
+  const bool active = sink != nullptr;
+  mSinkSlot->set(std::move(sink));
+  mAudioCapture->tap().setSinkActive(active);
+  for (auto &[id, media] : mMedia) {
+    media->audio->tap().setSinkActive(active);
+  }
 }
 
 void LiveKitVideoProvider::switchSpeaker(const QAudioDevice &device) {
@@ -515,6 +589,9 @@ void LiveKitVideoProvider::switchSpeaker(const QAudioDevice &device) {
 
 void LiveKitVideoProvider::teardown() {
   ++mGeneration;
+  mPendingMicrophone.reset();
+  mMicrophoneSwitchQueued = false;
+  mCallClock.invalidate();
   if (mDelegate) mDelegate->invalidate();
   {
     std::lock_guard lock(mCallbackMutex);

@@ -124,6 +124,19 @@ TEST(CallEntryWidgetTest, ShowErrorDisplaysMessageAndClearErrorHidesIt) {
   EXPECT_TRUE(errorLabel->text().isEmpty());
 }
 
+TEST(AppSettingsTest, TranscriptionDefaultsEnabledAndPersistsRoundTrip) {
+  QSettings().remove("transcription/enabled");
+  EXPECT_TRUE(pcm::app_settings::transcriptionEnabled());
+  pcm::app_settings::setTranscriptionEnabled(false);
+  QSettings().sync();
+  EXPECT_FALSE(QSettings().value("transcription/enabled", true).toBool());
+  EXPECT_FALSE(pcm::app_settings::transcriptionEnabled());
+  pcm::app_settings::setTranscriptionEnabled(true);
+  QSettings().sync();
+  EXPECT_TRUE(QSettings().value("transcription/enabled", false).toBool());
+  EXPECT_TRUE(pcm::app_settings::transcriptionEnabled());
+}
+
 int main(int argc, char **argv) {
   QTemporaryDir settingsDir;
   QSettings::setDefaultFormat(QSettings::IniFormat);

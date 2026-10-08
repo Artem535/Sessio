@@ -2,6 +2,7 @@
 #include "fake_video_provider.h"
 #include "device_manager.h"
 #include "busy_spinner.h"
+#include "call_control_icons.h"
 
 #include <QApplication>
 #include <QColor>
@@ -9,6 +10,7 @@
 #include <QImage>
 #include <QLabel>
 #include <QLayout>
+#include <QMenu>
 #include <QPointer>
 #include <QPushButton>
 #include <QResizeEvent>
@@ -18,6 +20,9 @@
 #include <QToolButton>
 #include <QTextDocument>
 #include <gtest/gtest.h>
+#ifdef SESSIO_TEST_AUDIO_DEVICE_PRIVATE
+#include <QtMultimedia/private/qaudiodevice_p.h>
+#endif
 
 using pcm::video::test::FakeVideoProvider;
 using pcm::video::VideoSession;
@@ -1009,6 +1014,63 @@ TEST(CallPageTest, SelectingADeviceCallsSwitchOnTheAttachedProvider) {
   }
 }
 
+TEST(CallPageTest, ReopenedMicrophoneSelectorShowsConfirmedSelectionRecoveryAndNoInput) {
+#ifdef SESSIO_TEST_AUDIO_DEVICE_PRIVATE
+  const auto makeDevice = [](const QByteArray &id) {
+    return QAudioDevicePrivate::createQAudioDevice(std::make_unique<QAudioDevicePrivate>(
+        id, QAudioDevice::Input, QString::fromLatin1(id), false,
+        QAudioDevicePrivate::AudioDeviceFormat{}));
+  };
+  class Devices final : public pcm::video::DeviceManager {
+  public:
+    QList<QAudioDevice> inputs;
+    QList<QAudioDevice> microphones() const override { return inputs; }
+  } devices;
+  const auto a = makeDevice("A");
+  const auto b = makeDevice("B");
+  devices.inputs = {a, b};
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider;
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateMicrophoneChanged(a);
+  auto *button = page.findChild<QToolButton *>("devicesButton");
+  const auto open = [&] {
+    button->click();
+    return page.findChild<QComboBox *>("deviceMicrophoneCombo");
+  };
+  const auto close = [](QComboBox *combo) {
+    auto *menu = combo->window();
+    menu->close();
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+  };
+  auto *combo = open();
+  ASSERT_NE(combo, nullptr);
+  combo->setCurrentIndex(combo->findData(b.id()));
+  EXPECT_EQ(provider->mSwitchMicrophoneCallCount, 1);
+  EXPECT_EQ(provider->selectedMicrophone(), b);
+  close(combo);
+  combo = open();
+  ASSERT_NE(combo, nullptr);
+  EXPECT_EQ(combo->currentData().toByteArray(), b.id());
+  combo->setCurrentIndex(combo->findData(a.id()));
+  EXPECT_EQ(provider->mSwitchMicrophoneCallCount, 2);
+  provider->simulateMicrophoneChanged(b);  // failed A opening, recovery to B
+  close(combo);
+  combo = open();
+  ASSERT_NE(combo, nullptr);
+  EXPECT_EQ(combo->currentData().toByteArray(), b.id());
+  provider->simulateMicrophoneChanged({});  // both attempts failed
+  close(combo);
+  combo = open();
+  ASSERT_NE(combo, nullptr);
+  EXPECT_EQ(combo->currentIndex(), -1);
+  close(combo);
+#else
+  GTEST_SKIP() << "Synthetic audio descriptors require Qt >= 6.11 MultimediaPrivate";
+#endif
+}
+
 TEST(CallPageTest, SetSidePanelExpandedByDefaultChecksTheNotesToggle) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);
@@ -1029,6 +1091,86 @@ TEST(CallPageTest, SetSidePanelExpandedByDefaultIsANoOpWithoutATotoggleYet) {
   // fires).
   page.setSidePanelExpandedByDefault(true);
   EXPECT_EQ(page.findChild<QToolButton *>("notesToggleButton"), nullptr);
+}
+
+TEST(CallPageTest, TranscribeButtonHiddenByDefault) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  EXPECT_EQ(page.findChild<QToolButton *>("transcribeButton"), nullptr);
+}
+
+TEST(CallPageTest, ActiveTranscriptGlyphContrastsWithAccentFillAndHoverFill) {
+  const QPalette original = QApplication::palette();
+  QPalette palette = original;
+  palette.setColor(QPalette::Highlight, QColor(30, 90, 180));
+  palette.setColor(QPalette::HighlightedText, Qt::white);
+  QApplication::setPalette(palette);
+  const QImage icon = pcm::widgets::transcriptIcon(true).pixmap(24, 24).toImage();
+  QApplication::setPalette(original);
+  int opaquePixels = 0;
+  const QColor fill = palette.color(QPalette::Highlight).darker(120);
+  const QColor hover = fill.lighter(115);
+  for (int y = 0; y < icon.height(); ++y) {
+    for (int x = 0; x < icon.width(); ++x) {
+      const QColor pixel = icon.pixelColor(x, y);
+      if (pixel.alpha() < 250) continue;
+      ++opaquePixels;
+      // White strokes retain separation from both checked backgrounds.
+      EXPECT_GE(pixel.red(), 230);
+      EXPECT_GE(pixel.green(), 230);
+      EXPECT_GE(pixel.blue(), 230);
+      EXPECT_GT(pixel.lightness() - fill.lightness(), 100);
+      EXPECT_GT(pixel.lightness() - hover.lightness(), 100);
+    }
+  }
+  EXPECT_GT(opaquePixels, 10);
+}
+
+TEST(CallPageTest, TranscribeButtonShownWhenEnabledAndEmitsSignalOnClick) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  page.setTranscribeButtonVisible(true);
+  auto *button = page.findChild<QToolButton *>("transcribeButton");
+  ASSERT_NE(button, nullptr);
+  QSignalSpy spy(&page, &CallPage::transcribeRequested);
+  button->click();
+  EXPECT_EQ(spy.count(), 1);
+  EXPECT_FALSE(button->isChecked());
+  page.setTranscribeButtonVisible(false);
+  EXPECT_EQ(page.findChild<QToolButton *>("transcribeButton"), nullptr);
+}
+
+TEST(CallPageTest, TranscribeButtonStateChangesTooltipAndCheckedLook) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  page.setTranscribeButtonVisible(true);
+  auto *button = page.findChild<QToolButton *>("transcribeButton");
+  ASSERT_NE(button, nullptr);
+  page.setTranscribeButtonState(true, "Transcribing…");
+  EXPECT_TRUE(button->isChecked());
+  EXPECT_EQ(button->toolTip(), "Transcribing…");
+  EXPECT_EQ(button->accessibleName(), button->toolTip());
+  QSignalSpy spy(&page, &CallPage::transcribeRequested);
+  button->click();
+  EXPECT_TRUE(button->isChecked());
+  EXPECT_EQ(spy.count(), 1);
+  page.setTranscribeButtonState(false, "ignored");
+  EXPECT_FALSE(button->isChecked());
+  EXPECT_EQ(button->toolTip(), CallPage::tr("Transcribe"));
+}
+
+TEST(CallPageTest, OpenSidePanelExpandsToggle) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  page.setSidePanelWidget(new QWidget);
+  auto *host = page.findChild<QWidget *>("sidePanelHost");
+  ASSERT_NE(host, nullptr);
+  page.openSidePanel();
+  EXPECT_TRUE(host->isHidden());
+  page.setSidePanelToggleVisible(true);
+  page.openSidePanel();
+  EXPECT_FALSE(host->isHidden());
+  EXPECT_TRUE(page.findChild<QToolButton *>("notesToggleButton")->isChecked());
 }
 
 int main(int argc, char **argv) {

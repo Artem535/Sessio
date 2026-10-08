@@ -12,5 +12,6 @@ namespace pcm::widgets {
 [[nodiscard]] QIcon devicesIcon();
 [[nodiscard]] QIcon fullscreenIcon(bool active);
 [[nodiscard]] QIcon notesIcon();
+[[nodiscard]] QIcon transcriptIcon(bool active);
 
 } // namespace pcm::widgets

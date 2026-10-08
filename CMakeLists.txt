@@ -8,7 +8,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Define the project
-project(Sessio VERSION 0.2.16 LANGUAGES CXX)
+project(Sessio VERSION 0.2.17 LANGUAGES CXX)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Svg PrintSupport LinguistTools Multimedia MultimediaWidgets OpenGLWidgets)
 include(GNUInstallDirs)
 include(FetchContent)
@@ -54,6 +54,7 @@ livekit_sdk_setup(
 )
 find_package(LiveKit CONFIG REQUIRED)
 option(PCM_BUILD_TESTS "Build project tests" OFF)
+include(cmake/Transcription.cmake)
 
 if(Qt6_VERSION VERSION_LESS 6.8.0)
   message(FATAL_ERROR "Qlementine requires Qt 6.8.0 or newer. Detected Qt ${Qt6_VERSION}.")
@@ -174,6 +175,11 @@ add_subdirectory(src/config)
 add_subdirectory(src/database)
 add_subdirectory(src/meeting)
 add_subdirectory(src/video)
+if(SESSIO_TRANSCRIPTION_ENABLED)
+  add_subdirectory(src/transcription)
+  add_subdirectory(src/call_transcription)
+  add_subdirectory(src/pages/transcript_page)
+endif()
 add_subdirectory(src/backup)
 add_subdirectory(src/client_model)
 add_subdirectory(src/pages/client_info_page)
@@ -188,9 +194,18 @@ add_subdirectory(src/app)
 
 include_directories(src/app)
 
+option(SESSIO_BUILD_TRANSCRIPTION_TESTS
+    "Build only the transcription tests (used by CI; PCM_BUILD_TESTS includes them)" OFF)
+
 if(PCM_BUILD_TESTS)
   enable_testing()
   add_subdirectory(test)
+endif()
+
+# Self-contained and cheap to build: no QApplication, so CI can enable just these.
+if(SESSIO_TRANSCRIPTION_ENABLED AND (SESSIO_BUILD_TRANSCRIPTION_TESTS OR PCM_BUILD_TESTS))
+  enable_testing()
+  add_subdirectory(test/transcription)
 endif()
 
 set(PCM_APP_SOURCES
@@ -266,6 +281,50 @@ if(APPLE)
 else()
   install(DIRECTORY ${PCM_SCHEDULE_ZONEINFO_SOURCE_DIR}/
       DESTINATION ${CMAKE_INSTALL_DATADIR}/sessio/zoneinfo)
+endif()
+
+if(SESSIO_TRANSCRIPTION_ENABLED)
+  if(APPLE)
+    set(_sessio_models_dest Sessio.app/Contents/Resources/models)
+    set(_sessio_ml_libs_dest Sessio.app/Contents/Frameworks)
+  elseif(WIN32)
+    set(_sessio_models_dest ${CMAKE_INSTALL_BINDIR}/models)
+    set(_sessio_ml_libs_dest ${CMAKE_INSTALL_BINDIR})
+  else()
+    set(_sessio_models_dest ${CMAKE_INSTALL_DATADIR}/sessio/models)
+    set(_sessio_ml_libs_dest ${CMAKE_INSTALL_LIBDIR}/sessio)
+  endif()
+  install(DIRECTORY ${SESSIO_MODELS_DIR}/
+      DESTINATION ${_sessio_models_dest}
+      PATTERN ".stamp" EXCLUDE
+      PATTERN "test_wavs" EXCLUDE)
+  install(FILES
+      $<TARGET_FILE:sherpa-onnx-c-api>
+      $<TARGET_FILE:sherpa-onnx-cxx-api>
+      DESTINATION ${_sessio_ml_libs_dest})
+  install(FILES ${SESSIO_ONNXRUNTIME_LIBS} DESTINATION ${_sessio_ml_libs_dest})
+  if(UNIX AND NOT APPLE)
+    # The sherpa libs are linked in the build tree with an absolute RUNPATH into
+    # the build dir; give the installed copies a clean $ORIGIN (they sit next to
+    # libonnxruntime). macOS: not handled here, the libs go to Contents/Frameworks.
+    find_program(SESSIO_PATCHELF patchelf)
+    if(NOT SESSIO_PATCHELF)
+      message(WARNING "patchelf not found: installed sherpa-onnx libraries will keep the build RUNPATH")
+    else()
+      install(CODE "
+        file(GLOB _sherpa_libs \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_sessio_ml_libs_dest}/libsherpa-onnx-*.so*\")
+        foreach(_lib IN LISTS _sherpa_libs)
+          if(NOT IS_SYMLINK \"\${_lib}\")
+            execute_process(COMMAND \"${SESSIO_PATCHELF}\" --set-rpath \"\$ORIGIN\" \"\${_lib}\"
+                            RESULT_VARIABLE _rc)
+            if(NOT _rc EQUAL 0)
+              message(FATAL_ERROR \"patchelf --set-rpath failed on \${_lib}\")
+            endif()
+          endif()
+        endforeach()
+      ")
+    endif()
+  endif()
 endif()
 
 if(UNIX AND NOT APPLE)
@@ -344,7 +403,7 @@ elseif(UNIX AND NOT APPLE)
   set(CPACK_RPM_SPEC_MORE_DEFINE
 "%global __provides_exclude_from ^/usr/lib(64)?/sessio/.*$
 %global __requires_exclude_from ^/usr/lib(64)?/sessio/.*$
-%global __requires_exclude ^liblivekit(_ffi)?\\.so")
+%global __requires_exclude ^(liblivekit(_ffi)?\\.so|libsherpa-onnx-.*\\.so|libonnxruntime\\.so.*)")
   # Registers Sessio.desktop (via its MimeType=x-scheme-handler/sessio entry)
   # as the sessio:// URL handler and refreshes the desktop database on
   # install; see packaging/linux/register-sessio-scheme.sh. Uninstall uses a

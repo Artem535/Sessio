@@ -10,6 +10,7 @@
 
 #include <memory>
 #include <optional>
+#include <functional>
 
 namespace pcm::database {
 class Database;
@@ -56,8 +57,12 @@ public:
   // Not owned. Enables the "Switch to client mode" button; without a switcher
   // it stays disabled.
   void setRoleSwitcher(const pcm::AppRoleSwitcher *switcher);
+  void setTranscriptionActiveProvider(std::function<bool()> provider);
 
 private:
+  std::function<bool()> mTranscriptionActive;
+  QWidget *mTranscriptionPanel = nullptr;
+  void setupTranscriptionSection();
   void setupUi();
   void setupLiveKitSection();
   void loadSettings() const;

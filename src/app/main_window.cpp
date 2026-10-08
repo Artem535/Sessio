@@ -200,6 +200,18 @@ void MainWindow::setCallFullscreen(bool fullscreen) {
   }
 }
 
+void MainWindow::registerTranscriptPage(QWidget *page) {
+  if (mPages.contains(Pages::transcript)) return;
+  mPages.insertOrAssign(Pages::transcript, page);
+  mPagesIndex.insertOrAssign(Pages::transcript, mUi->stackedWidget->addWidget(page));
+}
+void MainWindow::openTranscriptPage() { showPage(Pages::transcript, mBtnCalendar); }
+void MainWindow::returnToEvent(int64_t eventId, qint64 dayMs) {
+  showPage(Pages::eventInfo, mBtnCalendar);
+  if (auto *page = dynamic_cast<QEventInfoPage *>(getPage(Pages::eventInfo)))
+    page->showEventOnDay(eventId, dayMs);
+}
+
 void MainWindow::setDatabase(std::shared_ptr<pcm::database::Database> db) {
   mDb = std::move(db);
 }
@@ -419,6 +431,7 @@ void MainWindow::setupUtilityButtons() {
 
 void MainWindow::openSettingsDialog() {
   SettingsDialog dialog(mDb, this);
+  dialog.setTranscriptionActiveProvider(mTranscriptionActive);
   dialog.setRoleSwitcher(mRoleSwitcher);
   dialog.exec();
   refreshPageAppearance();
@@ -452,6 +465,8 @@ QString MainWindow::pageTitle(const Pages page) const {
       return tr("Notes");
     case Pages::calls:
       return tr("Calls");
+    case Pages::transcript:
+      return tr("Transcript");
   }
 
   return tr("Page");

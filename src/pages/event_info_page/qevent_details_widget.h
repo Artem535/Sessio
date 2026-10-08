@@ -68,6 +68,7 @@ public:
    */
   void setDialogMode(bool enabled);
   void setInspectorMode(bool enabled);
+  void setTranscriptCount(int count);
   void setConflictChecker(
       std::function<std::optional<DuckEvent>(const DuckEvent &)> checker);
   void setMeetingCoordinator(pcm::meeting::MeetingCoordinator *coordinator);
@@ -128,6 +129,7 @@ public:
   void setClientList(const QHash<int64_t, QString> &clients);
 
 signals:
+  void openTranscriptRequested();
   // Inspector mode: "Back to day" was pressed.
   void backRequested();
   void editRequested();
@@ -237,6 +239,8 @@ private:
   std::unique_ptr<Ui::EventDetails> mUI;
   QWidget *mEditorFields = nullptr;
   QWidget *mInspectorSummary = nullptr;
+  QPushButton *mTranscriptButton = nullptr;
+  int mTranscriptCount = 0;
   QBoxLayout *mSeriesActionsLayout = nullptr;
   QLabel *mInspectorTitle = nullptr;
   // Labelled read-only fields: small muted caption above the value.

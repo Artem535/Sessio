@@ -304,6 +304,94 @@ DuckEvent buildVirtualOccurrence(const DuckEventSeries &series,
   return event;
 }
 
+namespace {
+
+struct DecodedVirtualId {
+  int64_t seriesId = 0;
+  int64_t julianDay = 0;
+};
+
+std::optional<DecodedVirtualId> decodeVirtualId(const int64_t virtualId) {
+  if (virtualId >= 0) {
+    return std::nullopt;
+  }
+  const auto encoded = -virtualId;
+  // The id is series.id * 1'000'000 + julianDay, but real Julian day numbers are about
+  // 2.46 million, so they overflow the 1'000'000 stride into the series part. A calendar
+  // day in [2'000'000, 3'000'000) (years ~763..3500) is the only reading that fits, which
+  // makes the decoding unambiguous for every date the application can show.
+  constexpr int64_t kStride = 1'000'000LL;
+  constexpr int64_t kJulianDayBase = 2'000'000LL;
+  const auto julianDay = encoded % kStride + kJulianDayBase;
+  const auto seriesId = (encoded - julianDay) / kStride;
+  if (seriesId <= 0 || !QDate::fromJulianDay(julianDay).isValid()) {
+    return std::nullopt;
+  }
+  return DecodedVirtualId{seriesId, julianDay};
+}
+
+} // namespace
+
+std::optional<int64_t> materialisedEventForVirtualId(pcm::database::Database &db,
+                                                     const int64_t virtualId) {
+  const auto decoded = decodeVirtualId(virtualId);
+  if (!decoded) {
+    return std::nullopt;
+  }
+  // Deliberately independent of the series' active flag and rule: an occurrence that was
+  // already materialised stays reachable after the series is deactivated or edited.
+  std::optional<QTimeZone> zone;
+  if (const auto identity = db.get_schedule_identity(decoded->seriesId);
+      identity.has_value() && !identity->timezone.empty()) {
+    const QTimeZone candidate(QByteArray::fromStdString(identity->timezone));
+    if (candidate.isValid()) {
+      zone = candidate;
+    }
+  }
+  for (const auto startMs : db.get_materialized_occurrence_starts_for_series(decoded->seriesId)) {
+    const auto instant = QDateTime::fromMSecsSinceEpoch(startMs, QTimeZone::UTC);
+    const auto day = zone ? instant.toTimeZone(*zone).date() : instant.toLocalTime().date();
+    if (day.toJulianDay() != decoded->julianDay) {
+      continue;
+    }
+    if (const auto event = db.get_event_by_series_occurrence(decoded->seriesId, startMs)) {
+      return event->id;
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<DuckEvent> virtualOccurrenceForId(pcm::database::Database &db,
+                                                const int64_t virtualId) {
+  const auto decoded = decodeVirtualId(virtualId);
+  if (!decoded) {
+    return std::nullopt;
+  }
+  const auto seriesId = decoded->seriesId;
+  const auto julianDay = decoded->julianDay;
+  const auto day = QDate::fromJulianDay(julianDay);
+  auto series = db.get_event_series(seriesId);
+  if (!series || !series->active) {
+    return std::nullopt;
+  }
+  resolveSeriesClientName(db, *series);
+
+  const QDateTime dayStart(day, QTime(0, 0, 0));
+  const QDateTime dayEnd = dayStart.addDays(1).addMSecs(-1);
+  const auto exceptions = db.get_event_series_exceptions_for_range(
+      dayStart.toUTC().toMSecsSinceEpoch(), dayEnd.toUTC().toMSecsSinceEpoch());
+  for (const auto &occurrence : seriesOccurrences(db, *series, dayStart, dayEnd)) {
+    if (occurrence.date().toJulianDay() != julianDay) {
+      continue;
+    }
+    if (exceptions.contains({seriesId, occurrence.toUTC().toMSecsSinceEpoch()})) {
+      return std::nullopt;
+    }
+    return buildVirtualOccurrence(*series, occurrence, virtualId);
+  }
+  return std::nullopt;
+}
+
 QVector<DuckEvent> eventsForClient(pcm::database::Database &db, const int64_t clientId,
                                    const QDateTime &virtualWindowStart,
                                    const QDateTime &virtualWindowEnd) {

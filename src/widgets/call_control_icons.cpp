@@ -1,4 +1,5 @@
 #include "call_control_icons.h"
+#include "accent_color.h"
 
 #include <QPainter>
 #include <QPainterPath>
@@ -83,6 +84,21 @@ QIcon fullscreenIcon(bool active) {
     painter.drawLine(QPointF(o, 24 - o), QPointF(o + l, 24 - o));
     painter.drawLine(QPointF(24 - o, 24 - o - l), QPointF(24 - o, 24 - o));
     painter.drawLine(QPointF(24 - o, 24 - o), QPointF(24 - o - l, 24 - o));
+  });
+}
+
+QIcon transcriptIcon(bool active) {
+  return renderIcon(false, [active](QPainter &painter, const QColor &color) {
+    painter.setPen(QPen(active ? onAccentColor() : color, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    painter.setBrush(Qt::NoBrush);
+    QPainterPath bubble;
+    bubble.addRoundedRect(QRectF(3, 3, 18, 16), 3, 3);
+    painter.drawPath(bubble);
+    painter.drawLine(QPointF(8, 19), QPointF(6, 22));
+    painter.drawLine(QPointF(6, 22), QPointF(12, 19));
+    painter.drawLine(QPointF(7, 7), QPointF(17, 7));
+    painter.drawLine(QPointF(7, 11), QPointF(15, 11));
+    painter.drawLine(QPointF(7, 15), QPointF(12, 15));
   });
 }
 

@@ -354,6 +354,12 @@ void QEventInfoPage::openEventOnDay(const int64_t eventId, const qint64 dayMs) {
   editEventWithDialog(eventId);
 }
 
+void QEventInfoPage::showEventOnDay(const int64_t eventId, const qint64 dayMs) {
+  onCalendarClicked(
+      QDateTime::fromMSecsSinceEpoch(dayMs, QTimeZone::systemTimeZone()).date());
+  onTimelineEventSelected(eventId);
+}
+
 void QEventInfoPage::setMonthView(bool enabled) {
   const QSignalBlocker blocker(mViewSwitch);
   mViewSwitch->setChecked(enabled);
@@ -422,6 +428,17 @@ QEventInfoPage::shownSeriesRule(const std::optional<DuckEvent> &event) const {
   return ShownSeriesRule{series->recurrence_rule, series->recurrence_until};
 }
 
+void QEventInfoPage::setTranscriptCountProvider(std::function<int(int64_t)> provider) {
+  mTranscriptCountProvider = std::move(provider);
+  showInspector(mSelectedEvent, true);
+}
+
+void QEventInfoPage::reloadSelectedDay() {
+  mTimelineWidget->onSelectedDayChanged(mSelectedDate);
+  // Transcript counts are injected and may change without an event row change.
+  showInspector(mSelectedEvent, true);
+}
+
 void QEventInfoPage::showInspector(const std::optional<DuckEvent> &event, bool force) {
   if (!force && mInspector && event && mSelectedEvent &&
       sameOccurrence(*mSelectedEvent, *event) && sameEventData(*mSelectedEvent, *event) &&
@@ -448,6 +465,10 @@ void QEventInfoPage::showInspector(const std::optional<DuckEvent> &event, bool f
   mInspector->setMeetingCoordinator(mMeetingCoordinator);
   QEventItem copy(*event);
   mInspector->loadEvent(&copy);
+  mInspector->setTranscriptCount(event->id > 0 && mTranscriptCountProvider
+                                    ? mTranscriptCountProvider(event->id) : 0);
+  connect(mInspector, &QEventDetailsWidget::openTranscriptRequested, this,
+          [this, id = event->id] { emit openTranscriptRequested(id); });
   if (event->series_id && mModel) {
     if (const auto series = mModel->eventSeriesById(*event->series_id)) {
       mInspector->setRecurrenceRule(QString::fromStdString(series->recurrence_rule),

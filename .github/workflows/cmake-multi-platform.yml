@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "devel", "devel-qt"]
+    branches: ["main", "devel", "devel-qt", "feat/118-call-transcription"]
   pull_request:
     branches: ["main", "devel", "devel-qt"]
 
@@ -20,6 +20,8 @@ jobs:
   build:
     name: Build ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
 
     strategy:
       fail-fast: false
@@ -221,7 +223,20 @@ jobs:
           "VCPKG_ROOT=${{ github.workspace }}/vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Configure
+        if: runner.os != 'Linux'
         run: cmake --preset vcpkg-release
+
+      - name: Configure (Linux, with transcription tests)
+        if: runner.os == 'Linux'
+        run: cmake --preset vcpkg-release -DSESSIO_BUILD_TRANSCRIPTION_TESTS=ON
+
+      # The models are downloaded at build time into this directory (see
+      # cmake/FetchTranscriptionModels.cmake); restoring it skips ~200 MB.
+      - name: Cache transcription models
+        uses: actions/cache@v4
+        with:
+          path: build-release/transcription-models
+          key: transcription-models-${{ hashFiles('cmake/FetchTranscriptionModels.cmake') }}
 
       - name: Verify LiveKit RPM staging
         if: runner.os == 'Linux'
@@ -262,6 +277,18 @@ jobs:
       - name: Build
         run: cmake --build build-release --parallel
 
+      - name: Transcription model tests
+        if: runner.os == 'Linux'
+        run: |
+          cmake --build build-release --target Sessio_transcription_model_tests --parallel
+          ctest --test-dir build-release -L models --output-on-failure
+
+      - name: Verify transcription install tree
+        if: runner.os == 'Linux'
+        run: |
+          cmake --install build-release --prefix "${{ github.workspace }}/build-release/transcription-install"
+          cmake -DINSTALL_ROOT="${{ github.workspace }}/build-release/transcription-install" -P test/transcription_install_smoke.cmake
+
       - name: Install bundle
         if: runner.os != 'Windows'
         run: cmake --install build-release --config MinSizeRel --prefix "${{ github.workspace }}/build-release/install"
@@ -274,11 +301,19 @@ jobs:
           Copy-Item build-release/Sessio.exe build-release/packages/Sessio/
           $keychainDll = Get-ChildItem build-release/_deps/qtkeychain-build -Recurse -Filter qt6keychain.dll |
             Select-Object -First 1
-          if ($null -eq $keychainDll) {
-            throw "qt6keychain.dll was not built"
+          if ($null -ne $keychainDll) {
+            Copy-Item $keychainDll.FullName (Join-Path $env:QT_ROOT_DIR "bin") -Force
+            Copy-Item $keychainDll.FullName build-release/packages/Sessio/ -Force
+          } else {
+            # qtkeychain can be linked statically. Require a DLL only when
+            # the executable actually imports it; a .lib alone is ambiguous.
+            $dependencies = & dumpbin /DEPENDENTS build-release/Sessio.exe
+            if ($LASTEXITCODE -ne 0) { throw "Cannot inspect Sessio.exe dependencies" }
+            if ($dependencies -match 'qt6keychain\.dll') {
+              throw "Sessio.exe imports qt6keychain.dll but the DLL was not found"
+            }
+            Write-Host "qtkeychain is linked statically; no runtime DLL required"
           }
-          Copy-Item $keychainDll.FullName (Join-Path $env:QT_ROOT_DIR "bin") -Force
-          Copy-Item $keychainDll.FullName build-release/packages/Sessio/ -Force
 
           # LiveKit's prebuilt SDK ships its own runtime DLLs (not built by
           # this project, so they never land next to Sessio.exe on their
@@ -325,6 +360,39 @@ jobs:
           }
           Copy-Item $zoneinfo build-release/packages/Sessio/zoneinfo -Recurse -Force
 
+      - name: Copy transcription models and runtime DLLs
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Resolved at run time as <exe dir>\models (ModelLocator).
+          $dest = "build-release/packages/Sessio"
+          $models = "build-release/transcription-models"
+          if (-not (Test-Path "$models/gigaam-v3-rnnt/encoder.int8.onnx")) {
+            throw "transcription models not found at $models"
+          }
+          Copy-Item $models "$dest/models" -Recurse -Force
+          Remove-Item "$dest/models/.stamp", "$dest/models/gigaam-v3-rnnt/test_wavs" -Recurse -Force -ErrorAction SilentlyContinue
+
+          # sherpa-onnx and ONNX Runtime are built/unpacked in the build tree
+          # and never land next to Sessio.exe on their own.
+          foreach ($dllName in "sherpa-onnx-c-api.dll", "sherpa-onnx-cxx-api.dll") {
+            $dll = Get-ChildItem build-release -Recurse -Filter $dllName |
+              Where-Object { $_.FullName -notmatch "packages" } | Select-Object -First 1
+            if ($null -eq $dll) {
+              throw "$dllName was not found under build-release"
+            }
+            Copy-Item $dll.FullName $dest -Force
+          }
+          $ort = Get-ChildItem build-release/_deps/onnxruntime-src -Recurse -Filter "onnxruntime*.dll"
+          if (-not ($ort | Where-Object { $_.Name -eq "onnxruntime.dll" })) {
+            throw "onnxruntime.dll was not found under build-release/_deps/onnxruntime-src"
+          }
+          $ort | ForEach-Object { Copy-Item $_.FullName $dest -Force }
+
+          foreach ($required in "Sessio.exe", "models/silero_vad.onnx", "models/gigaam-v3-rnnt/encoder.int8.onnx", "models/gigaam-v3-rnnt/decoder.onnx", "models/gigaam-v3-rnnt/joiner.onnx", "models/gigaam-v3-rnnt/tokens.txt", "onnxruntime.dll", "sherpa-onnx-c-api.dll", "sherpa-onnx-cxx-api.dll") {
+            if (-not (Test-Path "$dest/$required")) { throw "$required missing from $dest" }
+          }
+
       - name: Install Inno Setup
         if: runner.os == 'Windows'
         shell: pwsh
@@ -335,8 +403,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(Sessio VERSION ([0-9.]+)' | Select-Object -First 1).Matches.Groups[1].Value
+          if (-not $version) { throw "Application version not found in CMakeLists.txt" }
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
-            "/DMyAppVersion=${{ matrix.qt_version }}" `
+            "/DMyAppVersion=$version" `
             "/DMySourceDir=${{ github.workspace }}\build-release\packages\Sessio" `
             "/DMyOutputDir=${{ github.workspace }}\build-release\packages" `
             "/DMyIconFile=${{ github.workspace }}\resources\icons\Sessio.ico" `
@@ -362,6 +432,12 @@ jobs:
           fi
           if rpm -qp --provides build-release/packages/*.rpm | grep -E '\.so'; then
             echo "::error::RPM must not Provide shared-library sonames"
+            exit 1
+          fi
+          # sherpa-onnx and ONNX Runtime are bundled in /usr/lib*/sessio, so rpm's
+          # autoreq must not turn them into system dependencies.
+          if rpm -qp --requires build-release/packages/*.rpm | grep -Ei 'sherpa|onnxruntime'; then
+            echo "::error::RPM must not Require the bundled sherpa-onnx/ONNX Runtime libraries"
             exit 1
           fi
           for dep in 'qt6-qtbase >= 6.8' qt6-qtbase-gui qt6-qtsvg qt6-qtwayland qt6-qtmultimedia qtkeychain-qt6; do

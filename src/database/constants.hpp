@@ -181,6 +181,37 @@ CREATE TABLE IF NOT EXISTS ScheduleOutbox (
     inflight_desired_revision BIGINT,
     updated_at TIMESTAMP NOT NULL
 );
+
+-- Live call transcripts. status: recording | draft | reviewed. Phrase times are
+-- milliseconds from the start of the call (not timestamps).
+-- No foreign key on event_id: DuckDB treats updates of referenced rows as key updates
+-- (update_event would fail); Database::add_transcript checks the event exists.
+-- No foreign key on TranscriptPhrase.transcript_id either: DuckDB still counts rows deleted
+-- earlier in the same transaction as referencing, so the phrases-then-transcript cascade
+-- failed inside commit_schedule_change. Integrity is kept by add_transcript_phrase (checks
+-- the transcript), the explicit cascades, and purge_orphan_transcripts() at startup.
+CREATE TABLE IF NOT EXISTS Transcript (
+    id INTEGER PRIMARY KEY,
+    event_id INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    consent_scope TEXT NOT NULL,
+    consent_given_at TIMESTAMP NOT NULL,
+    consent_revoked_at TIMESTAMP,
+    model_id TEXT,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS TranscriptPhrase (
+    id INTEGER PRIMARY KEY,
+    transcript_id INTEGER NOT NULL,
+    track_role TEXT NOT NULL,
+    speaker_name TEXT,
+    start_ms BIGINT NOT NULL,
+    end_ms BIGINT NOT NULL,
+    text TEXT NOT NULL,
+    edited BOOLEAN DEFAULT FALSE
+);
 )duckdb";
 
 constexpr auto kSchemaMigrations = R"duckdb(
@@ -523,6 +554,27 @@ SET active = FALSE,
 WHERE id = $1
 )duckdb";
 
+constexpr auto kDeletePhrasesOfEventTranscriptsQuery = R"duckdb(
+DELETE FROM TranscriptPhrase
+WHERE transcript_id IN (SELECT id FROM Transcript WHERE event_id = $1)
+)duckdb";
+constexpr auto kDeleteTranscriptsOfEventQuery =
+    "DELETE FROM Transcript WHERE event_id = $1";
+
+constexpr auto kDeletePhrasesOfSeriesOverrideTranscriptsQuery = R"duckdb(
+DELETE FROM TranscriptPhrase
+WHERE transcript_id IN (
+    SELECT t.id FROM Transcript t
+    JOIN Event e ON e.id = t.event_id
+    WHERE e.series_id = $1 AND e.original_occurrence_start >= $2)
+)duckdb";
+constexpr auto kDeleteTranscriptsOfSeriesOverridesQuery = R"duckdb(
+DELETE FROM Transcript
+WHERE event_id IN (
+    SELECT id FROM Event
+    WHERE series_id = $1 AND original_occurrence_start >= $2)
+)duckdb";
+
 constexpr auto kDeleteEventSeriesOverridesFromQuery = R"duckdb(
 DELETE FROM Event
 WHERE series_id = $1
@@ -650,6 +702,106 @@ INSERT INTO EventClient (id, client_id, event_id)
 SELECT COALESCE(MAX(id), 0) + 1, $1, $2
 FROM EventClient
 RETURNING id
+)duckdb";
+
+constexpr auto kInsertTranscriptQuery = R"duckdb(
+INSERT INTO Transcript (
+    id, event_id, status, consent_scope, consent_given_at, model_id,
+    created_at, updated_at
+)
+SELECT COALESCE(MAX(id), 0) + 1, $1, 'recording', $2, $3, $4, $5, $6
+FROM Transcript
+RETURNING id
+)duckdb";
+
+constexpr auto kSelectTranscriptByIdQuery = R"duckdb(
+SELECT id, event_id, status, consent_scope, consent_given_at,
+       consent_revoked_at, model_id, created_at, updated_at
+FROM Transcript WHERE id = $1
+)duckdb";
+
+constexpr auto kSelectTranscriptsByEventQuery = R"duckdb(
+SELECT id, event_id, status, consent_scope, consent_given_at,
+       consent_revoked_at, model_id, created_at, updated_at
+FROM Transcript WHERE event_id = $1 ORDER BY id
+)duckdb";
+
+constexpr auto kEventExistsQuery = "SELECT 1 FROM Event WHERE id = $1";
+constexpr auto kTranscriptExistsQuery = "SELECT 1 FROM Transcript WHERE id = $1";
+
+constexpr auto kUpdateTranscriptStatusQuery =
+    "UPDATE Transcript SET status = $1, updated_at = $2 WHERE id = $3";
+
+constexpr auto kRevokeTranscriptConsentQuery =
+    "UPDATE Transcript SET consent_revoked_at = $1, updated_at = $2 WHERE id = $3";
+
+constexpr auto kFinalizeInterruptedTranscriptsQuery = R"duckdb(
+UPDATE Transcript SET status = 'draft', updated_at = $1
+WHERE status = 'recording'
+RETURNING id
+)duckdb";
+
+constexpr auto kDeleteTranscriptByIdQuery = "DELETE FROM Transcript WHERE id = $1";
+constexpr auto kDeleteAllTranscriptsQuery = "DELETE FROM Transcript";
+
+constexpr auto kInsertTranscriptPhraseQuery = R"duckdb(
+INSERT INTO TranscriptPhrase (
+    id, transcript_id, track_role, speaker_name, start_ms, end_ms, text, edited
+)
+SELECT COALESCE(MAX(id), 0) + 1, $1, $2, $3, $4, $5, $6, FALSE
+FROM TranscriptPhrase
+RETURNING id
+)duckdb";
+
+constexpr auto kSelectTranscriptPhrasesQuery = R"duckdb(
+SELECT id, transcript_id, track_role, speaker_name, start_ms, end_ms, text, edited
+FROM TranscriptPhrase WHERE transcript_id = $1 ORDER BY start_ms, id
+)duckdb";
+
+constexpr auto kSelectTranscriptIdOfPhraseQuery =
+    "SELECT transcript_id FROM TranscriptPhrase WHERE id = $1";
+
+constexpr auto kUpdateTranscriptPhraseTextQuery =
+    "UPDATE TranscriptPhrase SET text = $1, edited = TRUE WHERE id = $2";
+
+constexpr auto kTouchTranscriptQuery =
+    "UPDATE Transcript SET updated_at = $1 WHERE id = $2";
+
+constexpr auto kDeleteTranscriptPhraseByIdQuery =
+    "DELETE FROM TranscriptPhrase WHERE id = $1";
+constexpr auto kDeletePhrasesByTranscriptIdQuery =
+    "DELETE FROM TranscriptPhrase WHERE transcript_id = $1";
+constexpr auto kDeleteAllTranscriptPhrasesQuery = "DELETE FROM TranscriptPhrase";
+
+constexpr auto kPurgeOrphanTranscriptPhrasesQuery = R"duckdb(
+DELETE FROM TranscriptPhrase
+WHERE transcript_id NOT IN (SELECT id FROM Transcript)
+   OR transcript_id IN (
+       SELECT id FROM Transcript WHERE event_id NOT IN (SELECT id FROM Event))
+)duckdb";
+constexpr auto kPurgeOrphanTranscriptsQuery = R"duckdb(
+DELETE FROM Transcript WHERE event_id NOT IN (SELECT id FROM Event) RETURNING id
+)duckdb";
+
+constexpr auto kSelectTranscriptWriteStateQuery =
+    "SELECT status, consent_revoked_at IS NOT NULL FROM Transcript WHERE id = $1";
+
+constexpr auto kSelectTranscriptsByClientQuery = R"duckdb(
+SELECT t.id, t.event_id, t.status, t.consent_scope, t.consent_given_at,
+       t.consent_revoked_at, t.model_id, t.created_at, t.updated_at
+FROM Transcript t
+JOIN EventClient ec ON ec.event_id = t.event_id
+WHERE ec.client_id = $1
+ORDER BY t.created_at, t.id
+)duckdb";
+
+constexpr auto kCountTranscriptsQuery = "SELECT COUNT(*) FROM Transcript";
+constexpr auto kCountTranscriptPhrasesQuery =
+    "SELECT COUNT(*) FROM TranscriptPhrase WHERE transcript_id = $1";
+
+constexpr auto kRenameTranscriptSpeakerQuery = R"duckdb(
+UPDATE TranscriptPhrase SET speaker_name = $1
+WHERE transcript_id = $2 AND track_role = $3
 )duckdb";
 
 constexpr auto kInsertClientNoteQuery = R"duckdb(
