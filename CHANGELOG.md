@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.25] - 2026-10-09
+
+### Changed
+
+- The Transcripts page shows transcripts as cards in a centred column like the
+  transcript window: date, status, client, phrase count, duration and model as
+  chips, with Open and Delete buttons on each card and a hint when the list is
+  empty. Clicking a card opens it.
+
 ## [0.2.23] - 2026-10-08
 
 ### Changed

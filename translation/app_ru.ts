@@ -2507,20 +2507,10 @@ See you!</source>
         <translation>Транскрипты</translation>
     </message>
     <message>
-        <source>Date</source>
-        <translation>Дата</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>Статус</translation>
-    </message>
-    <message>
-        <source>Clients</source>
-        <translation>Клиенты</translation>
-    </message>
-    <message>
-        <source>Open transcript</source>
-        <translation>Открыть транскрипт</translation>
+        <source>No transcripts yet.
+They appear here after a call with transcription turned on.</source>
+        <translation>Транскриптов пока нет.
+Они появятся здесь после звонка с включённой транскрипцией.</translation>
     </message>
     <message>
         <source>Delete transcript</source>
@@ -2554,9 +2544,29 @@ See you!</source>
         <source>No clients attached</source>
         <translation>Клиенты не привязаны</translation>
     </message>
+    <message numerus="yes">
+        <source>%n phrases</source>
+        <translation>
+            <numerusform>%n реплика</numerusform>
+            <numerusform>%n реплики</numerusform>
+            <numerusform>%n реплик</numerusform>
+        </translation>
+    </message>
     <message>
-        <source>No transcripts yet.</source>
-        <translation>Транскриптов пока нет.</translation>
+        <source>Open</source>
+        <translation type="unfinished">Открыть</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation type="unfinished">Удалить</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n transcripts</source>
+        <translation>
+            <numerusform>%n транскрипт</numerusform>
+            <numerusform>%n транскрипта</numerusform>
+            <numerusform>%n транскриптов</numerusform>
+        </translation>
     </message>
     <message>
         <source>Could not load transcripts. Please try again.</source>
