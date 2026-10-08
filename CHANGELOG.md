@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.20] - 2026-10-08
+
+### Added
+
+- An isolated screen-sharing permission diagnostic and verification report.
+  Screen sharing remains unavailable pending a fix for cached LiveKit grant
+  tokens restoring screen publishing after permission revocation.
+
 ## [0.2.19] - 2026-10-08
 
 ### Added
