@@ -29,6 +29,18 @@ public:
 
   VideoFrameSource *frameSource(const QString &id) override { return mSources.value(id); }
 
+  void startScreenShare(const ScreenCaptureTarget &target) override {
+    mLastScreenTarget = target;
+    ++mStartScreenShareCallCount;
+    mScreenSharing = true;
+    emit screenSharingChanged(true);
+  }
+  void stopScreenShare() override {
+    ++mStopScreenShareCallCount;
+    mScreenSharing = false;
+    emit screenSharingChanged(false);
+  }
+  [[nodiscard]] bool isScreenSharing() const override { return mScreenSharing; }
   VideoFrameSource *screenSource(const QString &id) override { return mScreens.value(id); }
   void simulateScreenSharing(const QString &id, bool sharing) {
     auto participant = participants()->participant(id);
@@ -116,6 +128,10 @@ public:
   QHash<QString, QPointer<VideoFrameSource>> mSources;
   QHash<QString, QPointer<VideoFrameSource>> mScreens;
   bool mRejectMediaChanges{false};
+  bool mScreenSharing{false};
+  int mStartScreenShareCallCount{0};
+  int mStopScreenShareCallCount{0};
+  ScreenCaptureTarget mLastScreenTarget;
   bool mMicrophoneEnabled{true};
   bool mCameraEnabled{true};
   int mSetMicrophoneEnabledCallCount{0};

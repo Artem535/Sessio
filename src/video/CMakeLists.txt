@@ -28,6 +28,10 @@ qt_add_library(${TARGET_NAME} STATIC
         video_capture_worker.cpp
         video_capture_adapter.h
         video_capture_adapter.cpp
+        screen_capture_worker.h
+        screen_capture_worker.cpp
+        screen_capture_adapter.h
+        screen_capture_adapter.cpp
         audio_capture_adapter.h
         audio_capture_adapter.cpp
         remote_video_renderer.h

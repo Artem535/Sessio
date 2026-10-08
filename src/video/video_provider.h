@@ -7,6 +7,7 @@
 #include <memory>
 #include "audio_sink.h"
 #include "participant_model.h"
+#include "screen_capture_target.h"
 #include "video_frame_source.h"
 
 namespace pcm::video {
@@ -39,6 +40,12 @@ public:
     Q_UNUSED(id);
     return nullptr;
   }
+
+  // Shares a screen or window as an extra track; camera and microphone are
+  // untouched. Any participant may do this at the same time as others.
+  virtual void startScreenShare(const ScreenCaptureTarget &target) { Q_UNUSED(target); }
+  virtual void stopScreenShare() {}
+  [[nodiscard]] virtual bool isScreenSharing() const { return false; }
 
   // Connects to the given server url with the given (pre-obtained) JWT
   // token, and publishes local audio/video tracks. This provider does not
@@ -82,6 +89,7 @@ signals:
   void audioInterrupted(QString id);
   void audioResumed(QString id);
   void microphoneChanged(QAudioDevice device);
+  void screenSharingChanged(bool sharing);
   void reconnecting();
   void reconnected();
   // Terminal: the SDK has given up on the connection (whether or not it

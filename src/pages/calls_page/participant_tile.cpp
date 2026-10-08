@@ -63,7 +63,10 @@ void ParticipantTile::refreshMedia() {
   // exercise placeholders and layout without constructing an OpenGL context.
   mRenderer->setVisible(hasFrame);
   mPlaceholder->setVisible(!hasFrame);
-  mPlaceholder->setText(active ? (mKind == Kind::Screen ? tr("Waiting for screen...") : tr("Waiting for video..."))
+  // The local screen is never mirrored back: sharing a whole display would show an endless tunnel.
+  mPlaceholder->setText(active ? (mKind == Kind::Screen ? (mParticipant.isLocal ? tr("You are sharing your screen")
+                                                                                : tr("Waiting for screen..."))
+                                                        : tr("Waiting for video..."))
                                : (mKind == Kind::Screen ? tr("Screen sharing stopped") : tr("Camera off")));
   mName->raise();
 }

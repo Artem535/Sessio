@@ -7,7 +7,11 @@
 
 #include <QAudioDevice>
 #include <QCameraDevice>
+#include <QAction>
 #include <QComboBox>
+#include <QGuiApplication>
+#include <QScreen>
+#include <QWindowCapture>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -436,6 +440,27 @@ void CallPage::buildConnectedScreen() {
   escapeShortcut->setContext(Qt::WidgetWithChildrenShortcut);
   connect(escapeShortcut, &QShortcut::activated, this, [this]() { leaveFullscreenIfActive(); });
 
+  mScreenShareButton = new QToolButton(mConnectedView);
+  mScreenShareButton->setObjectName("screenShareButton");
+  mScreenShareButton->setCheckable(true);
+  mScreenShareButton->setIcon(pcm::widgets::screenShareIcon(false));
+  mScreenShareButton->setToolTip(tr("Share screen"));
+  mScreenShareButton->setAccessibleName(tr("Share screen"));
+  // The checked state follows the provider (a failed or ended capture unchecks it), not the click.
+  connect(mScreenShareButton, &QToolButton::clicked, this, [this] {
+    auto *provider = mSession ? mSession->provider() : nullptr;
+    if (!provider) {
+      refreshMediaButtons();
+      return;
+    }
+    if (provider->isScreenSharing()) {
+      provider->stopScreenShare();
+      return;
+    }
+    refreshMediaButtons();
+    showScreenShareMenu();
+  });
+
   mDevicesButton = new QToolButton(mConnectedView);
   mDevicesButton->setObjectName("devicesButton");
   mDevicesButton->setIcon(pcm::widgets::devicesIcon());
@@ -468,12 +493,13 @@ void CallPage::buildConnectedScreen() {
   auto *controlBarLayout = new QHBoxLayout(mControlBar);
   controlBarLayout->setContentsMargins(12, 4, 12, 4);
   controlBarLayout->setSpacing(8);
-  for (auto *button : {mMicrophoneToggleButton, mCameraToggleButton, mDevicesButton, mFullscreenToggleButton}) {
+  for (auto *button : {mMicrophoneToggleButton, mCameraToggleButton, mScreenShareButton, mDevicesButton, mFullscreenToggleButton}) {
     button->setFixedSize(40, 40);
     button->setIconSize(QSize(20, 20));
   }
   controlBarLayout->addWidget(mMicrophoneToggleButton);
   controlBarLayout->addWidget(mCameraToggleButton);
+  controlBarLayout->addWidget(mScreenShareButton);
   controlBarLayout->addWidget(mDevicesButton);
   controlBarLayout->addWidget(mFullscreenToggleButton);
   controlBarLayout->addWidget(leaveButton);
@@ -527,7 +553,9 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
     connect(model, &QAbstractItemModel::rowsInserted, this, &CallPage::syncParticipants),
     connect(model, &QAbstractItemModel::rowsRemoved, this, &CallPage::syncParticipants),
     connect(model, &QAbstractItemModel::modelReset, this, &CallPage::syncParticipants),
-    connect(model, &QAbstractItemModel::dataChanged, this, &CallPage::syncParticipants)
+    connect(model, &QAbstractItemModel::dataChanged, this, &CallPage::syncParticipants),
+    connect(session->provider(), &pcm::video::VideoProvider::screenSharingChanged, this,
+            &CallPage::refreshMediaButtons)
   };
   syncParticipants();
   refreshMediaButtons();
@@ -555,6 +583,45 @@ void CallPage::refreshMediaButtons() {
     mCameraToggleButton->setToolTip(label);
     mCameraToggleButton->setAccessibleName(label);
   }
+  if (mScreenShareButton && mSession->provider()) {
+    const QSignalBlocker blocker(mScreenShareButton);
+    const bool sharing = mSession->provider()->isScreenSharing();
+    mScreenShareButton->setChecked(sharing);
+    mScreenShareButton->setIcon(pcm::widgets::screenShareIcon(sharing));
+    const QString label = sharing ? tr("Stop sharing screen") : tr("Share screen");
+    mScreenShareButton->setToolTip(label);
+    mScreenShareButton->setAccessibleName(label);
+  }
+}
+
+void CallPage::showScreenShareMenu() {
+  auto *provider = mSession ? mSession->provider() : nullptr;
+  if (!provider || !mScreenShareButton)
+    return;
+  auto *menu = new QMenu(this);
+  menu->setAttribute(Qt::WA_DeleteOnClose);
+  menu->setObjectName("screenShareMenu");
+  menu->addSection(tr("Screens"));
+  for (QScreen *screen : QGuiApplication::screens()) {
+    const QSize size = screen->size();
+    auto *action = menu->addAction(tr("%1 (%2×%3)").arg(screen->name()).arg(size.width()).arg(size.height()));
+    connect(action, &QAction::triggered, this, [this, screen = QPointer<QScreen>(screen)] {
+      if (mSession && mSession->provider() && screen)
+        mSession->provider()->startScreenShare({screen, {}});
+    });
+  }
+  const auto windows = QWindowCapture::capturableWindows();
+  if (!windows.isEmpty()) {
+    menu->addSection(tr("Windows"));
+    for (const auto &window : windows) {
+      auto *action = menu->addAction(window.description());
+      connect(action, &QAction::triggered, this, [this, window] {
+        if (mSession && mSession->provider())
+          mSession->provider()->startScreenShare({{}, window});
+      });
+    }
+  }
+  menu->popup(mScreenShareButton->mapToGlobal(QPoint(0, -menu->sizeHint().height())));
 }
 
 void CallPage::clearParticipants() {

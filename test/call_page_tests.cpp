@@ -1218,3 +1218,25 @@ TEST(CallPageTest, DepartureRemovesTheScreenTileToo) {
   provider->simulateParticipantLeft("first");
   EXPECT_EQ(page.findChild<QWidget *>("participantScreenTile_first"), nullptr);
 }
+
+TEST(CallPageTest, ScreenShareButtonStartsAndStopsSharingThroughTheProvider) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  connectSession(session, provider);
+  auto *button = page.findChild<QToolButton *>("screenShareButton");
+  ASSERT_NE(button, nullptr);
+  EXPECT_FALSE(button->isChecked());
+  // Not sharing: the click opens the chooser instead of starting anything.
+  button->click();
+  EXPECT_EQ(provider->mStartScreenShareCallCount, 0);
+  if (auto *menu = page.findChild<QMenu *>("screenShareMenu")) menu->close();
+
+  provider->startScreenShare({});
+  EXPECT_TRUE(button->isChecked());
+  button->click();
+  EXPECT_EQ(provider->mStopScreenShareCallCount, 1);
+  EXPECT_FALSE(button->isChecked());
+}

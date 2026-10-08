@@ -6,6 +6,7 @@
 #include "device_manager.h"
 #include "livekit_video_frame_source.h"
 #include "remote_audio_player.h"
+#include "screen_capture_adapter.h"
 #include "video_capture_adapter.h"
 
 #include <QJsonDocument>
@@ -400,6 +401,7 @@ void LiveKitVideoProvider::applyParticipant(const ParticipantSnapshot &snapshot,
     }
   }
   if (value.isLocal) {
+    value.screenSharing = mScreenTrack != nullptr;
     value.microphoneEnabled = mMicrophoneEnabled;
     value.cameraEnabled = mCameraEnabled;
   }
@@ -506,6 +508,7 @@ void LiveKitVideoProvider::updateLocalState() {
   if (auto local = participants()->participant(mLocalIdentity)) {
     local->microphoneEnabled = mMicrophoneEnabled;
     local->cameraEnabled = mCameraEnabled;
+    local->screenSharing = mScreenTrack != nullptr;
     if (!mCameraEnabled) {
       if (auto source = frameSource(mLocalIdentity)) source->clear();
     }
@@ -551,6 +554,58 @@ void LiveKitVideoProvider::setCameraEnabled(bool enabled) {
   }
   mCameraEnabled = enabled;
   updateLocalState();
+}
+
+void LiveKitVideoProvider::startScreenShare(const ScreenCaptureTarget &target) {
+  if (!mRoom) return;
+  auto localParticipant = mRoom->localParticipant().lock();
+  if (!localParticipant) return;
+  // Starting again replaces the previous share; its capture and track are retired first.
+  stopScreenShare();
+  try {
+    auto capture = std::make_unique<ScreenCaptureAdapter>();
+    auto track = livekit::LocalVideoTrack::createLocalVideoTrack("screen", capture->videoSource());
+    livekit::TrackPublishOptions options;
+    options.source = livekit::TrackSource::SOURCE_SCREENSHARE;
+    options.dtx = false;
+    options.simulcast = false;
+    if (!capture->start(target)) {
+      emit mediaError(QStringLiteral("Nothing to share."));
+      return;
+    }
+    localParticipant->publishTrack(track, options);
+    connect(capture.get(), &ScreenCaptureAdapter::captureFailed, this, [this](const QString &reason) {
+      stopScreenShare();
+      emit mediaError(QStringLiteral("Screen sharing stopped: %1").arg(reason));
+    });
+    mScreenCapture = std::move(capture);
+    mScreenTrack = std::move(track);
+  } catch (const std::exception &e) {
+    mScreenCapture.reset();
+    emit mediaError(QStringLiteral("Failed to share the screen: %1").arg(e.what()));
+    return;
+  }
+  updateLocalState();
+  emit screenSharingChanged(true);
+}
+
+void LiveKitVideoProvider::stopScreenShare() {
+  if (!mScreenTrack && !mScreenCapture) return;
+  mScreenCapture.reset();
+  if (mScreenTrack) {
+    if (mRoom) {
+      if (auto localParticipant = mRoom->localParticipant().lock()) {
+        try {
+          localParticipant->unpublishTrack(mScreenTrack->sid());
+        } catch (const std::exception &) {
+          // A disconnected room may refuse; the local state is cleared regardless.
+        }
+      }
+    }
+    mScreenTrack.reset();
+  }
+  updateLocalState();
+  emit screenSharingChanged(false);
 }
 
 void LiveKitVideoProvider::switchCamera(const QCameraDevice &device) {
@@ -636,6 +691,8 @@ void LiveKitVideoProvider::teardown() {
   if (mRoom) mRoom->setDelegate(nullptr);
   mVideoCapture->stop();
   mAudioCapture->stop();
+  const bool wasSharing = mScreenTrack != nullptr;
+  mScreenCapture.reset();
   participants()->clear();
   mMedia.clear();
   mLocalIdentity.clear();
@@ -649,8 +706,10 @@ void LiveKitVideoProvider::teardown() {
   }
   mAudioTrack.reset();
   mVideoTrack.reset();
+  mScreenTrack.reset();
   mRoom.reset();
   mDelegate.reset();
+  if (wasSharing) emit screenSharingChanged(false);
 }
 
 void LiveKitVideoProvider::leave() {
@@ -702,9 +761,13 @@ void LiveKitVideoProvider::unpublishTracks() {
     if (mVideoTrack) {
       localParticipant->unpublishTrack(mVideoTrack->sid());
     }
+    if (mScreenTrack) {
+      localParticipant->unpublishTrack(mScreenTrack->sid());
+    }
   }
   mAudioTrack.reset();
   mVideoTrack.reset();
+  mScreenTrack.reset();
 }
 
 

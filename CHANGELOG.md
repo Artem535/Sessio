@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.22] - 2026-10-08
+
+### Added
+
+- Any participant can share a screen at the same time as others, from the app
+  (whole screen or a single window) and from the browser guest page. Shared
+  screens appear as their own tiles; camera, microphone and transcription are
+  unaffected. The one-owner lease design for screen sharing is dropped.
+
 ## [0.2.20] - 2026-10-08
 
 ### Added

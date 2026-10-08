@@ -123,6 +123,7 @@ private:
   // Qt::WA_DeleteOnClose) so it always reflects the current device list and
   // the currently attached session's provider.
   void showDevicesPopover();
+  void showScreenShareMenu();
 
   QStackedWidget *mStack{nullptr};
   DeviceCheckWidget *mDeviceCheck{nullptr};
@@ -158,6 +159,7 @@ private:
   QToolButton *mCameraToggleButton{nullptr};
   QToolButton *mFullscreenToggleButton{nullptr};
   QToolButton *mDevicesButton{nullptr};
+  QToolButton *mScreenShareButton{nullptr};
   QToolButton *mTranscribeButton{nullptr};
   bool mTranscribing{false};
   QString mTranscribeTooltip;

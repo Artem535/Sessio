@@ -87,6 +87,22 @@ QIcon fullscreenIcon(bool active) {
   });
 }
 
+QIcon screenShareIcon(bool active) {
+  return renderIcon(false, [active](QPainter &painter, const QColor &color) {
+    painter.setPen(QPen(color, 2));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRoundedRect(QRectF(3, 4, 18, 12), 2, 2);
+    painter.drawLine(QPointF(9, 20), QPointF(15, 20));
+    painter.drawLine(QPointF(12, 16), QPointF(12, 20));
+    // An arrow leaves the screen while sharing; a plain monitor otherwise.
+    if (active) {
+      painter.drawLine(QPointF(12, 13), QPointF(12, 7));
+      painter.drawLine(QPointF(12, 7), QPointF(9.5, 9.5));
+      painter.drawLine(QPointF(12, 7), QPointF(14.5, 9.5));
+    }
+  });
+}
+
 QIcon transcriptIcon(bool active) {
   return renderIcon(false, [active](QPainter &painter, const QColor &color) {
     painter.setPen(QPen(active ? onAccentColor() : color, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
