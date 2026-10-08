@@ -1178,3 +1178,43 @@ int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+TEST(CallPageTest, EveryParticipantCanShareAScreenAtTheSameTime) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateParticipantJoined({"local", "Me", "client", true, true, false});
+  provider->simulateParticipantJoined({"first", "First"});
+  provider->simulateParticipantJoined({"second", "Second"});
+  EXPECT_EQ(page.findChild<QWidget *>("participantScreenTile_first"), nullptr);
+
+  provider->simulateScreenSharing("first", true);
+  provider->simulateScreenSharing("local", true);
+  auto *firstScreen = page.findChild<QWidget *>("participantScreenTile_first");
+  ASSERT_NE(firstScreen, nullptr);
+  EXPECT_NE(page.findChild<QWidget *>("participantScreenTile_local"), nullptr);
+  // Cameras stay: sharing never replaces the camera tile.
+  EXPECT_NE(page.findChild<QWidget *>("participantTile_first"), nullptr);
+  EXPECT_NE(page.findChild<QWidget *>("participantTile_local"), nullptr);
+  EXPECT_EQ(page.findChild<QLabel *>("participantName", Qt::FindChildrenRecursively) != nullptr, true);
+
+  provider->simulateScreenSharing("first", false);
+  EXPECT_EQ(page.findChild<QWidget *>("participantScreenTile_first"), nullptr);
+  EXPECT_NE(page.findChild<QWidget *>("participantTile_first"), nullptr);
+  EXPECT_NE(page.findChild<QWidget *>("participantScreenTile_local"), nullptr);
+}
+
+TEST(CallPageTest, DepartureRemovesTheScreenTileToo) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateParticipantJoined({"first", "First"});
+  provider->simulateScreenSharing("first", true);
+  ASSERT_NE(page.findChild<QWidget *>("participantScreenTile_first"), nullptr);
+  provider->simulateParticipantLeft("first");
+  EXPECT_EQ(page.findChild<QWidget *>("participantScreenTile_first"), nullptr);
+}

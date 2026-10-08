@@ -35,8 +35,12 @@ ParticipantSnapshot copyParticipant(const livekit::Participant &participant) {
   result.value.cameraEnabled = false;
   if (const auto *remote = dynamic_cast<const livekit::RemoteParticipant *>(&participant)) {
     for (const auto &[sid, publication] : remote->trackPublications()) {
-      if (publication->kind() == livekit::TrackKind::KIND_VIDEO && !publication->muted())
-        result.value.cameraEnabled = true;
+      if (publication->kind() == livekit::TrackKind::KIND_VIDEO && !publication->muted()) {
+        if (publication->source() == livekit::TrackSource::SOURCE_SCREENSHARE)
+          result.value.screenSharing = true;
+        else
+          result.value.cameraEnabled = true;
+      }
       if (publication->kind() == livekit::TrackKind::KIND_AUDIO && !publication->muted())
         result.value.microphoneEnabled = true;
     }
@@ -51,7 +55,8 @@ TrackSnapshot copyTrack(const livekit::Participant &participant,
                         std::shared_ptr<livekit::Track> track = {}) {
   return {QString::fromStdString(participant.identity()),
           QString::fromStdString(participant.sid()), QString::fromStdString(publication.sid()),
-          publication.kind(), publication.muted(), std::move(track)};
+          publication.kind(), publication.muted(), std::move(track),
+          publication.source() == livekit::TrackSource::SOURCE_SCREENSHARE};
 }
 } // namespace
 
@@ -255,6 +260,11 @@ void LiveKitVideoProvider::queueCallback(uint64_t generation,
   }, Qt::QueuedConnection);
 }
 
+VideoFrameSource *LiveKitVideoProvider::screenSource(const QString &id) {
+  const auto it = mMedia.find(id);
+  return it == mMedia.end() ? nullptr : it->second->screen.get();
+}
+
 VideoFrameSource *LiveKitVideoProvider::frameSource(const QString &id) {
   const auto it = mMedia.find(id);
   return it == mMedia.end() ? nullptr : it->second->video.get();
@@ -348,6 +358,10 @@ void LiveKitVideoProvider::applyParticipant(const ParticipantSnapshot &snapshot,
     if (!allowInsert) return;
     mDeparted.insert({id, it->second->sid});
     it->second->video->detach();
+    it->second->screen->detach();
+    it->second->screenSid.clear();
+    it->second->lastScreenSid.clear();
+    it->second->retiredScreenSids.clear();
     it->second->audio->detach();
     it->second->audioTrack.reset();
     it->second->videoSid.clear();
@@ -362,6 +376,7 @@ void LiveKitVideoProvider::applyParticipant(const ParticipantSnapshot &snapshot,
     auto media = std::make_unique<ParticipantMedia>();
     media->sid = snapshot.sid;
     media->video = std::make_unique<LiveKitVideoFrameSource>();
+    media->screen = std::make_unique<LiveKitVideoFrameSource>();
     media->audio = std::make_unique<RemoteAudioPlayer>();
     media->audio->tap().setCallback(
         [slot = mSinkSlot, id](const int16_t *samples, std::size_t count, int rate) {
@@ -380,6 +395,7 @@ void LiveKitVideoProvider::applyParticipant(const ParticipantSnapshot &snapshot,
     if (const auto current = participants()->participant(id)) {
       value.microphoneEnabled = current->microphoneEnabled;
       value.cameraEnabled = current->cameraEnabled;
+      value.screenSharing = current->screenSharing;
       value.isLocal = current->isLocal;
     }
   }
@@ -406,7 +422,16 @@ void LiveKitVideoProvider::applySubscribed(const TrackSnapshot &snapshot) {
   if (it == mMedia.end() || !participant || it->second->sid != snapshot.participantSid) return;
   auto &media = *it->second;
   try {
-    if (snapshot.kind == livekit::TrackKind::KIND_VIDEO) {
+    if (snapshot.kind == livekit::TrackKind::KIND_VIDEO && snapshot.screen) {
+      if (media.retiredScreenSids.contains(snapshot.sid)) return;
+      if (media.screenSid == snapshot.sid) return;
+      if (!media.lastScreenSid.isEmpty() && media.lastScreenSid != snapshot.sid)
+        media.retiredScreenSids.insert(media.lastScreenSid);
+      media.screen->attachTrack(snapshot.track);
+      media.screenSid = snapshot.sid;
+      media.lastScreenSid = snapshot.sid;
+      participant->screenSharing = !snapshot.muted;
+    } else if (snapshot.kind == livekit::TrackKind::KIND_VIDEO) {
       if (media.retiredVideoSids.contains(snapshot.sid)) return;
       if (media.videoSid == snapshot.sid) return;
       if (!media.lastVideoSid.isEmpty() && media.lastVideoSid != snapshot.sid)
@@ -439,7 +464,13 @@ void LiveKitVideoProvider::applyUnsubscribed(const TrackSnapshot &snapshot) {
   auto participant = participants()->participant(snapshot.id);
   if (it == mMedia.end() || !participant || it->second->sid != snapshot.participantSid) return;
   auto &media = *it->second;
-  if (snapshot.kind == livekit::TrackKind::KIND_VIDEO && media.videoSid == snapshot.sid) {
+  if (snapshot.kind == livekit::TrackKind::KIND_VIDEO && snapshot.screen &&
+      media.screenSid == snapshot.sid) {
+    media.screen->detach();
+    media.screenSid.clear();
+    participant->screenSharing = false;
+  } else if (snapshot.kind == livekit::TrackKind::KIND_VIDEO && !snapshot.screen &&
+             media.videoSid == snapshot.sid) {
     media.video->detach();
     media.videoSid.clear();
     participant->cameraEnabled = false;
@@ -457,7 +488,12 @@ void LiveKitVideoProvider::applyMuted(const TrackSnapshot &snapshot, bool muted)
   auto participant = participants()->participant(snapshot.id);
   if (it == mMedia.end() || !participant || it->second->sid != snapshot.participantSid) return;
   auto &media = *it->second;
-  if (snapshot.kind == livekit::TrackKind::KIND_VIDEO && media.videoSid == snapshot.sid) {
+  if (snapshot.kind == livekit::TrackKind::KIND_VIDEO && snapshot.screen &&
+      media.screenSid == snapshot.sid) {
+    participant->screenSharing = !muted;
+    if (muted) media.screen->clear();
+  } else if (snapshot.kind == livekit::TrackKind::KIND_VIDEO && !snapshot.screen &&
+             media.videoSid == snapshot.sid) {
     participant->cameraEnabled = !muted;
     if (muted) media.video->clear();
   } else if (snapshot.kind == livekit::TrackKind::KIND_AUDIO && media.audioSid == snapshot.sid) {

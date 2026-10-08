@@ -588,11 +588,30 @@ void CallPage::syncParticipants() {
     }
     tile->attachSource(provider->frameSource(id));
     ordered.append(tile);
+    // Every participant may share at the same time; each screen gets its own tile.
+    const QString screenKey = id + QStringLiteral("#screen");
+    if (participant->screenSharing) {
+      present.insert(screenKey);
+      auto *screenTile = mTiles.value(screenKey);
+      if (!screenTile) {
+        screenTile = new pcm::video::ParticipantTile(*participant, mVideoStage,
+                                                     pcm::video::ParticipantTile::Kind::Screen);
+        mTiles.insert(screenKey, screenTile);
+      } else {
+        screenTile->updateParticipant(*participant);
+      }
+      screenTile->attachSource(provider->screenSource(id));
+      ordered.append(screenTile);
+    }
   }
   // Approved group layout places self-view after remote participants while
   // preserving remote insertion order and every surviving tile's identity.
   std::stable_partition(ordered.begin(), ordered.end(), [](const auto *tile) {
     return !tile->isLocal();
+  });
+  // Shared screens come first: they are what the call is currently about.
+  std::stable_partition(ordered.begin(), ordered.end(), [](const auto *tile) {
+    return tile->isScreen();
   });
   // Remove layout references before deleting departed widgets.
   mVideoStage->setTiles(ordered);

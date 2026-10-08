@@ -9,10 +9,11 @@
 
 namespace pcm::video {
 
-ParticipantTile::ParticipantTile(const Participant &participant, QWidget *parent)
-    : QWidget(parent), mRenderer(new RemoteVideoRenderer(this)),
+ParticipantTile::ParticipantTile(const Participant &participant, QWidget *parent, Kind kind)
+    : QWidget(parent), mKind(kind), mRenderer(new RemoteVideoRenderer(this)),
       mPlaceholder(new QLabel(this)), mName(new QLabel(this)) {
-  setObjectName(QStringLiteral("participantTile_") + participant.id);
+  setObjectName((kind == Kind::Screen ? QStringLiteral("participantScreenTile_")
+                                      : QStringLiteral("participantTile_")) + participant.id);
   setMinimumSize(0, 0);
   mRenderer->setObjectName("participantRenderer");
   mPlaceholder->setObjectName("cameraOffPlaceholder");
@@ -28,7 +29,10 @@ ParticipantTile::ParticipantTile(const Participant &participant, QWidget *parent
 void ParticipantTile::updateParticipant(const Participant &participant) {
   mParticipant = participant;
   const QString name = participant.displayName.isEmpty() ? tr("Participant") : participant.displayName;
-  mName->setText(participant.isLocal ? tr("%1 (You)").arg(name) : name);
+  if (mKind == Kind::Screen)
+    mName->setText(participant.isLocal ? tr("Your screen") : tr("%1's screen").arg(name));
+  else
+    mName->setText(participant.isLocal ? tr("%1 (You)").arg(name) : name);
   mName->setGeometry(8, 8, std::min({std::max(0, width() - 72), mName->sizeHint().width(), 320}), std::min(30, height()));
   mName->setToolTip(Qt::convertFromPlainText(mName->text()));
   setAccessibleName(mName->text());
@@ -53,12 +57,14 @@ void ParticipantTile::attachSource(VideoFrameSource *source) {
 }
 
 void ParticipantTile::refreshMedia() {
-  const bool hasFrame = mParticipant.cameraEnabled && mSource && !mSource->latestFrame().isNull();
+  const bool active = mKind == Kind::Screen ? mParticipant.screenSharing : mParticipant.cameraEnabled;
+  const bool hasFrame = active && mSource && !mSource->latestFrame().isNull();
   // A renderer remains hidden until a usable frame arrives: offscreen Qt can
   // exercise placeholders and layout without constructing an OpenGL context.
   mRenderer->setVisible(hasFrame);
   mPlaceholder->setVisible(!hasFrame);
-  mPlaceholder->setText(mParticipant.cameraEnabled ? tr("Waiting for video...") : tr("Camera off"));
+  mPlaceholder->setText(active ? (mKind == Kind::Screen ? tr("Waiting for screen...") : tr("Waiting for video..."))
+                               : (mKind == Kind::Screen ? tr("Screen sharing stopped") : tr("Camera off")));
   mName->raise();
 }
 

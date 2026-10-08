@@ -31,6 +31,7 @@ struct TrackSnapshot {
   livekit::TrackKind kind;
   bool muted;
   std::shared_ptr<livekit::Track> track;
+  bool screen{false};
 };
 
 class LiveKitVideoProvider final : public VideoProvider {
@@ -42,6 +43,7 @@ public:
   void join(const QString &url, const QString &token) override;
   void leave() override;
   VideoFrameSource *frameSource(const QString &id) override;
+  VideoFrameSource *screenSource(const QString &id) override;
   void setMicrophoneEnabled(bool enabled) override;
   void setCameraEnabled(bool enabled) override;
   [[nodiscard]] bool isMicrophoneEnabled() const override { return mMicrophoneEnabled; }
@@ -59,6 +61,10 @@ private:
   struct ParticipantMedia {
     QString sid;
     std::unique_ptr<LiveKitVideoFrameSource> video;
+    std::unique_ptr<LiveKitVideoFrameSource> screen;
+    QString screenSid;
+    QString lastScreenSid;
+    std::set<QString> retiredScreenSids;
     std::unique_ptr<RemoteAudioPlayer> audio;
     QString videoSid;
     QString audioSid;

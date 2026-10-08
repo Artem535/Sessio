@@ -33,6 +33,13 @@ public:
     return nullptr;
   }
 
+  // Frames of the screen the participant is sharing, or nullptr. Any number
+  // of participants may share at once; camera and screen are independent.
+  [[nodiscard]] virtual VideoFrameSource *screenSource(const QString &id) {
+    Q_UNUSED(id);
+    return nullptr;
+  }
+
   // Connects to the given server url with the given (pre-obtained) JWT
   // token, and publishes local audio/video tracks. This provider does not
   // fetch the token itself — the caller obtains it via the MeetingProvider/

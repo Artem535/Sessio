@@ -29,6 +29,16 @@ public:
 
   VideoFrameSource *frameSource(const QString &id) override { return mSources.value(id); }
 
+  VideoFrameSource *screenSource(const QString &id) override { return mScreens.value(id); }
+  void simulateScreenSharing(const QString &id, bool sharing) {
+    auto participant = participants()->participant(id);
+    if (!participant) return;
+    if (sharing && !mScreens.value(id)) mScreens.insert(id, new VideoFrameSource(this));
+    if (!sharing) delete mScreens.take(id);
+    participant->screenSharing = sharing;
+    participants()->upsert(*participant);
+  }
+
   void setMicrophoneEnabled(bool enabled) override {
     if (!mRejectMediaChanges)
       mMicrophoneEnabled = enabled;
@@ -74,7 +84,7 @@ public:
   qint64 mCallElapsedMs{0};
   void simulateJoined() { emit joined(); }
   void simulateJoinFailed(const QString &reason) { emit joinFailed(reason); }
-  void simulateLeft() { participants()->clear(); qDeleteAll(mSources); mSources.clear(); emit left(); }
+  void simulateLeft() { participants()->clear(); qDeleteAll(mSources); mSources.clear(); qDeleteAll(mScreens); mScreens.clear(); emit left(); }
   void simulateParticipantJoined(const Participant &participant) {
     const bool exists = participants()->participant(participant.id).has_value();
     if (!mSources.value(participant.id))
@@ -88,6 +98,7 @@ public:
       return;
     participants()->remove(id);
     delete mSources.take(id);
+    delete mScreens.take(id);
     emit participantLeft(id);
   }
   void simulateReconnecting() { emit reconnecting(); }
@@ -103,6 +114,7 @@ public:
   int mSwitchCountsAtJoin{0};
   int mLeaveCallCount{0};
   QHash<QString, QPointer<VideoFrameSource>> mSources;
+  QHash<QString, QPointer<VideoFrameSource>> mScreens;
   bool mRejectMediaChanges{false};
   bool mMicrophoneEnabled{true};
   bool mCameraEnabled{true};
