@@ -1,5 +1,7 @@
 #include "transcript_panel.h"
+#include "phrase_card_paint.h"
 #include <QHBoxLayout>
+#include <QFrame>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
@@ -8,6 +10,12 @@
 #include <algorithm>
 
 namespace {
+class PhraseCard final : public QFrame {
+public:
+  using QFrame::QFrame;
+protected:
+  void paintEvent(QPaintEvent *) override { paintPhraseCard(this, false); }
+};
 QLabel *label(const QString &text, const char *name, QWidget *parent) {
   auto *result = new QLabel(text, parent);
   result->setObjectName(QString::fromLatin1(name));
@@ -41,7 +49,7 @@ TranscriptPanel::TranscriptPanel(QWidget *parent) : QWidget(parent) {
   mAudioGap = label(tr("Microphone audio interrupted; other participants are still being transcribed"), "transcriptAudioGap", this); layout->addWidget(mAudioGap); mAudioGap->hide();
   mDelayed = label(tr("Transcription is falling behind"), "transcriptDelayed", this); layout->addWidget(mDelayed); mDelayed->hide();
   mScroll = new QScrollArea(this); mScroll->setWidgetResizable(true); mScroll->setObjectName("transcriptScroll");
-  auto *content = new QWidget(mScroll); mRows = new QVBoxLayout(content); mRows->setAlignment(Qt::AlignTop);
+  auto *content = new QWidget(mScroll); mRows = new QVBoxLayout(content); mRows->setAlignment(Qt::AlignTop); mRows->setContentsMargins(0, 8, 12, 8); mRows->setSpacing(10); mScroll->setFrameShape(QFrame::NoFrame); mScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   mListening = label(tr("Listening…"), "transcriptListening", content); mRows->addWidget(mListening); mListening->hide();
   mScroll->setWidget(content); layout->addWidget(mScroll, 1);
   auto *bar = mScroll->verticalScrollBar();
@@ -81,16 +89,28 @@ void TranscriptPanel::setStartAvailable(bool available, const QString &reason) {
   mStart->setEnabled(available); message(mReason, available ? QString{} : reason);
 }
 void TranscriptPanel::addPhrase(const DuckTranscriptPhrase &phrase) {
-  auto *row = new QWidget(mScroll->widget()); auto *layout = new QVBoxLayout(row);
-  auto *meta = new QHBoxLayout;
-  meta->addWidget(label(timestamp(phrase.start_ms), "phraseTime", row));
+  auto *row = new PhraseCard(mScroll->widget());
+  row->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
+  auto *layout = new QVBoxLayout(row);
+  layout->setContentsMargins(18, 12, 18, 14); layout->setSpacing(8);
   const bool practitioner = phrase.track_role == "practitioner";
   const QString name = phrase.speaker_name && !phrase.speaker_name->empty() ? QString::fromStdString(*phrase.speaker_name) : (practitioner ? tr("You") : tr("Participant"));
-  auto *speaker = label(name, "phraseSpeaker", row);
-  QFont font = speaker->font(); font.setBold(practitioner); speaker->setFont(font);
   row->setProperty("practitioner", practitioner);
-  meta->addWidget(speaker, 1); layout->addLayout(meta);
-  auto *text = label(QString::fromStdString(phrase.text), "phraseText", row); text->setTextInteractionFlags(Qt::TextSelectableByMouse); layout->addWidget(text);
+  auto *meta = new QHBoxLayout;
+  auto *dot = label(QStringLiteral("●"), "speakerMarker", row);
+  auto markerPalette = dot->palette();
+  markerPalette.setColor(QPalette::WindowText, practitioner ? palette().color(QPalette::Highlight) : QColor("#65bda9"));
+  dot->setPalette(markerPalette);
+  meta->addWidget(dot);
+  auto *speaker = label(name, "phraseSpeaker", row);
+  QFont font = speaker->font(); font.setBold(true); font.setPointSize(11); speaker->setFont(font);
+  meta->addWidget(speaker); meta->addStretch();
+  const auto range = phrase.end_ms > phrase.start_ms ? timestamp(phrase.start_ms) + QStringLiteral(" – ") + timestamp(phrase.end_ms) : timestamp(phrase.start_ms);
+  meta->addWidget(label(range, "phraseTime", row));
+  layout->addLayout(meta);
+  auto *text = label(QString::fromStdString(phrase.text), "phraseText", row);
+  auto textFont = text->font(); textFont.setPointSize(12); text->setFont(textFont);
+  text->setTextInteractionFlags(Qt::TextSelectableByMouse); layout->addWidget(text);
   mRows->insertWidget(mRows->count() - 1, row); ++mPhraseCount;
 }
 void TranscriptPanel::setDelayed(bool delayed) { mDelayed->setVisible(delayed); }

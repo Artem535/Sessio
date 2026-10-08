@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.23] - 2026-10-08
+
+### Changed
+
+- The live transcript in a call shows phrases as the same rounded cards as the
+  transcript window: speaker marker, bold speaker name, time range and larger
+  text.
+
 ## [0.2.22] - 2026-10-08
 
 ### Added
