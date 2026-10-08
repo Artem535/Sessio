@@ -10,7 +10,18 @@ synthetic QBuffer containing 20 silence frames into the real capture reader and
 LiveKit AudioSource. A direct frame callback stops capture after frame 1. Baseline
 still delivers all 20 frames. This proves that stop/start does not cancel a batch
 already read from the old source. Clang ASan/UBSan reproduces the failed assertion;
-it does not report a memory violation in this test.
+it does not report a memory violation in that stop-only test.
+
+A second baseline harness uses the same synthetic batch and destroys the adapter
+inside its first direct `frameCaptured` callback. Clang ASan reports
+`heap-use-after-free`: `std::__shared_ptr<livekit::AudioSource>::get()` called by
+`AudioCaptureAdapter::onReadyRead`, baseline line 56, after the line-58 signal
+deleted the adapter. The baseline source is extracted from `77bbf5e` into the
+ignored local harness; only a friend test-access declaration is added to bind the
+synthetic QIODevice. This establishes a real reentrant capture lifetime bug, but
+does not establish that the user's physical-device switch follows this path.
+The committed regression exercises the source factory and real readyRead
+connection. A QPointer guard ends delivery after destruction.
 
 `TranscriptionEngineTest.ResetSeparatesSpeechAndPreservesRemoteTrack` supplies
 synthetic speech before and after a capture gap plus continuous remote speech.
