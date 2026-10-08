@@ -123,32 +123,6 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
   navigation->addWidget(mAttach);
   auto *exportButton = button(tr("Export text"), "transcriptExport", this);
   navigation->addWidget(exportButton);
-  connect(exportButton, &QPushButton::clicked, this, [this] {
-    QPointer<TranscriptPage> guard(this);
-    try {
-      const auto bytes = exportText().toUtf8();
-      const auto path = QFileDialog::getSaveFileName(this, tr("Export transcript"), {}, tr("Text files (*.txt)"));
-      if (!guard || path.isEmpty()) return;
-      QSaveFile file(path);
-      if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) reportFailure();
-    } catch (...) { if (guard) reportFailure(); }
-  });
-  connect(mAttach, &QPushButton::clicked, this, [this] {
-    const auto id = mSelector->currentData().toLongLong();
-    QPointer<TranscriptPage> guard(this);
-    try {
-      if (!mayMutate(id)) return;
-      QPointer<TranscriptClientDialog> dialog = new TranscriptClientDialog(mDb, id, this);
-      const auto result = dialog->exec();
-      if (!guard || !dialog) return;
-      const auto clients = dialog->selectedClientIds();
-      dialog->deleteLater();
-      if (result != QDialog::Accepted) return;
-      if (!mayMutate(id)) return;
-      if (!mDb->set_transcript_clients(id, clients)) { reportFailure(); return; }
-      showTranscript(); emit transcriptsChanged();
-    } catch (...) { if (guard) reportFailure(); }
-  });
   auto *more = new QToolButton(this);
   more->setAccessibleName(tr("More actions"));
   more->setObjectName("transcriptMoreActions");
@@ -186,6 +160,32 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
     return QMessageBox::question(this, tr("Delete transcript"), message,
                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes;
   };
+  connect(exportButton, &QPushButton::clicked, this, [this] {
+    QPointer<TranscriptPage> guard(this);
+    try {
+      const auto bytes = exportText().toUtf8();
+      const auto path = QFileDialog::getSaveFileName(this, tr("Export transcript"), {}, tr("Text files (*.txt)"));
+      if (!guard || path.isEmpty()) return;
+      QSaveFile file(path);
+      if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) reportFailure();
+    } catch (...) { if (guard) reportFailure(); }
+  });
+  connect(mAttach, &QPushButton::clicked, this, [this] {
+    const auto id = mSelector->currentData().toLongLong();
+    QPointer<TranscriptPage> guard(this);
+    try {
+      if (!mayMutate(id)) return;
+      QPointer<TranscriptClientDialog> dialog = new TranscriptClientDialog(mDb, id, this);
+      const auto result = dialog->exec();
+      if (!guard || !dialog) return;
+      const auto clients = dialog->selectedClientIds();
+      dialog->deleteLater();
+      if (result != QDialog::Accepted) return;
+      if (!mayMutate(id)) return;
+      if (!mDb->set_transcript_clients(id, clients)) { reportFailure(); return; }
+      showTranscript(); emit transcriptsChanged();
+    } catch (...) { if (guard) reportFailure(); }
+  });
   connect(mSelector, &QComboBox::currentIndexChanged, this, &TranscriptPage::showTranscript);
   connect(mReview, &QPushButton::clicked, this, [this] {
     const auto id = mSelector->currentData().toLongLong();
