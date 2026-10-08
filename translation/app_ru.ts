@@ -2554,11 +2554,11 @@ They appear here after a call with transcription turned on.</source>
     </message>
     <message>
         <source>Open</source>
-        <translation type="unfinished">Открыть</translation>
+        <translation>Открыть</translation>
     </message>
     <message>
         <source>Delete</source>
-        <translation type="unfinished">Удалить</translation>
+        <translation>Удалить</translation>
     </message>
     <message numerus="yes">
         <source>%n transcripts</source>

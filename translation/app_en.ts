@@ -2551,11 +2551,11 @@ They appear here after a call with transcription turned on.</translation>
     </message>
     <message>
         <source>Open</source>
-        <translation type="unfinished">Open</translation>
+        <translation>Open</translation>
     </message>
     <message>
         <source>Delete</source>
-        <translation type="unfinished">Delete</translation>
+        <translation>Delete</translation>
     </message>
     <message numerus="yes">
         <source>%n transcripts</source>
