@@ -1,0 +1,31 @@
+# Substitute CALL_HOST, TLS_CERT, TLS_KEY, TOKEN_UPSTREAM, LIVEKIT_WSS before install.
+map $uri $safe_call_path {
+  ~^/v1/invitations/ /v1/invitations/REDACTED;
+  default $uri;
+}
+log_format call_safe '$remote_addr $request_method $safe_call_path $status';
+server {
+  listen 443 ssl;
+  server_name ${CALL_HOST};
+  ssl_certificate ${TLS_CERT};
+  ssl_certificate_key ${TLS_KEY};
+  root /srv/sessio-call;
+  access_log /var/log/nginx/sessio-call.log call_safe;
+  add_header Referrer-Policy no-referrer always;
+  add_header Permissions-Policy 'camera=(self), microphone=(self), display-capture=(self)' always;
+  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' ${LIVEKIT_WSS}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" always;
+  location = /join { try_files /index.html =404; }
+  location = / { try_files /index.html =404; }
+  location /assets/ { try_files $uri =404; }
+  location /v1/ {
+    proxy_pass ${TOKEN_UPSTREAM};
+    proxy_cache off;
+    proxy_hide_header Cache-Control;
+    add_header Cache-Control no-store always;
+    add_header Referrer-Policy no-referrer always;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto https;
+    client_max_body_size 128k;
+  }
+  location / { return 404; }
+}

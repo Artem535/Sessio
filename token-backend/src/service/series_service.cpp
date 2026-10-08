@@ -1,4 +1,5 @@
 #include "service/series_service.h"
+#include "service/display_name.h"
 #include "service/schedule_wire.h"
 #include "db/series_repository.h"
 #include "crypto/hashing.h"
@@ -83,8 +84,8 @@ struct SeriesService::Impl {
   }
   Result<TokenResult> token(AccountId account, const std::string &uid, std::optional<int64_t> original,
                             bool client, const std::string &name) {
-    if (name.size() > 256) return error<TokenResult>(ServiceError::InvalidDisplayName);
-    for (unsigned char c : name) if (c < 32 || c == 127) return error<TokenResult>(ServiceError::InvalidDisplayName);
+    const auto normalised = normaliseDisplayName(name, false);
+    if (!normalised) return error<TokenResult>(ServiceError::InvalidDisplayName);
     // Caller keeps the shared lock until JWT mint; snapshot writers cannot interleave.
     auto stored = schedules.get(account, uid);
     if (!stored) return error<TokenResult>(ServiceError::NotFound);
@@ -107,9 +108,9 @@ struct SeriesService::Impl {
     if (!meeting || meeting->status != "active") return error<TokenResult>(ServiceError::OccurrenceUnavailable);
     VideoGrants grants; grants.room = meeting->roomName;
     std::string identity = (client ? "client-" : "practitioner-") + meeting->meetingRef;
-    if (!client) identity += "-" + generateUrlSafeToken(16);
+    identity += "-" + generateUrlSafeToken(16);
     auto jwt = mintLiveKitJwt(config.liveKitApiKey, config.liveKitApiSecret, identity, grants,
-        config.tokenTtlSeconds, client ? R"({"role":"client"})" : R"({"role":"practitioner"})", name, now);
+        config.tokenTtlSeconds, client ? R"({"role":"client"})" : R"({"role":"practitioner"})", *normalised, now);
     transaction.commit();
     return {TokenResult{endpoint, meeting->roomName, jwt, now + config.tokenTtlSeconds}, {}};
   }

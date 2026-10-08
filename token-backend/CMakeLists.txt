@@ -38,6 +38,7 @@ add_library(token_backend_lib STATIC
   src/auth/authorizer.h
   src/auth/static_token_authorizer.h
   src/service/meeting_service.cpp
+  src/service/display_name.cpp
   src/service/series_service.cpp
   src/service/schedule_service.cpp
   src/service/schedule_wire.cpp

@@ -228,7 +228,7 @@ TEST_F(SeriesServiceTest, BackupRestoreAndMigrationPreserveReplayRoomAndLegacyRo
   std::filesystem::remove(path);
 }
 
-TEST_F(SeriesServiceTest, SignedTokensUseInjectedServerTimeAndStableClientIdentity) {
+TEST_F(SeriesServiceTest, SignedTokensUseInjectedServerTimeAndUniqueGuestIdentity) {
   auto invitation = invite(); ASSERT_TRUE(invitation.ok());
   auto first = service->clientToken(invitation.value->code, invitation.value->passcode); ASSERT_TRUE(first && first->ok());
   auto decode = [](const std::string &encoded) {
@@ -251,11 +251,16 @@ TEST_F(SeriesServiceTest, SignedTokensUseInjectedServerTimeAndStableClientIdenti
   EXPECT_NE(decoded.find("\"exp\":1791299400"), std::string::npos);
   EXPECT_EQ(first->value->expiresAtUnix, 1791299400);
   SeriesRepository repository(conn); auto meeting = meetings.findById(*repository.meetingId(uid, now * 1000)); ASSERT_TRUE(meeting);
-  const auto identity = "\"sub\":\"client-" + meeting->meetingRef + "\"";
+  const auto identity = "\"sub\":\"client-" + meeting->meetingRef + "-";
   EXPECT_NE(decoded.find(identity), std::string::npos);
   now += 10;
   auto second = service->clientToken(invitation.value->code, invitation.value->passcode); ASSERT_TRUE(second && second->ok());
   EXPECT_NE(payload(*second->value).find(identity), std::string::npos);
+  const auto subject = [](const std::string &json) {
+    const auto start = json.find("\"sub\":\"") + 7;
+    return json.substr(start, json.find('"', start) - start);
+  };
+  EXPECT_NE(subject(decoded), subject(payload(*second->value)));
   EXPECT_EQ(second->value->roomName, first->value->roomName);
   now += 2 * 3600;
   EXPECT_EQ(service->clientToken(invitation.value->code, invitation.value->passcode)->error, ServiceError::OccurrenceUnavailable);

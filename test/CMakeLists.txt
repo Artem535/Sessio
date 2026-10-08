@@ -910,6 +910,9 @@ add_executable(Sessio_fake_client fake_client.cpp)
 target_link_libraries(Sessio_fake_client PRIVATE
     Qt6::Gui Qt6::Network Sessio_token_client LiveKit::livekit
 )
+if(UNIX AND NOT APPLE)
+  target_link_libraries(Sessio_fake_client PRIVATE "${LIVEKIT_CURL_LIBRARY}")
+endif()
 
 # CallsPage tests
 #

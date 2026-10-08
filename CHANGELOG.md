@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.19] - 2026-10-08
+
+### Added
+
+- Browser guest call client with required name, device preview and direct LiveKit
+  room entry; HTTPS fragment invitations and same-origin deployment template.
+- Guest names use a shared 80 Unicode scalar limit. Legacy native empty names
+  remain accepted; recurring guests now receive independent participant identities.
+
 ## [0.2.18] - 2026-10-08
 
 ### Added

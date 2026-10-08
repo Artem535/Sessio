@@ -720,6 +720,20 @@ TEST_F(HttpIntegrationTest, ClientTokenSucceedsWithNoCredentialAtAll) {
   EXPECT_EQ(jsonString(response.body, "endpointUrl"), "ws://livekit.test:7880") << response.body;
 }
 
+TEST_F(HttpIntegrationTest, WebRequiresNameAndInvalidKindCostsNoGuess) {
+  auto meeting = createMeeting();
+  const auto path = clientTokenPath(meeting.invitationCode);
+  for (const auto &extra : {",\"clientKind\":\"web\"", ",\"clientKind\":\"web\",\"displayName\":\"   \"", ",\"clientKind\":\"admin\""}) {
+    for (int i = 0; i < 6; ++i)
+      EXPECT_EQ(request("POST", path, {}, "{\"passcode\":\"wrong\"" + std::string(extra) + "}").status, 400);
+  }
+  const auto body = "{\"passcode\":\"" + meeting.passcode + "\",\"clientKind\":\"web\",\"displayName\":\"Гость\"}";
+  auto first = request("POST", path, {}, body), second = request("POST", path, {}, body);
+  ASSERT_EQ(first.status, 200); ASSERT_EQ(second.status, 200);
+  EXPECT_EQ(jsonString(first.body, "roomName"), jsonString(second.body, "roomName"));
+  EXPECT_NE(jsonString(first.body, "token"), jsonString(second.body, "token"));
+}
+
 TEST_F(HttpIntegrationTest, ClientTokenWithWrongPasscodeIs401) {
   auto meeting = createMeeting();
   auto response =
