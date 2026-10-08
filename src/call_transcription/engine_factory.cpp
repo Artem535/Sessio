@@ -51,8 +51,9 @@ QString sanitizeLoadError(const char *what, const std::vector<std::filesystem::p
 }
 
 EngineFactory makeProductionEngineFactory(std::filesystem::path appDir,
-                                          std::string modelsEnvOverride) {
-  return [appDir = std::move(appDir), env = std::move(modelsEnvOverride)](
+                                          std::string modelsEnvOverride,
+                                          pcm::transcription::TranscriptionTuning tuning) {
+  return [appDir = std::move(appDir), env = std::move(modelsEnvOverride), tuning](
              pcm::transcription::EngineCallbacks callbacks,
              QString *error) -> std::shared_ptr<pcm::transcription::TranscriptionEngine> {
     auto fail = [error](const QString &text) {
@@ -66,9 +67,9 @@ EngineFactory makeProductionEngineFactory(std::filesystem::path appDir,
       const auto located = pcm::transcription::locateModels(
           appDir, pcm::transcription::currentPlatform(), env);
       if (!located.paths) return fail(sanitizedLocateError(located.error));
-      auto recognizer = pcm::transcription::makeSherpaRecognizer(*located.paths);
+      auto recognizer = pcm::transcription::makeSherpaRecognizer(*located.paths, tuning.numThreads);
       if (!recognizer) return fail(QStringLiteral("Speech recogniser could not be created"));
-      auto vadFactory = pcm::transcription::makeSherpaVadFactory(*located.paths);
+      auto vadFactory = pcm::transcription::makeSherpaVadFactory(*located.paths, tuning);
       // Probe once so a corrupt VAD model fails here with an error instead of the call
       // recording with no output when the first track creates its detector.
       if (!vadFactory || !vadFactory()) return fail(QStringLiteral("Voice activity model could not be created"));

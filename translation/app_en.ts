@@ -1694,6 +1694,10 @@ See you!</translation>
         <source>Entry not found</source>
         <translation>Entry not found</translation>
     </message>
+    <message>
+        <source> s</source>
+        <translation> s</translation>
+    </message>
 </context>
 <context>
     <name>QShortcut</name>
@@ -2829,6 +2833,58 @@ See you!</translation>
     <message>
         <source>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</source>
         <translation>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</translation>
+    </message>
+    <message>
+        <source>Speech recognition</source>
+        <translation>Speech recognition</translation>
+    </message>
+    <message>
+        <source>How confident the detector must be that a sound is speech. Raise it if background noise becomes text, lower it if quiet speech is missed.</source>
+        <translation>How confident the detector must be that a sound is speech. Raise it if background noise becomes text, lower it if quiet speech is missed.</translation>
+    </message>
+    <message>
+        <source>A pause this long ends a phrase. Shorter pauses give shorter, quicker phrases.</source>
+        <translation>A pause this long ends a phrase. Shorter pauses give shorter, quicker phrases.</translation>
+    </message>
+    <message>
+        <source>Sounds shorter than this are ignored.</source>
+        <translation>Sounds shorter than this are ignored.</translation>
+    </message>
+    <message>
+        <source>Continuous speech longer than this is cut into several phrases.</source>
+        <translation>Continuous speech longer than this is cut into several phrases.</translation>
+    </message>
+    <message>
+        <source>CPU threads for the speech model. More threads are faster but load the computer during a call.</source>
+        <translation>CPU threads for the speech model. More threads are faster but load the computer during a call.</translation>
+    </message>
+    <message>
+        <source>Speech sensitivity</source>
+        <translation>Speech sensitivity</translation>
+    </message>
+    <message>
+        <source>Pause that ends a phrase</source>
+        <translation>Pause that ends a phrase</translation>
+    </message>
+    <message>
+        <source>Shortest speech</source>
+        <translation>Shortest speech</translation>
+    </message>
+    <message>
+        <source>Longest phrase</source>
+        <translation>Longest phrase</translation>
+    </message>
+    <message>
+        <source>Recognizer threads</source>
+        <translation>Recognizer threads</translation>
+    </message>
+    <message>
+        <source>Restore defaults</source>
+        <translation>Restore defaults</translation>
+    </message>
+    <message>
+        <source>Changes apply to the next transcription.</source>
+        <translation>Changes apply to the next transcription.</translation>
     </message>
     <message>
         <source>Delete all transcripts…</source>
