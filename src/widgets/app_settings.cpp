@@ -116,6 +116,28 @@ void setTranscriptionEnabled(bool enabled) {
   QSettings().setValue("transcription/enabled", enabled);
 }
 
+pcm::transcription::TranscriptionTuning transcriptionTuning() {
+  using pcm::transcription::TranscriptionTuning;
+  const QSettings settings;
+  TranscriptionTuning tuning;
+  tuning.threshold = settings.value("transcription/vadThreshold", tuning.threshold).toFloat();
+  tuning.minSilenceSec = settings.value("transcription/vadMinSilence", tuning.minSilenceSec).toFloat();
+  tuning.minSpeechSec = settings.value("transcription/vadMinSpeech", tuning.minSpeechSec).toFloat();
+  tuning.maxPhraseSec = settings.value("transcription/vadMaxPhrase", tuning.maxPhraseSec).toFloat();
+  tuning.numThreads = settings.value("transcription/threads", tuning.numThreads).toInt();
+  return tuning.clamped();
+}
+
+void setTranscriptionTuning(const pcm::transcription::TranscriptionTuning &tuning) {
+  const auto t = tuning.clamped();
+  QSettings settings;
+  settings.setValue("transcription/vadThreshold", t.threshold);
+  settings.setValue("transcription/vadMinSilence", t.minSilenceSec);
+  settings.setValue("transcription/vadMinSpeech", t.minSpeechSec);
+  settings.setValue("transcription/vadMaxPhrase", t.maxPhraseSec);
+  settings.setValue("transcription/threads", t.numThreads);
+}
+
 QString callDisplayName() {
   return QSettings().value("calls/displayName").toString().trimmed().left(64);
 }

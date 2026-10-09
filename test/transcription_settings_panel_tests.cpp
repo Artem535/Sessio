@@ -1,6 +1,8 @@
 #include "transcription_settings_panel.h"
 #include <QApplication>
 #include <QCheckBox>
+#include <QDoubleSpinBox>
+#include <QSpinBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -50,4 +52,35 @@ int main(int argc, char **argv) {
   QApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+
+TEST(TranscriptionSettingsPanelTest, SpeechParametersRoundTripEmitOnEditAndResetToDefaults) {
+  TranscriptionSettingsPanel panel;
+  pcm::transcription::TranscriptionTuning received;
+  int emitted = 0;
+  QObject::connect(&panel, &TranscriptionSettingsPanel::tuningChanged,
+                   [&](const pcm::transcription::TranscriptionTuning &t) { received = t; ++emitted; });
+  pcm::transcription::TranscriptionTuning chosen;
+  chosen.threshold = 0.7F; chosen.minSilenceSec = 1.5F; chosen.numThreads = 8;
+  panel.setTuning(chosen);
+  EXPECT_EQ(emitted, 0);  // loading saved values is not an edit
+  EXPECT_EQ(panel.tuning(), chosen);
+
+  panel.findChild<QSpinBox *>("recognizerThreads")->setValue(2);
+  ASSERT_EQ(emitted, 1);
+  EXPECT_EQ(received.numThreads, 2);
+  EXPECT_FLOAT_EQ(received.threshold, 0.7F);
+
+  panel.findChild<QPushButton *>("resetTranscriptionTuning")->click();
+  EXPECT_EQ(received, pcm::transcription::TranscriptionTuning{});
+  EXPECT_EQ(panel.tuning(), pcm::transcription::TranscriptionTuning{});
+}
+
+TEST(TranscriptionSettingsPanelTest, OutOfRangeValuesAreClampedWhenLoaded) {
+  TranscriptionSettingsPanel panel;
+  pcm::transcription::TranscriptionTuning wild;
+  wild.threshold = 5.0F; wild.numThreads = 500;
+  panel.setTuning(wild);
+  EXPECT_FLOAT_EQ(panel.tuning().threshold, pcm::transcription::TranscriptionTuning::kMaxThreshold);
+  EXPECT_EQ(panel.tuning().numThreads, pcm::transcription::TranscriptionTuning::kMaxThreads);
 }

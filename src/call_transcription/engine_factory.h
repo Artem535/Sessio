@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "transcription_session.h"
+#include "transcription_tuning.h"
 
 namespace pcm::calltranscription {
 
@@ -13,7 +14,8 @@ namespace pcm::calltranscription {
 // and builds the engine. Never throws; returns null and sets *error on failure.
 // Error texts are short diagnostics without directory paths.
 EngineFactory makeProductionEngineFactory(std::filesystem::path appDir,
-                                          std::string modelsEnvOverride = {});
+                                          std::string modelsEnvOverride = {},
+                                          pcm::transcription::TranscriptionTuning tuning = {});
 
 // Removes the given directory roots (and, as a fallback, any other path prefix) from a
 // load-error text so it never leaks a user name or folder. Handles roots with spaces.

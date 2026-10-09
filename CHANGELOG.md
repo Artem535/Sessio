@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.24] - 2026-10-08
+
+### Added
+
+- Settings → Transcription now has a Speech recognition group: speech
+  sensitivity, the pause that ends a phrase, the shortest speech, the longest
+  phrase and the recogniser thread count, with a Restore defaults button.
+  Values are clamped to safe ranges and apply to the next transcription.
+
 ## [0.2.23] - 2026-10-08
 
 ### Changed

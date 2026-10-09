@@ -163,7 +163,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  app.setApplicationVersion("0.2.23");
+  app.setApplicationVersion("0.2.24");
   // Installed builds ship libical's timezone data next to the executable; the
   // path compiled into the schedule engine only exists in development trees.
   pcm::meeting::configureScheduleZoneinfo(QCoreApplication::applicationDirPath());
@@ -1112,7 +1112,8 @@ void Application::connectSignals() {
     hooks.engineFactory = [] {
       return pcm::calltranscription::makeProductionEngineFactory(
           QCoreApplication::applicationDirPath().toStdString(),
-          qEnvironmentVariable("SESSIO_MODELS_DIR").toStdString());
+          qEnvironmentVariable("SESSIO_MODELS_DIR").toStdString(),
+          pcm::app_settings::transcriptionTuning());
     };
     auto modelsAvailable = [] {
       return pcm::calltranscription::transcriptionModelsAvailable(

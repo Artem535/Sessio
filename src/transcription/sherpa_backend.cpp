@@ -46,8 +46,8 @@ class SherpaRecognizer : public ISpeechRecognizer {
 
 class SherpaVad : public IVoiceActivityDetector {
  public:
-  explicit SherpaVad(const ModelPaths& paths)
-      : vad_(create(paths)), history_(sc::CircularBuffer::Create(kHistorySamples)) {
+  SherpaVad(const ModelPaths& paths, const TranscriptionTuning& tuning)
+      : vad_(create(paths, tuning)), history_(sc::CircularBuffer::Create(kHistorySamples)) {
     if (!vad_.Get()) throw std::runtime_error("Failed to load the voice detector");
     if (!history_.MoveOnly::Get()) throw std::runtime_error("Failed to create the voice buffer");
   }
@@ -91,13 +91,13 @@ class SherpaVad : public IVoiceActivityDetector {
   static constexpr int32_t kLeadingSamples = 2400; // 150 ms
   static constexpr int32_t kTrailingSamples = 3200; // 200 ms
 
-  static sc::VoiceActivityDetector create(const ModelPaths& paths) {
+  static sc::VoiceActivityDetector create(const ModelPaths& paths, const TranscriptionTuning& tuning) {
     sc::VadModelConfig config;
     config.silero_vad.model = paths.vad.string();
-    config.silero_vad.threshold = 0.5F;
-    config.silero_vad.min_silence_duration = 0.8F;
-    config.silero_vad.min_speech_duration = 0.25F;
-    config.silero_vad.max_speech_duration = 20.0F;
+    config.silero_vad.threshold = tuning.threshold;
+    config.silero_vad.min_silence_duration = tuning.minSilenceSec;
+    config.silero_vad.min_speech_duration = tuning.minSpeechSec;
+    config.silero_vad.max_speech_duration = tuning.maxPhraseSec;
     config.sample_rate = 16000;
     config.silero_vad.window_size = static_cast<int32_t>(kWindow);
     return sc::VoiceActivityDetector::Create(config, 120.0F);
@@ -111,11 +111,14 @@ class SherpaVad : public IVoiceActivityDetector {
 }  // namespace
 
 std::shared_ptr<ISpeechRecognizer> makeSherpaRecognizer(const ModelPaths& paths, int num_threads) {
-  return std::make_shared<SherpaRecognizer>(paths, num_threads);
+  return std::make_shared<SherpaRecognizer>(
+      paths, std::clamp(num_threads, TranscriptionTuning::kMinThreads, TranscriptionTuning::kMaxThreads));
 }
 
-TranscriptionEngine::VadFactory makeSherpaVadFactory(const ModelPaths& paths) {
-  return [paths] { return std::make_unique<SherpaVad>(paths); };
+TranscriptionEngine::VadFactory makeSherpaVadFactory(const ModelPaths& paths,
+                                                     const TranscriptionTuning& tuning) {
+  const TranscriptionTuning safe = tuning.clamped();
+  return [paths, safe] { return std::make_unique<SherpaVad>(paths, safe); };
 }
 
 }  // namespace pcm::transcription
