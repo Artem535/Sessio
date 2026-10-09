@@ -8,7 +8,8 @@
 #include <QSignalSpy>
 #include <QListWidget>
 #include <QTimer>
-#include <QTableWidget>
+#include <QFrame>
+#include <QLabel>
 #include <QTemporaryDir>
 #include <gtest/gtest.h>
 
@@ -34,12 +35,10 @@ TEST_F(TranscriptListTest, StandaloneSurvivesRestartOpenEditExportBindUnbindAndD
   ASSERT_TRUE(db->set_transcript_status(id, "draft"));
   db.reset(); db = std::make_shared<pcm::database::Database>(conf);
   TranscriptListPage list(db);
-  auto *table = list.findChild<QTableWidget *>("transcriptList");
-  ASSERT_EQ(table->rowCount(), 1);
-  EXPECT_EQ(table->item(0, 0)->data(Qt::UserRole).toLongLong(), id);
+  ASSERT_EQ(list.transcriptCount(), 1);
+  ASSERT_NE(list.findChild<QFrame *>("transcriptCard_" + QString::number(id)), nullptr);
   QSignalSpy open(&list, &TranscriptListPage::openTranscriptRequested);
-  table->selectRow(0);
-  list.findChild<QPushButton *>("openTranscript")->click();
+  list.findChild<QPushButton *>("openTranscript_" + QString::number(id))->click();
   ASSERT_EQ(open.count(), 1);
   TranscriptPage review(db, 0, {});
   review.reloadTranscript(open.at(0).at(0).toLongLong(), "Transcript");
@@ -61,7 +60,8 @@ TEST_F(TranscriptListTest, StandaloneSurvivesRestartOpenEditExportBindUnbindAndD
   review.findChild<QPushButton *>("transcriptAttachClients")->click();
   EXPECT_EQ(db->get_transcript_client_ids(id), std::vector<int64_t>{clientId});
   list.reload();
-  EXPECT_EQ(table->item(0, 2)->text(), "Existing client");
+  EXPECT_EQ(list.findChild<QLabel *>("transcriptClient")->text(), "Existing client");
+  EXPECT_EQ(list.findChild<QLabel *>("transcriptNoClient"), nullptr);
   QTimer::singleShot(0, [&] {
     for (auto *widget : QApplication::topLevelWidgets())
       if (auto *dialog = qobject_cast<TranscriptClientDialog *>(widget)) {
@@ -73,11 +73,10 @@ TEST_F(TranscriptListTest, StandaloneSurvivesRestartOpenEditExportBindUnbindAndD
   review.findChild<QPushButton *>("transcriptAttachClients")->click();
   EXPECT_TRUE(db->get_transcript_client_ids(id).empty());
   list.reload();
-  EXPECT_EQ(table->item(0, 2)->text(), "No clients attached");
+  EXPECT_EQ(list.findChild<QLabel *>("transcriptNoClient")->text(), "No clients attached");
   list.setConfirmHook([](const QString &) { return true; });
-  table->selectRow(0);
-  list.findChild<QPushButton *>("deleteTranscript")->click();
-  EXPECT_EQ(table->rowCount(), 0);
+  list.findChild<QPushButton *>("deleteTranscript_" + QString::number(id))->click();
+  EXPECT_EQ(list.transcriptCount(), 0);
   EXPECT_EQ(db->get_transcript(id), nullptr);
   EXPECT_TRUE(db->get_transcript_phrases(id).empty());
 }
@@ -85,13 +84,16 @@ TEST_F(TranscriptListTest, StandaloneSurvivesRestartOpenEditExportBindUnbindAndD
 TEST_F(TranscriptListTest, RecordingAndRejectedDeleteKeepTheText) {
   const auto id = db->add_transcript(std::nullopt, "scope");
   TranscriptListPage list(db);
-  auto *table = list.findChild<QTableWidget *>("transcriptList");
+  const auto remove = "deleteTranscript_" + QString::number(id);
+  // A transcript that is still recording cannot be deleted at all.
+  EXPECT_FALSE(list.findChild<QPushButton *>(remove)->isEnabled());
   list.setConfirmHook([](const QString &) { return true; });
-  table->selectRow(0); list.findChild<QPushButton *>("deleteTranscript")->click();
+  list.findChild<QPushButton *>(remove)->click();
   EXPECT_NE(db->get_transcript(id), nullptr);
   ASSERT_TRUE(db->set_transcript_status(id, "draft"));
+  list.reload();
   list.setConfirmHook([](const QString &) { return false; });
-  list.findChild<QPushButton *>("deleteTranscript")->click();
+  list.findChild<QPushButton *>(remove)->click();
   EXPECT_NE(db->get_transcript(id), nullptr);
 }
 
@@ -111,6 +113,23 @@ TEST_F(TranscriptListTest, ReloadAnotherIdDoesNotLosePendingEdit) {
   EXPECT_EQ(review.findChild<QPlainTextEdit *>("phraseEditor")->toPlainText(), "Pending");
   review.findChild<QPushButton *>("savePhrase")->click();
   EXPECT_EQ(db->get_transcript_phrases(first).at(0).text, "Pending");
+}
+
+TEST_F(TranscriptListTest, CardsShowStatusPhraseCountDurationAndEmptyState) {
+  TranscriptListPage empty(db);
+  EXPECT_FALSE(empty.findChild<QLabel *>("transcriptsEmpty")->isHidden());
+  const auto id = db->add_transcript(std::nullopt, "live_local_v1");
+  DuckTranscriptPhrase phrase; phrase.transcript_id = id; phrase.track_role = "participant";
+  phrase.text = "One"; phrase.start_ms = 0; phrase.end_ms = 65000;
+  ASSERT_GT(db->add_transcript_phrase(phrase), 0);
+  phrase.text = "Two"; phrase.end_ms = 125000;
+  ASSERT_GT(db->add_transcript_phrase(phrase), 0);
+  ASSERT_TRUE(db->set_transcript_status(id, "reviewed"));
+  TranscriptListPage list(db);
+  EXPECT_TRUE(list.findChild<QLabel *>("transcriptsEmpty")->isHidden());
+  EXPECT_EQ(list.findChild<QLabel *>("transcriptStatus")->text(), "Reviewed");
+  EXPECT_EQ(list.findChild<QLabel *>("transcriptDuration")->text(), "02:05");
+  EXPECT_NE(list.findChild<QLabel *>("transcriptPhrases")->text().indexOf("2"), -1);
 }
 
 int main(int argc, char **argv) {

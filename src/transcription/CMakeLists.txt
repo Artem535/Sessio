@@ -17,6 +17,7 @@ add_library(${TARGET_NAME} STATIC
   speech_recognizer.h
   phrase_segmenter.h
   phrase_segmenter.cpp
+  transcription_tuning.h
   transcription_engine.h
   transcription_engine.cpp
 )

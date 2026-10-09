@@ -13,6 +13,24 @@ All notable changes to this project will be documented in this file.
   change after the screen is hidden no longer reopens it (the camera indicator
   stayed on and the camera kept recording).
 
+## [0.2.25] - 2026-10-09
+
+### Changed
+
+- The Transcripts page shows transcripts as cards in a centred column like the
+  transcript window: date, status, client, phrase count, duration and model as
+  chips, with Open and Delete buttons on each card and a hint when the list is
+  empty. Clicking a card opens it.
+
+## [0.2.24] - 2026-10-08
+
+### Added
+
+- Settings → Transcription now has a Speech recognition group: speech
+  sensitivity, the pause that ends a phrase, the shortest speech, the longest
+  phrase and the recogniser thread count, with a Restore defaults button.
+  Values are clamped to safe ranges and apply to the next transcription.
+
 ## [0.2.23] - 2026-10-08
 
 ### Changed

@@ -147,6 +147,31 @@ TEST(AppSettingsTest, TranscriptionDefaultsEnabledAndPersistsRoundTrip) {
   EXPECT_TRUE(pcm::app_settings::transcriptionEnabled());
 }
 
+TEST(AppSettingsTest, TranscriptionTuningDefaultsPersistAndAreClamped) {
+  using pcm::transcription::TranscriptionTuning;
+  for (const char *key : {"vadThreshold", "vadMinSilence", "vadMinSpeech", "vadMaxPhrase", "threads"})
+    QSettings().remove(QStringLiteral("transcription/") + key);
+  EXPECT_EQ(pcm::app_settings::transcriptionTuning(), TranscriptionTuning{});
+
+  TranscriptionTuning chosen;
+  chosen.threshold = 0.65F; chosen.minSilenceSec = 1.2F; chosen.minSpeechSec = 0.4F;
+  chosen.maxPhraseSec = 12.0F; chosen.numThreads = 2;
+  pcm::app_settings::setTranscriptionTuning(chosen);
+  QSettings().sync();
+  EXPECT_EQ(pcm::app_settings::transcriptionTuning(), chosen);
+
+  // A hand-edited or corrupt config can never reach the engine out of range.
+  QSettings().setValue("transcription/vadThreshold", 7.0);
+  QSettings().setValue("transcription/threads", 0);
+  QSettings().setValue("transcription/vadMaxPhrase", "garbage");
+  const auto clamped = pcm::app_settings::transcriptionTuning();
+  EXPECT_FLOAT_EQ(clamped.threshold, TranscriptionTuning::kMaxThreshold);
+  EXPECT_EQ(clamped.numThreads, TranscriptionTuning::kMinThreads);
+  EXPECT_FLOAT_EQ(clamped.maxPhraseSec, TranscriptionTuning::kMinPhrase);
+  for (const char *key : {"vadThreshold", "vadMinSilence", "vadMinSpeech", "vadMaxPhrase", "threads"})
+    QSettings().remove(QStringLiteral("transcription/") + key);
+}
+
 int main(int argc, char **argv) {
   QTemporaryDir settingsDir;
   QSettings::setDefaultFormat(QSettings::IniFormat);
