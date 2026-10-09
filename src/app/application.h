@@ -81,6 +81,8 @@ private:
   int runClientFlow(QApplication &app, const QString &launchUrl);
   void loadBearerCredential();
   void refreshUpcomingMeetings();
+  // Coalesces bursts of calendar changes into one Calls-tab refresh on the next loop turn.
+  void queueUpcomingMeetingsRefresh();
   void handleJoinLink(const QString &url);
   // Points mTokenClient (and mTokenBackendBaseUrl) at a new token backend.
   void applyTokenBackendBaseUrl(const QString &baseUrl);
@@ -134,6 +136,7 @@ private:
   std::unique_ptr<QSystemTrayIcon> mTrayIcon;
   QAction *mLockAppAction = nullptr;
   QTimer mNotificationTimer;
+  bool mUpcomingRefreshQueued = false;
   QTimer mAppLockTimer;
   std::unique_ptr<AppLockService> mAppLockService;
   std::unique_ptr<AppLockController> mAppLockController;

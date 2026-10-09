@@ -124,6 +124,16 @@ TEST(CallEntryWidgetTest, ShowErrorDisplaysMessageAndClearErrorHidesIt) {
   EXPECT_TRUE(errorLabel->text().isEmpty());
 }
 
+TEST(CallEntryWidgetTest, ShowingTheEntryScreenAsksForAFreshMeetingList) {
+  CallEntryWidget widget(true);
+  QSignalSpy spy(&widget, &CallEntryWidget::shown);
+  widget.show();
+  EXPECT_EQ(spy.count(), 1);
+  widget.hide();
+  widget.show();
+  EXPECT_EQ(spy.count(), 2);
+}
+
 TEST(AppSettingsTest, TranscriptionDefaultsEnabledAndPersistsRoundTrip) {
   QSettings().remove("transcription/enabled");
   EXPECT_TRUE(pcm::app_settings::transcriptionEnabled());

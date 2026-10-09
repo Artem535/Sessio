@@ -210,4 +210,5 @@ QString CallEntryWidget::displayName() const {
 void CallEntryWidget::showEvent(QShowEvent *event) {
   QWidget::showEvent(event);
   mDisplayNameEdit->setText(pcm::app_settings::callDisplayName());
+  emit shown();
 }

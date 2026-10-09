@@ -163,7 +163,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  app.setApplicationVersion("0.2.25");
+  app.setApplicationVersion("0.2.26");
   // Installed builds ship libical's timezone data next to the executable; the
   // path compiled into the schedule engine only exists in development trees.
   pcm::meeting::configureScheduleZoneinfo(QCoreApplication::applicationDirPath());
@@ -351,6 +351,21 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
       });
 #endif
   timelineModel->setScheduleCommitter(mScheduleCommitter.get());
+  // The Calls tab lists today's meetings; it must follow every calendar change at once rather
+  // than waiting for the periodic poll.
+  const auto refresh = [this] { queueUpcomingMeetingsRefresh(); };
+  connect(timelineModel, &QAbstractItemModel::rowsInserted, this, refresh);
+  connect(timelineModel, &QAbstractItemModel::rowsRemoved, this, refresh);
+  connect(timelineModel, &QAbstractItemModel::rowsMoved, this, refresh);
+  connect(timelineModel, &QAbstractItemModel::modelReset, this, refresh);
+  connect(timelineModel, &QAbstractItemModel::dataChanged, this, refresh);
+  connect(timelineModel, &QTimelineModel::eventsLoaded, this, &Application::queueUpcomingMeetingsRefresh);
+  if (mMeetingCoordinator) {
+    connect(mMeetingCoordinator.get(), &pcm::meeting::MeetingCoordinator::meetingCreated, this,
+            [this] { queueUpcomingMeetingsRefresh(); });
+    connect(mMeetingCoordinator.get(), &pcm::meeting::MeetingCoordinator::meetingCanceled, this,
+            [this] { queueUpcomingMeetingsRefresh(); });
+  }
   mMainWindow->addEventInfoPage(timelineModel, mMeetingCoordinator.get());
   if (auto *eventPage = dynamic_cast<QEventInfoPage *>(
           mMainWindow->getPage(MainWindow::Pages::eventInfo))) {
@@ -362,6 +377,9 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
   mMainWindow->addClientNotesPage(mDb);
   mMainWindow->addCallsPage(mDeviceManager.get(), mTokenClient.get(),
                             [this]() { return mBearerCredential; });
+  if (auto *calls = dynamic_cast<CallsPage *>(mMainWindow->getPage(MainWindow::Pages::calls)))
+    connect(calls, &CallsPage::upcomingMeetingsRefreshRequested, this,
+            &Application::queueUpcomingMeetingsRefresh);
   refreshUpcomingMeetings();
   mMainWindow->setDatabase(mDb);
   mMainWindow->connectSignals();
@@ -463,6 +481,15 @@ void Application::loadBearerCredential() {
 // set the reminder notifications use) and have not ended yet. Only pushes the
 // list to the page when it actually changed, so the periodic refresh does not
 // rebuild the rows (and drop keyboard focus) every tick.
+void Application::queueUpcomingMeetingsRefresh() {
+  if (mUpcomingRefreshQueued) return;
+  mUpcomingRefreshQueued = true;
+  QTimer::singleShot(0, this, [this] {
+    mUpcomingRefreshQueued = false;
+    refreshUpcomingMeetings();
+  });
+}
+
 void Application::refreshUpcomingMeetings() {
   if (!mMainWindow || !mDb) {
     return;
