@@ -8,7 +8,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Define the project
-project(Sessio VERSION 0.1.34 LANGUAGES CXX)
+project(Sessio VERSION 0.2.29 LANGUAGES CXX)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Svg PrintSupport LinguistTools Multimedia MultimediaWidgets OpenGLWidgets)
 include(GNUInstallDirs)
 include(FetchContent)
@@ -54,6 +54,7 @@ livekit_sdk_setup(
 )
 find_package(LiveKit CONFIG REQUIRED)
 option(PCM_BUILD_TESTS "Build project tests" OFF)
+include(cmake/Transcription.cmake)
 
 if(Qt6_VERSION VERSION_LESS 6.8.0)
   message(FATAL_ERROR "Qlementine requires Qt 6.8.0 or newer. Detected Qt ${Qt6_VERSION}.")
@@ -75,6 +76,21 @@ if(NOT pcm_ecm_POPULATED)
 endif()
 list(PREPEND CMAKE_MODULE_PATH "${pcm_ecm_SOURCE_DIR}/modules")
 
+# On Linux the RPM links against the distribution's own Qt and qtkeychain
+# instead of bundling them: a package that ships libQt6*.so.6 (and Provides
+# them) overwrites the system Qt on install. The AppImage build opts back in
+# with -DSESSIO_BUNDLE_QT=ON, because it needs Qt and friends in the install
+# tree for linuxdeploy.
+if(UNIX AND NOT APPLE)
+  option(SESSIO_BUNDLE_QT "Install Qt and bundled third-party libraries into the install tree" OFF)
+else()
+  set(SESSIO_BUNDLE_QT ON)
+endif()
+set(SESSIO_THIRD_PARTY_SUBDIR_ARGS "")
+if(NOT SESSIO_BUNDLE_QT)
+  set(SESSIO_THIRD_PARTY_SUBDIR_ARGS EXCLUDE_FROM_ALL)
+endif()
+
 set(BUILD_WITH_QT6 ON CACHE BOOL "" FORCE)
 set(BUILD_TEST_APPLICATION OFF CACHE BOOL "" FORCE)
 set(BUILD_TRANSLATIONS OFF CACHE BOOL "" FORCE)
@@ -84,6 +100,7 @@ FetchContent_Declare(
   URL https://github.com/frankosterfeld/qtkeychain/archive/refs/tags/0.14.3.tar.gz
   URL_HASH SHA512=d1d87553db94bf54da1373016a847476e6cd608db6d427ed72532658e2272501daf45d7c9976efdde2f26ab3810ba9dbfec2518d46dee5a76ecaa369bfee2e4a
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  ${SESSIO_THIRD_PARTY_SUBDIR_ARGS}
 )
 FetchContent_MakeAvailable(qtkeychain)
 
@@ -118,7 +135,7 @@ add_custom_target(apply_qlementine_patch
 
 set(QLEMENTINE_SANDBOX OFF CACHE BOOL "" FORCE)
 set(QLEMENTINE_SHOWCASE OFF CACHE BOOL "" FORCE)
-add_subdirectory(third_party/qlementine)
+add_subdirectory(third_party/qlementine ${SESSIO_THIRD_PARTY_SUBDIR_ARGS})
 
 qt_add_library(qcustomplot STATIC
     third_party/qcustomplot/qcustomplot.cpp
@@ -149,11 +166,20 @@ qt_add_translations(Sessio
 )
 
 # Include subdirectories for modules
+# Shared recurring-schedule calculation (also used by the token backend):
+# series with a pinned timezone are expanded by the same code on both sides.
+add_subdirectory(token-backend/schedule ${CMAKE_BINARY_DIR}/pcm_schedule)
+add_subdirectory(src/token_client)
 add_subdirectory(src/widgets)
 add_subdirectory(src/config)
 add_subdirectory(src/database)
 add_subdirectory(src/meeting)
 add_subdirectory(src/video)
+if(SESSIO_TRANSCRIPTION_ENABLED)
+  add_subdirectory(src/transcription)
+  add_subdirectory(src/call_transcription)
+  add_subdirectory(src/pages/transcript_page)
+endif()
 add_subdirectory(src/backup)
 add_subdirectory(src/client_model)
 add_subdirectory(src/pages/client_info_page)
@@ -161,15 +187,25 @@ add_subdirectory(src/pages/event_info_page)
 add_subdirectory(src/pages/detail_client_info_page)
 add_subdirectory(src/pages/client_notes_page)
 add_subdirectory(src/pages/analytics_page)
+add_subdirectory(src/pages/calls_page)
 add_subdirectory(src/timeline_widget)
 add_subdirectory(src/event_view)
 add_subdirectory(src/app)
 
 include_directories(src/app)
 
+option(SESSIO_BUILD_TRANSCRIPTION_TESTS
+    "Build only the transcription tests (used by CI; PCM_BUILD_TESTS includes them)" OFF)
+
 if(PCM_BUILD_TESTS)
   enable_testing()
   add_subdirectory(test)
+endif()
+
+# Self-contained and cheap to build: no QApplication, so CI can enable just these.
+if(SESSIO_TRANSCRIPTION_ENABLED AND (SESSIO_BUILD_TRANSCRIPTION_TESTS OR PCM_BUILD_TESTS))
+  enable_testing()
+  add_subdirectory(test/transcription)
 endif()
 
 set(PCM_APP_SOURCES
@@ -194,6 +230,18 @@ set_target_properties(Sessio PROPERTIES
     MACOSX_BUNDLE TRUE
 )
 
+if(APPLE)
+  # Registers the sessio:// URL scheme in the bundle's Info.plist
+  # (CFBundleURLTypes) so macOS can launch/forward links to Sessio. CMake's
+  # MACOSX_BUNDLE_INFO_PLIST has no first-class property for CFBundleURLTypes,
+  # so this template is a copy of CMake's own default
+  # (Modules/MacOSXBundleInfo.plist.in) with that array added — every other
+  # key/substitution behaves exactly as before this template was introduced.
+  set_target_properties(Sessio PROPERTIES
+      MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in"
+  )
+endif()
+
 add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_app)
 
 # Link with libs
@@ -204,11 +252,80 @@ install(TARGETS Sessio
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-install(FILES
-    ${CMAKE_SOURCE_DIR}/LICENSE
-    ${CMAKE_SOURCE_DIR}/README.md
-    DESTINATION .
-)
+if(UNIX AND NOT APPLE)
+  # Not "." — that would drop /usr/LICENSE and /usr/README.md into the prefix.
+  install(FILES
+      ${CMAKE_SOURCE_DIR}/LICENSE
+      ${CMAKE_SOURCE_DIR}/README.md
+      DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/Sessio
+  )
+else()
+  install(FILES
+      ${CMAKE_SOURCE_DIR}/LICENSE
+      ${CMAKE_SOURCE_DIR}/README.md
+      DESTINATION .
+  )
+endif()
+
+# libical's timezone data for the recurring-schedule engine. Resolved at run
+# time relative to the executable (src/meeting/schedule_zoneinfo.h): RPM and
+# AppImage get <prefix>/share/sessio/zoneinfo, the macOS bundle gets
+# Contents/Resources/zoneinfo. The Windows installer copies the same directory
+# next to Sessio.exe (see the workflow's Windows deploy step).
+if(NOT EXISTS "${PCM_SCHEDULE_ZONEINFO_SOURCE_DIR}/America/New_York.ics")
+  message(FATAL_ERROR "libical timezone data missing: ${PCM_SCHEDULE_ZONEINFO_SOURCE_DIR}")
+endif()
+if(APPLE)
+  install(DIRECTORY ${PCM_SCHEDULE_ZONEINFO_SOURCE_DIR}/
+      DESTINATION Sessio.app/Contents/Resources/zoneinfo)
+else()
+  install(DIRECTORY ${PCM_SCHEDULE_ZONEINFO_SOURCE_DIR}/
+      DESTINATION ${CMAKE_INSTALL_DATADIR}/sessio/zoneinfo)
+endif()
+
+if(SESSIO_TRANSCRIPTION_ENABLED)
+  if(APPLE)
+    set(_sessio_models_dest Sessio.app/Contents/Resources/models)
+    set(_sessio_ml_libs_dest Sessio.app/Contents/Frameworks)
+  elseif(WIN32)
+    set(_sessio_models_dest ${CMAKE_INSTALL_BINDIR}/models)
+    set(_sessio_ml_libs_dest ${CMAKE_INSTALL_BINDIR})
+  else()
+    set(_sessio_models_dest ${CMAKE_INSTALL_DATADIR}/sessio/models)
+    set(_sessio_ml_libs_dest ${CMAKE_INSTALL_LIBDIR}/sessio)
+  endif()
+  install(DIRECTORY ${SESSIO_MODELS_DIR}/
+      DESTINATION ${_sessio_models_dest}
+      PATTERN ".stamp" EXCLUDE
+      PATTERN "test_wavs" EXCLUDE)
+  install(FILES
+      $<TARGET_FILE:sherpa-onnx-c-api>
+      $<TARGET_FILE:sherpa-onnx-cxx-api>
+      DESTINATION ${_sessio_ml_libs_dest})
+  install(FILES ${SESSIO_ONNXRUNTIME_LIBS} DESTINATION ${_sessio_ml_libs_dest})
+  if(UNIX AND NOT APPLE)
+    # The sherpa libs are linked in the build tree with an absolute RUNPATH into
+    # the build dir; give the installed copies a clean $ORIGIN (they sit next to
+    # libonnxruntime). macOS: not handled here, the libs go to Contents/Frameworks.
+    find_program(SESSIO_PATCHELF patchelf)
+    if(NOT SESSIO_PATCHELF)
+      message(WARNING "patchelf not found: installed sherpa-onnx libraries will keep the build RUNPATH")
+    else()
+      install(CODE "
+        file(GLOB _sherpa_libs \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_sessio_ml_libs_dest}/libsherpa-onnx-*.so*\")
+        foreach(_lib IN LISTS _sherpa_libs)
+          if(NOT IS_SYMLINK \"\${_lib}\")
+            execute_process(COMMAND \"${SESSIO_PATCHELF}\" --set-rpath \"\$ORIGIN\" \"\${_lib}\"
+                            RESULT_VARIABLE _rc)
+            if(NOT _rc EQUAL 0)
+              message(FATAL_ERROR \"patchelf --set-rpath failed on \${_lib}\")
+            endif()
+          endif()
+        endforeach()
+      ")
+    endif()
+  endif()
+endif()
 
 if(UNIX AND NOT APPLE)
   install(FILES
@@ -222,12 +339,39 @@ if(UNIX AND NOT APPLE)
   )
 endif()
 
-qt_generate_deploy_app_script(
-    TARGET Sessio
-    OUTPUT_SCRIPT deploy_runtime_dependencies_script
-    NO_UNSUPPORTED_PLATFORM_ERROR
-)
-install(SCRIPT ${deploy_runtime_dependencies_script})
+if(SESSIO_BUNDLE_QT)
+  qt_generate_deploy_app_script(
+      TARGET Sessio
+      OUTPUT_SCRIPT deploy_runtime_dependencies_script
+      NO_UNSUPPORTED_PLATFORM_ERROR
+  )
+  install(SCRIPT ${deploy_runtime_dependencies_script})
+endif()
+
+if(UNIX AND NOT APPLE)
+  # The prebuilt Linux LiveKit SDK archive bundles its own libcurl.so.4,
+  # which itself needs ~20 further libraries (OpenSSL, GnuTLS, Kerberos,
+  # LDAP, etc). qt_generate_deploy_app_script() above only walks Sessio's
+  # OWN direct runtime deps (Qt/qlementine/qt6keychain plus liblivekit.so/
+  # liblivekit_ffi.so themselves as direct link deps) — it does not recurse
+  # into what liblivekit.so itself needs. Vendor that whole chain into a
+  # private, RPATH-scoped subdirectory so plain `cpack --generator RPM`
+  # packaging does not silently fall back to the host distro's own
+  # curl/openssl/gnutls/krb5/openldap, which this SDK was never built or
+  # tested against, and does not drop a second libcurl.so.4 at a path
+  # Fedora's own curl package already owns. Linux-only: this problem is
+  # specific to the prebuilt Linux SDK archive's bundled curl; the
+  # AppImage step already handles this correctly via its own linuxdeploy
+  # scan and is untouched by this.
+  set(SESSIO_PRIVATE_LIBDIR_NAME "sessio")
+  install(CODE "
+    set(LIVEKIT_SDK_LIB_DIR \"${LIVEKIT_SDK_LIB_DIR}\")
+    set(SESSIO_INSTALL_LIBDIR \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}\")
+    set(SESSIO_INSTALL_BINDIR \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}\")
+    set(SESSIO_PRIVATE_LIBDIR_NAME \"${SESSIO_PRIVATE_LIBDIR_NAME}\")
+    include(\"${CMAKE_SOURCE_DIR}/cmake/BundleLiveKitLinuxDeps.cmake\")
+  ")
+endif()
 
 set(CPACK_PACKAGE_NAME "Sessio")
 set(CPACK_PACKAGE_VENDOR "Sessio")
@@ -248,6 +392,29 @@ elseif(UNIX AND NOT APPLE)
   set(CPACK_RPM_PACKAGE_URL "https://github.com/Artem535/Sessio")
   set(CPACK_RPM_PACKAGE_DESCRIPTION
       "Local-first desktop workspace for calendar scheduling, client management, and session tracking.")
+  # Qt and qtkeychain come from the distribution; nothing Qt-related is
+  # bundled (see SESSIO_BUNDLE_QT). Exact sonames/versions are added by rpm's
+  # automatic dependency generator on top of these.
+  set(CPACK_RPM_PACKAGE_REQUIRES
+      "qt6-qtbase >= 6.8, qt6-qtbase-gui, qt6-qtsvg, qt6-qtwayland, qt6-qtmultimedia, qtkeychain-qt6")
+  # The private /usr/lib/sessio directory (LiveKit and its curl/OpenSSL/...
+  # chain) must neither advertise Provides for those sonames — that would
+  # shadow the system packages — nor generate Requires for them.
+  set(CPACK_RPM_SPEC_MORE_DEFINE
+"%global __provides_exclude_from ^/usr/lib(64)?/sessio/.*$
+%global __requires_exclude_from ^/usr/lib(64)?/sessio/.*$
+%global __requires_exclude ^(liblivekit(_ffi)?\\.so|libsherpa-onnx-.*\\.so|libonnxruntime\\.so.*)")
+  # Registers Sessio.desktop (via its MimeType=x-scheme-handler/sessio entry)
+  # as the sessio:// URL handler and refreshes the desktop database on
+  # install; see packaging/linux/register-sessio-scheme.sh. Uninstall uses a
+  # separate script that only refreshes the desktop database — it must NOT
+  # re-run the same xdg-mime registration, which would point the system
+  # default handler at a .desktop file that was just removed; see
+  # packaging/linux/unregister-sessio-scheme.sh.
+  set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE
+      "${CMAKE_SOURCE_DIR}/packaging/linux/register-sessio-scheme.sh")
+  set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
+      "${CMAKE_SOURCE_DIR}/packaging/linux/unregister-sessio-scheme.sh")
 endif()
 
 include(CPack)

@@ -19,6 +19,12 @@ qt_add_library(${TARGET_NAME} STATIC
         tab_button.cpp
         rounded_calendar_widget.cpp
         quick_slots_widget.cpp
+        busy_spinner.cpp
+        busy_spinner.h
+        call_control_icons.cpp
+        call_control_icons.h
+        combo_fit.cpp
+        combo_fit.h
 )
 
 #add_dependencies(${TARGET_NAME}
@@ -31,3 +37,5 @@ target_link_libraries(${TARGET_NAME} PUBLIC
 )
 
 target_include_directories(${TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+# transcription_tuning.h is a Qt-free, header-only value type shared with the speech engine.
+target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/src/transcription)

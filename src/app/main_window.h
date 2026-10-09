@@ -1,6 +1,7 @@
 #pragma once
 
 #include "analytics_page.h"
+#include "calls_page.h"
 #include "client_info.h"
 #include "client_notes_page.h"
 #include "event_info.h"
@@ -9,6 +10,7 @@
 #include "meeting_coordinator.h"
 #include "settings_dialog.h"
 #include "tab_button.h"
+#include "token_backend_client.h"
 
 #include <QAction>
 #include <QLineEdit>
@@ -17,6 +19,7 @@
 #include <QLabel>
 #include <QHBoxLayout>
 
+#include <functional>
 #include <memory>
 #include <optional>
 
@@ -44,7 +47,7 @@ public:
   /**
    * @brief Enum to identify the available pages in the application.
    */
-  enum class Pages { clientInfo, eventInfo, analytics, clientCard, clientNotes };
+  enum class Pages { clientInfo, eventInfo, analytics, clientCard, clientNotes, calls, transcript, transcriptList };
 
   /**
    * @brief Constructor for the MainWindow class.
@@ -74,7 +77,27 @@ public:
    */
   void addClientCardPage(std::shared_ptr<pcm::database::Database> db);
   void addClientNotesPage(std::shared_ptr<pcm::database::Database> db);
+
+  /**
+   * @brief Adds the calls (video meetings) page to the application.
+   * @param deviceManager Camera/microphone/speaker enumeration, owned by the caller.
+   * @param tokenClient Token-backend HTTP client, owned by the caller.
+   * @param bearerCredentialProvider Supplies the specialist bearer credential on demand.
+   */
+  void addCallsPage(pcm::video::DeviceManager *deviceManager,
+                    pcm::tokenclient::TokenBackendClient *tokenClient,
+                    std::function<QString()> bearerCredentialProvider);
   void setDatabase(std::shared_ptr<pcm::database::Database> db);
+  void registerTranscriptPage(QWidget *page);
+  void registerTranscriptListPage(QWidget *page);
+  void openTranscriptListPage();
+  void openTranscriptPage();
+  void returnToEvent(int64_t eventId, qint64 dayMs);
+  void setTranscriptionActiveProvider(std::function<bool()> provider) {
+    mTranscriptionActive = std::move(provider);
+  }
+  // Not owned; handed to the Settings dialog for "Switch to client mode".
+  void setRoleSwitcher(const pcm::AppRoleSwitcher *switcher) { mRoleSwitcher = switcher; }
 
   /**
    * @brief Sets up all signal/slot connections between UI elements and logic.
@@ -95,6 +118,20 @@ public:
    */
   void setPageCustomWidget(Pages page, QWidget *widget);
 
+  /**
+   * @brief Switches to the Calls tab and preselects the given LiveKit
+   * meeting, in response to "Open Meeting" being clicked on a LiveKit-
+   * provider event.
+   * @param meetingRef The meeting reference to preselect on the Calls page.
+   */
+  void preselectLiveKitMeeting(const QString &meetingRef);
+
+  /**
+   * @brief Switches to the Calls tab and prefills an invitation's code and
+   * passcode, in response to a sessio:// or browser join link.
+   */
+  void openJoinLink(const QString &code, const QString &passcode);
+
 signals:
   /**
    * @brief Emitted when a client should be saved.
@@ -110,7 +147,19 @@ signals:
    */
   void provideClientEventPairSave(const int64_t clientId, const int64_t eventId);
 
+  /**
+   * @brief Emitted after the Settings dialog closes. Its sections save
+   * independently (e.g. the LiveKit section's own Save button), so this fires
+   * unconditionally and listeners re-read whatever they depend on.
+   */
+  void settingsSaved();
+
 private:
+  std::function<bool()> mTranscriptionActive;
+  // Hides (or restores) everything around the page content: navigation, utility buttons,
+  // title and page header, so a fullscreen call shows only the call screen.
+  void setCallFullscreen(bool fullscreen);
+
   // Map of pages by type
   QHash<Pages, QWidget*> mPages;
   QHash<Pages, int> mPagesIndex;
@@ -127,6 +176,8 @@ private:
   TabButton *mBtnAnalytics{nullptr};
   TabButton *mBtnProfile{nullptr};
   TabButton *mBtnNotes{nullptr};
+  TabButton *mBtnCalls{nullptr};
+  TabButton *mBtnTranscripts{nullptr};
   QWidget *mClientPageActions{nullptr};
   oclero::qlementine::LineEdit *mClientSearchInput{nullptr};
   oclero::qlementine::Switch *mShowInactiveClientsSwitch{nullptr};
@@ -135,6 +186,11 @@ private:
   QPushButton *mBtnSettings{nullptr};
   QPushButton *mBtnAbout{nullptr};
   QHBoxLayout *mPageCustomWidgetLayout{nullptr};
+  QWidget *mTitleWidget{nullptr};
+  // Chrome hidden while a call is fullscreen, with the visibility to restore on exit.
+  QHash<QWidget *, bool> mChromeVisibility;
+  QMargins mGridMargins;
+  bool mCallFullscreen{false};
   QHash<Pages, QWidget*> mPageCustomWidgets;
   Pages mCurrentPage{Pages::eventInfo};
 
@@ -165,6 +221,7 @@ private:
   void setupUtilityButtons();
   void openSettingsDialog();
   void openAboutDialog();
+  const pcm::AppRoleSwitcher *mRoleSwitcher = nullptr;
   [[nodiscard]] QString pageTitle(Pages page) const;
   void refreshPageAppearance();
 };

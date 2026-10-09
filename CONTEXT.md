@@ -21,15 +21,15 @@ A logical online meeting belonging to exactly one `Event`, identified by an opaq
 _Avoid_: Call, session, room (room specifically means the LiveKit-level `room_name`, a different value, only meaningful for the `LiveKit` provider).
 
 **Provider Kind**:
-Which implementation of `MeetingProvider` an `Event`'s `Meeting` uses: `ExternalUrl` (existing behavior — the practitioner types/pastes an arbitrary http(s) link) or `LiveKit` (mints a real LiveKit room via the token backend). Persisted on `Event`/`EventSeries` alongside `meeting_ref`. `LiveKit` is not yet selectable in the UI — that lands with the native call UI.
+Which implementation of `MeetingProvider` an `Event`'s `Meeting` uses: `ExternalUrl` (existing behavior — the practitioner types/pastes an arbitrary http(s) link) or `LiveKit` (mints a real LiveKit room via the token backend). Persisted on `Event`/`EventSeries` alongside `meeting_ref`. Both kinds are selectable in `QEventDetailsWidget`.
 _Avoid_: Provider type, meeting type.
 
 **MeetingProvider**:
-The desktop app's polymorphic interface for creating and cancelling a `Meeting`, one implementation per `Provider Kind`. Asynchronous (signal-based, like `CredentialStore`) so `LiveKitMeetingProvider` can call the token backend without blocking the UI thread; `ExternalUrlMeetingProvider` does no I/O and emits its result synchronously within the call. The `LiveKit` implementation starts as a non-functional stub — it satisfies the interface but is never invoked, since the UI does not yet expose `LiveKit` as a selectable `Provider Kind`.
+The desktop app's polymorphic interface for creating and cancelling a `Meeting`, one implementation per `Provider Kind`. Asynchronous (signal-based, like `CredentialStore`) so `LiveKitMeetingProvider` can call the token backend without blocking the UI thread; `ExternalUrlMeetingProvider` does no I/O and emits its result synchronously within the call. `LiveKitMeetingProvider` makes a real async HTTP call to the token backend (`POST /v1/meetings` to create, `POST /v1/meetings/{ref}/invalidate` to cancel) via `TokenBackendClient`.
 _Avoid_: `VideoProvider` (a distinct concept for in-call runtime state, not for creating/cancelling the logical `Meeting` — see `VideoProvider`).
 
 **MeetingDescriptor**:
-The result of `MeetingProvider::create`: `Provider Kind`, `meeting_ref`, an optional `meeting_url` fallback, and an optional invitation state. Only the `LiveKit` provider populates invitation state, and only once it becomes functional; until then both providers leave it unset.
+The result of `MeetingProvider::create`: `Provider Kind`, `meeting_ref`, an optional `meeting_url` fallback, and an optional invitation state. Only the `LiveKit` provider populates invitation state (as `invitation_url|passcode`); `ExternalUrlMeetingProvider` always leaves it unset.
 
 **MeetingCoordinator**:
 The desktop app's non-Qt-UI class that selects the right `MeetingProvider` by `Provider Kind` and drives `create`/`cancel` on behalf of the event-editing UI, keeping provider selection and error handling unit-testable independent of `QEventDetailsWidget`.
@@ -39,7 +39,7 @@ The desktop app's abstraction over the actual in-call media session — device c
 _Avoid_: `MeetingProvider` (creates/cancels the logical `Meeting` record; does not touch media or devices).
 
 **VideoSession**:
-Owns the call lifecycle for one `Meeting`, encapsulating a `QStateMachine` over `VideoSessionState` and driving a `VideoProvider`. Exposes `join()`/`leave()` and a `stateChanged` signal; knows nothing about `Event`, `QTimelineModel`, or persistence — recording a technical outcome (`call_joined`/`call_failed`) on the `Event` is the caller's responsibility, not `VideoSession`'s. The JWT it needs to join is passed in by the caller (via `MeetingProvider`/token-backend integration), not fetched by `VideoSession` itself.
+Owns the call lifecycle for one `Meeting`, encapsulating a `QStateMachine` over `VideoSessionState` and driving a `VideoProvider`. Exposes `join()`/`leave()` and a `stateChanged` signal; knows nothing about `Event`, `QTimelineModel`, or persistence — recording a technical outcome (`call_joined`/`call_failed`) on the `Event` would be the caller's responsibility, not `VideoSession`'s, if any caller did it; none does yet. The JWT it needs to join is passed in by the caller (via `MeetingProvider`/token-backend integration), not fetched by `VideoSession` itself.
 _Avoid_: Call, video call (ambiguous with `Meeting`, which is the persisted record rather than the live runtime object).
 
 **VideoSessionState**:
@@ -50,8 +50,12 @@ A thin wrapper over Qt Multimedia (`QMediaDevices`) that enumerates and selects 
 _Avoid_: Device selector (`DeviceManager` is the project's chosen term, matching `MeetingProvider`/`MeetingCoordinator`'s naming style).
 
 **Participant Page**:
-The client-facing surface for joining a `Meeting`: device check followed by room join via a one-time `Invitation`. Deliberately not part of the Sessio desktop app or its codebase — a distinct, not-yet-built deliverable whose channel (a minimal web page, a Telegram bot, or otherwise) is intentionally undecided (see `docs/asciidoc/11-token-backend-account-model-adr.adoc`), since any channel need only implement the same invitation-redemption contract.
-_Avoid_: Client app, web client (implies more than the minimal, no-PII-access surface this actually is).
+A client-facing surface for joining a `Meeting` outside the Sessio desktop app: device check followed by room join via a one-time `Invitation`. A distinct, not-yet-built deliverable whose channel (a minimal web page, a Telegram bot, or otherwise) is intentionally undecided (see `docs/asciidoc/11-token-backend-account-model-adr.adoc`), since any channel need only implement the same invitation-redemption contract. `ClientModeWindow` (#80) is a second, non-exclusive channel implementing that same contract from inside the Sessio desktop app itself — building it does not retire the Participant Page as a future option for clients unwilling to install Sessio.
+_Avoid_: Client app, web client (implies more than the minimal, no-PII-access surface this actually is); the only Sessio-desktop-app surface is `ClientModeWindow`, not this term.
+
+**ClientModeWindow**:
+The Sessio desktop app's top-level window for a pure client (no therapist account): hosts only the shared call-entry widget (join by `Invitation` code + `Room Passcode`) and the call screens, with no `Database`, `QClientModel`, or notes dependency anywhere in its construction — a structural, not merely visual, privacy boundary. Chosen over `MainWindow` by a one-time role selection at first launch, persisted in `Config`. See `docs/superpowers/specs/2026-09-27-native-call-ui-and-client-mode-design.md`.
+_Avoid_: Client app (see Participant Page — this is one specific window class, not a separate distributable).
 
 **Invitation**:
 The client's one-time-issued, repeatedly-redeemable link into a `Meeting`. "One-time" means one invitation is created per meeting, not that redeeming it twice fails — it stays valid for repeated token exchange until the meeting's scheduled window closes or it is invalidated, so a client can reconnect after a dropped connection or a closed tab. See `docs/asciidoc/12-invitation-security-model-adr.adoc`.

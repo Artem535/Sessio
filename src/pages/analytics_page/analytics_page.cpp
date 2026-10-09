@@ -1,6 +1,7 @@
 #include "analytics_page.h"
 
 #include "qcustomplot.h"
+#include "../../widgets/accent_color.h"
 #include "../../widgets/app_settings.h"
 #include "../../widgets/constants.hpp"
 #include "../../widgets/surface_paint_filter.h"
@@ -26,10 +27,9 @@ const QColor kAxisColor(255, 255, 255, 110);
 const QColor kTextColor(255, 255, 255, 215);
 const QColor kMutedTextColor(255, 255, 255, 140);
 const QColor kGridColor(255, 255, 255, 26);
-const QColor kSessionsColor(0x9f, 0xc0, 0xff);
 const QColor kIncomeColor(0x43, 0xc2, 0x7a);
-const QColor kWorkColor(0x9f, 0xc0, 0xff);
-const QColor kPersonalColor(0xd4, 0xa6, 0xe0);
+// Distinct from the (purple) accent used for work bars.
+const QColor kPersonalColor(0xf0, 0xb2, 0x7a);
 
 QFrame *makeSurface(QWidget *parent = nullptr) {
   auto *frame = new QFrame(parent);
@@ -345,7 +345,7 @@ void AnalyticsPage::updateIncomePlot(
   bars->setName(tr("Sessions"));
   bars->setWidth(0.55);
   bars->setPen(Qt::NoPen);
-  bars->setBrush(kSessionsColor);
+  bars->setBrush(pcm::widgets::accentColor());
   bars->setData(ticks, sessions);
 
   auto *line = mIncomePlot->addGraph(mIncomePlot->xAxis, mIncomePlot->yAxis2);
@@ -430,7 +430,7 @@ void AnalyticsPage::updateMixPlot(
   auto *group = new QCPBarsGroup(mMixPlot);
 
   workBars->setName(tr("Work events"));
-  workBars->setBrush(kWorkColor);
+  workBars->setBrush(pcm::widgets::accentColor());
   workBars->setPen(Qt::NoPen);
   workBars->setWidth(0.24);
   workBars->setBarsGroup(group);

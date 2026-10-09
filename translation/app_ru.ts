@@ -77,6 +77,25 @@
     </message>
 </context>
 <context>
+    <name>AppRoleSwitcher</name>
+    <message>
+        <source>Invalid application mode.</source>
+        <translation>Недопустимый режим приложения.</translation>
+    </message>
+    <message>
+        <source>The settings file could not be read, so the mode was not changed.</source>
+        <translation>Не удалось прочитать файл настроек, поэтому режим не изменён.</translation>
+    </message>
+    <message>
+        <source>The settings file could not be written, so the mode was not changed.</source>
+        <translation>Не удалось записать файл настроек, поэтому режим не изменён.</translation>
+    </message>
+    <message>
+        <source>The mode was changed but the application could not restart. Start it again manually.</source>
+        <translation>Режим изменён, но приложение не удалось перезапустить. Запустите его снова вручную.</translation>
+    </message>
+</context>
+<context>
     <name>AppointmentSummaryWidget</name>
     <message>
         <source>Last appointment: none</source>
@@ -93,6 +112,151 @@
     <message>
         <source>Next appointment: %1</source>
         <translation>Следующая встреча: %1</translation>
+    </message>
+</context>
+<context>
+    <name>CallEntryWidget</name>
+    <message>
+        <source>Name in calls</source>
+        <translation>Имя в звонках</translation>
+    </message>
+    <message>
+        <source>Your name</source>
+        <translation>Ваше имя</translation>
+    </message>
+    <message>
+        <source>Shown to other participants</source>
+        <translation>Видно другим участникам</translation>
+    </message>
+    <message>
+        <source>Join a meeting</source>
+        <translation>Подключиться к встрече</translation>
+    </message>
+    <message>
+        <source>Invitation code or link</source>
+        <translation>Код приглашения или ссылка</translation>
+    </message>
+    <message>
+        <source>Passcode</source>
+        <translation>Код доступа</translation>
+    </message>
+    <message>
+        <source>Passcode (6 digits)</source>
+        <translation>Код доступа (6 цифр)</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Подключиться</translation>
+    </message>
+    <message>
+        <source>Your calls today</source>
+        <translation>Ваши звонки на сегодня</translation>
+    </message>
+    <message>
+        <source>No calls today</source>
+        <translation>Сегодня звонков нет</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Войти</translation>
+    </message>
+</context>
+<context>
+    <name>CallPage</name>
+    <message>
+        <source>Connecting...</source>
+        <translation>Подключение...</translation>
+    </message>
+    <message>
+        <source>Reconnecting...</source>
+        <translation>Переподключение...</translation>
+    </message>
+    <message>
+        <source>Call ended.</source>
+        <translation>Звонок завершён.</translation>
+    </message>
+    <message>
+        <source>Waiting for others to join</source>
+        <translation>Ожидание других участников</translation>
+    </message>
+    <message>
+        <source>Mute microphone</source>
+        <translation>Выключить микрофон</translation>
+    </message>
+    <message>
+        <source>Unmute microphone</source>
+        <translation>Включить микрофон</translation>
+    </message>
+    <message>
+        <source>Turn off camera</source>
+        <translation>Выключить камеру</translation>
+    </message>
+    <message>
+        <source>Turn on camera</source>
+        <translation>Включить камеру</translation>
+    </message>
+    <message>
+        <source>Enter fullscreen</source>
+        <translation>Развернуть на весь экран</translation>
+    </message>
+    <message>
+        <source>Exit fullscreen</source>
+        <translation>Выйти из полноэкранного режима</translation>
+    </message>
+    <message>
+        <source>Share screen</source>
+        <translation>Показать экран</translation>
+    </message>
+    <message>
+        <source>You are sharing your screen</source>
+        <translation>Вы показываете экран</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Остановить</translation>
+    </message>
+    <message>
+        <source>Switch camera, microphone, or speaker</source>
+        <translation>Переключить камеру, микрофон или динамик</translation>
+    </message>
+    <message>
+        <source>Leave</source>
+        <translation>Завершить</translation>
+    </message>
+    <message>
+        <source>Stop sharing screen</source>
+        <translation>Остановить показ экрана</translation>
+    </message>
+    <message>
+        <source>Screens</source>
+        <translation>Экраны</translation>
+    </message>
+    <message>
+        <source>%1 (%2×%3)</source>
+        <translation>%1 (%2×%3)</translation>
+    </message>
+    <message>
+        <source>Windows</source>
+        <translation>Окна</translation>
+    </message>
+    <message>
+        <source>Notes</source>
+        <translation>Заметки</translation>
+    </message>
+    <message>
+        <source>Transcribe</source>
+        <translation>Транскрибировать</translation>
+    </message>
+</context>
+<context>
+    <name>CallSidePanel</name>
+    <message>
+        <source>Notes</source>
+        <translation>Заметки</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Транскрипция</translation>
     </message>
 </context>
 <context>
@@ -139,6 +303,10 @@
     <message>
         <source>Delete %1? This action cannot be undone.</source>
         <translation>Удалить %1? Это действие нельзя отменить.</translation>
+    </message>
+    <message>
+        <source>The transcript will be kept.</source>
+        <translation>Транскрипт сохранится.</translation>
     </message>
 </context>
 <context>
@@ -266,6 +434,58 @@
     <message>
         <source>: CHARTS_PLACEHOLDER</source>
         <translation>В следующем обновлении будут графики</translation>
+    </message>
+</context>
+<context>
+    <name>ClientModeSettingsDialog</name>
+    <message>
+        <source>Settings</source>
+        <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>Name in calls</source>
+        <translation>Имя в звонках</translation>
+    </message>
+    <message>
+        <source>Token backend URL</source>
+        <translation>URL токен-бэкенда</translation>
+    </message>
+    <message>
+        <source>Address of the service that issued your invitation. Your specialist can tell you this if joining by code fails.</source>
+        <translation>Адрес сервиса, который выдал ваше приглашение. Ваш специалист может сообщить его, если не удаётся присоединиться по коду.</translation>
+    </message>
+    <message>
+        <source>https://token-backend.example.com</source>
+        <translation>https://token-backend.example.com</translation>
+    </message>
+    <message>
+        <source>Enter a valid http or https address.</source>
+        <translation>Введите корректный адрес http или https.</translation>
+    </message>
+    <message>
+        <source>Token backend</source>
+        <translation>Токен-бэкенд</translation>
+    </message>
+    <message>
+        <source>The token backend URL applies until Sessio is closed, but could not be saved:
+%1</source>
+        <translation>URL токен-бэкенда будет использоваться до закрытия Sessio, но не удалось сохранить его:
+%1</translation>
+    </message>
+</context>
+<context>
+    <name>ClientModeWindow</name>
+    <message>
+        <source>Sessio</source>
+        <translation>Sessio</translation>
+    </message>
+    <message>
+        <source>Settings</source>
+        <translation>Настройки</translation>
+    </message>
+    <message>
+        <source>Switch to specialist mode…</source>
+        <translation>Перейти в режим специалиста…</translation>
     </message>
 </context>
 <context>
@@ -479,6 +699,45 @@
     </message>
 </context>
 <context>
+    <name>DeviceCheckWidget</name>
+    <message>
+        <source>Check your devices</source>
+        <translation>Проверьте устройства</translation>
+    </message>
+    <message>
+        <source>Only you see this preview until you join</source>
+        <translation>Пока вы не подключились, это превью видите только вы</translation>
+    </message>
+    <message>
+        <source>Camera</source>
+        <translation>Камера</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Микрофон</translation>
+    </message>
+    <message>
+        <source>Speaker</source>
+        <translation>Динамик</translation>
+    </message>
+    <message>
+        <source>Test</source>
+        <translation>Проверить</translation>
+    </message>
+    <message>
+        <source>Play a short tone through the selected speaker</source>
+        <translation>Воспроизвести короткий сигнал через выбранный динамик</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation>Назад</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Присоединиться</translation>
+    </message>
+</context>
+<context>
     <name>EventDetails</name>
     <message>
         <source>: EVENT_DETAILS_TITLE</source>
@@ -546,13 +805,6 @@
     </message>
 </context>
 <context>
-    <name>EventInfo</name>
-    <message>
-        <source>: EVENT_INFO_FORM_TITLE</source>
-        <translation>Календарь событий</translation>
-    </message>
-</context>
-<context>
     <name>MainWindow</name>
     <message>
         <source>: APP_TITLE</source>
@@ -591,6 +843,14 @@
         <translation>Заметки</translation>
     </message>
     <message>
+        <source>Calls</source>
+        <translation>Звонки</translation>
+    </message>
+    <message>
+        <source>Transcripts</source>
+        <translation>Транскрипты</translation>
+    </message>
+    <message>
         <source>Back to clients</source>
         <translation>Назад к клиентам</translation>
     </message>
@@ -627,8 +887,30 @@
         <translation>Детали</translation>
     </message>
     <message>
+        <source>Transcript</source>
+        <translation>Транскрипция</translation>
+    </message>
+    <message>
         <source>Page</source>
         <translation>Страница</translation>
+    </message>
+</context>
+<context>
+    <name>MonthCalendarWidget</name>
+    <message>
+        <source>+%1 more</source>
+        <translation>Ещё %1</translation>
+    </message>
+</context>
+<context>
+    <name>MonthPickerWidget</name>
+    <message>
+        <source>Previous year</source>
+        <translation>Предыдущий год</translation>
+    </message>
+    <message>
+        <source>Next year</source>
+        <translation>Следующий год</translation>
     </message>
 </context>
 <context>
@@ -770,6 +1052,14 @@
         <translation>Онлайн-сессия</translation>
     </message>
     <message>
+        <source>External link</source>
+        <translation>Внешняя ссылка</translation>
+    </message>
+    <message>
+        <source>LiveKit</source>
+        <translation>LiveKit</translation>
+    </message>
+    <message>
         <source>Scheduled</source>
         <translation>Запланирована</translation>
     </message>
@@ -806,12 +1096,128 @@
         <translation>Формат сессии</translation>
     </message>
     <message>
+        <source>Provider</source>
+        <translation>Провайдер</translation>
+    </message>
+    <message>
+        <source>Copy passcode</source>
+        <translation>Копировать код доступа</translation>
+    </message>
+    <message>
+        <source>Use one link for all meetings of this series.</source>
+        <translation>Используйте одну ссылку для всех встреч этой серии.</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Повторить</translation>
+    </message>
+    <message>
+        <source>Create new link</source>
+        <translation>Создать новую ссылку</translation>
+    </message>
+    <message>
+        <source>Publish this device&apos;s schedule</source>
+        <translation>Опубликовать расписание с этого устройства</translation>
+    </message>
+    <message>
+        <source>Move to a permanent link...</source>
+        <translation>Перейти на постоянную ссылку...</translation>
+    </message>
+    <message>
+        <source>Meeting</source>
+        <translation>Встреча</translation>
+    </message>
+    <message>
+        <source>Back to day</source>
+        <translation>К дню</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Транскрипция</translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>Дата</translation>
+    </message>
+    <message>
+        <source>Time</source>
+        <translation>Время</translation>
+    </message>
+    <message>
+        <source>Delivery format</source>
+        <translation>Способ проведения</translation>
+    </message>
+    <message>
+        <source>Status</source>
+        <translation>Статус</translation>
+    </message>
+    <message>
+        <source>In person</source>
+        <translation>Очно</translation>
+    </message>
+    <message>
+        <source>Online (LiveKit)</source>
+        <translation>Онлайн (LiveKit)</translation>
+    </message>
+    <message>
+        <source>Online (external link)</source>
+        <translation>Онлайн (внешняя ссылка)</translation>
+    </message>
+    <message>
+        <source>Does not repeat</source>
+        <translation>Не повторяется</translation>
+    </message>
+    <message>
+        <source>Repeats daily</source>
+        <translation>Повторяется ежедневно</translation>
+    </message>
+    <message>
+        <source>Repeats every %1 week(s)</source>
+        <translation>Повторяется каждые %1 нед.</translation>
+    </message>
+    <message>
+        <source>Repeats monthly</source>
+        <translation>Повторяется ежемесячно</translation>
+    </message>
+    <message>
+        <source>Repeats yearly</source>
+        <translation>Повторяется ежегодно</translation>
+    </message>
+    <message>
+        <source>Create a new link</source>
+        <translation>Создать новую ссылку</translation>
+    </message>
+    <message>
+        <source>The current link stops working immediately. Anyone who has it will need the new link. Continue?</source>
+        <translation>Текущая ссылка сразу перестанет работать. Всем, у кого она есть, потребуется новая. Продолжить?</translation>
+    </message>
+    <message>
+        <source>The server holds a different version of this schedule. Publishing replaces it with the schedule on this device. Continue?</source>
+        <translation>На сервере другая версия этого расписания. Публикация заменит её расписанием с этого устройства. Продолжить?</translation>
+    </message>
+    <message>
+        <source>Failed to create the LiveKit meeting: %1</source>
+        <translation>Не удалось создать встречу LiveKit: %1</translation>
+    </message>
+    <message>
         <source>Overlaps with an existing event, %1.</source>
         <translation>Пересекается с другим событием, %1.</translation>
     </message>
     <message>
         <source>Overlaps with &quot;%1&quot;, %2.</source>
         <translation>Пересекается с «%1», %2.</translation>
+    </message>
+    <message>
+        <source>The system keychain is not available, so the link cannot be read.</source>
+        <translation>Системная связка ключей недоступна, поэтому ссылку не удаётся прочитать.</translation>
+    </message>
+    <message>
+        <source>The permanent link is not stored on this device. Create a new link.</source>
+        <translation>Постоянная ссылка не сохранена на этом устройстве. Создайте новую ссылку.</translation>
+    </message>
+    <message>
+        <source>The permanent link is stored securely. Use Copy link.</source>
+        <translation>Постоянная ссылка надёжно сохранена. Используйте «Копировать ссылку».</translation>
     </message>
     <message>
         <source>Repeat</source>
@@ -901,6 +1307,14 @@
         <source>Suggest free slot</source>
         <translation>Предложить свободное время</translation>
     </message>
+    <message numerus="yes">
+        <source>%n minute(s)</source>
+        <translation>
+            <numerusform>%n минута</numerusform>
+            <numerusform>%n минуты</numerusform>
+            <numerusform>%n минут</numerusform>
+        </translation>
+    </message>
     <message>
         <source>Repeat end date must not be earlier than the event date.</source>
         <translation>Дата окончания повтора не может быть раньше даты события.</translation>
@@ -949,6 +1363,42 @@
 <context>
     <name>QEventInfoPage</name>
     <message>
+        <source>The change was not saved.</source>
+        <translation>Изменение не сохранено.</translation>
+    </message>
+    <message>
+        <source>This series has a permanent call link, so it cannot be split into &quot;this and future&quot; events. Nothing was changed.</source>
+        <translation>У этой серии есть постоянная ссылка на звонок, поэтому её нельзя разделить на «это и последующие» события. Ничего не изменено.</translation>
+    </message>
+    <message>
+        <source>The schedule cannot be published: %1. Nothing was changed.</source>
+        <translation>Расписание нельзя опубликовать: %1. Ничего не изменено.</translation>
+    </message>
+    <message>
+        <source>The change was not saved: %1</source>
+        <translation>Изменение не сохранено: %1</translation>
+    </message>
+    <message>
+        <source>Recurring event</source>
+        <translation>Повторяющееся событие</translation>
+    </message>
+    <message>
+        <source>Day</source>
+        <translation>День</translation>
+    </message>
+    <message>
+        <source>Calendar view</source>
+        <translation>Вид календаря</translation>
+    </message>
+    <message>
+        <source>Month</source>
+        <translation>Месяц</translation>
+    </message>
+    <message>
+        <source>New meeting</source>
+        <translation>Новая встреча</translation>
+    </message>
+    <message>
         <source>: EVENT_ADD_BUTTON</source>
         <translation>Добавить</translation>
     </message>
@@ -963,6 +1413,10 @@
     <message>
         <source>: EVENT_DELETE_CONFIRMATION</source>
         <translation>Вы уверены, что хотите удалить это событие?</translation>
+    </message>
+    <message>
+        <source>The transcript will be kept.</source>
+        <translation>Транскрипт сохранится.</translation>
     </message>
 </context>
 <context>
@@ -1187,8 +1641,16 @@ See you!</source>
         <translation>Что вы хотите удалить?</translation>
     </message>
     <message>
+        <source>The transcript will be kept.</source>
+        <translation>Транскрипт сохранится.</translation>
+    </message>
+    <message>
         <source>This and future events</source>
         <translation>Это и все последующие события</translation>
+    </message>
+    <message>
+        <source>&quot;This and future events&quot; is not available for a series with a permanent call link. Delete only this event or the whole series.</source>
+        <translation>Вариант «Это и последующие события» недоступен для серии с постоянной ссылкой на звонок. Удалите только это событие или всю серию.</translation>
     </message>
     <message>
         <source>Access to keychain denied</source>
@@ -1234,6 +1696,10 @@ See you!</source>
         <source>Entry not found</source>
         <translation>Запись не найдена</translation>
     </message>
+    <message>
+        <source> s</source>
+        <translation> с</translation>
+    </message>
 </context>
 <context>
     <name>QShortcut</name>
@@ -1267,6 +1733,159 @@ See you!</source>
     <message>
         <source>Quick slots are not configured yet.</source>
         <translation>Быстрые слоты пока не настроены.</translation>
+    </message>
+</context>
+<context>
+    <name>RoleSelectionDialog</name>
+    <message>
+        <source>Welcome to Sessio</source>
+        <translation>Добро пожаловать в Sessio</translation>
+    </message>
+    <message>
+        <source>Who are you?</source>
+        <translation>Кто вы?</translation>
+    </message>
+    <message>
+        <source>I&apos;m a specialist</source>
+        <translation>Я специалист</translation>
+    </message>
+    <message>
+        <source>I&apos;m a client</source>
+        <translation>Я клиент</translation>
+    </message>
+</context>
+<context>
+    <name>RoleSwitchPrompt</name>
+    <message>
+        <source>Switch to specialist mode</source>
+        <translation>Переход в режим специалиста</translation>
+    </message>
+    <message>
+        <source>Switch to client mode</source>
+        <translation>Переход в режим клиента</translation>
+    </message>
+    <message>
+        <source>Sessio will restart as the specialist application. If the specialist profile is not set up yet, the specialist first-run setup runs after the restart. An active call in this window will be ended.</source>
+        <translation>Sessio перезапустится как приложение специалиста. Если профиль специалиста ещё не настроен, после перезапуска начнётся обычная первичная настройка. Активный звонок в этом окне будет завершён.</translation>
+    </message>
+    <message>
+        <source>Sessio will restart in client mode, where you can only join calls. Your specialist data (clients, events, notes and backups) stays on this computer and is NOT deleted; switch back to specialist mode at any time to see it again. The specialist windows will be closed.</source>
+        <translation>Sessio перезапустится в режиме клиента, где можно только присоединяться к звонкам. Данные специалиста (клиенты, события, заметки и резервные копии) остаются на этом компьютере и НЕ удаляются; в любой момент можно вернуться в режим специалиста и увидеть их снова. Окна специалиста будут закрыты.</translation>
+    </message>
+    <message>
+        <source>Switch and restart</source>
+        <translation>Перейти и перезапустить</translation>
+    </message>
+</context>
+<context>
+    <name>SeriesCallStatus</name>
+    <message>
+        <source>the system keychain is not available</source>
+        <translation>системная связка ключей недоступна</translation>
+    </message>
+    <message>
+        <source>the access key could not be read</source>
+        <translation>не удалось прочитать ключ доступа</translation>
+    </message>
+    <message>
+        <source>the server rejected the access key</source>
+        <translation>сервер отклонил ключ доступа</translation>
+    </message>
+    <message>
+        <source>the server refused the schedule</source>
+        <translation>сервер отклонил расписание</translation>
+    </message>
+    <message>
+        <source>the server has a different version of the schedule</source>
+        <translation>на сервере другая версия расписания</translation>
+    </message>
+    <message>
+        <source>the server does not support recurring calls</source>
+        <translation>сервер не поддерживает повторяющиеся звонки</translation>
+    </message>
+    <message>
+        <source>the local database could not be updated</source>
+        <translation>не удалось обновить локальную базу данных</translation>
+    </message>
+    <message>
+        <source>Moving this series to a permanent link: sending the schedule to the server...</source>
+        <translation>Переход на постоянную ссылку: отправка расписания на сервер...</translation>
+    </message>
+    <message>
+        <source>Moving this series to a permanent link: creating the link...</source>
+        <translation>Переход на постоянную ссылку: создание ссылки...</translation>
+    </message>
+    <message>
+        <source>Could not move this series to a permanent link (%1). The previous link stays valid.</source>
+        <translation>Не удалось перевести серию на постоянную ссылку (%1). Прежняя ссылка остаётся действительной.</translation>
+    </message>
+    <message>
+        <source>Schedule synchronized with the server.</source>
+        <translation>Расписание синхронизировано с сервером.</translation>
+    </message>
+    <message>
+        <source>Schedule saved on this device, waiting to be sent.</source>
+        <translation>Расписание сохранено на этом устройстве и ожидает отправки.</translation>
+    </message>
+    <message>
+        <source>Sending the schedule...</source>
+        <translation>Отправка расписания...</translation>
+    </message>
+    <message>
+        <source>Waiting for the network. The schedule will be sent automatically.</source>
+        <translation>Ожидание сети. Расписание будет отправлено автоматически.</translation>
+    </message>
+    <message>
+        <source>The server has a different version of this schedule. Nothing was overwritten.</source>
+        <translation>На сервере другая версия этого расписания. Ничего не перезаписано.</translation>
+    </message>
+    <message>
+        <source>The server refused this schedule (%1). Your changes are kept on this device.</source>
+        <translation>Сервер отклонил это расписание (%1). Ваши изменения сохранены на этом устройстве.</translation>
+    </message>
+    <message>
+        <source>This server does not support recurring calls yet. The schedule stays on this device and no call link can be created.</source>
+        <translation>Этот сервер пока не поддерживает повторяющиеся звонки. Расписание остаётся на этом устройстве, ссылку на звонок создать нельзя.</translation>
+    </message>
+    <message>
+        <source>The server rejected the saved access key. Check it in Settings.</source>
+        <translation>Сервер отклонил сохранённый ключ доступа. Проверьте его в настройках.</translation>
+    </message>
+    <message>
+        <source>The access key could not be read from the system keychain.</source>
+        <translation>Не удалось прочитать ключ доступа из системной связки ключей.</translation>
+    </message>
+    <message>
+        <source>The server may still allow entry under the previous schedule until this is sent.</source>
+        <translation>Пока это не отправлено, сервер может по-прежнему пускать на звонок по прежнему расписанию.</translation>
+    </message>
+    <message>
+        <source>Permanent link ready.</source>
+        <translation>Постоянная ссылка готова.</translation>
+    </message>
+    <message>
+        <source>The permanent link has not been created yet.</source>
+        <translation>Постоянная ссылка ещё не создана.</translation>
+    </message>
+    <message>
+        <source>The link will be created once the server has the schedule.</source>
+        <translation>Ссылка будет создана, когда расписание появится на сервере.</translation>
+    </message>
+    <message>
+        <source>Creating the permanent link...</source>
+        <translation>Создание постоянной ссылки...</translation>
+    </message>
+    <message>
+        <source>Waiting for the network to create the link.</source>
+        <translation>Ожидание сети для создания ссылки.</translation>
+    </message>
+    <message>
+        <source>The link is not available on this device. Create a new link; the old one will stop working.</source>
+        <translation>Ссылка недоступна на этом устройстве. Создайте новую; старая перестанет работать.</translation>
+    </message>
+    <message>
+        <source>Could not create the link (%1).</source>
+        <translation>Не удалось создать ссылку (%1).</translation>
     </message>
 </context>
 <context>
@@ -1340,6 +1959,10 @@ See you!</source>
         <translation>Язык</translation>
     </message>
     <message>
+        <source>LiveKit</source>
+        <translation>LiveKit</translation>
+    </message>
+    <message>
         <source>System default</source>
         <translation>Системный</translation>
     </message>
@@ -1373,7 +1996,27 @@ See you!</source>
     </message>
     <message>
         <source>Backup</source>
-        <translation>Резервное копирование</translation>
+        <translation>Резервные копии</translation>
+    </message>
+    <message>
+        <source>Privacy &amp; Security</source>
+        <translation>Безопасность</translation>
+    </message>
+    <message>
+        <source>Application mode</source>
+        <translation>Режим приложения</translation>
+    </message>
+    <message>
+        <source>Switch to client mode…</source>
+        <translation>Перейти в режим клиента…</translation>
+    </message>
+    <message>
+        <source>Client mode</source>
+        <translation>Режим клиента</translation>
+    </message>
+    <message>
+        <source>Restarts Sessio as a client that only joins calls. Your specialist data stays on this computer and is not deleted.</source>
+        <translation>Перезапускает Sessio как клиент, который только присоединяется к звонкам. Данные специалиста остаются на этом компьютере и не удаляются.</translation>
     </message>
     <message>
         <source>Create a full backup (database and attachments) as a single .psybackup file, or validate an existing one.</source>
@@ -1512,10 +2155,6 @@ See you!</source>
         <translation>Сколько напоминание показывает на общем или заблокированном экране. Имя клиента и тема сеанса не отображаются нигде, кроме режима «Полная информация».</translation>
     </message>
     <message>
-        <source>Privacy</source>
-        <translation>Конфиденциальность</translation>
-    </message>
-    <message>
         <source>Change PIN or password</source>
         <translation>Изменить PIN-код или пароль</translation>
     </message>
@@ -1556,8 +2195,32 @@ See you!</source>
         <translation>Задержка перед удалением скопированных данных встречи.</translation>
     </message>
     <message>
-        <source>Timeline colors</source>
-        <translation>Цвета таймлайна</translation>
+        <source>Token backend</source>
+        <translation>Токен-бэкенд</translation>
+    </message>
+    <message>
+        <source>Token backend URL</source>
+        <translation>URL токен-бэкенда</translation>
+    </message>
+    <message>
+        <source>Base URL of the LiveKit token-issuing backend.</source>
+        <translation>Базовый адрес бэкенда, выдающего токены LiveKit.</translation>
+    </message>
+    <message>
+        <source>https://token-backend.example.com</source>
+        <translation>https://token-backend.example.com</translation>
+    </message>
+    <message>
+        <source>Bearer credential</source>
+        <translation>Bearer-токен</translation>
+    </message>
+    <message>
+        <source>Stored in the system keychain. Leave blank to keep the current credential.</source>
+        <translation>Хранится в системном хранилище ключей. Оставьте поле пустым, чтобы сохранить текущие учётные данные.</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Сохранить</translation>
     </message>
     <message>
         <source>Set application lock</source>
@@ -1618,6 +2281,54 @@ See you!</source>
         <translation>Не удалось создать резервную копию</translation>
     </message>
     <message>
+        <source>App lock</source>
+        <translation>Блокировка приложения</translation>
+    </message>
+    <message>
+        <source>Clipboard</source>
+        <translation>Буфер обмена</translation>
+    </message>
+    <message>
+        <source>Scheduling defaults</source>
+        <translation>Параметры планирования по умолчанию</translation>
+    </message>
+    <message>
+        <source>Billing</source>
+        <translation>Оплата</translation>
+    </message>
+    <message>
+        <source>Event colors</source>
+        <translation>Цвета событий</translation>
+    </message>
+    <message>
+        <source>Calls</source>
+        <translation>Звонки</translation>
+    </message>
+    <message>
+        <source>Name in calls</source>
+        <translation>Имя в звонках</translation>
+    </message>
+    <message>
+        <source>Stop transcription before deleting its data.</source>
+        <translation>Остановите транскрипцию перед удалением её данных.</translation>
+    </message>
+    <message>
+        <source>Transcription</source>
+        <translation>Транскрипция</translation>
+    </message>
+    <message>
+        <source>Delete all transcripts</source>
+        <translation>Удалить все транскрипции</translation>
+    </message>
+    <message>
+        <source>Delete every transcript and its phrases? This cannot be undone.</source>
+        <translation>Удалить все транскрипции и их реплики? Это действие нельзя отменить.</translation>
+    </message>
+    <message>
+        <source>Unable to delete transcripts.</source>
+        <translation>Не удалось удалить транскрипции.</translation>
+    </message>
+    <message>
         <source>Backup Encryption</source>
         <translation>Шифрование резервных копий</translation>
     </message>
@@ -1640,6 +2351,20 @@ See you!</source>
     <message>
         <source>Select Automatic Backup Folder</source>
         <translation>Выбор папки для автоматических резервных копий</translation>
+    </message>
+    <message>
+        <source>The token backend URL could not be saved:
+%1</source>
+        <translation>Не удалось сохранить URL токен-бэкенда:
+%1</translation>
+    </message>
+    <message>
+        <source>Credentials are saved</source>
+        <translation>Учётные данные сохранены</translation>
+    </message>
+    <message>
+        <source>No credentials saved yet</source>
+        <translation>Учётные данные пока не сохранены</translation>
     </message>
     <message>
         <source>Validate Backup</source>
@@ -1769,6 +2494,437 @@ See you!</source>
     </message>
 </context>
 <context>
+    <name>TranscriptClientDialog</name>
+    <message>
+        <source>Attach clients</source>
+        <translation>Привязать клиентов</translation>
+    </message>
+    <message>
+        <source>Select existing clients. Guest names are never matched automatically.</source>
+        <translation>Выберите существующие карточки клиентов. Имена гостей никогда не сопоставляются автоматически.</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptListPage</name>
+    <message>
+        <source>Transcripts</source>
+        <translation>Транскрипты</translation>
+    </message>
+    <message>
+        <source>No transcripts yet.
+They appear here after a call with transcription turned on.</source>
+        <translation>Транскриптов пока нет.
+Они появятся здесь после звонка с включённой транскрипцией.</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Удалить транскрипцию</translation>
+    </message>
+    <message>
+        <source>This transcript is still being recorded. Editing is unavailable.</source>
+        <translation>Эта транскрипция ещё записывается. Редактирование недоступно.</translation>
+    </message>
+    <message>
+        <source>Delete this transcript and all its phrases?</source>
+        <translation>Удалить эту транскрипцию и все её реплики?</translation>
+    </message>
+    <message>
+        <source>Could not update the transcript. Please try again.</source>
+        <translation>Не удалось обновить транскрипцию. Попробуйте ещё раз.</translation>
+    </message>
+    <message>
+        <source>Recording</source>
+        <translation>Записывается</translation>
+    </message>
+    <message>
+        <source>Reviewed</source>
+        <translation>Проверено</translation>
+    </message>
+    <message>
+        <source>Draft</source>
+        <translation>Черновик</translation>
+    </message>
+    <message>
+        <source>No clients attached</source>
+        <translation>Клиенты не привязаны</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n phrases</source>
+        <translation>
+            <numerusform>%n реплика</numerusform>
+            <numerusform>%n реплики</numerusform>
+            <numerusform>%n реплик</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>Открыть</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Удалить</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n transcripts</source>
+        <translation>
+            <numerusform>%n транскрипт</numerusform>
+            <numerusform>%n транскрипта</numerusform>
+            <numerusform>%n транскриптов</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Could not load transcripts. Please try again.</source>
+        <translation>Не удалось загрузить транскрипты. Попробуйте ещё раз.</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptPage</name>
+    <message>
+        <source>Back to event</source>
+        <translation>Вернуться к событию</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Транскрипция</translation>
+    </message>
+    <message>
+        <source>Mark reviewed</source>
+        <translation>Отметить как проверенную</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Удалить транскрипцию</translation>
+    </message>
+    <message>
+        <source>Attach clients</source>
+        <translation>Привязать клиентов</translation>
+    </message>
+    <message>
+        <source>Export text</source>
+        <translation>Экспорт текста</translation>
+    </message>
+    <message>
+        <source>Export transcript</source>
+        <translation>Экспорт транскрипта</translation>
+    </message>
+    <message>
+        <source>Text files (*.txt)</source>
+        <translation>Текстовые файлы (*.txt)</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>Другие действия</translation>
+    </message>
+    <message>
+        <source>Delete this transcript and all its phrases?</source>
+        <translation>Удалить эту транскрипцию и все её реплики?</translation>
+    </message>
+    <message>
+        <source>Could not update the transcript. Please try again.</source>
+        <translation>Не удалось обновить транскрипцию. Попробуйте ещё раз.</translation>
+    </message>
+    <message>
+        <source>This transcript is still being recorded. Editing is unavailable.</source>
+        <translation>Эта транскрипция ещё записывается. Редактирование недоступно.</translation>
+    </message>
+    <message>
+        <source>Save or cancel the current edit first.</source>
+        <translation>Сначала сохраните или отмените текущую правку.</translation>
+    </message>
+    <message>
+        <source>Back to transcripts</source>
+        <translation>К транскриптам</translation>
+    </message>
+    <message>
+        <source>No clients attached</source>
+        <translation>Клиенты не привязаны</translation>
+    </message>
+    <message>
+        <source>No transcripts for this event.</source>
+        <translation>У этого события нет транскрипций.</translation>
+    </message>
+    <message>
+        <source>Transcript unavailable.</source>
+        <translation>Транскрипция недоступна.</translation>
+    </message>
+    <message>
+        <source>Clients: %1</source>
+        <translation>Клиенты: %1</translation>
+    </message>
+    <message>
+        <source>Recording</source>
+        <translation>Записывается</translation>
+    </message>
+    <message>
+        <source>Reviewed</source>
+        <translation>Проверено</translation>
+    </message>
+    <message>
+        <source>Draft</source>
+        <translation>Черновик</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n phrases</source>
+        <translation>
+            <numerusform>%n реплика</numerusform>
+            <numerusform>%n реплики</numerusform>
+            <numerusform>%n реплик</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source> · Model: %1</source>
+        <translation> · Модель: %1</translation>
+    </message>
+    <message>
+        <source>Practitioner</source>
+        <translation>Специалист</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+    <message>
+        <source>Edited</source>
+        <translation>Изменено</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Редактировать</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Удалить</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Сохранить</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <source>Phrase text cannot be empty.</source>
+        <translation>Текст реплики не может быть пустым.</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptPanel</name>
+    <message>
+        <source>Transcript</source>
+        <translation>Транскрипция</translation>
+    </message>
+    <message>
+        <source>Local</source>
+        <translation>Локально</translation>
+    </message>
+    <message>
+        <source>Microphone audio interrupted; other participants are still being transcribed</source>
+        <translation>Звук микрофона прерван; речь других участников продолжает распознаваться</translation>
+    </message>
+    <message>
+        <source>Transcription is falling behind</source>
+        <translation>Распознавание задерживается</translation>
+    </message>
+    <message>
+        <source>Listening…</source>
+        <translation>Слушаю…</translation>
+    </message>
+    <message>
+        <source>Audio is not stored</source>
+        <translation>Аудио не сохраняется</translation>
+    </message>
+    <message>
+        <source>Start</source>
+        <translation>Начать</translation>
+    </message>
+    <message>
+        <source>Stop</source>
+        <translation>Остановить</translation>
+    </message>
+    <message>
+        <source>Revoke consent</source>
+        <translation>Отозвать согласие</translation>
+    </message>
+    <message>
+        <source>Transcription is off</source>
+        <translation>Транскрипция выключена</translation>
+    </message>
+    <message>
+        <source>Loading speech model…</source>
+        <translation>Загрузка модели распознавания речи…</translation>
+    </message>
+    <message>
+        <source>Transcription running</source>
+        <translation>Транскрипция выполняется</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Завершение…</translation>
+    </message>
+    <message>
+        <source>Transcript saved as a draft</source>
+        <translation>Транскрипция сохранена как черновик</translation>
+    </message>
+    <message>
+        <source>Transcription stopped</source>
+        <translation>Транскрипция остановлена</translation>
+    </message>
+    <message>
+        <source>You</source>
+        <translation>Вы</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptionConsentDialog</name>
+    <message>
+        <source>Transcribe this session</source>
+        <translation>Транскрибировать эту сессию</translation>
+    </message>
+    <message>
+        <source>The session is converted to text on this computer.</source>
+        <translation>Речь в сессии преобразуется в текст на этом компьютере.</translation>
+    </message>
+    <message>
+        <source>Audio is not stored and is not sent anywhere.</source>
+        <translation>Аудио не сохраняется и никуда не отправляется.</translation>
+    </message>
+    <message>
+        <source>The client can withdraw consent at any moment, and transcription stops immediately.</source>
+        <translation>Клиент может отозвать согласие в любой момент. Транскрипция немедленно остановится.</translation>
+    </message>
+    <message>
+        <source>The text is saved as a draft and can be edited and deleted.</source>
+        <translation>Текст сохраняется как черновик. Его можно редактировать и удалить.</translation>
+    </message>
+    <message>
+        <source>The client has given consent to transcribing this session</source>
+        <translation>Клиент дал согласие на транскрипцию этой сессии</translation>
+    </message>
+    <message>
+        <source>Start transcription</source>
+        <translation>Начать транскрипцию</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptionFailure</name>
+    <message>
+        <source>The transcript could not be saved. Please try again.</source>
+        <translation>Не удалось сохранить транскрипцию. Попробуйте ещё раз.</translation>
+    </message>
+    <message>
+        <source>The transcription models are unavailable. Please check the model installation.</source>
+        <translation>Модели транскрипции недоступны. Проверьте установку моделей.</translation>
+    </message>
+    <message>
+        <source>The voice activity detector could not be started. Please check the model installation.</source>
+        <translation>Не удалось запустить детектор речи. Проверьте установку модели.</translation>
+    </message>
+    <message>
+        <source>The speech recognition model could not be loaded. Please check the model installation.</source>
+        <translation>Не удалось загрузить модель распознавания речи. Проверьте установку модели.</translation>
+    </message>
+    <message>
+        <source>Transcription could not be completed. Please try again.</source>
+        <translation>Не удалось завершить транскрипцию. Попробуйте ещё раз.</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptionSettingsPanel</name>
+    <message>
+        <source>Enable call transcription</source>
+        <translation>Включить транскрипцию звонков</translation>
+    </message>
+    <message>
+        <source>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</source>
+        <translation>Транскрипция выполняется на этом компьютере. Аудио не сохраняется. Текст хранится в локальной базе вместе с другими данными и включается в резервные копии.</translation>
+    </message>
+    <message>
+        <source>Speech recognition</source>
+        <translation>Распознавание речи</translation>
+    </message>
+    <message>
+        <source>How confident the detector must be that a sound is speech. Raise it if background noise becomes text, lower it if quiet speech is missed.</source>
+        <translation>Насколько детектор должен быть уверен, что звук — речь. Повысьте, если фоновый шум попадает в текст, понизьте, если тихая речь пропускается.</translation>
+    </message>
+    <message>
+        <source>A pause this long ends a phrase. Shorter pauses give shorter, quicker phrases.</source>
+        <translation>Пауза такой длины завершает фразу. Чем короче пауза, тем короче и быстрее появляются фразы.</translation>
+    </message>
+    <message>
+        <source>Sounds shorter than this are ignored.</source>
+        <translation>Более короткие звуки игнорируются.</translation>
+    </message>
+    <message>
+        <source>Continuous speech longer than this is cut into several phrases.</source>
+        <translation>Непрерывная речь длиннее этого значения делится на несколько фраз.</translation>
+    </message>
+    <message>
+        <source>CPU threads for the speech model. More threads are faster but load the computer during a call.</source>
+        <translation>Потоки процессора для модели речи. Больше потоков — быстрее, но выше нагрузка на компьютер во время звонка.</translation>
+    </message>
+    <message>
+        <source>Speech sensitivity</source>
+        <translation>Чувствительность к речи</translation>
+    </message>
+    <message>
+        <source>Pause that ends a phrase</source>
+        <translation>Пауза, завершающая фразу</translation>
+    </message>
+    <message>
+        <source>Shortest speech</source>
+        <translation>Самая короткая речь</translation>
+    </message>
+    <message>
+        <source>Longest phrase</source>
+        <translation>Самая длинная фраза</translation>
+    </message>
+    <message>
+        <source>Recognizer threads</source>
+        <translation>Потоки распознавания</translation>
+    </message>
+    <message>
+        <source>Restore defaults</source>
+        <translation>Вернуть по умолчанию</translation>
+    </message>
+    <message>
+        <source>Changes apply to the next transcription.</source>
+        <translation>Изменения применятся к следующей транскрипции.</translation>
+    </message>
+    <message>
+        <source>Delete all transcripts…</source>
+        <translation>Удалить все транскрипции…</translation>
+    </message>
+    <message>
+        <source>Model: %1 — %2</source>
+        <translation>Модель: %1 — %2</translation>
+    </message>
+    <message>
+        <source>installed</source>
+        <translation>установлена</translation>
+    </message>
+    <message>
+        <source>not installed</source>
+        <translation>не установлена</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n transcripts stored</source>
+        <translation>
+            <numerusform>Сохранена %n транскрипция</numerusform>
+            <numerusform>Сохранены %n транскрипции</numerusform>
+            <numerusform>Сохранено %n транскрипций</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>pcm::AppLockDialog</name>
     <message>
         <source>Unlock Sessio</source>
@@ -1854,6 +3010,155 @@ Your previous data was kept.</source>
     <message>
         <source>Quit</source>
         <translation>Выйти</translation>
+    </message>
+    <message>
+        <source>Consent withdrawn</source>
+        <translation>Согласие отозвано</translation>
+    </message>
+    <message>
+        <source>Transcription has stopped. What should happen to the recorded text?</source>
+        <translation>Транскрипция остановлена. Что сделать с записанным текстом?</translation>
+    </message>
+    <message>
+        <source>Delete what was recorded</source>
+        <translation>Удалить записанный текст</translation>
+    </message>
+    <message>
+        <source>Keep as draft</source>
+        <translation>Оставить как черновик</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Транскрипт</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::eventpage::SeriesTimezoneDialog</name>
+    <message>
+        <source>Confirm the series timezone</source>
+        <translation>Подтвердите часовой пояс серии</translation>
+    </message>
+    <message>
+        <source>A permanent link needs a fixed timezone for this series. From now on the meeting times follow this timezone, not the timezone of this computer. Check that the dates below stay the same.</source>
+        <translation>Для постоянной ссылки у серии должен быть фиксированный часовой пояс. Теперь время встреч определяется им, а не часовым поясом этого компьютера. Убедитесь, что даты ниже не изменились.</translation>
+    </message>
+    <message>
+        <source>Choose a timezone</source>
+        <translation>Выберите часовой пояс</translation>
+    </message>
+    <message>
+        <source>not available</source>
+        <translation>недоступно</translation>
+    </message>
+    <message>
+        <source>no upcoming dates</source>
+        <translation>нет ближайших дат</translation>
+    </message>
+    <message>
+        <source>Dates today: %1</source>
+        <translation>Даты сейчас: %1</translation>
+    </message>
+    <message>
+        <source>Choose the timezone this series is scheduled in.</source>
+        <translation>Выберите часовой пояс, в котором назначена серия.</translation>
+    </message>
+    <message>
+        <source>Dates in %1: %2</source>
+        <translation>Даты в %1: %2</translation>
+    </message>
+    <message>
+        <source>This timezone cannot be used for the series.</source>
+        <translation>Этот часовой пояс нельзя использовать для серии.</translation>
+    </message>
+    <message>
+        <source>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</source>
+        <translation>Некоторые встречи сместятся на другие даты или время. Выберите другой часовой пояс или отмените и оставьте серию как есть.</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::transcriptionui::CallTranscriptionController</name>
+    <message>
+        <source>Transcription is turned off in Settings</source>
+        <translation>Транскрипция выключена в настройках</translation>
+    </message>
+    <message>
+        <source>Speech models are not installed</source>
+        <translation>Модели распознавания речи не установлены</translation>
+    </message>
+    <message>
+        <source>Open a call to transcribe it</source>
+        <translation>Откройте звонок, чтобы начать транскрипцию</translation>
+    </message>
+    <message>
+        <source>Wait for the current transcription to finish</source>
+        <translation>Дождитесь завершения текущей транскрипции</translation>
+    </message>
+    <message>
+        <source>Transcribe call</source>
+        <translation>Транскрибировать звонок</translation>
+    </message>
+    <message>
+        <source>Unable to open the calendar event for transcription</source>
+        <translation>Не удалось открыть событие календаря для транскрипции</translation>
+    </message>
+    <message>
+        <source>Some participant audio could not be transcribed</source>
+        <translation>Не удалось распознать часть речи участника</translation>
+    </message>
+    <message>
+        <source>Unable to delete the transcript</source>
+        <translation>Не удалось удалить транскрипцию</translation>
+    </message>
+    <message>
+        <source>Unable to save the transcript</source>
+        <translation>Не удалось сохранить транскрипцию</translation>
+    </message>
+    <message>
+        <source>Unable to start transcription</source>
+        <translation>Не удалось начать транскрипцию</translation>
+    </message>
+    <message>
+        <source>Transcription running</source>
+        <translation>Транскрипция выполняется</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::video::ParticipantTile</name>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+    <message>
+        <source>Your screen</source>
+        <translation>Ваш экран</translation>
+    </message>
+    <message>
+        <source>%1&apos;s screen</source>
+        <translation>Экран: %1</translation>
+    </message>
+    <message>
+        <source>%1 (You)</source>
+        <translation>%1 (Вы)</translation>
+    </message>
+    <message>
+        <source>You are sharing your screen</source>
+        <translation>Вы показываете экран</translation>
+    </message>
+    <message>
+        <source>Waiting for screen...</source>
+        <translation>Ожидание экрана...</translation>
+    </message>
+    <message>
+        <source>Waiting for video...</source>
+        <translation>Ожидание видео...</translation>
+    </message>
+    <message>
+        <source>Camera off</source>
+        <translation>Камера выключена</translation>
+    </message>
+    <message>
+        <source>Screen sharing stopped</source>
+        <translation>Показ экрана остановлен</translation>
     </message>
 </context>
 </TS>

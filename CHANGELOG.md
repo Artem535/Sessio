@@ -2,6 +2,444 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.29] - 2026-10-09
+
+### Fixed
+
+- Drop-down lists (device selectors and every other combo box) open at their
+  full height again on Windows. A list near the bottom of the screen was cut
+  to a sliver, so its entries did not fit; it now shows up to its usual number
+  of rows and the system moves it up when there is no room below.
+
+## [0.2.28] - 2026-10-09
+
+### Added
+
+- Sessio keeps a log file, `sessio.log` in a `logs` folder of the app's local
+  data (on Windows `%LOCALAPPDATA%\Sessio\Sessio\logs`), rotated at 2 MB.
+  It also receives the LiveKit SDK's own warnings and a timed trace of each
+  step of leaving a call. On Windows a crash writes a small `.dmp` file
+  (thread stacks only) next to it. Both are there to track down the hang and
+  crash on leaving a call seen on Windows.
+
+### Fixed
+
+- Device drop-downs (camera, microphone, speaker) show long device names in
+  full: the list is as wide as its longest entry, and the full name appears
+  as a tooltip.
+- The browser call page has the Sessio icon in the browser tab.
+
+## [0.2.27] - 2026-10-09
+
+### Fixed
+
+- Call audio plays in both ears on Linux. The remote voice, the microphone
+  capture and the speaker test tone opened their audio streams without a
+  channel layout, which PipeWire treated as an auxiliary channel and sent to
+  the left speaker only.
+- Clicking "Open in app" on the browser call page, or any join link, now
+  switches the desktop app to the Calls tab with the code filled in. Before,
+  the code was filled in on a tab that was not shown, so the link seemed to do
+  nothing.
+
+### Changed
+
+- The browser call page matches the desktop call window: video fills the
+  window, names sit on the tiles, a floating bar holds round microphone,
+  camera, screen and device buttons with clear on/off state, and devices
+  (including the speaker, where the browser allows it) open in a popover.
+  The sign-in screen shows the camera preview next to the form, "Open in app"
+  is a proper button and says so when no app opened, and "Enable audio" only
+  appears when the browser blocked playback.
+
+## [0.2.26] - 2026-10-09
+
+### Fixed
+
+- Today's meetings on the Calls tab update at once when a meeting is created,
+  edited, rescheduled or cancelled, and whenever the tab is opened, instead of
+  after the next 30-second poll.
+- Leaving the device-check preview releases the camera for good: a device-list
+  change after the screen is hidden no longer reopens it (the camera indicator
+  stayed on and the camera kept recording).
+
+## [0.2.25] - 2026-10-09
+
+### Changed
+
+- The Transcripts page shows transcripts as cards in a centred column like the
+  transcript window: date, status, client, phrase count, duration and model as
+  chips, with Open and Delete buttons on each card and a hint when the list is
+  empty. Clicking a card opens it.
+
+## [0.2.24] - 2026-10-08
+
+### Added
+
+- Settings → Transcription now has a Speech recognition group: speech
+  sensitivity, the pause that ends a phrase, the shortest speech, the longest
+  phrase and the recogniser thread count, with a Restore defaults button.
+  Values are clamped to safe ranges and apply to the next transcription.
+
+## [0.2.23] - 2026-10-08
+
+### Changed
+
+- The live transcript in a call shows phrases as the same rounded cards as the
+  transcript window: speaker marker, bold speaker name, time range and larger
+  text.
+
+## [0.2.22] - 2026-10-08
+
+### Added
+
+- Any participant can share a screen at the same time as others, from the app
+  (whole screen or a single window) and from the browser guest page. Shared
+  screens appear as their own tiles; camera, microphone and transcription are
+  unaffected. The one-owner lease design for screen sharing is dropped.
+- In the call window the featured screen fills the stage and the other screens
+  and cameras sit in a strip below it; click a screen in the strip to feature
+  it. A banner with a Stop button shows while you share.
+
+## [0.2.20] - 2026-10-08
+
+### Added
+
+- An isolated screen-sharing permission diagnostic and verification report.
+  Screen sharing remains unavailable pending a fix for cached LiveKit grant
+  tokens restoring screen publishing after permission revocation.
+
+## [0.2.19] - 2026-10-08
+
+### Added
+
+- Browser guest call client with required name, device preview and direct LiveKit
+  room entry; HTTPS fragment invitations and same-origin deployment template.
+- Guest names use a shared 80 Unicode scalar limit. Legacy native empty names
+  remain accepted; recurring guests now receive independent participant identities.
+
+## [0.2.18] - 2026-10-08
+
+### Added
+- Call transcription without a calendar event or client card, with the same consent and revocation controls.
+- A durable Transcripts page with review by transcript ID, text export, and manual assignment to existing client cards.
+
+### Changed
+- Deleting events or client cards preserves transcript text and removes only the corresponding link.
+- Schema 2 migrates legacy transcript/client links once; backups retain format 1 and legacy backups migrate before restoration.
+
+## [0.2.17] - 2026-10-08
+
+### Fixed
+
+- Microphone capture discards stale callbacks and old audio batches during a
+  restart, including reentrant stop or destruction. Failed selection attempts
+  to restore the previous device once and keeps mute and the published source.
+- Transcription separates local speech across microphone capture gaps, continues
+  remote speech, and timestamps phrases from call join even when started later.
+  The transcript panel displays a separate microphone interruption notice.
+
+## [0.2.16] - 2026-10-04
+
+### Added
+
+- Switching between application modes. Client mode has a new "Switch to specialist
+  mode…" menu action, and the specialist Settings (General) has "Switch to client
+  mode…". Both ask for confirmation, store the new mode in the settings file and
+  restart Sessio. Specialist data (clients, events, notes, backups) is never
+  deleted by the switch; if the specialist profile is not set up yet, the usual
+  first-run setup runs after the restart.
+- The settings file is now written through a temporary file and renamed, so a failed
+  write leaves the previous settings intact; a failed mode switch shows an error and
+  keeps the current mode.
+
+## [0.2.12] - 2026-10-04
+
+### Changed
+
+- The accent colour of the interface is now purple instead of blue, taken from the
+  Sessio logo (`#a78bfa`): primary buttons, switches, checkboxes, sliders, focus
+  rings and selections. Text on the accent is dark for readable contrast.
+- The calendar's selected-day pill, today underline, month picker tiles, the
+  charts on the Analytics page and the client page, the call controls and the
+  Join button now follow the theme accent instead of hard-coded blues.
+- "Personal events" bars on the Analytics chart are now peach so they stay
+  distinguishable from the purple work bars.
+- Default event colours and user colour settings are unchanged.
+
+## [0.2.11] - 2026-10-04
+
+### Changed
+
+- Month view: meeting chips now use the same work and personal event colors as the
+  day timeline (configurable in Settings) with a matching darker border and a
+  light or dark text chosen for contrast. Colors update without restarting the
+  application.
+
+## [0.2.10] - 2026-10-04
+
+### Changed
+
+- The first-launch role dialog has a fixed size and centered layout.
+
+## [0.2.9] - 2026-10-02
+
+### Added
+
+- Month view for the calendar: a month grid with rounded meeting chips (time and
+  title; accent colour for work meetings, neutral for personal ones), dimmed
+  neighbouring days, a filled badge with the day number for the selected day, a
+  ring for today, the week starting according to the system locale, and a
+  "+N more" link in days that have more meetings than fit in the cell. Rows share the
+  window height equally (at least 112 px) so the grid ends at the bottom of the
+  left column. Meetings crossing midnight and occurrences
+  of recurring series are shown in every affected day.
+- A Day / Month switch and the "New meeting" button in the top row of the
+  Calendar page.
+- In Month mode the calendar card becomes a month picker (year arrows and
+  twelve month tiles).
+- One info panel under the calendar card: the day summary, replaced by the
+  meeting inspector (labelled Date / Time / Repeat / Delivery format / Status
+  fields, full-width actions, recurring series state) when a meeting is
+  selected in the timeline or the month grid; "Back to day" returns to the
+  day summary.
+- The day timeline scrolls to the first meeting of the day (or 08:00).
+
+### Changed
+
+- Month mode uses the same layout as Day mode: calendar card, info panel and
+  quick session slots on the left, the month grid in the centre.
+
+### Fixed
+
+- Settings/About button text colour follows the theme (padding and left alignment unchanged).
+- The day timeline no longer jumps back to the first meeting after saving, editing or deleting a meeting of the same day.
+
+## [0.2.8] - 2026-10-02
+
+### Added
+
+- Recurring LiveKit calls: a weekly (or other recurring) event can be
+  published as one series with a single permanent invitation link and
+  passcode. Every occurrence gets its own room, so one invitation covers the
+  whole series.
+- The event editor shows the series state (publishing, published, needs
+  attention), lets you copy the invitation, and offers a retry when syncing the
+  schedule to the call service failed or is offline.
+- A timezone confirmation dialog appears before a series is published, so the
+  occurrences are pinned to the timezone you intend.
+- Existing recurring events can be moved to the new series model on request
+  (opt-in legacy series migration); nothing is migrated automatically.
+
+### Changed
+
+- Recurring calls require a token backend of version 0.2.8 or newer; with an
+  older backend a recurring event is shown as unsupported and no call is
+  created.
+- "Create a new link" is offered next to a ready permanent link (after a backup
+  restore or a keychain reset the link can not be copied on that device), and
+  an interrupted link replacement is completed when the app starts.
+- The installed application now ships the timezone data it needs to publish
+  recurring series (RPM, AppImage, Windows installer and macOS bundle).
+- Splitting a series ("this and following") is blocked while the series is
+  published, to keep the shared invitation valid.
+- Joining an occurrence of a published series goes through the series
+  invitation and the per-occurrence room.
+
+## [0.2.7] - 2026-10-01
+
+### Fixed
+
+- The Linux RPM no longer bundles Qt, qtkeychain, ICU, ffmpeg or Qt plugins and
+  no longer advertises system library names as Provides, so installing it can
+  not overwrite the distribution's own libraries. It now depends on the
+  distribution's Qt 6 and qtkeychain packages; only LiveKit and its private
+  dependencies live under `/usr/lib*/sessio`. Licence and readme moved to
+  `/usr/share/doc/Sessio`. The AppImage still bundles everything it needs.
+
+## [0.2.6] - 2026-10-01
+
+### Added
+
+- The Calls page is organised into a name card on top, a "Join a meeting"
+  group on the left and "Your calls today" on the right (with the start time
+  of each call and an empty state).
+- The device-check screen before a call is rebuilt: a larger 16:9 camera
+  preview beside a card with labelled camera, microphone and speaker
+  selectors, a live microphone level meter and a "Test" button that plays a
+  short tone through the selected speaker.
+- The notes panel in a call can be resized by dragging the handle between it
+  and the video.
+- While you wait for others to join, a "Waiting for others to join" pill
+  floats above the control bar, and your own video is shown inset with
+  rounded corners. Participant tiles in grid calls have rounded corners too.
+
+### Changed
+
+- Fullscreen in a call now hides the navigation, headers and the notes panel,
+  leaving only the participants and the control bar; Esc or ending the call
+  leaves fullscreen.
+- The call control bar uses round buttons and sits closer to the bottom edge.
+
+### Fixed
+
+- The camera, microphone and speaker chosen on the device-check screen are now
+  the ones the call actually uses (previously the screen only drove the
+  preview and the call opened the defaults).
+- Calls and the device-check screen start from the system default camera,
+  microphone and speaker instead of the first device in the list.
+- The device-check screen no longer crashes the application when it is
+  opened.
+
+### Internal
+
+- Added `Sessio_fake_client`, a manual test tool that joins a call as one or
+  more fake participants publishing an animation and a tone.
+
+## [0.2.5] - 2026-10-01
+
+### Added
+
+- Calls display every participant in an adaptive grid, with a local preview,
+  camera-off placeholders and participant names. Two-person calls retain the
+  picture-in-picture layout; larger calls use equal tiles.
+- Each token issuance creates a distinct participant identity, so multiple
+  clients can join the same meeting independently.
+- Both app modes save a call display name, with a per-call override on the
+  join form. Participant names are signed into LiveKit tokens and displayed
+  independently of the connection identity.
+
+### Fixed
+
+- Remote video and audio are handled independently for every participant.
+  Leaving, rejoining, muting and changing the speaker retain the other
+  participants' media and release departed streams.
+- Participant names remain literal text in labels and tooltips.
+- Two-person calls use the full video stage without cropping the camera frame,
+  with a larger overlaid self-preview, compact name badges and larger controls.
+- Remote audio no longer writes through a destroyed backend device, preventing
+  a crash when queued participant audio arrives after the output is released.
+
+## [0.2.4] - 2026-09-30
+
+### Changed
+
+- The Settings dialog is regrouped into General, Privacy & Security, Backup,
+  Events, Online, and LiveKit tabs. Notifications and app lock moved into
+  Privacy & Security, and Backup is now its own tab.
+- The Events tab is split into Scheduling defaults, Billing, and Event
+  colors groups instead of one mixed box.
+- The clipboard-clearing options now have their own "Clipboard" group.
+- Every settings page scrolls, and the dialog height is capped to the screen
+  so it always fits.
+
+### Fixed
+
+- On Linux (Wayland), the application now sets its desktop file name and
+  themed window icon, so panels can match the window to the Sessio icon.
+
+## [0.2.3] - 2026-09-30
+
+### Changed
+
+- The call screen's control bar (mute, camera, devices, fullscreen, leave)
+  now floats as an opaque bar over the video instead of sitting in a
+  docked strip below it.
+- The notes toggle is now a separate floating button in the corner of the
+  call screen instead of living in the control bar.
+
+## [0.2.2] - 2026-09-30
+
+### Added
+
+- Mute and camera toggle buttons on the call screen, letting participants
+  silence their microphone or turn off their camera without leaving the
+  call.
+- A mid-call device-switch popover for choosing a different camera,
+  microphone, or speaker while a call is in progress.
+- A self-preview (picture-in-picture) view showing the local camera feed
+  during a call.
+- A fullscreen toggle for the call screen.
+- The notes side panel now opens by default when a call is linked to a
+  client.
+
+### Fixed
+
+- Areas of the call screen without an active video feed no longer render
+  a transparent/see-through artifact.
+
+## [0.2.1] - 2026-09-29
+
+### Fixed
+
+- The device-check preview has a Back button that safely returns to the
+  join form without joining a call; leaving an active room continues to
+  return to that same form.
+- LiveKit invitations may now use the Sessio `sessio://join` deep-link
+  format: pasting one into the join field extracts its code and passcode, and
+  the copy controls remain available in both the event editor and timeline
+  context menu.
+- The token backend supports an `INVITATION_BASE_URL` positional standard
+  format template, allowing it to embed the invitation code and passcode
+  into a valid Sessio deep link while retaining legacy prefix configuration.
+
+## [0.2.0] - 2026-09-28
+
+### Added
+
+- Native in-app LiveKit call UI: a new "Звонки" (Calls) tab in the
+  specialist `MainWindow`, listing the practitioner's own scheduled
+  meetings and offering a "join by code" form for someone else's meeting.
+  Clicking "Open Meeting" on a LiveKit event now routes to this tab
+  instead of opening an external URL.
+- A new, minimal `ClientModeWindow` shell that hosts the same call-entry
+  widget for a pure client with no therapist account — structurally free
+  of any `Database`/client-record/notes dependency.
+- A first-launch role-selection dialog ("Я специалист" / "Я клиент") that
+  persists the chosen `AppRole` in `Config` and determines which window
+  shell `Application` constructs on every subsequent launch. There is no
+  in-app way back: once a role is chosen, only a manual edit of
+  `Config.yaml` (or a fresh install) returns to the selection dialog.
+- The full call experience driven by `VideoSession`: a device-check /
+  pre-join screen with camera preview and camera/microphone/speaker
+  selection, plus connected/reconnecting/ended/failed call screens with a
+  "Завершить" (Leave) control, and a "Заметки" side panel (reusing the
+  existing client notes editor) that is only available to the specialist,
+  never exposed to the remote party. There is no in-call mute, camera
+  toggle, or device-switching control yet; device selection only happens
+  on the pre-join screen, before the call connects.
+- `sessio://` deep links for joining a call directly from a shared
+  invitation, registered as the default handler for the `sessio` URL
+  scheme on Windows (installer registry entry), macOS
+  (`CFBundleURLTypes`), and Linux (`.desktop` MIME association); links
+  received while Sessio is already running are forwarded to the single
+  running instance via a local single-instance guard.
+- LiveKit meetings can now be created and canceled from the event editor
+  when LiveKit is selected as the online-session provider (previously a
+  non-functional stub).
+- A keychain-backed credential store and settings section for configuring
+  the LiveKit token-backend URL and access credential.
+
+### Fixed
+
+- The "Завершить" (Leave) button now actually ends the call, instead of
+  doing nothing.
+- The other participant's video is now displayed during a call.
+- Join and reconnect failures now show the actual reason on screen instead
+  of silently dropping back to the join form.
+- A LiveKit meeting is now only saved to the event once the backend
+  confirms it was created; a failed create no longer leaves the event
+  referencing a meeting that was never actually made, and a re-applied
+  event no longer accumulates orphaned backend meetings.
+- The Open/Copy link/Copy invite buttons on a LiveKit event now reflect
+  whether a meeting actually exists, instead of behaving as if it were an
+  external-link event.
+- Client mode can now be pointed at a specific token backend, either via a
+  `sessio://` join link or a small settings dialog, and takes effect
+  without restarting the app.
+- Loading or saving a corrupted `Config.yaml` no longer crashes the
+  settings dialog.
+
 ## [0.1.34] - 2026-09-26
 
 ### Added

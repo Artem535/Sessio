@@ -1,0 +1,10 @@
+Failed to open VDPAU backend libvdpau_nvidia.so: cannot open shared object file: No such file or directory
+[2026-10-01 09:49:03.433] [livekit] [warning] local_track_published for unknown sid: TR_AM2U7CoqFprPaH
+[2026-10-01T06:49:04Z WARN  livekit::room::participant] could not find publication to remove: TrackSid("TR_unknown")
+[2026-10-01T06:49:04Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 205
+[2026-10-01T06:49:04Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 207
+[2026-10-01T06:49:04Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 58
+[2026-10-01T06:49:04Z WARN  livekit_ffi::server] Attempted to drop unknown FFI handle: 60
+[2026-10-01T06:49:04Z ERROR livekit::rtc_engine::rtc_session] failed to negotiate the publisher: Rtc(RtcError { error_type: InvalidState, message: "CreateOffer called when PeerConnection is closed." })
+synthetic runtime gate failed: synthetic publisher synthetic-red media producer failed: injected audio capture failure
+remote patterns and decoded 440/660 Hz tones passed

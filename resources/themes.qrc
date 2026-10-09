@@ -13,6 +13,7 @@
         <file alias="user-solid-full.svg">icons/user-solid-full.svg</file>
         <file alias="users-gear-solid-full.svg">icons/users-gear-solid-full.svg</file>
         <file alias="users-line-solid-full.svg">icons/users-line-solid-full.svg</file>
+        <file alias="video-solid-full.svg">icons/video-solid-full.svg</file>
     </qresource>
     <qresource prefix="/themes">
         <file alias="qlementine_dark.json">themes/qlementine_dark.json</file>

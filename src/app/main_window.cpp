@@ -40,6 +40,7 @@ MainWindow::MainWindow(QWidget *parent)
   titleLayout->addWidget(titleIconLabel);
   titleLayout->addWidget(titleTextLabel);
   titleLayout->addStretch();
+  mTitleWidget = titleWidget;
   mUi->gridLayout->replaceWidget(mUi->label, titleWidget);
   mUi->label->hide();
   mUi->label->deleteLater();
@@ -55,6 +56,10 @@ MainWindow::MainWindow(QWidget *parent)
       new TabButton(QIcon(":/icons/users-gear-solid-full.svg"), tr(": NAV_DETAILS"), this);
   mBtnNotes =
       new TabButton(QIcon(":/icons/notes.svg"), tr("Notes"), this);
+  mBtnCalls =
+      new TabButton(QIcon(":/icons/video-solid-full.svg"), tr("Calls"), this);
+  mBtnTranscripts = new TabButton(QIcon(":/icons/notes.svg"), tr("Transcripts"), this);
+  mBtnTranscripts->hide();
 
   // Add buttons to the vertical layout
   mUi->verticalLayout->addWidget(mBtnCalendar);
@@ -62,6 +67,8 @@ MainWindow::MainWindow(QWidget *parent)
   mUi->verticalLayout->addWidget(mBtnAnalytics);
   mUi->verticalLayout->addWidget(mBtnProfile);
   mUi->verticalLayout->addWidget(mBtnNotes);
+  mUi->verticalLayout->addWidget(mBtnCalls);
+  mUi->verticalLayout->addWidget(mBtnTranscripts);
   mBtnProfile->hide();
   mBtnNotes->hide();
 
@@ -124,6 +131,8 @@ void MainWindow::addEventInfoPage(QTimelineModel *model,
 
   const int index = mUi->stackedWidget->addWidget(page);
   mPagesIndex.insertOrAssign(Pages::eventInfo, index);
+  // Day|Month switch and "New meeting" live in the top row next to the title.
+  setPageCustomWidget(Pages::eventInfo, page->headerControls());
 }
 
 void MainWindow::addAnalyticsPage(std::shared_ptr<pcm::database::Database> db) {
@@ -151,6 +160,67 @@ void MainWindow::addClientNotesPage(std::shared_ptr<pcm::database::Database> db)
   const int index = mUi->stackedWidget->addWidget(page);
   mPagesIndex.insertOrAssign(Pages::clientNotes, index);
   setPageCustomWidget(Pages::clientNotes, mBtnBackToClients);
+}
+
+void MainWindow::addCallsPage(pcm::video::DeviceManager *deviceManager,
+                              pcm::tokenclient::TokenBackendClient *tokenClient,
+                              std::function<QString()> bearerCredentialProvider) {
+  const auto page = new CallsPage(/*specialistMode=*/true, deviceManager, tokenClient, this);
+  page->setBearerCredentialProvider(std::move(bearerCredentialProvider));
+  mPages.insertOrAssign(Pages::calls, page);
+  connect(page, &CallsPage::fullscreenChanged, this, &MainWindow::setCallFullscreen);
+
+  const int index = mUi->stackedWidget->addWidget(page);
+  mPagesIndex.insertOrAssign(Pages::calls, index);
+}
+
+void MainWindow::setCallFullscreen(bool fullscreen) {
+  if (fullscreen == mCallFullscreen) {
+    return;
+  }
+  mCallFullscreen = fullscreen;
+  if (fullscreen) {
+    mChromeVisibility.clear();
+    const auto hide = [this](QWidget *widget) {
+      if (!widget) return;
+      mChromeVisibility.insert(widget, widget->isVisibleTo(this));
+      widget->hide();
+    };
+    hide(mTitleWidget);
+    hide(mUi->pageCustomWidgetHost);
+    hide(statusBar());
+    for (int i = 0; i < mUi->verticalLayout->count(); ++i) {
+      hide(mUi->verticalLayout->itemAt(i)->widget());
+    }
+    mGridMargins = mUi->gridLayout->contentsMargins();
+    mUi->gridLayout->setContentsMargins(0, 0, 0, 0);
+  } else {
+    for (auto it = mChromeVisibility.cbegin(); it != mChromeVisibility.cend(); ++it) {
+      it.key()->setVisible(it.value());
+    }
+    mChromeVisibility.clear();
+    mUi->gridLayout->setContentsMargins(mGridMargins);
+  }
+}
+
+void MainWindow::registerTranscriptPage(QWidget *page) {
+  if (mPages.contains(Pages::transcript)) return;
+  mPages.insertOrAssign(Pages::transcript, page);
+  mPagesIndex.insertOrAssign(Pages::transcript, mUi->stackedWidget->addWidget(page));
+}
+void MainWindow::openTranscriptPage() { showPage(Pages::transcript, mBtnCalendar); }
+void MainWindow::registerTranscriptListPage(QWidget *page) {
+  if (mPages.contains(Pages::transcriptList)) return;
+  mPages.insertOrAssign(Pages::transcriptList, page);
+  mPagesIndex.insertOrAssign(Pages::transcriptList, mUi->stackedWidget->addWidget(page));
+  mBtnTranscripts->show();
+  connect(mBtnTranscripts, &QPushButton::clicked, this, &MainWindow::openTranscriptListPage);
+}
+void MainWindow::openTranscriptListPage() { showPage(Pages::transcriptList, mBtnTranscripts); }
+void MainWindow::returnToEvent(int64_t eventId, qint64 dayMs) {
+  showPage(Pages::eventInfo, mBtnCalendar);
+  if (auto *page = dynamic_cast<QEventInfoPage *>(getPage(Pages::eventInfo)))
+    page->showEventOnDay(eventId, dayMs);
 }
 
 void MainWindow::setDatabase(std::shared_ptr<pcm::database::Database> db) {
@@ -182,6 +252,8 @@ void MainWindow::connectSignals() {
           [this]() { showPage(Pages::clientCard, mBtnProfile); });
   connect(mBtnNotes, &QPushButton::clicked,
           [this]() { showPage(Pages::clientNotes, mBtnNotes); });
+  connect(mBtnCalls, &QPushButton::clicked,
+          [this]() { showPage(Pages::calls, mBtnCalls); });
 
   // When a client is selected in the list, show its info in the client card page
   connect(clientInfoPage, &ClientInfo::displayButtonClicked, clientCardPage,
@@ -258,6 +330,20 @@ void MainWindow::setPageCustomWidget(const Pages page, QWidget *widget) {
   }
 }
 
+void MainWindow::preselectLiveKitMeeting(const QString &meetingRef) {
+  showPage(Pages::calls, mBtnCalls);
+  if (auto *callsPage = dynamic_cast<CallsPage *>(mPages.value(Pages::calls, nullptr))) {
+    callsPage->preselectOwnMeeting(meetingRef);
+  }
+}
+
+void MainWindow::openJoinLink(const QString &code, const QString &passcode) {
+  showPage(Pages::calls, mBtnCalls);
+  if (auto *callsPage = dynamic_cast<CallsPage *>(mPages.value(Pages::calls, nullptr))) {
+    callsPage->prefillJoinCode(code, passcode);
+  }
+}
+
 void MainWindow::initDefaultStyle() const {
   checkButton(mBtnCalendar);
 }
@@ -268,6 +354,8 @@ void MainWindow::checkButton(QPushButton *btn) const {
   mBtnAnalytics->setChecked(false);
   mBtnProfile->setChecked(false);
   mBtnNotes->setChecked(false);
+  mBtnCalls->setChecked(false);
+  mBtnTranscripts->setChecked(false);
   btn->setChecked(true);
 }
 
@@ -330,19 +418,16 @@ void MainWindow::setupUtilityButtons() {
     button->setCursor(Qt::PointingHandCursor);
     button->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     button->setIconSize(QSize(16, 16));
+    // The colour is taken from the live palette (no hard-coded value), so it
+    // follows the light and dark Qlementine themes; a style sheet without any
+    // colour would leave the text unreadable.
     button->setStyleSheet(
         "QPushButton {"
-        " color: rgba(255, 255, 255, 0.52);"
+        " color: palette(window-text);"
         " background: transparent;"
         " border: none;"
         " padding: 6px 10px;"
         " text-align: left;"
-        "}"
-        "QPushButton:hover {"
-        " color: rgba(255, 255, 255, 0.78);"
-        "}"
-        "QPushButton:pressed {"
-        " color: rgba(255, 255, 255, 0.92);"
         "}");
     return button;
   };
@@ -365,8 +450,11 @@ void MainWindow::setupUtilityButtons() {
 
 void MainWindow::openSettingsDialog() {
   SettingsDialog dialog(mDb, this);
+  dialog.setTranscriptionActiveProvider(mTranscriptionActive);
+  dialog.setRoleSwitcher(mRoleSwitcher);
   dialog.exec();
   refreshPageAppearance();
+  emit settingsSaved();
 }
 
 void MainWindow::openAboutDialog() {
@@ -394,6 +482,12 @@ QString MainWindow::pageTitle(const Pages page) const {
       return tr("Details");
     case Pages::clientNotes:
       return tr("Notes");
+    case Pages::calls:
+      return tr("Calls");
+    case Pages::transcript:
+      return tr("Transcript");
+    case Pages::transcriptList:
+      return tr("Transcripts");
   }
 
   return tr("Page");

@@ -2,7 +2,8 @@
 Type=Application
 Name=Sessio
 Comment=Desktop workspace for calendar scheduling, client management, and session tracking.
-Exec=Sessio
+Exec=Sessio %u
 Icon=Sessio
 Categories=Office;Utility;
 Terminal=false
+MimeType=x-scheme-handler/sessio;
