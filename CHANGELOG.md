@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.28] - 2026-10-09
+
+### Added
+
+- Sessio keeps a log file, `sessio.log` in a `logs` folder of the app's local
+  data (on Windows `%LOCALAPPDATA%\Sessio\Sessio\logs`), rotated at 2 MB.
+  It also receives the LiveKit SDK's own warnings and a timed trace of each
+  step of leaving a call. On Windows a crash writes a small `.dmp` file
+  (thread stacks only) next to it. Both are there to track down the hang and
+  crash on leaving a call seen on Windows.
+
+### Fixed
+
+- Device drop-downs (camera, microphone, speaker) show long device names in
+  full: the list is as wide as its longest entry, and the full name appears
+  as a tooltip.
+- The browser call page has the Sessio icon in the browser tab.
+
 ## [0.2.27] - 2026-10-09
 
 ### Fixed

@@ -23,6 +23,8 @@ qt_add_library(${TARGET_NAME} STATIC
         busy_spinner.h
         call_control_icons.cpp
         call_control_icons.h
+        combo_fit.cpp
+        combo_fit.h
 )
 
 #add_dependencies(${TARGET_NAME}

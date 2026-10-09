@@ -6,6 +6,7 @@
 #include <QAudioSource>
 #include <QBuffer>
 #include <QComboBox>
+#include "combo_fit.h"
 #include <QFont>
 #include <QFrame>
 #include <QGridLayout>
@@ -90,6 +91,7 @@ void refreshDeviceCombo(QComboBox *combo, const DeviceList &devices, const QByte
   } else if (combo->count() > 0) {
     combo->setCurrentIndex(0);
   }
+  pcm::widgets::fitComboToLongItems(combo);
 }
 } // namespace
 
