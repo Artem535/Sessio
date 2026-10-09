@@ -5,6 +5,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <gtest/gtest.h>
+#include <memory>
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 
 // #144: on Windows a combo in the lower part of the screen opened a list a
@@ -27,7 +28,7 @@ TEST(ComboPopupTest, ListNearTheBottomOfTheScreenStillShowsItsRows) {
   combo->showPopup();
   QApplication::processEvents();
 
-  auto *view = combo->view();
+  const auto *view = combo->view();
   int rows = 0;
   for (int i = 0; i < combo->count(); ++i) rows += view->sizeHintForRow(i);
   EXPECT_GE(view->height(), rows);
@@ -42,7 +43,7 @@ TEST(ComboPopupTest, LongListStopsAtMaxVisibleItemsAndScrolls) {
   combo.showPopup();
   QApplication::processEvents();
 
-  auto *view = combo.view();
+  const auto *view = combo.view();
   EXPECT_LE(view->height(), view->sizeHintForRow(0) * 6);
   EXPECT_GE(view->height(), view->sizeHintForRow(0) * 4);
   combo.hidePopup();
@@ -50,7 +51,8 @@ TEST(ComboPopupTest, LongListStopsAtMaxVisibleItemsAndScrolls) {
 
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
-  app.setStyle(new oclero::qlementine::QlementineStyle(&app));
+  // Parented to the application, which also takes ownership in setStyle().
+  QApplication::setStyle(std::make_unique<oclero::qlementine::QlementineStyle>(&app).release());
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
