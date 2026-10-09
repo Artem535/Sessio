@@ -2509,20 +2509,10 @@ See you!</translation>
         <translation>Transcripts</translation>
     </message>
     <message>
-        <source>Date</source>
-        <translation>Date</translation>
-    </message>
-    <message>
-        <source>Status</source>
-        <translation>Status</translation>
-    </message>
-    <message>
-        <source>Clients</source>
-        <translation>Clients</translation>
-    </message>
-    <message>
-        <source>Open transcript</source>
-        <translation>Open transcript</translation>
+        <source>No transcripts yet.
+They appear here after a call with transcription turned on.</source>
+        <translation>No transcripts yet.
+They appear here after a call with transcription turned on.</translation>
     </message>
     <message>
         <source>Delete transcript</source>
@@ -2556,9 +2546,27 @@ See you!</translation>
         <source>No clients attached</source>
         <translation>No clients attached</translation>
     </message>
+    <message numerus="yes">
+        <source>%n phrases</source>
+        <translation>
+            <numerusform>%n phrase</numerusform>
+            <numerusform>%n phrases</numerusform>
+        </translation>
+    </message>
     <message>
-        <source>No transcripts yet.</source>
-        <translation>No transcripts yet.</translation>
+        <source>Open</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Delete</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n transcripts</source>
+        <translation>
+            <numerusform>%n transcript</numerusform>
+            <numerusform>%n transcripts</numerusform>
+        </translation>
     </message>
     <message>
         <source>Could not load transcripts. Please try again.</source>

@@ -5,7 +5,7 @@
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTemporaryDir>
-#include <QTableWidget>
+#include <QFrame>
 #ifdef SESSIO_CALL_TRANSCRIPTION
 #include "transcript_page.h"
 #include "transcript_list_page.h"
@@ -42,10 +42,8 @@ TEST(MainWindowCallsTabTest, StandaloneTranscriptListAndReviewNeedNoEventOrClien
   window.openTranscriptListPage();
   QApplication::processEvents();
   EXPECT_EQ(window.findChild<QStackedWidget *>()->currentWidget(), list);
-  auto *table = list->findChild<QTableWidget *>("transcriptList");
-  ASSERT_NE(table, nullptr);
-  ASSERT_EQ(table->rowCount(), 1);
-  EXPECT_EQ(table->item(0, 0)->data(Qt::UserRole).toLongLong(), id);
+  ASSERT_EQ(list->transcriptCount(), 1);
+  EXPECT_NE(list->findChild<QFrame *>("transcriptCard_" + QString::number(id)), nullptr);
   review->reloadTranscript(id, "Transcript");
   window.openTranscriptPage();
   QApplication::processEvents();
