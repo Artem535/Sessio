@@ -337,6 +337,13 @@ void MainWindow::preselectLiveKitMeeting(const QString &meetingRef) {
   }
 }
 
+void MainWindow::openJoinLink(const QString &code, const QString &passcode) {
+  showPage(Pages::calls, mBtnCalls);
+  if (auto *callsPage = dynamic_cast<CallsPage *>(mPages.value(Pages::calls, nullptr))) {
+    callsPage->prefillJoinCode(code, passcode);
+  }
+}
+
 void MainWindow::initDefaultStyle() const {
   checkButton(mBtnCalendar);
 }

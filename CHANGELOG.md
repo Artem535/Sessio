@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.27] - 2026-10-09
+
+### Fixed
+
+- Call audio plays in both ears on Linux. The remote voice, the microphone
+  capture and the speaker test tone opened their audio streams without a
+  channel layout, which PipeWire treated as an auxiliary channel and sent to
+  the left speaker only.
+- Clicking "Open in app" on the browser call page, or any join link, now
+  switches the desktop app to the Calls tab with the code filled in. Before,
+  the code was filled in on a tab that was not shown, so the link seemed to do
+  nothing.
+
+### Changed
+
+- The browser call page matches the desktop call window: video fills the
+  window, names sit on the tiles, a floating bar holds round microphone,
+  camera, screen and device buttons with clear on/off state, and devices
+  (including the speaker, where the browser allows it) open in a popover.
+  The sign-in screen shows the camera preview next to the form, "Open in app"
+  is a proper button and says so when no app opened, and "Enable audio" only
+  appears when the browser blocked playback.
+
 ## [0.2.26] - 2026-10-09
 
 ### Fixed

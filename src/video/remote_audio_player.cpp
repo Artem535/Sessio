@@ -89,6 +89,9 @@ void RemoteAudioPlayer::deliverAudioOnGuiThread(QByteArray pcmBytes, const int s
     QAudioFormat format;
     format.setSampleRate(sampleRate);
     format.setChannelCount(numChannels);
+    // Without an explicit config Qt's PipeWire backend tags the channels as
+    // AUX0..n, and PipeWire routes AUX0 to the left speaker only.
+    format.setChannelConfig(QAudioFormat::defaultChannelConfigForChannelCount(numChannels));
     format.setSampleFormat(QAudioFormat::Int16);
 
     mSink = std::make_unique<QAudioSink>(mOutputDevice, format, this);

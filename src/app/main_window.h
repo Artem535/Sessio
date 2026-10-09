@@ -126,6 +126,12 @@ public:
    */
   void preselectLiveKitMeeting(const QString &meetingRef);
 
+  /**
+   * @brief Switches to the Calls tab and prefills an invitation's code and
+   * passcode, in response to a sessio:// or browser join link.
+   */
+  void openJoinLink(const QString &code, const QString &passcode);
+
 signals:
   /**
    * @brief Emitted when a client should be saved.
