@@ -1696,6 +1696,10 @@ See you!</source>
         <source>Entry not found</source>
         <translation>Запись не найдена</translation>
     </message>
+    <message>
+        <source> s</source>
+        <translation> с</translation>
+    </message>
 </context>
 <context>
     <name>QShortcut</name>
@@ -2842,6 +2846,58 @@ They appear here after a call with transcription turned on.</source>
     <message>
         <source>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</source>
         <translation>Транскрипция выполняется на этом компьютере. Аудио не сохраняется. Текст хранится в локальной базе вместе с другими данными и включается в резервные копии.</translation>
+    </message>
+    <message>
+        <source>Speech recognition</source>
+        <translation>Распознавание речи</translation>
+    </message>
+    <message>
+        <source>How confident the detector must be that a sound is speech. Raise it if background noise becomes text, lower it if quiet speech is missed.</source>
+        <translation>Насколько детектор должен быть уверен, что звук — речь. Повысьте, если фоновый шум попадает в текст, понизьте, если тихая речь пропускается.</translation>
+    </message>
+    <message>
+        <source>A pause this long ends a phrase. Shorter pauses give shorter, quicker phrases.</source>
+        <translation>Пауза такой длины завершает фразу. Чем короче пауза, тем короче и быстрее появляются фразы.</translation>
+    </message>
+    <message>
+        <source>Sounds shorter than this are ignored.</source>
+        <translation>Более короткие звуки игнорируются.</translation>
+    </message>
+    <message>
+        <source>Continuous speech longer than this is cut into several phrases.</source>
+        <translation>Непрерывная речь длиннее этого значения делится на несколько фраз.</translation>
+    </message>
+    <message>
+        <source>CPU threads for the speech model. More threads are faster but load the computer during a call.</source>
+        <translation>Потоки процессора для модели речи. Больше потоков — быстрее, но выше нагрузка на компьютер во время звонка.</translation>
+    </message>
+    <message>
+        <source>Speech sensitivity</source>
+        <translation>Чувствительность к речи</translation>
+    </message>
+    <message>
+        <source>Pause that ends a phrase</source>
+        <translation>Пауза, завершающая фразу</translation>
+    </message>
+    <message>
+        <source>Shortest speech</source>
+        <translation>Самая короткая речь</translation>
+    </message>
+    <message>
+        <source>Longest phrase</source>
+        <translation>Самая длинная фраза</translation>
+    </message>
+    <message>
+        <source>Recognizer threads</source>
+        <translation>Потоки распознавания</translation>
+    </message>
+    <message>
+        <source>Restore defaults</source>
+        <translation>Вернуть по умолчанию</translation>
+    </message>
+    <message>
+        <source>Changes apply to the next transcription.</source>
+        <translation>Изменения применятся к следующей транскрипции.</translation>
     </message>
     <message>
         <source>Delete all transcripts…</source>

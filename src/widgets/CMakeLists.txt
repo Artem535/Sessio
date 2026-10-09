@@ -35,3 +35,5 @@ target_link_libraries(${TARGET_NAME} PUBLIC
 )
 
 target_include_directories(${TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+# transcription_tuning.h is a Qt-free, header-only value type shared with the speech engine.
+target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_SOURCE_DIR}/src/transcription)

@@ -1112,7 +1112,8 @@ void Application::connectSignals() {
     hooks.engineFactory = [] {
       return pcm::calltranscription::makeProductionEngineFactory(
           QCoreApplication::applicationDirPath().toStdString(),
-          qEnvironmentVariable("SESSIO_MODELS_DIR").toStdString());
+          qEnvironmentVariable("SESSIO_MODELS_DIR").toStdString(),
+          pcm::app_settings::transcriptionTuning());
     };
     auto modelsAvailable = [] {
       return pcm::calltranscription::transcriptionModelsAvailable(

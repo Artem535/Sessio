@@ -745,6 +745,7 @@ void SettingsDialog::setupTranscriptionSection() {
   auto *panel = new TranscriptionSettingsPanel(mSettingsStack);
   mTranscriptionPanel = panel;
   panel->setEnabledState(pcm::app_settings::transcriptionEnabled());
+  panel->setTuning(pcm::app_settings::transcriptionTuning());
   panel->setModelInfo(QStringLiteral("gigaam-v3-rnnt"),
       pcm::calltranscription::transcriptionModelsAvailable(
           QCoreApplication::applicationDirPath().toStdString(),
@@ -754,6 +755,8 @@ void SettingsDialog::setupTranscriptionSection() {
   mSettingsStack->addWidget(makeScrollPage(panel, mSettingsStack));
   connect(panel, &TranscriptionSettingsPanel::enabledToggled, this,
           &pcm::app_settings::setTranscriptionEnabled);
+  connect(panel, &TranscriptionSettingsPanel::tuningChanged, this,
+          &pcm::app_settings::setTranscriptionTuning);
   connect(panel, &TranscriptionSettingsPanel::deleteAllRequested, this, [this, panel] {
     if (!mDb) return;
     if (mTranscriptionActive && mTranscriptionActive()) return;
