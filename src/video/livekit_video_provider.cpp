@@ -9,7 +9,9 @@
 #include "screen_capture_adapter.h"
 #include "video_capture_adapter.h"
 
+#include <QElapsedTimer>
 #include <QJsonDocument>
+#include <QLoggingCategory>
 #include <QJsonObject>
 #include <QMetaObject>
 #include <QVideoFrame>
@@ -17,6 +19,9 @@
 #include <atomic>
 #include <chrono>
 #include <mutex>
+
+Q_LOGGING_CATEGORY(logVideoProvider, "pcm.video.provider")
+Q_LOGGING_CATEGORY(logLiveKit, "pcm.livekit")
 
 namespace pcm::video {
 namespace {
@@ -196,7 +201,15 @@ private:
 };
 
 LiveKitVideoProvider::LiveKitRuntimeGuard::LiveKitRuntimeGuard() {
-  if (gLiveKitRefCount.fetch_add(1) == 0) livekit::initialize(livekit::LogLevel::Warn);
+  if (gLiveKitRefCount.fetch_add(1) == 0) {
+    livekit::initialize(livekit::LogLevel::Warn);
+    // The SDK's default sink is stderr, which a Windows GUI build does not have.
+    livekit::setLogCallback([](livekit::LogLevel level, const std::string &logger, const std::string &message) {
+      const auto text = QString::fromStdString(logger + ": " + message);
+      if (level >= livekit::LogLevel::Error) qCWarning(logLiveKit).noquote() << text;
+      else qCInfo(logLiveKit).noquote() << text;
+    });
+  }
 }
 LiveKitVideoProvider::LiveKitRuntimeGuard::~LiveKitRuntimeGuard() {
   if (gLiveKitRefCount.fetch_sub(1) == 1) livekit::shutdown();
@@ -414,7 +427,9 @@ void LiveKitVideoProvider::applyDeparture(const QString &id, const QString &sid)
   if (it == mMedia.end() || it->second->sid != sid) return;
   mDeparted.insert({id, sid});
   participants()->remove(id);
+  qCInfo(logVideoProvider) << "remote participant left; closing its media";
   mMedia.erase(it); // source/player destructors close blocked reads before join
+  qCInfo(logVideoProvider) << "remote participant media closed";
   emit participantLeft(id);
 }
 
@@ -679,6 +694,15 @@ void LiveKitVideoProvider::switchSpeaker(const QAudioDevice &device) {
 
 
 void LiveKitVideoProvider::teardown() {
+  // Each step is logged with its time: a hang on leaving a call (seen on
+  // Windows, #142) has to show up in the log as the step that never finished.
+  const bool hadRoom = mRoom != nullptr;
+  QElapsedTimer clock;
+  clock.start();
+  const auto step = [&](const char *name) {
+    if (hadRoom) qCInfo(logVideoProvider) << "teardown:" << name << clock.elapsed() << "ms";
+  };
+  step("begin");
   ++mGeneration;
   mPendingMicrophone.reset();
   mMicrophoneSwitchQueued = false;
@@ -689,14 +713,17 @@ void LiveKitVideoProvider::teardown() {
     mPendingCallbacks.clear();
   }
   if (mRoom) mRoom->setDelegate(nullptr);
+  step("delegate detached");
   mVideoCapture->stop();
   mAudioCapture->stop();
   const bool wasSharing = mScreenTrack != nullptr;
   mScreenCapture.reset();
+  step("capture stopped");
   participants()->clear();
   mMedia.clear();
   mLocalIdentity.clear();
   mDeparted.clear();
+  step("remote media closed");
   if (mRoom) {
     try {
       unpublishTracks();
@@ -704,15 +731,19 @@ void LiveKitVideoProvider::teardown() {
       // Teardown must finish even when a disconnected room refuses unpublish.
     }
   }
+  step("tracks unpublished");
   mAudioTrack.reset();
   mVideoTrack.reset();
   mScreenTrack.reset();
   mRoom.reset();
+  step("room closed");
   mDelegate.reset();
+  step("done");
   if (wasSharing) emit screenSharingChanged(false);
 }
 
 void LiveKitVideoProvider::leave() {
+  qCInfo(logVideoProvider) << "leave requested";
   teardown();
   emit left();
 }

@@ -9,6 +9,7 @@
 #include <QCameraDevice>
 #include <QAction>
 #include <QComboBox>
+#include "combo_fit.h"
 #include <QGuiApplication>
 #include <QScreen>
 #include <QWindowCapture>
@@ -838,6 +839,7 @@ void CallPage::showDevicesPopover() {
         combo->setCurrentIndex(combo->count() - 1);
       }
     }
+    pcm::widgets::fitComboToLongItems(combo);
     QObject::connect(combo, &QComboBox::currentIndexChanged, menu, [combo, onSelected](int index) {
       if (index < 0) {
         return;

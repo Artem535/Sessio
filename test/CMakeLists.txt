@@ -971,6 +971,17 @@ target_link_libraries(Sessio_client_mode_window_tests PRIVATE
 )
 gtest_discover_tests(Sessio_client_mode_window_tests)
 
+# Log file and device-combo fitting (#142)
+add_executable(Sessio_file_log_tests file_log_tests.cpp)
+target_link_libraries(Sessio_file_log_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Sessio_app
+    Sessio_widgets
+)
+target_include_directories(Sessio_file_log_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/widgets)
+gtest_discover_tests(Sessio_file_log_tests)
+
 # Sessio URL parsing tests
 add_executable(Sessio_sessio_url_tests sessio_url_tests.cpp)
 target_link_libraries(Sessio_sessio_url_tests PRIVATE

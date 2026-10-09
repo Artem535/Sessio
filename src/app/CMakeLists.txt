@@ -31,6 +31,7 @@ qt_add_library(${TARGET_NAME} STATIC
         app_role_switcher.cpp
         application_restarter.cpp
         role_switch_prompt.cpp
+        file_log.cpp
 )
 
 target_include_directories(${TARGET_NAME} PRIVATE
@@ -80,6 +81,11 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         qt6keychain
         unofficial-sodium::sodium
 )
+
+if(WIN32)
+  # MiniDumpWriteDump for the crash handler in file_log.cpp.
+  target_link_libraries(${TARGET_NAME} PRIVATE dbghelp)
+endif()
 
 target_include_directories(${TARGET_NAME} PRIVATE
         ${qtkeychain_SOURCE_DIR}

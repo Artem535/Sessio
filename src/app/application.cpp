@@ -1,4 +1,5 @@
 #include "application.h"
+#include "file_log.h"
 #include "app_lock_dialog.h"
 #include "role_selection_dialog.h"
 #include "provider_kind.h"
@@ -29,6 +30,7 @@
 #include <QLibraryInfo>
 #include <QMenu>
 #include <QStringList>
+#include <QSysInfo>
 #include <QTimeZone>
 #include <QTranslator>
 #include <QWidget>
@@ -163,7 +165,15 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  app.setApplicationVersion("0.2.27");
+  app.setApplicationVersion("0.2.28");
+  // Before anything that can log: on Windows this file and the crash dump are
+  // the only trace a hang or crash leaves.
+  const QString logDir =
+      QDir(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)).filePath(QStringLiteral("logs"));
+  pcm::app::installFileLog(logDir);
+  pcm::app::installCrashDumpHandler(logDir);
+  qCInfo(logApplication).noquote() << "Sessio" << QCoreApplication::applicationVersion() << "on"
+                                   << QSysInfo::prettyProductName();
   // Installed builds ship libical's timezone data next to the executable; the
   // path compiled into the schedule engine only exists in development trees.
   pcm::meeting::configureScheduleZoneinfo(QCoreApplication::applicationDirPath());
