@@ -22,7 +22,7 @@ export function ParticipantTile({participant}:{participant:Participant}) {
   useEffect(()=>{ const element=video.current; if (element && camera) camera.attach(element); return()=>{if(element && camera) camera.detach(element);}; },[camera]);
   useEffect(()=>{ const element=audio.current; if (element && microphone && !participant.isLocal) microphone.attach(element); return()=>{if(element && microphone) microphone.detach(element);}; },[microphone,participant.isLocal]);
   return <article className={'tile'+(participant.isSpeaking?' speaking':'')+(participant.isLocal?' local':'')}>
-    <video ref={video} autoPlay playsInline muted={participant.isLocal} hidden={!showVideo}/>
+    <video ref={video} autoPlay playsInline muted={participant.isLocal} hidden={!showVideo}><track kind="captions"/></video>
     {!showVideo && <div className="avatar" aria-hidden="true">{initials(participant.name || 'Guest')}</div>}
-    <audio ref={audio} autoPlay/><NameTag participant={participant}/></article>;
+    <audio ref={audio} autoPlay><track kind="captions"/></audio><NameTag participant={participant}/></article>;
 }

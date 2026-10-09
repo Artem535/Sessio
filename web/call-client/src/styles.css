@@ -68,7 +68,8 @@ main.in-call{padding:0;display:block;height:100%}
 .tile.local video{transform:scaleX(-1)}
 .tile.screen{background:#000}
 .tile.screen video{object-fit:contain;transform:none}
-.tile.selectable{cursor:pointer}
+.tile.selectable{cursor:pointer;padding:0;border:none;color:inherit;font:inherit}
+.tile.selectable:hover{background:#000;outline-color:var(--line)}
 .avatar{position:absolute;inset:0;margin:auto;width:clamp(48px,28%,112px);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:var(--accent);font-size:clamp(16px,4vw,36px);font-weight:600;color:#fff}
 .strip .avatar{font-size:16px}
 .name-tag{position:absolute;left:10px;bottom:10px;max-width:calc(100% - 20px);display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;background:rgba(20,20,20,.85);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

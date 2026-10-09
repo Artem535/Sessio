@@ -13,5 +13,8 @@ export function ScreenTile({participant,onSelect}:{participant:Participant;onSel
   const screen = screenTrackOf(participant);
   useEffect(()=>{ const element=video.current; if (element && screen) screen.attach(element); return()=>{if(element && screen) screen.detach(element);}; },[screen]);
   if (!screen) return null;
-  return <article className={'tile screen'+(onSelect?' selectable':'')} onClick={onSelect}><video ref={video} autoPlay playsInline muted/><NameTag participant={participant} suffix={text.sharing}/></article>;
+  const content = <><video ref={video} autoPlay playsInline muted><track kind="captions"/></video><NameTag participant={participant} suffix={text.sharing}/></>;
+  // A screen in the strip is a button that brings it to the stage.
+  if (onSelect) return <button type="button" className="tile screen selectable" aria-label={`${participant.name || 'Guest'} · ${text.sharing}`} onClick={onSelect}>{content}</button>;
+  return <article className="tile screen">{content}</article>;
 }
