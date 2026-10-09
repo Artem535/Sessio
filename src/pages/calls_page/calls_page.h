@@ -56,6 +56,8 @@ public:
 
 signals:
   void transcribeRequested();
+  // The Calls tab was opened; the owner refreshes today's meetings so they are never stale.
+  void upcomingMeetingsRefreshRequested();
   void callSessionStarted(pcm::video::VideoSession *session);
   void callSessionEnded();
   void eventKnownForCurrentCall(int64_t eventId);

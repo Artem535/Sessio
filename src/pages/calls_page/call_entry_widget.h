@@ -37,6 +37,8 @@ protected:
 signals:
   void ownMeetingJoinRequested(QString meetingRef);
   void joinByCodeRequested(QString code, QString passcode);
+  // The entry screen became visible: its meeting list may be stale.
+  void shown();
 
 private:
   bool mShowOwnMeetings;

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.26] - 2026-10-09
+
+### Fixed
+
+- Today's meetings on the Calls tab update at once when a meeting is created,
+  edited, rescheduled or cancelled, and whenever the tab is opened, instead of
+  after the next 30-second poll.
+- Leaving the device-check preview releases the camera for good: a device-list
+  change after the screen is hidden no longer reopens it (the camera indicator
+  stayed on and the camera kept recording).
+
 ## [0.2.23] - 2026-10-08
 
 ### Changed

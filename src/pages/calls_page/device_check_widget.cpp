@@ -283,8 +283,15 @@ void DeviceCheckWidget::ensurePreviewAdapter() {
           });
 }
 
+bool DeviceCheckWidget::previewActive() const {
+  return mPreviewAdapter && mPreviewAdapter->isActive();
+}
+
 void DeviceCheckWidget::restartPreview() {
-  if (!mPreviewAdapter) {
+  // Never reopen the camera while the screen is hidden: a device-list change or a selection
+  // update that arrives after leaving the preview would otherwise turn the camera back on
+  // (indicator lit, recording) with nobody looking at it. showEvent() starts it again.
+  if (!mPreviewAdapter || !isVisible()) {
     return;
   }
   const auto cameras = mDeviceManager->cameras();

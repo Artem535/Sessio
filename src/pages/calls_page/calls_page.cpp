@@ -108,6 +108,7 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
             mTokenClient->requestSpecialistToken(mBearerCredentialProvider(), meetingRef, mEntryWidget->displayName());
           });
 
+  connect(mEntryWidget, &CallEntryWidget::shown, this, &CallsPage::upcomingMeetingsRefreshRequested);
   connect(mCallPage, &CallPage::transcribeRequested, this, &CallsPage::transcribeRequested);
   connect(mCallPage, &CallPage::callEnded, this, [this]() {
     endCallSession();

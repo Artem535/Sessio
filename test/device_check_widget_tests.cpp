@@ -10,6 +10,24 @@
 #include <QSignalSpy>
 #include <QTest>
 #include <gtest/gtest.h>
+#include <livekit/livekit.h>
+
+TEST(DeviceCheckWidgetTest, LeavingThePreviewReleasesTheCameraAndLaterDeviceChangesDoNotReopenIt) {
+  pcm::video::DeviceManager deviceManager;
+  DeviceCheckWidget widget(&deviceManager);
+  widget.show();
+  QApplication::processEvents();
+  widget.hide();
+  EXPECT_FALSE(widget.previewActive());
+  // A hot-plug event or the call's own camera start can change the device lists while hidden.
+  emit deviceManager.devicesChanged();
+  QApplication::processEvents();
+  EXPECT_FALSE(widget.previewActive());
+  widget.show();
+  QApplication::processEvents();
+  widget.hide();
+  EXPECT_FALSE(widget.previewActive());
+}
 
 TEST(DeviceCheckWidgetTest, HasCameraMicrophoneSpeakerSelectors) {
   pcm::video::DeviceManager deviceManager;
@@ -100,6 +118,10 @@ TEST(DeviceCheckWidgetTest, NoAncestorOfAComboBoxCarriesAStyleSheet) {
 
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
+  // The preview's capture adapter creates a LiveKit video source, so the SDK must be up.
+  livekit::initialize(livekit::LogLevel::Warn);
   ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+  const int result = RUN_ALL_TESTS();
+  livekit::shutdown();
+  return result;
 }

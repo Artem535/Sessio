@@ -33,6 +33,8 @@ public:
   [[nodiscard]] std::optional<QCameraDevice> selectedCamera() const;
   [[nodiscard]] std::optional<QAudioDevice> selectedMicrophone() const;
   [[nodiscard]] std::optional<QAudioDevice> selectedSpeaker() const;
+  // True while the preview holds the camera open.
+  [[nodiscard]] bool previewActive() const;
 
 signals:
   void joinRequested();
