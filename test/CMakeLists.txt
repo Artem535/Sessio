@@ -1079,6 +1079,12 @@ target_link_libraries(Sessio_accent_color_tests PRIVATE
     GTest::gtest Qt6::Widgets Sessio_event_page)
 gtest_discover_tests(Sessio_accent_color_tests)
 
+# qlementine combo drop-down height (#144)
+add_executable(Sessio_combo_popup_tests combo_popup_tests.cpp)
+target_include_directories(Sessio_combo_popup_tests PRIVATE ${qlementine_SOURCE_DIR}/lib/include)
+target_link_libraries(Sessio_combo_popup_tests PRIVATE GTest::gtest Qt6::Widgets qlementine)
+gtest_discover_tests(Sessio_combo_popup_tests)
+
 if(SESSIO_TRANSCRIPTION_ENABLED)
 add_executable(Sessio_transcription_consent_dialog_tests transcription_consent_dialog_tests.cpp)
 add_executable(Sessio_transcription_settings_panel_tests transcription_settings_panel_tests.cpp)

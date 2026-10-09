@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.29] - 2026-10-09
+
+### Fixed
+
+- Drop-down lists (device selectors and every other combo box) open at their
+  full height again on Windows. A list near the bottom of the screen was cut
+  to a sliver, so its entries did not fit; it now shows up to its usual number
+  of rows and the system moves it up when there is no room below.
+
 ## [0.2.28] - 2026-10-09
 
 ### Added
