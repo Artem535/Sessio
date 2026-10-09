@@ -6,6 +6,7 @@
 #include <QStackedWidget>
 #include <QTemporaryDir>
 #include <QFrame>
+#include <QLineEdit>
 #ifdef SESSIO_CALL_TRANSCRIPTION
 #include "transcript_page.h"
 #include "transcript_list_page.h"
@@ -21,6 +22,29 @@ TEST(MainWindowCallsTabTest, AddCallsPageAddsCallsTabAndPage) {
 
   EXPECT_NE(window.getPage(MainWindow::Pages::calls), nullptr);
   EXPECT_NE(window.findChild<QPushButton *>(), nullptr); // sidebar buttons exist
+}
+
+TEST(MainWindowCallsTabTest, JoinLinkSwitchesToCallsTabWithPrefilledCode) {
+  MainWindow window;
+  pcm::video::DeviceManager deviceManager;
+  pcm::tokenclient::TokenBackendClient tokenClient("http://127.0.0.1:1");
+  window.addCallsPage(&deviceManager, &tokenClient, [] { return QString(); });
+  auto *stack = window.findChild<QStackedWidget *>("stackedWidget");
+  ASSERT_NE(stack, nullptr);
+  // The specialist is looking at some other page when the link arrives.
+  auto *otherPage = new QWidget(stack);
+  stack->setCurrentIndex(stack->addWidget(otherPage));
+  ASSERT_NE(stack->currentWidget(), window.getPage(MainWindow::Pages::calls));
+
+  window.openJoinLink("ABCD-1234", "123456");
+
+  EXPECT_EQ(stack->currentWidget(), window.getPage(MainWindow::Pages::calls));
+  auto *code = window.findChild<QLineEdit *>("joinCodeEdit");
+  auto *passcode = window.findChild<QLineEdit *>("joinPasscodeEdit");
+  ASSERT_NE(code, nullptr);
+  ASSERT_NE(passcode, nullptr);
+  EXPECT_EQ(code->text(), "ABCD-1234");
+  EXPECT_EQ(passcode->text(), "123456");
 }
 
 #ifdef SESSIO_CALL_TRANSCRIPTION

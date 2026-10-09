@@ -163,7 +163,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  app.setApplicationVersion("0.2.26");
+  app.setApplicationVersion("0.2.27");
   // Installed builds ship libical's timezone data next to the executable; the
   // path compiled into the schedule engine only exists in development trees.
   pcm::meeting::configureScheduleZoneinfo(QCoreApplication::applicationDirPath());
@@ -606,9 +606,9 @@ void Application::handleJoinLink(const QString &url) {
     qCInfo(logApplication) << "Ignoring the join link's backend in specialist mode";
   }
   if (mMainWindow) {
-    if (auto *callsPage = dynamic_cast<CallsPage *>(mMainWindow->getPage(MainWindow::Pages::calls))) {
-      callsPage->prefillJoinCode(link->code, link->passcode);
-    }
+    // Switch tabs too: prefilling a page the specialist is not looking at
+    // makes the link look like it did nothing.
+    mMainWindow->openJoinLink(link->code, link->passcode);
   } else if (mClientModeWindow) {
     // ClientModeWindow's CallsPage is its central widget — reuse the same
     // dynamic_cast pattern via centralWidget() rather than a page lookup.

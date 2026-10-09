@@ -4,6 +4,7 @@ import { type Invitation } from './invitation';
 import { joinGuest } from './join-api';
 import { Prejoin, type DeviceSettings } from './Prejoin';
 import { CallRoom } from './CallRoom';
+import { NativeLink } from './NativeLink';
 import { text } from './copy';
 export function App({invitation}:{invitation:Invitation|null}) {
   const [room,setRoom] = useState<Room|null>(null), [busy,setBusy] = useState(false), [ended,setEnded] = useState(false), [error,setError] = useState('');
@@ -32,8 +33,9 @@ export function App({invitation}:{invitation:Invitation|null}) {
     }catch{if(epoch===generation.current){release();setError(text.error);}}
     finally{clearTimeout(timer);if(pending.current===controller){pending.current=null;setBusy(false);}}
   };
-  if(ended)return <main><h1>{text.ended}</h1></main>;
-  if(!invitation)return <main><h1>{text.invalid}</h1></main>;
+  if(ended)return <main className="message"><div className="card"><span className="brand">Sessio</span><h1>{text.ended}</h1></div></main>;
+  if(!invitation)return <main className="message"><div className="card"><span className="brand">Sessio</span><h1>{text.invalid}</h1></div></main>;
   const nativeLink = `sessio://join?${new URLSearchParams({code:invitation.code,passcode:invitation.passcode,backend:location.origin})}`;
-  return <main>{room ? <CallRoom room={room} onLeave={leave}/> : <><Prejoin busy={busy} onJoin={settings=>void join(settings)}/><p className="native"><a href={nativeLink} rel="noreferrer">{text.open}</a></p></>} {error && <p role="alert">{error}</p>}</main>;
+  if(room)return <main className="in-call"><CallRoom room={room} onLeave={leave} nativeLink={nativeLink}/>{error && <p className="alert" role="alert">{error}</p>}</main>;
+  return <main><Prejoin busy={busy} onJoin={settings=>void join(settings)} footer={<><p className="or"><span>{text.or}</span></p><NativeLink href={nativeLink}/></>}/>{error && <p className="alert" role="alert">{error}</p>}</main>;
 }

@@ -406,6 +406,8 @@ void DeviceCheckWidget::playSpeakerTest() {
   QAudioFormat format;
   format.setSampleRate(48000);
   format.setChannelCount(1);
+  // Mono, not AUX0: PipeWire would play an unpositioned channel in the left ear only.
+  format.setChannelConfig(QAudioFormat::ChannelConfigMono);
   format.setSampleFormat(QAudioFormat::Int16);
   if (!speaker->isFormatSupported(format)) {
     format = speaker->preferredFormat();

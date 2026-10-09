@@ -19,6 +19,8 @@ private:
     QAudioFormat value;
     value.setSampleRate(AudioCaptureAdapter::kSampleRate);
     value.setChannelCount(AudioCaptureAdapter::kChannels);
+    value.setChannelConfig(
+        QAudioFormat::defaultChannelConfigForChannelCount(AudioCaptureAdapter::kChannels));
     value.setSampleFormat(QAudioFormat::Int16);
     return value;
   }

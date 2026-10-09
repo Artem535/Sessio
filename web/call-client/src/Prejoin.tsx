@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { validateDisplayName } from './display-name';
 import { text } from './copy';
 export interface DeviceSettings { name:string; microphoneId:string; cameraId:string; microphoneEnabled:boolean; cameraEnabled:boolean }
-export function Prejoin({onJoin,busy}:{onJoin:(settings:DeviceSettings)=>void;busy:boolean}) {
+export function Prejoin({onJoin,busy,footer}:{onJoin:(settings:DeviceSettings)=>void;busy:boolean;footer?:ReactNode}) {
   const [name,setName] = useState(''), [mic,setMic] = useState(false), [camera,setCamera] = useState(false);
   const [devices,setDevices] = useState<MediaDeviceInfo[]>([]), [microphoneId,setMicrophoneId] = useState(''), [cameraId,setCameraId] = useState('');
   const [notice,setNotice] = useState(''), [level,setLevel] = useState(0);
@@ -36,13 +36,19 @@ export function Prejoin({onJoin,busy}:{onJoin:(settings:DeviceSettings)=>void;bu
     } catch { if (generation.current === epoch) { stop(); setMic(false); setCamera(false); setNotice(text.denied); } }
   };
   let valid = false; try { validateDisplayName(name); valid = true; } catch { /* form validity */ }
-  return <section className="prejoin"><h1>{text.title}</h1><video ref={video} autoPlay muted playsInline aria-label={text.preview}/>
-    <label>{text.name}<input maxLength={160} value={name} onChange={event=>setName(event.target.value)} autoComplete="off" disabled={busy}/></label>
-    <button disabled={busy} onClick={()=>void preview()}>{text.check}</button><meter min={0} max={1} value={mic ? level : 0} aria-label={text.mic}/>
-    <label>{text.mic}<select aria-label={`${text.mic} device`} disabled={busy} value={microphoneId} onChange={event=>{setMicrophoneId(event.target.value); void preview(event.target.value,cameraId);}}><option value="">Default</option>{devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label}</option>)}</select></label>
-    <label>{text.camera}<select aria-label={`${text.camera} device`} disabled={busy} value={cameraId} onChange={event=>{setCameraId(event.target.value); void preview(microphoneId,event.target.value);}}><option value="">Default</option>{devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label}</option>)}</select></label>
-    <label className="check"><input type="checkbox" checked={mic} onChange={event=>{microphoneIntent.current=event.target.checked;setMic(event.target.checked); stream.current?.getAudioTracks().forEach(t=>t.enabled=event.target.checked);}}/>{text.mic}</label>
-    <label className="check"><input type="checkbox" checked={camera} onChange={event=>{cameraIntent.current=event.target.checked;setCamera(event.target.checked); stream.current?.getVideoTracks().forEach(t=>t.enabled=event.target.checked);}}/>{text.camera}</label>
-    {notice && <p role="status">{notice}</p>}<button className="primary" disabled={!valid || busy} onClick={()=>{stop(); onJoin({name:validateDisplayName(name),microphoneId,cameraId,microphoneEnabled:mic,cameraEnabled:camera});}}>{busy ? text.connecting : text.join}</button>
+  return <section className="prejoin">
+    <div className="form"><span className="brand">Sessio</span><h1>{text.title}</h1><p className="lead">{text.lead}</p>
+      <label>{text.name}<input maxLength={160} value={name} onChange={event=>setName(event.target.value)} autoComplete="off" disabled={busy}/></label>
+      <label>{text.mic}<select aria-label={`${text.mic} device`} disabled={busy} value={microphoneId} onChange={event=>{setMicrophoneId(event.target.value); void preview(event.target.value,cameraId);}}><option value="">{text.defaultDevice}</option>{devices.filter(d=>d.kind==='audioinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label}</option>)}</select></label>
+      <label>{text.camera}<select aria-label={`${text.camera} device`} disabled={busy} value={cameraId} onChange={event=>{setCameraId(event.target.value); void preview(microphoneId,event.target.value);}}><option value="">{text.defaultDevice}</option>{devices.filter(d=>d.kind==='videoinput').map(d=><option key={d.deviceId} value={d.deviceId}>{d.label}</option>)}</select></label>
+      {notice && <p className="notice" role="status">{notice}</p>}<button className="primary" disabled={!valid || busy} onClick={()=>{stop(); onJoin({name:validateDisplayName(name),microphoneId,cameraId,microphoneEnabled:mic,cameraEnabled:camera});}}>{busy ? text.connecting : text.join}</button>
+      {footer}</div>
+    <div className="preview"><video ref={video} autoPlay muted playsInline aria-label={text.preview}/>
+      <button className="check" disabled={busy} onClick={()=>void preview()}>{text.check}</button>
+      <meter min={0} max={1} value={mic ? level : 0} aria-label={text.mic}/>
+      <div className="toggles">
+        <label className="check-toggle"><input type="checkbox" checked={mic} onChange={event=>{microphoneIntent.current=event.target.checked;setMic(event.target.checked); stream.current?.getAudioTracks().forEach(t=>t.enabled=event.target.checked);}}/>{text.mic}</label>
+        <label className="check-toggle"><input type="checkbox" checked={camera} onChange={event=>{cameraIntent.current=event.target.checked;setCamera(event.target.checked); stream.current?.getVideoTracks().forEach(t=>t.enabled=event.target.checked);}}/>{text.camera}</label>
+      </div></div>
   </section>;
 }
