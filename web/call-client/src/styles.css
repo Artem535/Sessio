@@ -54,6 +54,13 @@ main.in-call{padding:0;display:block;height:100%}
 .view-controls{display:flex;gap:8px;margin-left:auto}
 .view-controls button{font-size:13px;padding:7px 10px}
 .view-controls button[aria-pressed=true]{background:var(--accent)}
+.view-controls{flex-wrap:wrap;justify-content:flex-end}
+.layout-buttons{display:flex;gap:4px}
+.stage.overlay-layout{padding:0}
+.overlay-layout .participants-main{padding:0}
+.overlay-layout .participants-main>.tile:only-child{border-radius:0}
+.pip-preview{position:absolute;right:20px;bottom:84px;width:min(33vw,clamp(200px,20vw,280px));z-index:1;box-shadow:0 4px 20px #0008}
+.overlay-layout .participants-main .name-tag{bottom:96px}
 .call-top{flex-wrap:wrap}
 .participants-layout{display:grid;grid-template-columns:minmax(0,1fr) clamp(140px,20vw,240px);gap:12px}
 .participants-main{min-width:0}
@@ -63,6 +70,7 @@ main.in-call{padding:0;display:block;height:100%}
 @media(max-width:639px){
   .participants-layout{grid-template-columns:minmax(0,1fr) 110px;gap:8px}
   .self-preview{aspect-ratio:3/4}
+  .pip-preview{aspect-ratio:16/9;right:12px}
   .self-preview .name-tag{left:4px;bottom:4px;max-width:calc(100% - 8px);padding:4px;font-size:11px}
   .controls{gap:4px;padding:4px 6px;max-width:calc(100% - 12px)}
   .leave{padding:0 12px}

@@ -28,7 +28,7 @@ export function CallRoom({room,onLeave,nativeLink}:{room:Room;onLeave:()=>void;n
   const [devicesOpen,setDevicesOpen] = useState(false), [featured,setFeatured] = useState<string|null>(null);
   const width = useWidth();
   const call = useRef<HTMLElement>(null);
-  const [participantsLarge,setParticipantsLarge] = useState(false), [fullscreen,setFullscreen] = useState(false);
+  const [layout,setLayout] = useState<'auto'|'grid'|'overlay'|'side'>('auto'), [fullscreen,setFullscreen] = useState(false);
   useEffect(()=>{
     const element=call.current;
     const changed=()=>setFullscreen(document.fullscreenElement===element);
@@ -50,9 +50,12 @@ export function CallRoom({room,onLeave,nativeLink}:{room:Room;onLeave:()=>void;n
 
   const everyone:Participant[]=[local,...room.remoteParticipants.values()];
   const sharers=everyone.filter(p=>screenTrackOf(p));
-  const stageScreen=participantsLarge?undefined:(sharers.find(p=>p.identity===featured) ?? sharers[0]);
-  const cameras=participantsLarge?everyone.filter(p=>!p.isLocal):everyone;
-  const columns=gridColumns(cameras.length,participantsLarge?Math.max(0,width-240):width);
+  const stageScreen=layout==='auto'?(sharers.find(p=>p.identity===featured) ?? sharers[0]):undefined;
+  const remotes=everyone.filter(p=>!p.isLocal);
+  const overlay=!stageScreen && remotes.length>0 && (layout==='overlay' || (layout==='auto' && remotes.length===1));
+  const side=layout==='side';
+  const cameras=side || overlay?remotes:everyone;
+  const columns=gridColumns(cameras.length,side?Math.max(0,width-240):width);
   const grid={'--cols':columns,'--rows':Math.max(1,Math.ceil(cameras.length/columns))} as CSSProperties;
   const alone=room.remoteParticipants.size===0;
   const kinds:DeviceKind[]=canPickSpeaker?['audioinput','videoinput','audiooutput']:['audioinput','videoinput'];
@@ -61,18 +64,20 @@ export function CallRoom({room,onLeave,nativeLink}:{room:Room;onLeave:()=>void;n
   return <section className="call" ref={call}>
     <header className="call-top"><span className="brand">Sessio</span><span className="count">{everyone.length}</span>
       <div className="view-controls">
-        <button data-testid="participants-layout" aria-pressed={participantsLarge} onClick={()=>setParticipantsLarge(value=>!value)}>{participantsLarge?text.standardLayout:text.participantsLarge}</button>
+        <div className="layout-buttons" role="group" aria-label={text.layout}>
+          {(['auto','grid','overlay','side'] as const).map(mode=><button key={mode} data-layout={mode} aria-pressed={layout===mode} onClick={()=>setLayout(mode)}>{text[mode]}</button>)}
+        </div>
         {typeof document.documentElement.requestFullscreen==='function' && <button aria-pressed={fullscreen} onClick={()=>void toggleFullscreen()}>{fullscreen?text.exitFullscreen:text.fullscreen}</button>}
       </div>
       {nativeLink && <NativeLink href={nativeLink} compact/>}</header>
-    <div className={'stage'+(stageScreen?' with-screen':'')+(participantsLarge?' participants-layout':'')}>
+    <div className={'stage'+(stageScreen?' with-screen':'')+(side?' participants-layout':'')+(overlay?' overlay-layout':'')}>
       {stageScreen ? <>
         <div className="featured"><ScreenTile key={stageScreen.identity+'#screen'} participant={stageScreen}/></div>
         <div className="strip">{sharers.filter(p=>p!==stageScreen).map(p=><ScreenTile key={p.identity+'#screen'} participant={p} onSelect={()=>setFeatured(p.identity)}/>)}
           {everyone.map(p=><ParticipantTile key={p.identity} participant={p}/>)}</div>
       </> : <>
-        <div className={'grid'+(participantsLarge?' participants-main':'')} style={grid}>{cameras.map(p=><ParticipantTile key={p.identity} participant={p}/>)}</div>
-        {participantsLarge && <aside className="self-preview" aria-label={text.you}><ParticipantTile participant={local}/></aside>}
+        <div className={'grid'+(side || overlay?' participants-main':'')} style={grid}>{cameras.map(p=><ParticipantTile key={p.identity} participant={p}/>)}</div>
+        {(side || overlay) && <aside className={'self-preview'+(overlay?' pip-preview':'')} aria-label={text.you}><ParticipantTile participant={local}/></aside>}
       </>}
       {alone && !stageScreen && <p className="pill waiting" role="status"><span className="dot"/>{text.waiting}</p>}
       {reconnecting && <p className="pill" role="status">{text.reconnecting}</p>}

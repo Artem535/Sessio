@@ -6,9 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Browser calls offer a large participants layout with your own video in a
-  small tile on the right, and fullscreen controls in supported browsers.
-  Switch back to the standard layout to view shared screens.
+- Browser calls offer Auto, Grid, Overlay and Side layouts, and fullscreen
+  controls in supported browsers. Auto matches the native one-to-one call:
+  the remote camera fills the stage and your own preview floats at the bottom
+  right. Auto shows shared screens in the existing stage-and-strip layout.
 
 ## [0.2.29] - 2026-10-09
 

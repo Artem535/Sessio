@@ -3,7 +3,7 @@ const baseCopy = {
   en:{name:'Name',join:'Join',leave:'Leave',check:'Check devices',mic:'Microphone',camera:'Camera',invalid:'Invalid invitation',denied:'Devices unavailable. You can join without camera or microphone.',error:'Could not join. Check your invitation and try again.',connecting:'Connecting…',reconnecting:'Reconnecting…',sound:'Enable audio',ended:'Call ended',preview:'Device preview',title:'Join call',media:'Could not enable device',open:'Open in app',share:'Share screen',stopShare:'Stop sharing',sharing:'is sharing a screen',noShare:'Screen sharing is not available in this browser',devices:'Devices',speaker:'Speaker',waiting:'Waiting for others to join',appHint:'Nothing opened? Install Sessio and try again.',you:'you',or:'or',lead:'Check your camera and microphone before joining.',muted:'Microphone off',defaultDevice:'Default'}
 };
 export const copy = {
-  ru:{...baseCopy.ru,participantsLarge:'Участники крупно',standardLayout:'Обычная раскладка',fullscreen:'На весь экран',exitFullscreen:'Выйти из полного экрана',fullscreenFailed:'Не удалось открыть полный экран'},
-  en:{...baseCopy.en,participantsLarge:'Large participants',standardLayout:'Standard layout',fullscreen:'Fullscreen',exitFullscreen:'Exit fullscreen',fullscreenFailed:'Could not enter fullscreen'}
+  ru:{...baseCopy.ru,layout:'Раскладка',auto:'Авто',grid:'Сетка',overlay:'Поверх',side:'Сбоку',fullscreen:'На весь экран',exitFullscreen:'Выйти из полного экрана',fullscreenFailed:'Не удалось открыть полный экран'},
+  en:{...baseCopy.en,layout:'Layout',auto:'Auto',grid:'Grid',overlay:'Overlay',side:'Side',fullscreen:'Fullscreen',exitFullscreen:'Exit fullscreen',fullscreenFailed:'Could not enter fullscreen'}
 };
 export const text = copy[navigator.language.startsWith('ru') ? 'ru' : 'en'];
