@@ -11,6 +11,15 @@ All notable changes to this project will be documented in this file.
   preview over remote cameras and Side places it in a separate right column.
   Fullscreen remains independently available.
 
+## [0.2.30] - 2026-10-13
+
+### Added
+
+- Browser calls offer Auto, Grid, Overlay and Side layouts, and fullscreen
+  controls in supported browsers. Auto matches the native one-to-one call:
+  the remote camera fills the stage and your own preview floats at the bottom
+  right. Auto shows shared screens in the existing stage-and-strip layout.
+
 ## [0.2.29] - 2026-10-09
 
 ### Fixed
