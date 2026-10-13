@@ -34,7 +34,7 @@ void ParticipantTile::updateParticipant(const Participant &participant) {
     mName->setText(participant.isLocal ? tr("Your screen") : tr("%1's screen").arg(name));
   else
     mName->setText(participant.isLocal ? tr("%1 (You)").arg(name) : name);
-  mName->setGeometry(8, 8, std::min({std::max(0, width() - 72), mName->sizeHint().width(), 320}), std::min(30, height()));
+  mName->setGeometry(8, mNameTopMargin, std::min({std::max(0, width() - 72), mName->sizeHint().width(), 320}), std::min(30, height()));
   mName->setToolTip(Qt::convertFromPlainText(mName->text()));
   setAccessibleName(mName->text());
   refreshMedia();
@@ -105,12 +105,17 @@ void ParticipantTile::mouseReleaseEvent(QMouseEvent *event) {
     emit clicked();
 }
 
+void ParticipantTile::setNameTopMargin(int margin) {
+  mNameTopMargin = std::max(0, margin);
+  mName->move(8, mNameTopMargin);
+}
+
 void ParticipantTile::resizeEvent(QResizeEvent *event) {
   QWidget::resizeEvent(event);
   applyCornerMask();
   mRenderer->setGeometry(rect());
   mPlaceholder->setGeometry(rect());
-  mName->setGeometry(8, 8, std::min({std::max(0, width() - 72), mName->sizeHint().width(), 320}), std::min(30, height()));
+  mName->setGeometry(8, mNameTopMargin, std::min({std::max(0, width() - 72), mName->sizeHint().width(), 320}), std::min(30, height()));
   mName->raise();
 }
 

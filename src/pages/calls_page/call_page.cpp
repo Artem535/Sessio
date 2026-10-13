@@ -28,6 +28,7 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidgetAction>
+#include <QButtonGroup>
 
 namespace {
 // How long CallPage's transient media-error banner stays visible before
@@ -136,26 +137,65 @@ void VideoStage::layoutChildren() {
     mTileGrid->setRowMinimumHeight(row, 0);
     mTileGrid->setRowStretch(row, 0);
   }
-  const int top = mNotesToggleWidget && !mNotesToggleWidget->isHidden() ? 64 : 12;
+  const bool sharingStatus = mLayoutControls && mSharingBanner && !mSharingBanner->isHidden();
+  const int top = sharingStatus ? 104 : (mLayoutControls || (mNotesToggleWidget && !mNotesToggleWidget->isHidden())) ? 64 : 12;
+  QVector<ParticipantTile *> tiles;
+  for (auto *tile : mTiles) {
+    if (mViewLayout != CallViewLayout::Auto && tile->isScreen()) tile->hide();
+    else tiles.append(tile);
+  }
   ParticipantTile *local = nullptr;
-  for (auto *tile : mTiles)
-    if (tile->isLocal())
+  for (auto *tile : tiles)
+    if (tile->isLocal() && !tile->isScreen())
       local = tile;
-  const bool solo = mTiles.size() == 1 || (mTiles.size() == 2 && local);
+  const bool solo = tiles.size() == 1 || (tiles.size() == 2 && local && mViewLayout != CallViewLayout::Grid && mViewLayout != CallViewLayout::Side);
   // Waiting alone (just your own tile) is inset like the group grid, so its rounded corners show;
   // in a 1:1 call the main tile still fills the stage.
-  const bool fullBleed = solo && mTiles.size() == 2;
+  const bool fullBleed = solo && tiles.size() == 2;
+  for (auto *tile : tiles)
+    tile->setNameTopMargin(fullBleed && mLayoutControls && !tile->isLocal() ? top : 8);
   const QRect available = fullBleed ? rect() :
       QRect(12, top, std::max(0, width() - 24), std::max(0, height() - top - kBottomReserved));
   ParticipantTile *featured = nullptr;
-  for (auto *tile : mTiles)
+  for (auto *tile : tiles)
     if (tile->isScreen() && (!featured || tile->key() == mFeaturedScreen))
       featured = tile;
-  if (featured && !fullBleed) {
+  if (mViewLayout == CallViewLayout::Side) {
+    QVector<ParticipantTile *> remotes;
+    for (auto *tile : tiles) {
+      if (tile->isScreen()) tile->hide();
+      else if (!tile->isLocal()) remotes.append(tile);
+    }
+    mTileHost->setGeometry(available);
+    const int sideWidth = local ? std::min(available.width() / 3, std::clamp(available.width() / 5, 120, 240)) : 0;
+    const int mainWidth = std::max(0, available.width() - sideWidth - (local ? 8 : 0));
+    const auto strategy = CallLayoutStrategy::select(remotes.size(), false, QSize(mainWidth, available.height()));
+    const int gridHeight = strategy.rows * strategy.tileSize.height() + std::max(0, strategy.rows - 1) * 8;
+    for (int i = 0; i < remotes.size() && strategy.columns > 0; ++i) {
+      auto *tile = remotes[i];
+      const int row = i / strategy.columns;
+      const int count = std::min(strategy.columns, int(remotes.size()) - row * strategy.columns);
+      const int rowWidth = count * strategy.tileSize.width() + (count - 1) * 8;
+      tile->setParent(mTileHost);
+      const QSize size = remotes.size() == 1 ? QSize(mainWidth, available.height()) : strategy.tileSize;
+      tile->setFixedSize(size);
+      tile->setCornerRadius(12);
+      tile->move(remotes.size() == 1 ? 0 : (mainWidth - rowWidth) / 2 + (i % strategy.columns) * (size.width() + 8),
+                 remotes.size() == 1 ? 0 : (available.height() - gridHeight) / 2 + row * (size.height() + 8));
+      tile->show();
+    }
+    if (local) {
+      local->setParent(mTileHost);
+      local->setFixedSize(sideWidth, std::min(available.height(), sideWidth * 9 / 16));
+      local->setCornerRadius(12);
+      local->move(mainWidth + 8, 0);
+      local->show();
+    }
+  } else if (featured && !fullBleed) {
     constexpr int kGap = 8;
     constexpr int kTileCornerRadius = 12;
     QVector<ParticipantTile *> strip;
-    for (auto *tile : mTiles)
+    for (auto *tile : tiles)
       if (tile != featured) strip.append(tile);
     mTileHost->setGeometry(available);
     int stripHeight = 0;
@@ -182,15 +222,18 @@ void VideoStage::layoutChildren() {
       }
     }
   } else {
-  auto strategy = CallLayoutStrategy::select(mTiles.size(), local != nullptr, available.size());
+  const bool overlay = mViewLayout == CallViewLayout::Overlay && local && tiles.size() > 1;
+  auto strategy = CallLayoutStrategy::select(tiles.size() - (overlay ? 1 : 0),
+      mViewLayout == CallViewLayout::Auto && local != nullptr, available.size());
+  if (overlay) strategy.pictureInPicture = true;
   if (solo) strategy.tileSize = available.size();
   constexpr int kTileCornerRadius = 12;
-  const int gridCount = mTiles.size() - (strategy.pictureInPicture ? 1 : 0);
+  const int gridCount = tiles.size() - (strategy.pictureInPicture ? 1 : 0);
   const QSize gridSize(strategy.columns * strategy.tileSize.width() + std::max(0, strategy.columns - 1) * 8,
                        strategy.rows * strategy.tileSize.height() + std::max(0, strategy.rows - 1) * 8);
   mTileHost->setGeometry(solo ? available : QRect(available.center() - QPoint(gridSize.width() / 2, gridSize.height() / 2), gridSize));
   int index = 0;
-  for (auto *tile : mTiles) {
+  for (auto *tile : tiles) {
     if (strategy.pictureInPicture && tile == local) {
       tile->setParent(this);
       const int pipWidth = std::min(std::max(0, width() / 3), std::clamp(width() / 5, 200, 280));
@@ -219,9 +262,14 @@ void VideoStage::layoutChildren() {
     mTileGrid->setColumnMinimumWidth(column, std::max(0, (strategy.tileSize.width() - 8) / 2));
   mTileGrid->activate();
   }
+  if (mLayoutControls) {
+    const QSize hint = mLayoutControls->sizeHint();
+    mLayoutControls->setGeometry(12, 12, std::min(std::max(0, width() - 24), hint.width()), hint.height());
+    mLayoutControls->raise();
+  }
   if (mSharingBanner && !mSharingBanner->isHidden()) {
     const QSize hint = mSharingBanner->sizeHint();
-    mSharingBanner->setGeometry((width() - hint.width()) / 2, 12, hint.width(), hint.height());
+    mSharingBanner->setGeometry((width() - hint.width()) / 2, mLayoutControls ? 56 : 12, hint.width(), hint.height());
     mSharingBanner->raise();
   }
   if (mControlBarWidget) {
@@ -479,6 +527,34 @@ void CallPage::buildConnectedScreen() {
   });
 
   mFullscreenToggleButton = new QToolButton(mConnectedView);
+  auto *layoutControls = new QWidget(mVideoStage);
+  layoutControls->setObjectName("layoutControls");
+  auto *viewButtons = new QHBoxLayout(layoutControls);
+  viewButtons->setContentsMargins(0, 0, 0, 0);
+  viewButtons->setSpacing(4);
+  auto *viewGroup = new QButtonGroup(layoutControls);
+  using pcm::video::detail::CallViewLayout;
+  const QStringList labels{tr("Auto"), tr("Grid"), tr("Overlay"), tr("Side")};
+  const QStringList names{"layoutAutoButton", "layoutGridButton", "layoutOverlayButton", "layoutSideButton"};
+  layoutControls->setStyleSheet(QStringLiteral(
+      "QToolButton {background: rgb(50,54,65); color: white; border: none; border-radius: 8px; padding: 8px;}"
+      "QToolButton:checked {background: %1;}").arg(pcm::widgets::cssRgba(pcm::widgets::accentColor().darker(120))));
+  for (int i = 0; i < labels.size(); ++i) {
+    auto *button = new QToolButton(layoutControls);
+    button->setObjectName(names[i]);
+    button->setText(labels[i]);
+    button->setAccessibleName(labels[i]);
+    button->setToolTip(labels[i]);
+    button->setCheckable(true);
+    viewGroup->addButton(button, i);
+    viewButtons->addWidget(button);
+    if (i == 0) button->setChecked(true);
+    connect(button, &QToolButton::toggled, this, [this, i](bool checked) {
+      if (checked) mVideoStage->setViewLayout(static_cast<CallViewLayout>(i));
+    });
+  }
+  layoutControls->show();
+  mVideoStage->setLayoutControls(layoutControls);
   mFullscreenToggleButton->setObjectName("fullscreenToggleButton");
   mFullscreenToggleButton->setCheckable(true);
   mFullscreenToggleButton->setIcon(pcm::widgets::fullscreenIcon(false));

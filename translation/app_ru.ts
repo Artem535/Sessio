@@ -196,6 +196,22 @@
         <translation>Включить камеру</translation>
     </message>
     <message>
+        <source>Auto</source>
+        <translation>Авто</translation>
+    </message>
+    <message>
+        <source>Grid</source>
+        <translation>Сетка</translation>
+    </message>
+    <message>
+        <source>Overlay</source>
+        <translation>Поверх</translation>
+    </message>
+    <message>
+        <source>Side</source>
+        <translation>Сбоку</translation>
+    </message>
+    <message>
         <source>Enter fullscreen</source>
         <translation>Развернуть на весь экран</translation>
     </message>

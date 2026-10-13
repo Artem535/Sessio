@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.31] - 2026-10-13
+
+### Added
+
+- Native calls offer Auto, Grid, Overlay and Side layout buttons. Auto keeps
+  the existing one-to-one and screen-sharing behavior; Overlay floats your
+  preview over remote cameras and Side places it in a separate right column.
+  Fullscreen remains independently available.
+
 ## [0.2.30] - 2026-10-13
 
 ### Added

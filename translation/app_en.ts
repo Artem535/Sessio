@@ -196,6 +196,22 @@
         <translation>Turn on camera</translation>
     </message>
     <message>
+        <source>Auto</source>
+        <translation>Auto</translation>
+    </message>
+    <message>
+        <source>Grid</source>
+        <translation>Grid</translation>
+    </message>
+    <message>
+        <source>Overlay</source>
+        <translation>Overlay</translation>
+    </message>
+    <message>
+        <source>Side</source>
+        <translation>Side</translation>
+    </message>
+    <message>
         <source>Enter fullscreen</source>
         <translation>Enter fullscreen</translation>
     </message>

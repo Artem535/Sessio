@@ -25,6 +25,7 @@ public:
   [[nodiscard]] QString key() const { return mKind == Kind::Screen ? mParticipant.id + QStringLiteral("#screen") : mParticipant.id; }
   // Rounds the tile's corners (clipping the video and placeholder inside it); 0 = square.
   void setCornerRadius(int radius);
+  void setNameTopMargin(int margin);
   [[nodiscard]] int cornerRadius() const { return mCornerRadius; }
 
 signals:
@@ -44,6 +45,7 @@ private:
   QMetaObject::Connection mDestroyedConnection;
   void applyCornerMask();
   int mCornerRadius{0};
+  int mNameTopMargin{8};
   RemoteVideoRenderer *mRenderer;
   QLabel *mPlaceholder;
   QLabel *mName;
