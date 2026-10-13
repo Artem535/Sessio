@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Room, RoomEvent, type Participant } from 'livekit-client';
 import { ParticipantTile } from './ParticipantTile';
 import { ScreenTile, screenTrackOf } from './ScreenTile';
@@ -27,6 +27,15 @@ export function CallRoom({room,onLeave,nativeLink}:{room:Room;onLeave:()=>void;n
   const [reconnecting,setReconnecting] = useState(false), [devices,setDevices] = useState<MediaDeviceInfo[]>([]);
   const [devicesOpen,setDevicesOpen] = useState(false), [featured,setFeatured] = useState<string|null>(null);
   const width = useWidth();
+  const call = useRef<HTMLElement>(null);
+  const [participantsLarge,setParticipantsLarge] = useState(false), [fullscreen,setFullscreen] = useState(false);
+  useEffect(()=>{
+    const element=call.current;
+    const changed=()=>setFullscreen(document.fullscreenElement===element);
+    document.addEventListener('fullscreenchange',changed);
+    return()=>{document.removeEventListener('fullscreenchange',changed);if(element && document.fullscreenElement===element)void document.exitFullscreen().catch(()=>{});};
+  },[]);
+  const toggleFullscreen=async()=>{try{if(document.fullscreenElement===call.current)await document.exitFullscreen();else await call.current?.requestFullscreen();}catch{setNotice(text.fullscreenFailed);}};
   useEffect(()=>{ const refresh=()=>render(n=>n+1); const reconnect=()=>setReconnecting(true), connected=()=>setReconnecting(false);
     const events=[RoomEvent.ParticipantConnected,RoomEvent.ParticipantDisconnected,RoomEvent.TrackSubscribed,RoomEvent.TrackUnsubscribed,RoomEvent.TrackMuted,RoomEvent.TrackPublished,RoomEvent.TrackUnpublished,RoomEvent.TrackUnmuted,RoomEvent.LocalTrackPublished,RoomEvent.LocalTrackUnpublished,RoomEvent.ParticipantNameChanged,RoomEvent.ActiveSpeakersChanged,RoomEvent.AudioPlaybackStatusChanged,RoomEvent.ActiveDeviceChanged];
     events.forEach(event=>room.on(event,refresh)); room.on(RoomEvent.Reconnecting,reconnect); room.on(RoomEvent.SignalReconnecting,reconnect); room.on(RoomEvent.Reconnected,connected); room.on(RoomEvent.Disconnected,onLeave);
@@ -41,22 +50,30 @@ export function CallRoom({room,onLeave,nativeLink}:{room:Room;onLeave:()=>void;n
 
   const everyone:Participant[]=[local,...room.remoteParticipants.values()];
   const sharers=everyone.filter(p=>screenTrackOf(p));
-  const stageScreen=sharers.find(p=>p.identity===featured) ?? sharers[0];
-  const columns=gridColumns(everyone.length,width);
-  const grid={'--cols':columns,'--rows':Math.ceil(everyone.length/columns)} as CSSProperties;
+  const stageScreen=participantsLarge?undefined:(sharers.find(p=>p.identity===featured) ?? sharers[0]);
+  const cameras=participantsLarge?everyone.filter(p=>!p.isLocal):everyone;
+  const columns=gridColumns(cameras.length,participantsLarge?Math.max(0,width-240):width);
+  const grid={'--cols':columns,'--rows':Math.max(1,Math.ceil(cameras.length/columns))} as CSSProperties;
   const alone=room.remoteParticipants.size===0;
   const kinds:DeviceKind[]=canPickSpeaker?['audioinput','videoinput','audiooutput']:['audioinput','videoinput'];
   const kindLabel=(kind:DeviceKind)=>kind==='audioinput'?text.mic:kind==='videoinput'?text.camera:text.speaker;
 
-  return <section className="call">
+  return <section className="call" ref={call}>
     <header className="call-top"><span className="brand">Sessio</span><span className="count">{everyone.length}</span>
+      <div className="view-controls">
+        <button data-testid="participants-layout" aria-pressed={participantsLarge} onClick={()=>setParticipantsLarge(value=>!value)}>{participantsLarge?text.standardLayout:text.participantsLarge}</button>
+        {typeof document.documentElement.requestFullscreen==='function' && <button aria-pressed={fullscreen} onClick={()=>void toggleFullscreen()}>{fullscreen?text.exitFullscreen:text.fullscreen}</button>}
+      </div>
       {nativeLink && <NativeLink href={nativeLink} compact/>}</header>
-    <div className={'stage'+(stageScreen?' with-screen':'')}>
+    <div className={'stage'+(stageScreen?' with-screen':'')+(participantsLarge?' participants-layout':'')}>
       {stageScreen ? <>
         <div className="featured"><ScreenTile key={stageScreen.identity+'#screen'} participant={stageScreen}/></div>
         <div className="strip">{sharers.filter(p=>p!==stageScreen).map(p=><ScreenTile key={p.identity+'#screen'} participant={p} onSelect={()=>setFeatured(p.identity)}/>)}
           {everyone.map(p=><ParticipantTile key={p.identity} participant={p}/>)}</div>
-      </> : <div className="grid" style={grid}>{everyone.map(p=><ParticipantTile key={p.identity} participant={p}/>)}</div>}
+      </> : <>
+        <div className={'grid'+(participantsLarge?' participants-main':'')} style={grid}>{cameras.map(p=><ParticipantTile key={p.identity} participant={p}/>)}</div>
+        {participantsLarge && <aside className="self-preview" aria-label={text.you}><ParticipantTile participant={local}/></aside>}
+      </>}
       {alone && !stageScreen && <p className="pill waiting" role="status"><span className="dot"/>{text.waiting}</p>}
       {reconnecting && <p className="pill" role="status">{text.reconnecting}</p>}
       {notice && <p className="pill notice" role="status">{notice}</p>}

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.30] - 2026-10-13
+
+### Added
+
+- Browser calls offer a large participants layout with your own video in a
+  small tile on the right, and fullscreen controls in supported browsers.
+  Switch back to the standard layout to view shared screens.
+
 ## [0.2.29] - 2026-10-09
 
 ### Fixed
