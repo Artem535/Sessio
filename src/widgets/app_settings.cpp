@@ -114,6 +114,31 @@ bool transcriptionEnabled() {
 
 void setTranscriptionEnabled(bool enabled) {
   QSettings().setValue("transcription/enabled", enabled);
+  if (!enabled) {
+    QSettings().setValue("transcription/autoStart", false);
+    QSettings().setValue("prompter/autoStart", false);
+  }
+}
+
+bool transcriptionAutoStart() { return transcriptionEnabled() && QSettings().value("transcription/autoStart", false).toBool(); }
+void setTranscriptionAutoStart(bool enabled) {
+  if (enabled) setTranscriptionEnabled(true);
+  QSettings().setValue("transcription/autoStart", enabled);
+  if (!enabled) QSettings().setValue("prompter/autoStart", false);
+}
+bool prompterAutoStart() { return transcriptionAutoStart() && QSettings().value("prompter/autoStart", false).toBool(); }
+void setPrompterAutoStart(bool enabled) {
+  if (enabled) setTranscriptionAutoStart(true);
+  QSettings().setValue("prompter/autoStart", enabled);
+}
+QString prompterPython() { return QSettings().value("prompter/python").toString(); }
+QString prompterModel() { return QSettings().value("prompter/model").toString(); }
+QString prompterTemplate() { return QSettings().value("prompter/template").toString(); }
+void setPrompterRuntime(const QString &python, const QString &model, const QString &promptTemplate) {
+  QSettings settings;
+  settings.setValue("prompter/python", python);
+  settings.setValue("prompter/model", model);
+  settings.setValue("prompter/template", promptTemplate);
 }
 
 pcm::transcription::TranscriptionTuning transcriptionTuning() {

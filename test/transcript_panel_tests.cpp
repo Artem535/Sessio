@@ -1,4 +1,15 @@
 #include "transcript_panel.h"
+#include <gtest/gtest.h>
+TEST(TranscriptPanelPrompterTest, SourceFocusFindsOnlyAnExistingPhrase) {
+  TranscriptPanel panel;
+  DuckTranscriptPhrase phrase; phrase.id = 123; phrase.text = "Source";
+  phrase.track_role = "participant";
+  panel.addPhrase(phrase);
+  EXPECT_TRUE(panel.focusPhrase(123));
+  EXPECT_FALSE(panel.focusPhrase(456));
+  panel.clearPhrases();
+  EXPECT_FALSE(panel.focusPhrase(123));
+}
 #include <QApplication>
 #include <QLabel>
 #include <QPushButton>

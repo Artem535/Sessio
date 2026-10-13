@@ -6,6 +6,7 @@ find_package(DuckDB CONFIG REQUIRED)
 
 add_library(${TARGET_NAME} STATIC
         database.cpp
+        prompter_database.cpp
         constants.hpp
         datetime.hpp
         schema.hpp

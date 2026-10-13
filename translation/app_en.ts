@@ -265,6 +265,77 @@
     </message>
 </context>
 <context>
+    <name>CallPrompterController</name>
+    <message>
+        <source>Prompter is off</source>
+        <translation>Prompter is off</translation>
+    </message>
+    <message>
+        <source>Could not save prompter changes. Reopen the transcript and try again.</source>
+        <translation>Could not save prompter changes. Reopen the transcript and try again.</translation>
+    </message>
+    <message>
+        <source>Transcript unavailable</source>
+        <translation>Transcript unavailable</translation>
+    </message>
+    <message>
+        <source>Prompter is paused</source>
+        <translation>Prompter is paused</translation>
+    </message>
+    <message>
+        <source>Could not open prompter data</source>
+        <translation>Could not open prompter data</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Participant</translation>
+    </message>
+    <message>
+        <source>Start transcription first</source>
+        <translation>Start transcription first</translation>
+    </message>
+    <message>
+        <source>Waiting for completed phrases</source>
+        <translation>Waiting for completed phrases</translation>
+    </message>
+    <message>
+        <source>Local prompter failed. Check its settings and retry.</source>
+        <translation>Local prompter failed. Check its settings and retry.</translation>
+    </message>
+    <message>
+        <source>A phrase is too long. Review it in the transcript.</source>
+        <translation>A phrase is too long. Review it in the transcript.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Processing conversation · %n phrases waiting</source>
+        <translation>
+            <numerusform>Processing conversation · %n phrase waiting</numerusform>
+            <numerusform>Processing conversation · %n phrases waiting</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed through %1:%2 · %n phrases waiting</source>
+        <translation>
+            <numerusform>Processed through %1:%2 · %n phrase waiting</numerusform>
+            <numerusform>Processed through %1:%2 · %n phrases waiting</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Call agreement (transcript #%1):
+%2%3</source>
+        <translation>Call agreement (transcript #%1):
+%2%3</translation>
+    </message>
+    <message>
+        <source>Cancelled: </source>
+        <translation>Cancelled: </translation>
+    </message>
+    <message>
+        <source>Could not save the agreement to client notes</source>
+        <translation>Could not save the agreement to client notes</translation>
+    </message>
+</context>
+<context>
     <name>CallSidePanel</name>
     <message>
         <source>Notes</source>
@@ -273,6 +344,10 @@
     <message>
         <source>Transcript</source>
         <translation>Transcript</translation>
+    </message>
+    <message>
+        <source>Prompter</source>
+        <translation>Prompter</translation>
     </message>
 </context>
 <context>
@@ -953,6 +1028,129 @@
     <message>
         <source>Client: %1</source>
         <translation>Client: %1</translation>
+    </message>
+</context>
+<context>
+    <name>PrompterPanel</name>
+    <message>
+        <source>Start prompter</source>
+        <translation>Start prompter</translation>
+    </message>
+    <message>
+        <source>Pause</source>
+        <translation>Pause</translation>
+    </message>
+    <message>
+        <source>You could clarify</source>
+        <translation>You could clarify</translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation>Hide</translation>
+    </message>
+    <message>
+        <source>For review</source>
+        <translation>For review</translation>
+    </message>
+    <message>
+        <source>New agreements will appear here after completed phrases.</source>
+        <translation>New agreements will appear here after completed phrases.</translation>
+    </message>
+    <message>
+        <source>Accepted agreements</source>
+        <translation>Accepted agreements</translation>
+    </message>
+    <message>
+        <source>Private suggestions. Check the source before saving.</source>
+        <translation>Private suggestions. Check the source before saving.</translation>
+    </message>
+    <message>
+        <source>The source was changed or deleted. Review the transcript.</source>
+        <translation>The source was changed or deleted. Review the transcript.</translation>
+    </message>
+    <message>
+        <source>Source · %1:%2</source>
+        <translation>Source · %1:%2</translation>
+    </message>
+    <message>
+        <source>Accept</source>
+        <translation>Accept</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Edit</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>Dismiss</translation>
+    </message>
+    <message>
+        <source>To notes</source>
+        <translation>To notes</translation>
+    </message>
+    <message>
+        <source>Choose the agreement</source>
+        <translation>Choose the agreement</translation>
+    </message>
+    <message>
+        <source>New agreement</source>
+        <translation>New agreement</translation>
+    </message>
+    <message>
+        <source>Review the target</source>
+        <translation>Review the target</translation>
+    </message>
+    <message>
+        <source>Agreement to change or cancel</source>
+        <translation>Agreement to change or cancel</translation>
+    </message>
+    <message>
+        <source>Review agreement</source>
+        <translation>Review agreement</translation>
+    </message>
+    <message>
+        <source>Agreement</source>
+        <translation>Agreement</translation>
+    </message>
+    <message>
+        <source>Needs clarification</source>
+        <translation>Needs clarification</translation>
+    </message>
+    <message>
+        <source>Proposed cancellation</source>
+        <translation>Proposed cancellation</translation>
+    </message>
+    <message>
+        <source>Proposed change</source>
+        <translation>Proposed change</translation>
+    </message>
+    <message>
+        <source>Previous agreement: %1</source>
+        <translation>Previous agreement: %1</translation>
+    </message>
+    <message>
+        <source>Saved to notes</source>
+        <translation>Saved to notes</translation>
+    </message>
+    <message>
+        <source>Agreement kept as a draft</source>
+        <translation>Agreement kept as a draft</translation>
+    </message>
+    <message>
+        <source>Attach a client to this transcript to save the agreement in client notes.</source>
+        <translation>Attach a client to this transcript to save the agreement in client notes.</translation>
+    </message>
+    <message>
+        <source>%1 · #%2</source>
+        <translation>%1 · #%2</translation>
+    </message>
+    <message>
+        <source>Save to client notes</source>
+        <translation>Save to client notes</translation>
+    </message>
+    <message>
+        <source>Client</source>
+        <translation>Client</translation>
     </message>
 </context>
 <context>
@@ -2628,6 +2826,14 @@ They appear here after a call with transcription turned on.</translation>
         <translation>More actions</translation>
     </message>
     <message>
+        <source>Review agreements</source>
+        <translation>Review agreements</translation>
+    </message>
+    <message>
+        <source>Call agreements</source>
+        <translation>Call agreements</translation>
+    </message>
+    <message>
         <source>Delete this transcript and all its phrases?</source>
         <translation>Delete this transcript and all its phrases?</translation>
     </message>
@@ -2853,6 +3059,42 @@ They appear here after a call with transcription turned on.</translation>
     <message>
         <source>Enable call transcription</source>
         <translation>Enable call transcription</translation>
+    </message>
+    <message>
+        <source>Start transcription automatically when joining a call</source>
+        <translation>Start transcription automatically when joining a call</translation>
+    </message>
+    <message>
+        <source>Start the prompter automatically</source>
+        <translation>Start the prompter automatically</translation>
+    </message>
+    <message>
+        <source>Local prompter (experimental)</source>
+        <translation>Local prompter (experimental)</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>Browse…</translation>
+    </message>
+    <message>
+        <source>Select a local file</source>
+        <translation>Select a local file</translation>
+    </message>
+    <message>
+        <source>Python with LiteRT-LM installed</source>
+        <translation>Python with LiteRT-LM installed</translation>
+    </message>
+    <message>
+        <source>Gemma model (.litertlm)</source>
+        <translation>Gemma model (.litertlm)</translation>
+    </message>
+    <message>
+        <source>Gemma chat template (.jinja)</source>
+        <translation>Gemma chat template (.jinja)</translation>
+    </message>
+    <message>
+        <source>Choose an installed local runtime and model. Nothing is downloaded automatically. Prompter suggestions require your review.</source>
+        <translation>Choose an installed local runtime and model. Nothing is downloaded automatically. Prompter suggestions require your review.</translation>
     </message>
     <message>
         <source>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</source>

@@ -142,7 +142,7 @@ Database::Database(const config::Config &conf) {
       auto chunk = result->Fetch();
       if (chunk && chunk->size() && !chunk->GetValue(0, 0).IsNull()) {
         const auto version = chunk->GetValue(0, 0).GetValue<int32_t>();
-        if (version != 1 && version != 2)
+        if (version < 1 || version > 3)
           throw std::runtime_error("Unsupported database schema version");
       }
     }
@@ -151,6 +151,7 @@ Database::Database(const config::Config &conf) {
   init_tables();
   apply_schema_migrations();
   init_application_metadata();
+  init_prompter_schema();
   init_payment_status_table();
   init_event_status_table();
 
@@ -2122,7 +2123,14 @@ bool Database::delete_transcript(const int64_t id) {
   // thread and must not join (or race) a schedule transaction.
   ownedConn.emplace(*mDb);
   auto &conn = *ownedConn;
+  Transaction tx(conn);
+  if (!tx.active()) return false;
   if (!transcriptExists(conn, id)) return false;
+  for (const auto *table : {"TranscriptPrompterState", "TranscriptPrompterNote"}) {
+    auto removed = executePrepared(conn, std::string("DELETE FROM ") + table + " WHERE transcript_id=$1",
+                                   {duckdb::Value::BIGINT(id)});
+    if (!removed || removed->HasError()) return false;
+  }
   auto links = executePrepared(conn, "DELETE FROM TranscriptClient WHERE transcript_id = $1",
                                {duckdb::Value::BIGINT(id)});
   if (!links || links->HasError()) return false;
@@ -2140,6 +2148,7 @@ bool Database::delete_transcript(const int64_t id) {
                << "): " << (result ? result->GetError() : "prepare failed");
     return false;
   }
+  if (!tx.commit()) return false;
   checkpointBestEffort(conn, "delete_transcript");
   return true;
 }
@@ -2150,6 +2159,9 @@ bool Database::delete_all_transcripts() {
   // thread and must not join (or race) a schedule transaction.
   ownedConn.emplace(*mDb);
   auto &conn = *ownedConn;
+  Transaction tx(conn);
+  if (!tx.active()) return false;
+  if (conn.Query("DELETE FROM TranscriptPrompterState; DELETE FROM TranscriptPrompterNote;")->HasError()) return false;
   if (conn.Query("DELETE FROM TranscriptClient")->HasError()) return false;
   auto phrases = executePrepared(conn, constance::kDeleteAllTranscriptPhrasesQuery, {});
   if (!phrases || phrases->HasError()) {
@@ -2163,6 +2175,7 @@ bool Database::delete_all_transcripts() {
                << (result ? result->GetError() : "prepare failed");
     return false;
   }
+  if (!tx.commit()) return false;
   checkpointBestEffort(conn, "delete_all_transcripts");
   return true;
 }
@@ -2472,7 +2485,7 @@ void Database::init_application_metadata() {
   }
 
   const auto metadata = get_application_metadata();
-  if (metadata.schema_version == 2) return;
+  if (metadata.schema_version == 2 || metadata.schema_version == 3) return;
   if (metadata.schema_version != 1)
     throw std::runtime_error("Unsupported database schema version");
   Transaction tx(conn);

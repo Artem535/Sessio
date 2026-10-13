@@ -1,4 +1,7 @@
 #include "transcription_settings_panel.h"
+#include "app_settings.h"
+#include <QTemporaryDir>
+#include <QSettings>
 #include <QApplication>
 #include <QCheckBox>
 #include <QDoubleSpinBox>
@@ -48,10 +51,42 @@ TEST(TranscriptionSettingsPanelTest, ModelInfoReflectsAvailability) {
   EXPECT_TRUE(label->text().contains("gigaam-v3-rnnt"));
   EXPECT_FALSE(label->text().contains("not installed"));
 }
+TEST(TranscriptionSettingsPanelTest, AutomaticStartControlsAreSeparateAndInitiallyOff) {
+  TranscriptionSettingsPanel panel;
+  auto *transcription = panel.findChild<QCheckBox *>("transcriptionAutoStart");
+  auto *prompter = panel.findChild<QCheckBox *>("prompterAutoStart");
+  ASSERT_NE(transcription, nullptr);
+  ASSERT_NE(prompter, nullptr);
+  EXPECT_FALSE(transcription->isChecked());
+  EXPECT_FALSE(prompter->isChecked());
+  panel.setEnabledState(true);
+  prompter->click();
+  EXPECT_TRUE(transcription->isChecked());
+  panel.findChild<QCheckBox *>("transcriptionEnabled")->click();
+  EXPECT_FALSE(transcription->isChecked());
+  EXPECT_FALSE(prompter->isChecked());
+}
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
+  QTemporaryDir settings;
+  QCoreApplication::setOrganizationName("SessioTests");
+  QCoreApplication::setApplicationName("TranscriptionSettings151");
+  QSettings::setDefaultFormat(QSettings::IniFormat);
+  QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settings.path());
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+TEST(TranscriptionSettingsPanelTest, PersistentAutoStartDependenciesSurviveNewSettingsObjects) {
+  using namespace pcm::app_settings;
+  setTranscriptionEnabled(false);
+  EXPECT_FALSE(transcriptionAutoStart()); EXPECT_FALSE(prompterAutoStart());
+  setPrompterAutoStart(true);
+  QSettings().sync();
+  EXPECT_TRUE(transcriptionEnabled()); EXPECT_TRUE(transcriptionAutoStart()); EXPECT_TRUE(prompterAutoStart());
+  setTranscriptionAutoStart(false);
+  EXPECT_FALSE(prompterAutoStart());
+  setPrompterAutoStart(true); setTranscriptionEnabled(false);
+  EXPECT_FALSE(transcriptionAutoStart()); EXPECT_FALSE(prompterAutoStart());
 }
 
 TEST(TranscriptionSettingsPanelTest, SpeechParametersRoundTripEmitOnEditAndResetToDefaults) {

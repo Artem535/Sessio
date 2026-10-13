@@ -13,6 +13,9 @@ public:
   void setTranscriptionAvailable(bool available);
   void showNotes();
   void showTranscript();
+  void setPrompterPanel(QWidget *panel, QWidget *sharedHint);
+  void setPrompterPendingCount(int count);
+  void showPrompter();
   [[nodiscard]] bool transcriptShown() const;
 signals:
   void pageChanged(bool transcriptShown);

@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.32] - 2026-10-13
+
+### Added
+
+- Antora documentation site with the technical reference, local LLM research,
+  prompter setup and verification reports.
+
+- Optional automatic transcription when joining a call, preserving consent and
+  manual-stop behavior. Automatic prompter startup is configured separately.
+- Experimental local CPU Gemma prompter in the Notes / Transcript call panel:
+  agreement cards, source links, clarification suggestions and explicit review
+  of changes or cancellations. Accepted agreements can be added to client notes.
+- Transcript-owned prompter drafts and accepted agreements survive reopening and
+  backups; saved client notes remain when their source transcript is deleted.
+  Runtime and model files are configured locally; no automatic model download.
+
 ## [0.2.31] - 2026-10-13
 
 ### Added

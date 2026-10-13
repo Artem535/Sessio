@@ -1,0 +1,90 @@
+= Long call context CPU spike, 2026-10-09
+
+== Method
+
+Same Ryzen 7 7840HS and pinned artifacts as
+xref:research/live-llm-litert-results.adoc[the short-context comparison]. Compare
+llama.cpp GGUF Q4++_++0 and LiteRT-LM 0.18.0 mobile QAT with MTP
+enabled. CPU only, four threads, 4096 context, maximum 256 output
+tokens, greedy, no grammar, fresh LiteRT session/no llama prompt reuse.
+Warm compiled weights, one excluded short warmup. Runs sequentially
+under 8-GiB/no-swap user scopes.
+
+The reproducible synthetic fixture has two accepted facts: a Friday
+18:00 meeting near the beginning, and sending notes with a corrected
+Monday deadline near the middle. At the end, daily journaling is
+proposed and explicitly refused. Filler describes past experiences and
+does not introduce new agreements. Short control preserves the same
+fact-bearing turns and removes the filler. Both use identical system
+instruction and rendered chat template.
+
+[cols=",>,>",options="header",]
+|===
+|Fixture |Input tokens including BOS |Measured repeats
+|short++_++control |271 |4 per runtime
+|long++_++3000 |2986 |4 per runtime
+|===
+
+LiteRT raw-text BOS normalization and token-ID parity checks are
+retained. This compares different quantized artifacts, not isolated
+runtime performance; output lengths also differ. Repeated synthetic
+filler is not a real conversation distribution. Four observations per
+cell do not support a meaningful p95. No ASR, video, streaming
+transcript updates, or persistent KV-cache acceptance was tested. The
+long case fully processes the history on every request.
+
+== Final measurements
+
+Medians of four measured repeats per cell; all input counts match and no
+output hits the 256-token cap. Response text is stable within each
+configuration/case.
+
+[cols=",>,>,>,>",options="header",]
+|===
+|Runtime |Input |First text |Full response |Output tokens
+|llama.cpp Q4++_++0 |271 |1.816 s |7.791 s |165
+|LiteRT {plus} MTP |271 |0.671 s |2.860 s |117
+|llama.cpp Q4++_++0 |2986 |21.336 s |26.316 s |116
+|LiteRT {plus} MTP |2986 |5.515 s |7.507 s |110
+|===
+
+LiteRT long full-response median is about 3.5x faster for these exports.
+The long output lengths are close (116/110, with backend EOS-accounting
+differences), but quantization and checkpoint-equivalence caveats still
+prevent attribution solely to runtime. Increasing input from 271 to 2986
+tokens adds about 4.85 s to LiteRT first-text latency and 19.52 s to
+llama first-text latency.
+
+Peak RSS over both cases: LiteRT kernel high-water 2.36 GiB; llama
+sampled server RSS 3.97 GiB. This does not compare cold-start memory
+identically.
+
+== Semantic inspection
+
+Short control returns both complete agreements with evidence a1/a2 and
+b2/b3. The long case preserves the Friday meeting but reduces the second
+agreement to “В понедельник.” with evidence only b3, losing the actual
+action (send notes). It does not resurrect the obsolete deadline or turn
+the refused diary into an agreement. Thus long-context retention is
+incomplete despite valid JSON after Markdown fence removal. All `hint`
+fields are empty.
+
+llama short control identifies the actions but duplicates Monday as a
+separate agreement and omits accepting evidence for the Friday meeting.
+On the long history its agreements become “Да, договорились.” (a2) and
+“Хорошо, в понедельник.” (b3), losing actionable descriptions; its hint
+still mentions Friday 18:00. Both avoid the refused daily diary and
+obsolete tomorrow deadline. All 16 outputs parse after Markdown fence
+removal, none are raw JSON.
+
+The majority of long-request latency occurs before the first text.
+Full-history reprocessing is unsuitable for frequent updates if the
+target is roughly two seconds. A short rolling window plus explicit
+accumulated agreement state is the next design hypothesis to test, not a
+validated implementation. These data do not measure whether persistent
+KV-cache or incremental prefill solves latency.
+
+Raw outputs, metadata, and logs are local in
+`spikes/live-llm-bench/results/`. Fixture:
+`spikes/live-llm-bench/long-cases.json`; generator:
+`make++_++long++_++cases.py`.

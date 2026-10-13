@@ -6,6 +6,9 @@ qt_add_library(${TARGET_NAME} STATIC
     transcript_client_dialog.h transcript_client_dialog.cpp
     call_transcription_controller.h call_transcription_controller.cpp
     call_side_panel.h call_side_panel.cpp
+    call_prompter_controller.h call_prompter_controller.cpp
+    prompter_worker.h prompter_worker.cpp
+    prompter_panel.h prompter_panel.cpp
     transcript_panel.h transcript_panel.cpp
     transcription_consent_dialog.h transcription_consent_dialog.cpp
     failure_text.h failure_text.cpp)

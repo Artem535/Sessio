@@ -90,6 +90,8 @@ void TranscriptPanel::setStartAvailable(bool available, const QString &reason) {
 }
 void TranscriptPanel::addPhrase(const DuckTranscriptPhrase &phrase) {
   auto *row = new PhraseCard(mScroll->widget());
+  row->setProperty("phraseId", static_cast<qint64>(phrase.id));
+  row->setFocusPolicy(Qt::StrongFocus);
   row->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
   auto *layout = new QVBoxLayout(row);
   layout->setContentsMargins(18, 12, 18, 14); layout->setSpacing(8);
@@ -122,3 +124,12 @@ void TranscriptPanel::clearPhrases() {
   mPhraseCount = 0; mFollowing = true;
 }
 int TranscriptPanel::phraseCount() const { return mPhraseCount; }
+bool TranscriptPanel::focusPhrase(qint64 phraseId) {
+  for (int i = 0; i < mRows->count(); ++i) {
+    auto *widget = mRows->itemAt(i)->widget();
+    if (widget && widget->property("phraseId").toLongLong() == phraseId) {
+      mFollowing = false; mScroll->ensureWidgetVisible(widget); widget->setFocus(); return true;
+    }
+  }
+  return false;
+}
