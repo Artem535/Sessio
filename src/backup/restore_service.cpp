@@ -183,7 +183,7 @@ RestoreResult RestoreService::restore_backup(const std::string &backup_path,
       return result;
     }
     if (manifest.psybackup_format_version != 1 ||
-        (manifest.schema_version < 1 || manifest.schema_version > 2) || manifest.backup_format_version != 1) {
+        (manifest.schema_version < 1 || manifest.schema_version > 3) || manifest.backup_format_version != 1) {
       result.error = "backup format or schema version is not supported";
       return result;
     }
@@ -223,7 +223,7 @@ RestoreResult RestoreService::restore_backup(const std::string &backup_path,
       pcm::config::Config conf;
       conf.db_conf.value_.db_pth = Poco::Path(stagedDatabase);
       pcm::database::Database migrated(conf);
-      if (migrated.get_application_metadata().schema_version != 2) {
+      if (migrated.get_application_metadata().schema_version != 3) {
         result.error = "restored database schema is not supported";
         return result;
       }

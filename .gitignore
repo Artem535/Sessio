@@ -5,6 +5,8 @@
 #Build dir
 build
 build-release/
+build-antora/
+scripts/call-prompter/__pycache__/
 cmake-build-debug
 
 # Compiled Qt Linguist translations (build output of lrelease)

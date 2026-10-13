@@ -8,12 +8,59 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
+#include <QLineEdit>
+#include <QFileDialog>
 
 TranscriptionSettingsPanel::TranscriptionSettingsPanel(QWidget *parent) : QWidget(parent) {
   auto *layout = new QVBoxLayout(this);
   mEnabled = new QCheckBox(tr("Enable call transcription"), this);
   mEnabled->setObjectName("transcriptionEnabled");
   layout->addWidget(mEnabled);
+  mAutoStart = new QCheckBox(tr("Start transcription automatically when joining a call"), this);
+  mAutoStart->setObjectName("transcriptionAutoStart");
+  layout->addWidget(mAutoStart);
+  mPrompterAutoStart = new QCheckBox(tr("Start the prompter automatically"), this);
+  mPrompterAutoStart->setObjectName("prompterAutoStart");
+  layout->addWidget(mPrompterAutoStart);
+  connect(mEnabled, &QCheckBox::toggled, this, [this](bool enabled) {
+    if (!enabled) { mAutoStart->setChecked(false); mPrompterAutoStart->setChecked(false); }
+  });
+  connect(mAutoStart, &QCheckBox::toggled, this, [this](bool enabled) {
+    if (enabled) mEnabled->setChecked(true);
+    else mPrompterAutoStart->setChecked(false);
+    emit autoStartToggled(enabled);
+  });
+  connect(mPrompterAutoStart, &QCheckBox::toggled, this, [this](bool enabled) {
+    if (enabled) mAutoStart->setChecked(true);
+    emit prompterAutoStartToggled(enabled);
+  });
+  auto *runtime = new QGroupBox(tr("Local prompter (experimental)"), this);
+  auto *runtimeForm = new QFormLayout(runtime);
+  auto runtimeChanged = [this] {
+    emit prompterRuntimeChanged(mPython->text(), mPrompterModel->text(), mPrompterTemplate->text());
+  };
+  auto field = [this, runtime, runtimeForm, runtimeChanged](const QString &title, const char *name) {
+    auto *row = new QWidget(runtime);
+    auto *rowLayout = new QHBoxLayout(row);
+    rowLayout->setContentsMargins(0, 0, 0, 0);
+    auto *edit = new QLineEdit(row); edit->setObjectName(name);
+    auto *browse = new QPushButton(tr("Browse…"), row);
+    rowLayout->addWidget(edit, 1); rowLayout->addWidget(browse);
+    runtimeForm->addRow(title, row);
+    connect(edit, &QLineEdit::editingFinished, this, runtimeChanged);
+    connect(browse, &QPushButton::clicked, this, [this, edit, runtimeChanged] {
+      const auto path = QFileDialog::getOpenFileName(this, tr("Select a local file"), edit->text());
+      if (!path.isEmpty()) { edit->setText(path); runtimeChanged(); }
+    });
+    return edit;
+  };
+  mPython = field(tr("Python with LiteRT-LM installed"), "prompterPython");
+  mPrompterModel = field(tr("Gemma model (.litertlm)"), "prompterModel");
+  mPrompterTemplate = field(tr("Gemma chat template (.jinja)"), "prompterTemplate");
+  auto *runtimeNote = new QLabel(tr("Choose an installed local runtime and model. Nothing is downloaded automatically. Prompter suggestions require your review."), runtime);
+  runtimeNote->setWordWrap(true);
+  runtimeForm->addRow(runtimeNote);
+  layout->addWidget(runtime);
   mModel = new QLabel(this);
   mModel->setObjectName("transcriptionModelInfo");
   mModel->setTextFormat(Qt::PlainText);
@@ -105,6 +152,14 @@ pcm::transcription::TranscriptionTuning TranscriptionSettingsPanel::tuning() con
 void TranscriptionSettingsPanel::setEnabledState(bool enabled) {
   const QSignalBlocker block(mEnabled);
   mEnabled->setChecked(enabled);
+}
+void TranscriptionSettingsPanel::setAutoStartState(bool transcription, bool prompter) {
+  const QSignalBlocker a(mAutoStart), b(mPrompterAutoStart);
+  mAutoStart->setChecked(transcription);
+  mPrompterAutoStart->setChecked(prompter && transcription);
+}
+void TranscriptionSettingsPanel::setPrompterRuntime(const QString &python, const QString &model, const QString &promptTemplate) {
+  mPython->setText(python); mPrompterModel->setText(model); mPrompterTemplate->setText(promptTemplate);
 }
 void TranscriptionSettingsPanel::setModelInfo(const QString &id, bool installed) {
   mModel->setText(tr("Model: %1 — %2").arg(id, installed ? tr("installed") : tr("not installed")));

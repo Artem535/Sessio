@@ -10,6 +10,14 @@
 namespace pcm::app_settings {
 bool transcriptionEnabled();
 void setTranscriptionEnabled(bool enabled);
+bool transcriptionAutoStart();
+void setTranscriptionAutoStart(bool enabled);
+bool prompterAutoStart();
+void setPrompterAutoStart(bool enabled);
+QString prompterPython();
+QString prompterModel();
+QString prompterTemplate();
+void setPrompterRuntime(const QString &python, const QString &model, const QString &promptTemplate);
 // Speech detection and recogniser parameters; always returned clamped to their valid ranges.
 pcm::transcription::TranscriptionTuning transcriptionTuning();
 void setTranscriptionTuning(const pcm::transcription::TranscriptionTuning &tuning);

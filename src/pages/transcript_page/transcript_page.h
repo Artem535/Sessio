@@ -40,6 +40,7 @@ private:
   QPushButton *mReview;
   QPushButton *mDelete;
   QPushButton *mAttach;
+  QPushButton *mAgreements;
   QVBoxLayout *mRows;
   std::function<bool(const QString &)> mConfirm;
 };

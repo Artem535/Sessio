@@ -14,6 +14,7 @@ public:
   void setState(pcm::calltranscription::SessionState state);
   void setStartAvailable(bool available, const QString &reason);
   void addPhrase(const DuckTranscriptPhrase &phrase);
+  bool focusPhrase(qint64 phraseId);
   void setDelayed(bool delayed);
   void setNotice(const QString &text);
   void setAudioGap(bool interrupted);

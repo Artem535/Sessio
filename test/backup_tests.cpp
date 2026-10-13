@@ -1012,7 +1012,7 @@ TEST(BackupValidatorTest, RejectsUnsupportedFormatVersion) {
   EXPECT_FALSE(result.errors.empty());
 
   manifest.psybackup_format_version = 1;
-  manifest.schema_version = 3;
+  manifest.schema_version = 4;
   ASSERT_TRUE(rfl::json::save(
       Poco::Path(extractDir).append("manifest.json").toString(), manifest, rfl::json::pretty));
   {
@@ -1181,6 +1181,7 @@ TEST(RestoreServiceTest, RestoresTranscriptsAndPhrases) {
   const auto transcriptId = sourceDb.add_transcript(
       eventId, "live_local_v1", std::string{"gigaam-v3-rnnt"}, 1730000100000);
   ASSERT_GT(transcriptId, 0);
+  ASSERT_TRUE(sourceDb.save_prompter_state(transcriptId, 0, "{\"cards\":[{\"id\":\"saved-card\"}]}"));
   DuckTranscriptPhrase phrase;
   phrase.transcript_id = transcriptId;
   phrase.track_role = "participant";
@@ -1230,6 +1231,8 @@ TEST(RestoreServiceTest, RestoresTranscriptsAndPhrases) {
   pcm::config::Config targetConfig{
       .db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(targetPath)}};
   pcm::database::Database restoredDb{targetConfig};
+  EXPECT_EQ(restoredDb.get_prompter_state(transcriptId).revision, 1);
+  EXPECT_EQ(restoredDb.get_prompter_state(transcriptId).json, "{\"cards\":[{\"id\":\"saved-card\"}]}");
   const auto restored = restoredDb.get_transcripts_for_event(eventId);
   ASSERT_EQ(restored.size(), 1u);
   EXPECT_EQ(restored[0].status, "draft");
@@ -1298,7 +1301,7 @@ TEST(RestoreServiceTest, RestoresLegacySchemaOneAndBackfillsTranscriptClientsBef
     duckdb::DuckDB raw(target + "/database.db"); duckdb::Connection conn(raw);
     auto version = conn.Query("SELECT schema_version FROM ApplicationMetadata");
     ASSERT_FALSE(version->HasError());
-    EXPECT_EQ(version->Fetch()->GetValue(0, 0).GetValue<int32_t>(), 2);
+    EXPECT_EQ(version->Fetch()->GetValue(0, 0).GetValue<int32_t>(), 3);
   }
   pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(target)}};
   {

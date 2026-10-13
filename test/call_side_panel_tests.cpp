@@ -22,6 +22,21 @@ TEST_F(CallSidePanelTest, DefaultsToNotes) {
   EXPECT_EQ(stack()->currentIndex(), 0);
   EXPECT_EQ(switcher()->currentIndex(), 0);
 }
+TEST_F(CallSidePanelTest, PrompterUpdatesDoNotStealTheSelectedPage) {
+  auto *prompter = new QWidget;
+  auto *hint = new QWidget;
+  panel.setPrompterPanel(prompter, hint);
+  ASSERT_EQ(stack()->count(), 3);
+  EXPECT_EQ(stack()->currentIndex(), 0);
+  panel.setPrompterPendingCount(2);
+  EXPECT_EQ(stack()->currentIndex(), 0);
+  panel.showPrompter();
+  EXPECT_EQ(stack()->currentWidget(), prompter);
+  panel.setPrompterPendingCount(3);
+  EXPECT_EQ(stack()->currentWidget(), prompter);
+  panel.showNotes();
+  EXPECT_EQ(stack()->currentIndex(), 0);
+}
 TEST_F(CallSidePanelTest, SwitcherSwitchesPages) {
   QSignalSpy changed(&panel, &CallSidePanel::pageChanged);
   switcher()->setCurrentIndex(1);

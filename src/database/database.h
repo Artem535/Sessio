@@ -24,6 +24,11 @@
 
 namespace pcm::database {
 
+struct PrompterState {
+  int64_t revision = 0;
+  std::string json;
+};
+
 struct ClientMonthlyStats {
   int year = 0;
   int month = 0;
@@ -108,6 +113,10 @@ public:
   std::vector<DuckTranscript> get_transcripts();
   bool set_transcript_clients(int64_t transcript_id, const std::vector<int64_t> &client_ids);
   std::vector<int64_t> get_transcript_client_ids(int64_t transcript_id);
+  PrompterState get_prompter_state(int64_t transcript_id);
+  bool save_prompter_state(int64_t transcript_id, int64_t expected_revision, const std::string &json);
+  int64_t save_prompter_note(int64_t transcript_id, const std::string &card_id,
+                            int64_t client_id, const std::string &body);
   int64_t count_transcripts();
   int64_t count_transcript_phrases(int64_t transcript_id);
   // Callers of set_transcript_status, revoke_transcript_consent,
@@ -232,6 +241,7 @@ private:
   void add_demo_data();
   void init_tables();
   void apply_schema_migrations();
+  void init_prompter_schema();
   void init_application_metadata();
   void init_payment_status_table();
   void init_event_status_table();

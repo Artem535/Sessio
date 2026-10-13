@@ -1,0 +1,206 @@
+{
+  "startup_seconds": 1.2929235980000158,
+  "checks": {
+    "agreement_detected": true,
+    "missing_deadline_hint": false,
+    "reschedule_target": true,
+    "cancel_notes_target": true,
+    "neutral_abstains": true
+  },
+  "results": [
+    {
+      "case": "agreement_and_missing_deadline",
+      "request": {
+        "protocol_version": 1,
+        "request_id": 1,
+        "session_generation": 1,
+        "ledger_revision": 0,
+        "utterances": [
+          {
+            "id": "1",
+            "speaker": "Анна",
+            "text": "Я отправлю вам документы."
+          },
+          {
+            "id": "2",
+            "speaker": "Борис",
+            "text": "Хорошо, жду ваши документы."
+          }
+        ],
+        "candidates": []
+      },
+      "response": {
+        "protocol_version": 1,
+        "request_id": 1,
+        "session_generation": 1,
+        "ledger_revision": 0,
+        "events": [
+          {
+            "kind": "accept",
+            "participants": [
+              "Анна",
+              "Борис"
+            ],
+            "action": "Анна отправит документы Борису",
+            "evidence_ids": [
+              "1",
+              "2"
+            ],
+            "target_id": "",
+            "unresolved": false
+          }
+        ],
+        "suggestions": [],
+        "rejected": []
+      },
+      "seconds": 10.751297126999816
+    },
+    {
+      "case": "accepted_reschedule",
+      "request": {
+        "protocol_version": 1,
+        "request_id": 2,
+        "session_generation": 1,
+        "ledger_revision": 0,
+        "utterances": [
+          {
+            "id": "3",
+            "speaker": "Анна",
+            "text": "Перенесём созвон с пятницы на понедельник в 15:00."
+          },
+          {
+            "id": "4",
+            "speaker": "Борис",
+            "text": "Да, созвон в понедельник в 15:00."
+          }
+        ],
+        "candidates": [
+          {
+            "id": "meeting",
+            "text": "Созвон Анны и Бориса в пятницу в 15:00",
+            "participants": [
+              "Анна",
+              "Борис"
+            ]
+          }
+        ]
+      },
+      "response": {
+        "protocol_version": 1,
+        "request_id": 2,
+        "session_generation": 1,
+        "ledger_revision": 0,
+        "events": [
+          {
+            "kind": "accept",
+            "participants": [
+              "Анна",
+              "Борис"
+            ],
+            "action": "Созвон Анны и Бориса в понедельник в 15:00",
+            "evidence_ids": [
+              "3",
+              "4"
+            ],
+            "target_id": "meeting",
+            "unresolved": false
+          }
+        ],
+        "suggestions": [],
+        "rejected": []
+      },
+      "seconds": 11.683486076000008
+    },
+    {
+      "case": "cancel_notes_preserve_meeting",
+      "request": {
+        "protocol_version": 1,
+        "request_id": 3,
+        "session_generation": 1,
+        "ledger_revision": 0,
+        "utterances": [
+          {
+            "id": "5",
+            "speaker": "Анна",
+            "text": "Отменяю обещание отправить заметки в понедельник, отправлять их не буду."
+          },
+          {
+            "id": "6",
+            "speaker": "Борис",
+            "text": "Хорошо, отменяем отправку заметок."
+          }
+        ],
+        "candidates": [
+          {
+            "id": "meeting",
+            "text": "Созвон Анны и Бориса в пятницу в 15:00",
+            "participants": [
+              "Анна",
+              "Борис"
+            ]
+          },
+          {
+            "id": "notes",
+            "text": "Анна отправит заметки Борису в понедельник",
+            "participants": [
+              "Анна",
+              "Борис"
+            ]
+          }
+        ]
+      },
+      "response": {
+        "protocol_version": 1,
+        "request_id": 3,
+        "session_generation": 1,
+        "ledger_revision": 0,
+        "events": [
+          {
+            "kind": "cancel",
+            "participants": [
+              "Анна",
+              "Борис"
+            ],
+            "action": "Анна отправит заметки в понедельник",
+            "evidence_ids": [
+              "5",
+              "6"
+            ],
+            "target_id": "notes",
+            "unresolved": false
+          }
+        ],
+        "suggestions": [],
+        "rejected": []
+      },
+      "seconds": 8.542224460999932
+    },
+    {
+      "case": "neutral_abstention",
+      "request": {
+        "protocol_version": 1,
+        "request_id": 4,
+        "session_generation": 1,
+        "ledger_revision": 0,
+        "utterances": [
+          {
+            "id": "7",
+            "speaker": "Анна",
+            "text": "Сегодня дождь и прохладно."
+          }
+        ],
+        "candidates": []
+      },
+      "response": {
+        "protocol_version": 1,
+        "request_id": 4,
+        "session_generation": 1,
+        "ledger_revision": 0,
+        "events": [],
+        "suggestions": [],
+        "rejected": []
+      },
+      "seconds": 3.6622525029997632
+    }
+  ]
+}

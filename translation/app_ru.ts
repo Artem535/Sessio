@@ -265,6 +265,79 @@
     </message>
 </context>
 <context>
+    <name>CallPrompterController</name>
+    <message>
+        <source>Prompter is off</source>
+        <translation>Суфлёр выключен</translation>
+    </message>
+    <message>
+        <source>Could not save prompter changes. Reopen the transcript and try again.</source>
+        <translation>Не удалось сохранить изменения суфлёра. Откройте транскрипцию заново и повторите попытку.</translation>
+    </message>
+    <message>
+        <source>Transcript unavailable</source>
+        <translation>Транскрипция недоступна</translation>
+    </message>
+    <message>
+        <source>Prompter is paused</source>
+        <translation>Суфлёр на паузе</translation>
+    </message>
+    <message>
+        <source>Could not open prompter data</source>
+        <translation>Не удалось открыть данные суфлёра</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+    <message>
+        <source>Start transcription first</source>
+        <translation>Сначала включите транскрипцию</translation>
+    </message>
+    <message>
+        <source>Waiting for completed phrases</source>
+        <translation>Ожидаю завершённые реплики</translation>
+    </message>
+    <message>
+        <source>Local prompter failed. Check its settings and retry.</source>
+        <translation>Ошибка локального суфлёра. Проверьте настройки и повторите попытку.</translation>
+    </message>
+    <message>
+        <source>A phrase is too long. Review it in the transcript.</source>
+        <translation>Реплика слишком длинная. Проверьте её в транскрипции.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Processing conversation · %n phrases waiting</source>
+        <translation>
+            <numerusform>Обрабатываю разговор · в очереди %n реплика</numerusform>
+            <numerusform>Обрабатываю разговор · в очереди %n реплики</numerusform>
+            <numerusform>Обрабатываю разговор · в очереди %n реплик</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed through %1:%2 · %n phrases waiting</source>
+        <translation>
+            <numerusform>Обработано до %1:%2 · в очереди %n реплика</numerusform>
+            <numerusform>Обработано до %1:%2 · в очереди %n реплики</numerusform>
+            <numerusform>Обработано до %1:%2 · в очереди %n реплик</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Call agreement (transcript #%1):
+%2%3</source>
+        <translation>Договорённость звонка (транскрипция №%1):
+%2%3</translation>
+    </message>
+    <message>
+        <source>Cancelled: </source>
+        <translation>Отменено: </translation>
+    </message>
+    <message>
+        <source>Could not save the agreement to client notes</source>
+        <translation>Не удалось сохранить договорённость в заметки клиента</translation>
+    </message>
+</context>
+<context>
     <name>CallSidePanel</name>
     <message>
         <source>Notes</source>
@@ -273,6 +346,10 @@
     <message>
         <source>Transcript</source>
         <translation>Транскрипция</translation>
+    </message>
+    <message>
+        <source>Prompter</source>
+        <translation>Суфлёр</translation>
     </message>
 </context>
 <context>
@@ -954,6 +1031,129 @@
     <message>
         <source>Client: %1</source>
         <translation>Клиент: %1</translation>
+    </message>
+</context>
+<context>
+    <name>PrompterPanel</name>
+    <message>
+        <source>Start prompter</source>
+        <translation>Включить суфлёр</translation>
+    </message>
+    <message>
+        <source>Pause</source>
+        <translation>Пауза</translation>
+    </message>
+    <message>
+        <source>You could clarify</source>
+        <translation>Можно уточнить</translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation>Скрыть</translation>
+    </message>
+    <message>
+        <source>For review</source>
+        <translation>На проверку</translation>
+    </message>
+    <message>
+        <source>New agreements will appear here after completed phrases.</source>
+        <translation>Новые договорённости появятся здесь после завершения реплик.</translation>
+    </message>
+    <message>
+        <source>Accepted agreements</source>
+        <translation>Принятые договорённости</translation>
+    </message>
+    <message>
+        <source>Private suggestions. Check the source before saving.</source>
+        <translation>Подсказки видны только вам. Проверяйте источник перед сохранением.</translation>
+    </message>
+    <message>
+        <source>The source was changed or deleted. Review the transcript.</source>
+        <translation>Источник изменён или удалён. Проверьте транскрипцию.</translation>
+    </message>
+    <message>
+        <source>Source · %1:%2</source>
+        <translation>Источник · %1:%2</translation>
+    </message>
+    <message>
+        <source>Accept</source>
+        <translation>Принять</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Исправить</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>Отклонить</translation>
+    </message>
+    <message>
+        <source>To notes</source>
+        <translation>В заметки</translation>
+    </message>
+    <message>
+        <source>Choose the agreement</source>
+        <translation>Выбрать договорённость</translation>
+    </message>
+    <message>
+        <source>New agreement</source>
+        <translation>Новая договорённость</translation>
+    </message>
+    <message>
+        <source>Review the target</source>
+        <translation>Проверка выбранной договорённости</translation>
+    </message>
+    <message>
+        <source>Agreement to change or cancel</source>
+        <translation>Какую договорённость изменить или отменить</translation>
+    </message>
+    <message>
+        <source>Review agreement</source>
+        <translation>Проверка договорённости</translation>
+    </message>
+    <message>
+        <source>Agreement</source>
+        <translation>Договорённость</translation>
+    </message>
+    <message>
+        <source>Needs clarification</source>
+        <translation>Требует уточнения</translation>
+    </message>
+    <message>
+        <source>Proposed cancellation</source>
+        <translation>Предлагается отменить</translation>
+    </message>
+    <message>
+        <source>Proposed change</source>
+        <translation>Предлагается изменить</translation>
+    </message>
+    <message>
+        <source>Previous agreement: %1</source>
+        <translation>Прежняя договорённость: %1</translation>
+    </message>
+    <message>
+        <source>Saved to notes</source>
+        <translation>Сохранено в заметки</translation>
+    </message>
+    <message>
+        <source>Agreement kept as a draft</source>
+        <translation>Договорённость сохранена как черновик</translation>
+    </message>
+    <message>
+        <source>Attach a client to this transcript to save the agreement in client notes.</source>
+        <translation>Привяжите клиента к этой транскрипции, чтобы сохранить договорённость в его заметки.</translation>
+    </message>
+    <message>
+        <source>%1 · #%2</source>
+        <translation>%1 · №%2</translation>
+    </message>
+    <message>
+        <source>Save to client notes</source>
+        <translation>Сохранить в заметки клиента</translation>
+    </message>
+    <message>
+        <source>Client</source>
+        <translation>Клиент</translation>
     </message>
 </context>
 <context>
@@ -2632,6 +2832,14 @@ They appear here after a call with transcription turned on.</source>
         <translation>Другие действия</translation>
     </message>
     <message>
+        <source>Review agreements</source>
+        <translation>Проверить договорённости</translation>
+    </message>
+    <message>
+        <source>Call agreements</source>
+        <translation>Договорённости звонка</translation>
+    </message>
+    <message>
         <source>Delete this transcript and all its phrases?</source>
         <translation>Удалить эту транскрипцию и все её реплики?</translation>
     </message>
@@ -2858,6 +3066,42 @@ They appear here after a call with transcription turned on.</source>
     <message>
         <source>Enable call transcription</source>
         <translation>Включить транскрипцию звонков</translation>
+    </message>
+    <message>
+        <source>Start transcription automatically when joining a call</source>
+        <translation>Автоматически включать транскрипцию при входе в звонок</translation>
+    </message>
+    <message>
+        <source>Start the prompter automatically</source>
+        <translation>Автоматически включать суфлёр</translation>
+    </message>
+    <message>
+        <source>Local prompter (experimental)</source>
+        <translation>Локальный суфлёр (экспериментальный)</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>Обзор…</translation>
+    </message>
+    <message>
+        <source>Select a local file</source>
+        <translation>Выберите локальный файл</translation>
+    </message>
+    <message>
+        <source>Python with LiteRT-LM installed</source>
+        <translation>Python с установленным LiteRT-LM</translation>
+    </message>
+    <message>
+        <source>Gemma model (.litertlm)</source>
+        <translation>Модель Gemma (.litertlm)</translation>
+    </message>
+    <message>
+        <source>Gemma chat template (.jinja)</source>
+        <translation>Шаблон диалога Gemma (.jinja)</translation>
+    </message>
+    <message>
+        <source>Choose an installed local runtime and model. Nothing is downloaded automatically. Prompter suggestions require your review.</source>
+        <translation>Выберите установленный локальный runtime и модель. Файлы не скачиваются автоматически. Проверяйте предложения суфлёра.</translation>
     </message>
     <message>
         <source>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</source>

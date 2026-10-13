@@ -10,6 +10,9 @@
 #include "../widgets/app_settings.h"
 #ifdef SESSIO_CALL_TRANSCRIPTION
 #include "call_side_panel.h"
+#include "call_prompter_controller.h"
+#include "prompter_panel.h"
+#include "prompter_worker.h"
 #include "transcript_panel.h"
 #include "transcript_page.h"
 #include "transcript_list_page.h"
@@ -165,7 +168,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  QCoreApplication::setApplicationVersion("0.2.31");
+  QCoreApplication::setApplicationVersion("0.2.32");
   // Before anything that can log: on Windows this file and the crash dump are
   // the only trace a hang or crash leaves.
   const QString logDir =
@@ -1128,6 +1131,26 @@ void Application::connectSignals() {
     auto *panel = new TranscriptPanel;
     mCallNotesPanel = new ClientNotesPage(mDb);
     auto *sidePanel = new CallSidePanel(mCallNotesPanel, panel, callsPage);
+    auto *prompter = new CallPrompterController(mDb, this);
+    auto *worker = new PrompterWorker(this);
+    auto *prompterPanel = new PrompterPanel(prompter, mDb);
+    sidePanel->setPrompterPanel(prompterPanel, prompterPanel->sharedHintWidget());
+    connect(prompterPanel, &PrompterPanel::pendingCountChanged, sidePanel, &CallSidePanel::setPrompterPendingCount);
+    connect(prompterPanel, &PrompterPanel::sourceRequested, sidePanel, [sidePanel, panel](qint64 id) {
+      sidePanel->showTranscript(); panel->focusPhrase(id);
+    });
+    connect(prompterPanel, &PrompterPanel::noteSaved, mCallNotesPanel, &ClientNotesPage::refresh);
+    connect(prompter, &CallPrompterController::requestReady, worker, &PrompterWorker::send);
+    connect(worker, &PrompterWorker::resultReady, prompter, &CallPrompterController::handleResult);
+    connect(worker, &PrompterWorker::failed, prompter, &CallPrompterController::workerFailed);
+    auto startPrompter = [worker, prompter] {
+      if (worker->start(pcm::app_settings::prompterPython(), PrompterWorker::bundledScript(),
+                        pcm::app_settings::prompterModel(), pcm::app_settings::prompterTemplate()))
+        prompter->resume();
+    };
+    connect(prompterPanel, &PrompterPanel::pauseRequested, prompter, [worker, prompter] {
+      prompter->pause(); worker->stop();
+    });
     callsPage->setSidePanelWidget(sidePanel);
     pcm::transcriptionui::ControllerHooks hooks;
     hooks.resolveEvent = [this](int64_t id) { return resolveCallEvent(id); };
@@ -1159,9 +1182,32 @@ void Application::connectSignals() {
     };
     hooks.modelsAvailable = modelsAvailable;
     hooks.transcriptionEnabled = &pcm::app_settings::transcriptionEnabled;
+    hooks.autoStartEnabled = &pcm::app_settings::transcriptionAutoStart;
     hooks.eventMaterialised = [eventPage](int64_t) { eventPage->reloadSelectedDay(); };
     mCallTranscription = new pcm::transcriptionui::CallTranscriptionController(mDb, panel, sidePanel, std::move(hooks), this);
     auto *controller = mCallTranscription.data();
+    auto manualPrompterRequested = std::make_shared<bool>(false);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptStarted, prompter,
+            [prompter, worker, startPrompter, manualPrompterRequested](qint64 id) {
+      worker->stop(); prompter->beginTranscript(id);
+      if (*manualPrompterRequested || pcm::app_settings::prompterAutoStart()) startPrompter();
+      *manualPrompterRequested = false;
+    });
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::phraseAdded,
+            prompter, &CallPrompterController::addPhrase);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptionStopped,
+            prompter, [worker, prompter] { prompter->pause(); worker->stop(); });
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::consentRevoked,
+            prompter, [worker, prompter] { prompter->endCall(); worker->stop(); });
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptDeleted,
+            prompter, &CallPrompterController::transcriptDeleted);
+    connect(prompterPanel, &PrompterPanel::startRequested, controller,
+            [controller, prompter, startPrompter, manualPrompterRequested] {
+      if (controller->active() && prompter->transcriptId()) { startPrompter(); return; }
+      *manualPrompterRequested = true;
+      controller->onTranscribeRequested();
+      *manualPrompterRequested = false;
+    });
     auto refreshButton = [this, callsPage, modelsAvailable] {
       mCallTranscription->refreshAvailability();
       callsPage->setTranscribeButtonVisible(pcm::app_settings::transcriptionEnabled() &&
@@ -1170,12 +1216,15 @@ void Application::connectSignals() {
     connect(callsPage, &CallsPage::eventKnownForCurrentCall, this,
             [this](int64_t id) { mCurrentCallEventId = id; });
     connect(callsPage, &CallsPage::callSessionStarted, this,
-            [this, controller, refreshButton](pcm::video::VideoSession *session) {
+            [this, controller, refreshButton, prompter, worker](pcm::video::VideoSession *session) {
+              worker->stop();
+              prompter->beginTranscript(0);
               controller->attachCall(session, mCurrentCallEventId);
               refreshButton();
             });
-    connect(callsPage, &CallsPage::callSessionEnded, this, [this, controller, refreshButton] {
+    connect(callsPage, &CallsPage::callSessionEnded, this, [this, controller, refreshButton, prompter, worker] {
       controller->detachCall();
+      prompter->endCall(); worker->stop();
       mCurrentCallEventId.reset();
       refreshButton();
     });

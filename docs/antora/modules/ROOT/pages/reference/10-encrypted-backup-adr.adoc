@@ -1,0 +1,114 @@
+= ADR: Encrypted Backup Format
+
+*Status:* Accepted
+
+*Date:* 2026-08-04
+
+*Decision:* encrypted `.psybackup` files use a versioned external container
+implemented with libsodium. The existing ZIP archive is encrypted as a whole;
+individual ZIP entries are not encrypted separately.
+
+== Context
+
+The current backup is a ZIP file containing `manifest.json`, a DuckDB export,
+and optional attachments. ZIP-level password protection would expose file
+names, manifest metadata, and archive structure. The product must support
+automatic encrypted backups on the current computer and recovery of a backup
+on another computer, without storing a recovery password.
+
+== Decision
+
+=== Cryptography
+
+Use only libsodium primitives:
+
+* `crypto_pwhash` with `crypto_pwhash_ALG_ARGON2ID13` derives a key-encryption
+  key from the recovery password. New backups use the `moderate` profile; the
+  exact `opslimit`, `memlimit`, salt, and algorithm are stored in the file.
+* A random 256-bit workspace master key encrypts the archive with
+  `crypto_secretstream_xchacha20poly1305`. The stream uses fixed-size chunks
+  and a `TAG_FINAL` record.
+* The master key is wrapped with the password-derived key using
+  `crypto_aead_xchacha20poly1305_ietf`. Its nonce is random.
+
+The implementation calls `sodium_init()` before use and clears password,
+derived-key, and master-key buffers with `sodium_memzero()` on every exit path.
+No cryptographic primitive is implemented by Sessio itself.
+
+=== Container format
+
+An encrypted backup keeps the `.psybackup` extension and starts with an
+eight-byte ASCII magic `PCMENC01`, followed by a little-endian 32-bit header
+length (maximum 16 KiB) and a UTF-8 JSON header. The remaining bytes are the
+secretstream ciphertext.
+
+The header contains only technical metadata:
+
+* `container_version`;
+* Argon2id algorithm and parameters, plus random salt;
+* password-wrap nonce and encrypted workspace master key;
+* secretstream header and chunk size.
+
+The full serialized header is authenticated as associated data on every
+secretstream record. The master-key wrapping authenticates the fixed prefix
+and the same header with the wrapped-key field omitted. Consequently, changing
+KDF parameters, the stream header, or other metadata fails decryption.
+
+The plaintext ZIP, `manifest.json`, client data, attachment names, and backup
+timestamp are never present outside the ciphertext. The file name itself is
+not protected.
+
+=== Key lifecycle and recovery
+
+One random master key belongs to one workspace. Its local copy is stored using
+QtKeychain through a `CredentialStore` interface, keyed by the workspace UUID.
+Every encrypted backup contains a recovery-password-encrypted copy of that
+same key. This allows a new computer to restore the file using the recovery
+password alone.
+
+Enabling encrypted backups is a workspace-wide setting. The user supplies and
+confirms a recovery password of at least 12 characters; the UI encourages a
+long password phrase rather than composition rules. The password is never
+stored. All subsequent manual and automatic backups are encrypted.
+
+If QtKeychain is unavailable or locked, automatic encrypted backups do not
+run. A manual encrypted backup may proceed after the user enters the recovery
+password. The application must never silently create an unencrypted fallback.
+
+Loss of both the recovery password and the keychain key makes a backup
+unrecoverable by design. Password changes and master-key rotation are out of
+scope for the first encrypted-backup release; existing backups always retain
+the password that wrapped their key.
+
+=== Creation and restore flow
+
+`BackupService` creates the existing ZIP in a permission-restricted temporary
+directory, streams it into a same-directory encrypted partial file, removes
+the plaintext temporary ZIP, and atomically renames the encrypted partial file
+only after the final authentication record is written. Plaintext temporary
+files are removed with RAII cleanup; portable secure deletion is not claimed.
+
+`RestoreService` detects `PCMENC01`. It obtains the master key from QtKeychain
+or unwraps it with the supplied recovery password, decrypts to a
+permission-restricted temporary ZIP, and then runs the existing
+`BackupValidator` and staged restore flow. A wrong password, malformed header,
+or authentication failure returns one generic decryption error and must not
+modify the current database or attachments. A regular ZIP beginning with `PK`
+continues through the existing unencrypted restore path unchanged.
+
+=== Threat model and non-goals
+
+The format protects backup files copied from disk, external drives, or cloud
+folders. It does not protect against a compromised running operating system,
+keylogger, malware able to read the active process, or an unlocked user
+session with access to the system keychain. The first version does not encrypt
+the live DuckDB database or attachments, synchronize keys, recover forgotten
+passwords, or change passwords for existing backups.
+
+== Consequences
+
+Issue #34 must add libsodium and QtKeychain dependencies, an `EncryptionService`
+and `CredentialStore`, password-entry UI, encrypted-container tests, and
+restore regression tests. It must cover successful round trips, wrong-password
+rejection, tamper detection, unavailable-keychain behavior, and unchanged
+support for unencrypted ZIP backups.

@@ -180,7 +180,7 @@ ValidationResult BackupValidator::validate(
     const auto &manifest = manifestResult.value();
 
     if (manifest.psybackup_format_version != 1 || manifest.backup_format_version != 1 ||
-        manifest.schema_version < 1 || manifest.schema_version > 2) {
+        manifest.schema_version < 1 || manifest.schema_version > 3) {
       result.errors.push_back(
           "unsupported backup format or schema version");
       return result;

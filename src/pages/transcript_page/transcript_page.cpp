@@ -1,4 +1,5 @@
 #include "transcript_page.h"
+#include "prompter_panel.h"
 #include "phrase_card_paint.h"
 #include "transcript_client_dialog.h"
 #include <QFileDialog>
@@ -112,6 +113,29 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
   navigation->addWidget(back); navigation->addStretch();
   mAttach = button(tr("Attach clients"), "transcriptAttachClients", this);
   navigation->addWidget(mAttach);
+  mAgreements = button(tr("Review agreements"), "transcriptAgreements", this);
+  navigation->addWidget(mAgreements);
+  connect(mAgreements, &QPushButton::clicked, this, [this] {
+    const auto id = mSelector->currentData().toLongLong();
+    if (!mayMutate(id)) return;
+    auto *dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(tr("Call agreements")); dialog->resize(460, 650);
+    auto *controller = new CallPrompterController(mDb, dialog); controller->beginTranscript(id);
+    auto *panel = new PrompterPanel(controller, mDb, dialog);
+    panel->findChild<QPushButton *>("prompterStart")->hide();
+    panel->findChild<QPushButton *>("prompterPause")->hide();
+    auto *layout = new QVBoxLayout(dialog);
+    layout->addWidget(panel->sharedHintWidget());
+    layout->addWidget(panel);
+    connect(panel, &PrompterPanel::sourceRequested, this, [this, dialog](qint64 phraseId) {
+      dialog->close();
+      auto *widget = findChild<QWidget *>("phraseCard_" + QString::number(phraseId));
+      if (widget) { findChild<QScrollArea *>()->ensureWidgetVisible(widget); widget->setFocus(); }
+    });
+    connect(panel, &PrompterPanel::noteSaved, this, &TranscriptPage::transcriptsChanged);
+    dialog->open();
+  });
   auto *exportButton = button(tr("Export text"), "transcriptExport", this);
   navigation->addWidget(exportButton);
   auto *more = new QToolButton(this);
@@ -291,6 +315,7 @@ void TranscriptPage::showTranscript() {
     if (!row) { mNotice->setText(tr("Transcript unavailable.")); return; }
     const auto phrases = mDb->get_transcript_phrases(row->id);
     const bool recording = row->status == "recording";
+    mAgreements->setEnabled(!recording);
     QStringList names;
     for (const auto id : mDb->get_transcript_client_ids(row->id)) {
       if (const auto client = mDb->get_client(id))

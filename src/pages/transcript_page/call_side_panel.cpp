@@ -23,7 +23,7 @@ CallSidePanel::CallSidePanel(QWidget *notesPage, QWidget *transcriptPanel, QWidg
   connect(mSwitcher, &oclero::qlementine::SegmentedControl::currentIndexChanged,
           this, [this] {
     const int index = mSwitcher->currentIndex();
-    if (index != 0 && (index != 1 || !mTranscriptionAvailable)) {
+    if (index != 0 && (!mTranscriptionAvailable || (index != 1 && (index != 2 || mStack->count() < 3)))) {
       showNotes();
       return;
     }
@@ -49,3 +49,15 @@ void CallSidePanel::showTranscript() {
 }
 
 bool CallSidePanel::transcriptShown() const { return mStack->currentIndex() == 1; }
+void CallSidePanel::setPrompterPanel(QWidget *panel, QWidget *sharedHint) {
+  if (mStack->count() >= 3) return;
+  mStack->addWidget(panel);
+  mSwitcher->addItem(tr("Prompter"));
+  static_cast<QVBoxLayout *>(layout())->insertWidget(0, sharedHint);
+}
+void CallSidePanel::setPrompterPendingCount(int count) {
+  if (mStack->count() >= 3) mSwitcher->setItemBadge(2, count > 0 ? QString::number(count) : QString());
+}
+void CallSidePanel::showPrompter() {
+  if (mTranscriptionAvailable && mStack->count() >= 3) mSwitcher->setCurrentIndex(2);
+}

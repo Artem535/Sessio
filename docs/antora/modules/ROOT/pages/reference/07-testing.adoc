@@ -1,0 +1,38 @@
+= Testing
+
+Tests live in `test/` and are wired from `test/CMakeLists.txt`.
+
+== Existing Tests
+
+- `config_tests.cpp`
+: basic construction test for `pcm::config::Config`.
+- `database_tests.cpp`
+: DB initialization test with temporary directory.
+- `backup_tests.cpp`
+: checksum utility, manifest round-trip, database/attachment backup
+  creation, validator, and atomicity coverage.
+
+Framework: GoogleTest (`GTest`).
+
+== Execute
+
+[source,bash]
+----
+ctest --test-dir build --output-on-failure
+----
+
+== Current Coverage Shape
+
+Tests include database migrations, transcript editing/client associations,
+backup/restore, transcription consent and lifecycle, call panel navigation,
+settings persistence, bounded worker protocol and manual agreement decisions.
+The complete target inventory is maintained in `test/CMakeLists.txt`.
+
+Prompter verification uses isolated databases and synthetic conversations.
+Qt UI tests run offscreen and render the actual panel in both themes.
+The Python worker contract tests use a fake inference function; separate CPU
+smoke tests run the installed Gemma model through the persistent worker.
+See xref:call-prompter-verification.adoc[the integration verification report].
+
+These tests do not establish acceptance of simultaneous live video, ASR and LLM
+or validate the packaged runtime on Windows/macOS. Those are separate runtime gates.
