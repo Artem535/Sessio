@@ -6,9 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Native calls offer a large participants layout with remote cameras in the
-  main area and your own video in a small tile on the right. Switch back to
-  the standard layout to view shared screens; fullscreen remains available.
+- Native calls offer Auto, Grid, Overlay and Side layout buttons. Auto keeps
+  the existing one-to-one and screen-sharing behavior; Overlay floats your
+  preview over remote cameras and Side places it in a separate right column.
+  Fullscreen remains independently available.
 
 ## [0.2.29] - 2026-10-09
 

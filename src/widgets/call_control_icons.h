@@ -11,7 +11,6 @@ namespace pcm::widgets {
 [[nodiscard]] QIcon cameraIcon(bool enabled);
 [[nodiscard]] QIcon devicesIcon();
 [[nodiscard]] QIcon fullscreenIcon(bool active);
-[[nodiscard]] QIcon participantsLayoutIcon();
 [[nodiscard]] QIcon screenShareIcon(bool active);
 [[nodiscard]] QIcon notesIcon();
 [[nodiscard]] QIcon transcriptIcon(bool active);

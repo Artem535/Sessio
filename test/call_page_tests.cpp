@@ -148,7 +148,7 @@ TEST(CallPageTest, LargeParticipantsToggleSeparatesSelfAndRestoresSharedScreen) 
   provider->simulateParticipantJoined({"first", "First"});
   provider->simulateParticipantJoined({"second", "Second"});
   provider->simulateScreenSharing("first", true);
-  auto *toggle = page.findChild<QToolButton *>("participantsLayoutButton");
+  auto *toggle = page.findChild<QToolButton *>("layoutSideButton");
   ASSERT_NE(toggle, nullptr);
   EXPECT_TRUE(toggle->isCheckable());
   auto *stage = page.findChild<QWidget *>("videoStage");
@@ -168,23 +168,68 @@ TEST(CallPageTest, LargeParticipantsToggleSeparatesSelfAndRestoresSharedScreen) 
   provider->simulateParticipantLeft("second");
   EXPECT_EQ(page.findChild<QWidget *>("participantTile_first"), first);
   if (qEnvironmentVariableIsSet("SESSIO_LAYOUT_SCREENSHOT")) {
+    provider->simulateScreenSharing("first", false);
     auto *parent = stage->parentWidget();
     stage->setParent(nullptr);
     resizeAndDeliverEvent(stage, QSize(1280, 800));
     stage->show();
     QApplication::processEvents();
-    EXPECT_TRUE(stage->grab().save(qEnvironmentVariable("SESSIO_LAYOUT_SCREENSHOT")));
+    const QString path = qEnvironmentVariable("SESSIO_LAYOUT_SCREENSHOT");
+    for (const QString mode : {QString("Auto"), QString("Grid"), QString("Overlay"), QString("Side")}) {
+      stage->findChild<QToolButton *>("layout" + mode + "Button")->setChecked(true);
+      QApplication::processEvents();
+      EXPECT_TRUE(stage->grab().save(path + "-" + mode + ".png"));
+    }
     stage->hide();
     stage->setParent(parent);
   }
   provider->simulateParticipantLeft("first");
   EXPECT_TRUE(local->isVisibleTo(stage));
-  toggle->setChecked(false);
+  page.findChild<QToolButton *>("layoutAutoButton")->setChecked(true);
   provider->simulateParticipantJoined({"first", "First"});
   provider->simulateScreenSharing("first", true);
   screen = page.findChild<QWidget *>("participantScreenTile_first");
   ASSERT_NE(screen, nullptr);
   EXPECT_TRUE(screen->isVisibleTo(stage));
+}
+
+TEST(CallPageTest, LayoutButtonsSelectGridOverlayAndAutoWithoutReplacingTiles) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateParticipantJoined({"local", "Me", "client", true});
+  provider->simulateParticipantJoined({"first", "First"});
+  auto *stage = page.findChild<QWidget *>("videoStage");
+  auto *local = page.findChild<QWidget *>("participantTile_local");
+  auto *remote = page.findChild<QWidget *>("participantTile_first");
+  auto *grid = page.findChild<QToolButton *>("layoutGridButton");
+  auto *overlay = page.findChild<QToolButton *>("layoutOverlayButton");
+  auto *automatic = page.findChild<QToolButton *>("layoutAutoButton");
+  ASSERT_NE(grid, nullptr);
+  ASSERT_NE(overlay, nullptr);
+  ASSERT_NE(automatic, nullptr);
+  EXPECT_TRUE(automatic->isChecked());
+  resizeAndDeliverEvent(stage, QSize(1280, 720));
+  auto *name = remote->findChild<QLabel *>("participantName");
+  auto *controls = page.findChild<QWidget *>("layoutControls");
+  EXPECT_FALSE(QRect(name->mapTo(stage, QPoint()), name->size()).intersects(controls->geometry()));
+  grid->setChecked(true);
+  resizeAndDeliverEvent(stage, QSize(1280, 720));
+  EXPECT_EQ(local->size(), remote->size());
+  EXPECT_FALSE(automatic->isChecked());
+  overlay->setChecked(true);
+  const QRect localRect(local->mapTo(stage, QPoint()), local->size());
+  const QRect remoteRect(remote->mapTo(stage, QPoint()), remote->size());
+  EXPECT_TRUE(remoteRect.contains(localRect));
+  EXPECT_LT(local->width(), remote->width());
+  EXPECT_EQ(page.findChild<QWidget *>("participantTile_first"), remote);
+  EXPECT_FALSE(grid->isChecked());
+  provider->simulateParticipantJoined({"second", "Second"});
+  EXPECT_LT(local->width(), remote->width());
+  automatic->setChecked(true);
+  EXPECT_EQ(local->size(), remote->size());
 }
 
 TEST(CallPageTest, OneRemoteAndLocalUsePipAboveControlBar) {
@@ -1330,6 +1375,9 @@ TEST(CallPageTest, SharingBannerFollowsLocalScreenShare) {
   EXPECT_TRUE(banner->isHidden());
   provider->startScreenShare({});
   EXPECT_FALSE(banner->isHidden());
+  auto *stage = page.findChild<QWidget *>("videoStage");
+  resizeAndDeliverEvent(stage, QSize(480, 720));
+  EXPECT_FALSE(banner->geometry().intersects(page.findChild<QWidget *>("layoutControls")->geometry()));
   page.findChild<QPushButton *>("sharingBannerStop")->click();
   EXPECT_EQ(provider->mStopScreenShareCallCount, 1);
   EXPECT_TRUE(banner->isHidden());

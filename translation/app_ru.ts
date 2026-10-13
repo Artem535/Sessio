@@ -196,12 +196,20 @@
         <translation>Включить камеру</translation>
     </message>
     <message>
-        <source>Large participants</source>
-        <translation>Участники крупно</translation>
+        <source>Auto</source>
+        <translation>Авто</translation>
     </message>
     <message>
-        <source>Standard layout</source>
-        <translation>Обычная раскладка</translation>
+        <source>Grid</source>
+        <translation>Сетка</translation>
+    </message>
+    <message>
+        <source>Overlay</source>
+        <translation>Поверх</translation>
+    </message>
+    <message>
+        <source>Side</source>
+        <translation>Сбоку</translation>
     </message>
     <message>
         <source>Enter fullscreen</source>

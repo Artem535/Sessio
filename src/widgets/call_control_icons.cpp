@@ -87,15 +87,6 @@ QIcon fullscreenIcon(bool active) {
   });
 }
 
-QIcon participantsLayoutIcon() {
-  return renderIcon(false, [](QPainter &painter, const QColor &color) {
-    painter.setPen(QPen(color, 1.5));
-    painter.setBrush(Qt::NoBrush);
-    painter.drawRoundedRect(QRectF(2, 4, 13, 16), 2, 2);
-    painter.drawRoundedRect(QRectF(18, 4, 4, 6), 1, 1);
-  });
-}
-
 QIcon screenShareIcon(bool active) {
   return renderIcon(false, [active](QPainter &painter, const QColor &color) {
     painter.setPen(QPen(color, 2));

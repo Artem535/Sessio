@@ -196,12 +196,20 @@
         <translation>Turn on camera</translation>
     </message>
     <message>
-        <source>Large participants</source>
-        <translation>Large participants</translation>
+        <source>Auto</source>
+        <translation>Auto</translation>
     </message>
     <message>
-        <source>Standard layout</source>
-        <translation>Standard layout</translation>
+        <source>Grid</source>
+        <translation>Grid</translation>
+    </message>
+    <message>
+        <source>Overlay</source>
+        <translation>Overlay</translation>
+    </message>
+    <message>
+        <source>Side</source>
+        <translation>Side</translation>
     </message>
     <message>
         <source>Enter fullscreen</source>
