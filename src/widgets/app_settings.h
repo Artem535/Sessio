@@ -5,8 +5,16 @@
 #include <QTime>
 
 #include "notification_text.h"
+#include "transcription_tuning.h"
 
 namespace pcm::app_settings {
+bool transcriptionEnabled();
+void setTranscriptionEnabled(bool enabled);
+// Speech detection and recogniser parameters; always returned clamped to their valid ranges.
+pcm::transcription::TranscriptionTuning transcriptionTuning();
+void setTranscriptionTuning(const pcm::transcription::TranscriptionTuning &tuning);
+QString callDisplayName();
+void setCallDisplayName(const QString &name);
 
 bool confirmEventDeletion();
 void setConfirmEventDeletion(bool enabled);

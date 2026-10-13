@@ -2,6 +2,7 @@
 
 #include "change_log_text.h"
 #include "../../widgets/app_settings.h"
+#include "../../widgets/accent_color.h"
 #include "../../widgets/constants.hpp"
 #include "../../widgets/surface_paint_filter.h"
 
@@ -710,8 +711,9 @@ void ClientNotesPage::addNoteBubble(const DuckClientNote &note) {
                                                            QTimeZone::systemTimeZone());
       linkLabel->setText(QStringLiteral("🔗 %1").arg(startAt.toString("dd.MM.yyyy HH:mm")));
       linkLabel->setStyleSheet(
-          "QPushButton { text-align: left; color: rgba(120, 170, 255, 0.9); "
-          "background: transparent; border: none; padding: 0px; }");
+          QStringLiteral("QPushButton { text-align: left; color: %1; "
+                         "background: transparent; border: none; padding: 0px; }")
+              .arg(pcm::widgets::cssRgba(pcm::widgets::accentColor(), 0.9)));
       const auto linkedId = linkedEvent->id;
       const auto dayStartMs =
           QDateTime(startAt.date(), QTime(0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
@@ -741,11 +743,13 @@ void ClientNotesPage::addSessionEntry(const DuckEvent &event) {
   card->setMaximumWidth(pcm::widgets::constants::kNotesBubbleMaxWidth);
   card->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
   card->setStyleSheet(
-      "#sessionEntry {"
-      " background: rgba(120, 170, 255, 0.08);"
-      " border: 1px solid rgba(120, 170, 255, 0.18);"
-      " border-radius: 12px;"
-      "}");
+      QStringLiteral("#sessionEntry {"
+                     " background: %1;"
+                     " border: 1px solid %2;"
+                     " border-radius: 12px;"
+                     "}")
+          .arg(pcm::widgets::cssRgba(pcm::widgets::accentColor(), 0.08),
+               pcm::widgets::cssRgba(pcm::widgets::accentColor(), 0.18)));
 
   auto *layout = new QVBoxLayout(card);
   layout->setContentsMargins(

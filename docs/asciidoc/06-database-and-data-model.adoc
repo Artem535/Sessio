@@ -26,7 +26,8 @@ On first initialization, it:
 - `last_migration_at` records the latest successful metadata migration pass.
 
 Initialization is idempotent: a restart keeps the existing workspace UUID and
-creation timestamp while refreshing only the migration timestamp. The metadata
+creation timestamp. The migration timestamp changes only when a schema migration
+commits; reopening a workspace does not reset its schema version. The metadata
 is exposed through `Database::get_application_metadata()` for backup and restore
 services.
 
@@ -40,6 +41,9 @@ Defined in `src/database/constants.hpp`:
 - `PaymentStatus`
 - `EventStatus`
 - `ApplicationMetadata`
+- `Transcript`
+- `TranscriptClient` (independent many-to-many client assignments)
+- `TranscriptPhrase`
 
 === C++ Data Objects
 
@@ -74,3 +78,31 @@ All parse rows from `duckdb::DataChunk`.
 - Day range helper (`get_time_range`) computes start/end day in microseconds.
 
 When touching scheduling logic, verify unit consistency (`ms` vs `us` vs seconds fields like `duration`).
+
+=== Independent Transcripts (schema 2)
+
+`Transcript.id` identifies a recording independently of calendar events or client
+cards. `event_id` is nullable; a standalone call persists SQL NULL and creates no
+event or client. Consent, revocation, model identity, status and phrase timestamps
+are identical for linked and standalone calls.
+
+`TranscriptClient` holds explicit client assignments. Creating a transcript for
+an event copies that event's current client links once. Later calendar changes do
+not change those assignments. Guest display names never identify client cards.
+After recording ends, the Transcripts page can attach or detach existing cards.
+`set_transcript_clients` validates all IDs and replaces the deduplicated links in
+one transaction; invalid replacements preserve the previous assignments.
+
+Deleting an event or recurring override sets the transcript's event link to NULL;
+deleting a client removes its transcript/client links. Transcript text remains
+available in the general list. Startup cleanup removes dangling phrase/client
+links and detaches missing events without deleting independent recordings.
+Deleting a transcript explicitly removes its phrases and client assignments.
+
+Migration 1 to 2 drops the event NOT NULL constraint, creates `TranscriptClient`,
+and backfills legacy event/client associations in one transaction with the schema
+version update. It runs once, so manual unlinking survives reopening. Backups
+retain format 1; restore accepts schema 1 and 2 and migrates the staged database
+before replacing the workspace. Future schema versions are rejected. Downgrading
+the application requires restoration of a compatible backup; there is no reverse
+schema migration.

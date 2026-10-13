@@ -537,3 +537,142 @@ TEST(RecurrenceUtilsTest, ComputeDaySummarySkipsTooSmallGapAndFindsLargerOneAfte
   // And end at the work day's end
   EXPECT_EQ(summary.freeWindowEnd->time(), QTime(18, 0, 0));
 }
+
+// --- Pinned-timezone (published) series use the shared schedule calculation ---
+
+#include "schedule_snapshot.h"
+
+namespace {
+struct PinnedSeriesFixture {
+  PinnedSeriesFixture()
+      : conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(Poco::Path::current())
+                                                                  .append("tmp_dir_pinned_series")}} {
+    if (auto dir = Poco::File(conf.db_conf().db_pth); dir.exists()) {
+      dir.remove(true);
+    }
+    db = std::make_unique<pcm::database::Database>(conf);
+  }
+  ~PinnedSeriesFixture() {
+    db.reset();
+    if (auto dir = Poco::File(conf.db_conf().db_pth); dir.exists()) {
+      dir.remove(true);
+    }
+  }
+
+  // Tuesdays 18:00 Europe/Berlin, first one 2026-10-20 (CEST, 16:00Z).
+  DuckEventSeries berlinWeekly() const {
+    DuckEventSeries series;
+    series.name = std::string{"Weekly"};
+    series.event_stat_id = 1;
+    series.payment_stat_id = 1;
+    series.start_date = 1792512000000; // 2026-10-20T16:00:00Z
+    series.end_date = *series.start_date + 3'600'000;
+    series.duration = 3600;
+    series.recurrence_rule = "FREQ=WEEKLY;INTERVAL=1;BYDAY=TU";
+    return series;
+  }
+
+  pcm::config::Config conf;
+  std::unique_ptr<pcm::database::Database> db;
+};
+
+QString utc(const QDateTime &value) {
+  return value.toUTC().toString(Qt::ISODate);
+}
+} // namespace
+
+TEST(RecurrenceUtilsTest, PinnedTimezoneSeriesKeepsItsWallClockAcrossDaylightSavingChange) {
+  PinnedSeriesFixture fixture;
+  auto series = fixture.berlinWeekly();
+  const auto commit = fixture.db->commit_schedule_change(
+      [&]() -> std::optional<int64_t> { return fixture.db->add_event_series(series); },
+      "Europe/Berlin", pcm::meeting::buildScheduleSnapshotPayload);
+  ASSERT_TRUE(commit.has_value());
+  series.id = commit->series_id;
+
+  const auto from = QDateTime::fromMSecsSinceEpoch(1792454400000, QTimeZone::UTC); // 2026-10-20T00:00Z
+  const auto to = from.addDays(15);
+  const auto starts = pcm::recurrence::seriesOccurrences(*fixture.db, series, from, to);
+
+  ASSERT_EQ(starts.size(), 3);
+  EXPECT_EQ(utc(starts[0]), "2026-10-20T16:00:00Z"); // CEST
+  EXPECT_EQ(utc(starts[1]), "2026-10-27T17:00:00Z"); // CET after 25 Oct: still 18:00 in Berlin
+  EXPECT_EQ(utc(starts[2]), "2026-11-03T17:00:00Z");
+}
+
+TEST(RecurrenceUtilsTest, SeriesWithoutPinnedTimezoneKeepsLegacyCalendar) {
+  PinnedSeriesFixture fixture;
+  auto series = fixture.berlinWeekly();
+  const auto seriesId = fixture.db->add_event_series(series);
+  ASSERT_GT(seriesId, 0);
+  series.id = seriesId;
+
+  const auto from = QDateTime::fromMSecsSinceEpoch(1792454400000, QTimeZone::UTC);
+  const auto to = from.addDays(15);
+  const auto viaHelper = pcm::recurrence::seriesOccurrences(*fixture.db, series, from, to);
+  const auto legacy = pcm::recurrence::occurrences(series, from, to);
+
+  ASSERT_EQ(viaHelper.size(), legacy.size());
+  for (int i = 0; i < legacy.size(); ++i) {
+    EXPECT_EQ(viaHelper[i].toMSecsSinceEpoch(), legacy[i].toMSecsSinceEpoch());
+  }
+}
+
+TEST(RecurrenceUtilsTest, TimezonePreviewListsTheNearestDatesInThatZone) {
+  PinnedSeriesFixture fixture;
+  const auto series = fixture.berlinWeekly();
+  const auto from = QDateTime::fromMSecsSinceEpoch(1792454400000, QTimeZone::UTC);
+
+  // Moscow has no DST: the stored instant is 19:00 on Tuesdays all autumn.
+  const auto moscow = pcm::recurrence::previewOccurrences(series, "Europe/Moscow", from, 3);
+  ASSERT_TRUE(moscow.has_value());
+  ASSERT_EQ(moscow->size(), 3);
+  EXPECT_EQ(utc(moscow->at(0)), "2026-10-20T16:00:00Z");
+  EXPECT_EQ(utc(moscow->at(1)), "2026-10-27T16:00:00Z");
+  EXPECT_EQ(utc(moscow->at(2)), "2026-11-03T16:00:00Z");
+
+  // In Tokyo the same instant is already Wednesday 01:00, so BYDAY=TU moves the
+  // series to the following Tuesday: the preview must show that shift so the
+  // specialist can refuse the zone instead of silently moving meetings.
+  const auto tokyo = pcm::recurrence::previewOccurrences(series, "Asia/Tokyo", from, 2);
+  ASSERT_TRUE(tokyo.has_value());
+  EXPECT_EQ(utc(tokyo->at(0)), "2026-10-26T16:00:00Z");
+
+  EXPECT_FALSE(pcm::recurrence::previewOccurrences(series, "Not/AZone", from, 3).has_value());
+}
+
+TEST(RecurrenceUtilsTest, VirtualOccurrencesSkipExceptionsAndMaterializedOverrides) {
+  PinnedSeriesFixture fixture;
+  auto series = fixture.berlinWeekly();
+  const auto commit = fixture.db->commit_schedule_change(
+      [&]() -> std::optional<int64_t> { return fixture.db->add_event_series(series); },
+      "Europe/Berlin", pcm::meeting::buildScheduleSnapshotPayload);
+  ASSERT_TRUE(commit.has_value());
+  const auto oct27 = 1792512000000 + 7 * 24 * 3'600'000LL + 3'600'000; // 2026-10-27T17:00Z
+  ASSERT_TRUE(fixture.db->add_event_series_exception(commit->series_id, oct27, "deleted"));
+
+  const auto from = QDateTime::fromMSecsSinceEpoch(1792454400000, QTimeZone::UTC);
+  const auto events = pcm::recurrence::virtualOccurrencesInRange(*fixture.db, from, from.addDays(15));
+
+  ASSERT_EQ(events.size(), 2);
+  EXPECT_EQ(events[0].start_date.value(), 1792512000000);
+  EXPECT_EQ(events[1].start_date.value(), oct27 + 7 * 24 * 3'600'000LL);
+  EXPECT_TRUE(events[0].is_virtual_occurrence);
+  EXPECT_EQ(events[0].series_id.value(), commit->series_id);
+  EXPECT_EQ(events[0].original_occurrence_start.value(), events[0].start_date.value());
+}
+
+TEST(RecurrenceUtilsTest, ScheduleTimezoneSupportIsDecidedByTheSharedModule) {
+  EXPECT_TRUE(pcm::recurrence::isSupportedScheduleTimezone("Europe/Berlin"));
+  EXPECT_TRUE(pcm::recurrence::isSupportedScheduleTimezone("UTC"));
+  EXPECT_FALSE(pcm::recurrence::isSupportedScheduleTimezone(""));
+  EXPECT_FALSE(pcm::recurrence::isSupportedScheduleTimezone("localtime"));
+  EXPECT_FALSE(pcm::recurrence::isSupportedScheduleTimezone("Not/AZone"));
+}
+
+TEST(RecurrenceUtilsTest, DefaultScheduleTimezoneNeverGuessesAnUnknownZone) {
+  const auto zone = pcm::recurrence::systemScheduleTimezone();
+  // Either the machine's IANA id, accepted by the shared module, or nothing -
+  // the caller then asks the specialist instead of publishing a guess.
+  EXPECT_TRUE(zone.empty() || pcm::recurrence::isSupportedScheduleTimezone(zone));
+}

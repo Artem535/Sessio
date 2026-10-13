@@ -1,6 +1,7 @@
 #include "client_charts_widget.h"
 
 #include "qcustomplot.h"
+#include "../../widgets/accent_color.h"
 #include "../../widgets/constants.hpp"
 
 #include <algorithm>
@@ -11,7 +12,6 @@
 
 namespace {
 constexpr auto kMonthsVisible = 6;
-const QColor kSessionsColor(0x9f, 0xc0, 0xff);
 const QColor kIncomeColor(0x43, 0xc2, 0x7a);
 const QColor kAxisColor(255, 255, 255, 110);
 const QColor kTextColor(255, 255, 255, 215);
@@ -141,7 +141,7 @@ void ClientChartsWidget::initPlot() {
   bars->setName(tr("Sessions"));
   bars->setWidth(0.55);
   bars->setPen(Qt::NoPen);
-  bars->setBrush(kSessionsColor);
+  bars->setBrush(pcm::widgets::accentColor());
 
   auto *line = mPlot->addGraph(mPlot->xAxis, mPlot->yAxis2);
   line->setName(tr("Income"));

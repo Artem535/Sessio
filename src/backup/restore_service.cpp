@@ -11,6 +11,7 @@
 
 #include "backup_manifest.hpp"
 #include "backup_validator.h"
+#include "database.h"
 
 namespace pcm::backup {
 namespace {
@@ -182,7 +183,7 @@ RestoreResult RestoreService::restore_backup(const std::string &backup_path,
       return result;
     }
     if (manifest.psybackup_format_version != 1 ||
-        manifest.schema_version != 1 || manifest.backup_format_version != 1) {
+        (manifest.schema_version < 1 || manifest.schema_version > 2) || manifest.backup_format_version != 1) {
       result.error = "backup format or schema version is not supported";
       return result;
     }
@@ -216,6 +217,16 @@ RestoreResult RestoreService::restore_backup(const std::string &backup_path,
     if (!importDatabaseSnapshot(snapshotDir, stagedDatabase)) {
       result.error = "failed to import database snapshot";
       return result;
+    }
+    // Validate and migrate before replacing the workspace with a legacy snapshot.
+    {
+      pcm::config::Config conf;
+      conf.db_conf.value_.db_pth = Poco::Path(stagedDatabase);
+      pcm::database::Database migrated(conf);
+      if (migrated.get_application_metadata().schema_version != 2) {
+        result.error = "restored database schema is not supported";
+        return result;
+      }
     }
 
     std::string stagedAttachments;

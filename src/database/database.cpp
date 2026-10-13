@@ -1,4 +1,8 @@
 #include "database.h"
+#include <set>
+
+#include <cassert>
+#include <thread>
 
 #include <Poco/UUIDGenerator.h>
 
@@ -40,6 +44,81 @@ std::unique_ptr<duckdb::QueryResult> executePrepared(
   auto boundValues = std::move(values);
   return statement->Execute(boundValues);
 }
+
+std::int64_t nowMs() { return Poco::Timestamp().epochMicroseconds() / 1000; }
+
+duckdb::Value nowTimestamp() {
+  return db_utils::toDuckTimestamp(std::make_optional(nowMs() * 1000));
+}
+
+// Explicit transaction on one connection; rolls back unless commit() ran.
+class Transaction {
+public:
+  explicit Transaction(duckdb::Connection &conn) : mConn(conn) {
+    auto result = mConn.Query("BEGIN TRANSACTION");
+    mActive = result && !result->HasError();
+  }
+  ~Transaction() {
+    if (mActive) {
+      mConn.Query("ROLLBACK");
+    }
+  }
+  Transaction(const Transaction &) = delete;
+  Transaction &operator=(const Transaction &) = delete;
+  [[nodiscard]] bool active() const { return mActive; }
+  bool commit() {
+    if (!mActive) {
+      return false;
+    }
+    mActive = false;
+    auto result = mConn.Query("COMMIT");
+    if (!result || result->HasError()) {
+      mConn.Query("ROLLBACK");
+      return false;
+    }
+    return true;
+  }
+
+private:
+  duckdb::Connection &mConn;
+  bool mActive = false;
+};
+
+std::optional<ScheduleIdentity> identityFromChunk(const duckdb::DataChunk &chunk,
+                                                  const duckdb::idx_t row) {
+  ScheduleIdentity identity;
+  identity.series_id = db_utils::toInt32AsInt64(chunk.GetValue(0, row));
+  identity.series_uid = chunk.GetValue(1, row).ToString();
+  identity.timezone = chunk.GetValue(2, row).ToString();
+  identity.invitation_generation = chunk.GetValue(3, row).GetValue<int64_t>();
+  identity.invitation_key = db_utils::toOptionalString(chunk.GetValue(4, row));
+  identity.desired_revision = chunk.GetValue(5, row).GetValue<int64_t>();
+  identity.acked_revision = chunk.GetValue(6, row).GetValue<int64_t>();
+  identity.acked_content_hash =
+      db_utils::toOptionalString(chunk.GetValue(7, row)).value_or("");
+  identity.sync_state = chunk.GetValue(8, row).ToString();
+  identity.last_error = db_utils::toOptionalString(chunk.GetValue(9, row)).value_or("");
+  return identity;
+}
+
+std::optional<std::int64_t> optionalBigint(const duckdb::Value &value) {
+  if (value.IsNull()) {
+    return std::nullopt;
+  }
+  return value.GetValue<int64_t>();
+}
+
+// Rows touched by an UPDATE/DELETE, or nullopt on failure.
+std::optional<std::int64_t> affectedRows(duckdb::QueryResult *result) {
+  if (!result || result->HasError()) {
+    return std::nullopt;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) {
+    return 0;
+  }
+  return chunk->GetValue(0, 0).GetValue<int64_t>();
+}
 } // namespace
 
 Database::Database(const config::Config &conf) {
@@ -54,6 +133,20 @@ Database::Database(const config::Config &conf) {
   }
 
   mDb = std::make_unique<duckdb::DuckDB>(db_pth.toString() + "/database.db");
+
+  // Reject future workspaces before any additive migration can touch their schema.
+  {
+    duckdb::Connection conn(*mDb);
+    auto result = conn.Query("SELECT schema_version FROM ApplicationMetadata WHERE id = 1");
+    if (result && !result->HasError()) {
+      auto chunk = result->Fetch();
+      if (chunk && chunk->size() && !chunk->GetValue(0, 0).IsNull()) {
+        const auto version = chunk->GetValue(0, 0).GetValue<int32_t>();
+        if (version != 1 && version != 2)
+          throw std::runtime_error("Unsupported database schema version");
+      }
+    }
+  }
 
   init_tables();
   apply_schema_migrations();
@@ -80,7 +173,8 @@ int64_t Database::add_event(const DuckEvent &event, const bool allowOverlap) {
     return 0;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   duckdb::vector<duckdb::Value> values{
       db_utils::toDuckValue(event.name),
       db_utils::toDuckValue(event.description),
@@ -132,7 +226,8 @@ bool Database::update_event(const DuckEvent &event, const bool allowOverlap) {
     return false;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   std::unique_ptr<DuckEvent> existingEvent;
   auto existingResult = executePrepared(conn, constance::kSelectEventByIdQuery,
                                         {duckdb::Value::BIGINT(event.id)});
@@ -267,7 +362,8 @@ bool Database::remove_event(const int64_t &id) {
     return false;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   auto relationResult = executePrepared(
       conn, constance::kDeleteEventClientByEventIdQuery,
       {duckdb::Value::BIGINT(id)});
@@ -283,6 +379,15 @@ bool Database::remove_event(const int64_t &id) {
     PLOG_ERROR << "Failed to delete EventChangeLog rows for event (id=" << id
                << "): " << changeLogResult->GetError();
     return false;
+  }
+
+  for (const auto *query : {constance::kDetachTranscriptsOfEventQuery}) {
+    auto transcriptResult = executePrepared(conn, query, {duckdb::Value::BIGINT(id)});
+    if (!transcriptResult || transcriptResult->HasError()) {
+      PLOG_ERROR << "Failed to detach transcripts of event (id=" << id << "): "
+                 << (transcriptResult ? transcriptResult->GetError() : "prepare failed");
+      return false;
+    }
   }
 
   auto result =
@@ -327,7 +432,8 @@ int64_t Database::add_event_series(const DuckEventSeries &series) {
     return 0;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   const auto nowMs = Poco::Timestamp().epochMicroseconds() / 1000;
   duckdb::vector<duckdb::Value> values{
       db_utils::toDuckValue(series.name),
@@ -379,7 +485,8 @@ bool Database::update_event_series(const DuckEventSeries &series) {
     return false;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   const auto nowMs = Poco::Timestamp().epochMicroseconds() / 1000;
   duckdb::vector<duckdb::Value> values{
       db_utils::toDuckValue(series.name),
@@ -423,7 +530,8 @@ bool Database::deactivate_event_series(const int64_t series_id) {
     return false;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   const auto nowMs = Poco::Timestamp().epochMicroseconds() / 1000;
   auto result = executePrepared(
       conn, constance::kDeactivateEventSeriesQuery,
@@ -444,7 +552,19 @@ bool Database::delete_event_series_overrides_from(
     return false;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  const auto from = db_utils::toDuckTimestamp(std::make_optional(occurrence_start_ms * 1000));
+  for (const auto *query : {constance::kDetachTranscriptsOfSeriesOverridesQuery}) {
+    auto transcriptResult =
+        executePrepared(conn, query, {duckdb::Value::BIGINT(series_id), from});
+    if (!transcriptResult || transcriptResult->HasError()) {
+      PLOG_ERROR << "Failed to detach transcripts of series overrides: "
+                 << (transcriptResult ? transcriptResult->GetError() : "prepare failed");
+      return false;
+    }
+  }
+
   auto result = executePrepared(
       conn, constance::kDeleteEventSeriesOverridesFromQuery,
       {duckdb::Value::BIGINT(series_id),
@@ -565,7 +685,8 @@ bool Database::add_event_series_exception(const int64_t series_id,
     return false;
   }
 
-  duckdb::Connection conn(*mDb);
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
   auto result = executePrepared(
       conn, constance::kInsertEventSeriesExceptionQuery,
       {duckdb::Value::BIGINT(series_id),
@@ -709,6 +830,8 @@ bool Database::remove_client(const int64_t &id) {
   }
 
   duckdb::Connection conn(*mDb);
+  Transaction tx(conn);
+  if (!tx.active()) return false;
   auto linkCheckResult = executePrepared(
       conn, constance::kHasClientEventsQuery,
       {duckdb::Value::BIGINT(id)});
@@ -723,6 +846,12 @@ bool Database::remove_client(const int64_t &id) {
     return chunk && chunk->size() > 0;
   }();
 
+  // Both hiding an event-linked card and deleting a standalone card remove its
+  // transcript associations. Roll back the detach if the card mutation fails.
+  auto transcriptLinks = executePrepared(conn,
+      "DELETE FROM TranscriptClient WHERE client_id = $1", {duckdb::Value::BIGINT(id)});
+  if (!transcriptLinks || transcriptLinks->HasError()) return false;
+
   if (hasLinkedEvents) {
     auto deactivateResult = executePrepared(
         conn, constance::kDeactivateClientByIdQuery,
@@ -734,7 +863,7 @@ bool Database::remove_client(const int64_t &id) {
     }
 
     PLOG_DEBUG << "Client hidden by deactivation: id=" << id;
-    return true;
+    return tx.commit();
   }
 
   auto unlinkResult = executePrepared(
@@ -754,7 +883,7 @@ bool Database::remove_client(const int64_t &id) {
     return false;
   }
   PLOG_DEBUG << "Client deleted: id=" << id;
-  return true;
+  return tx.commit();
 }
 
 // --- EventClient ---
@@ -1383,6 +1512,924 @@ bool Database::export_snapshot(const std::string &target_dir) const {
   return true;
 }
 
+// --- Recurring schedule identity and transactional outbox ---
+
+duckdb::Connection &Database::write_connection(std::optional<duckdb::Connection> &owned) {
+  if (mTxConn != nullptr) {
+    assert(mTxThread == std::this_thread::get_id() &&
+           "schedule transaction connection used from another thread");
+    if (mTxThread == std::this_thread::get_id()) {
+      return *mTxConn;
+    }
+    // Release builds: never share the transaction's connection across threads.
+    PLOG_ERROR << "Schedule transaction connection requested from another thread";
+  }
+  owned.emplace(*mDb);
+  return *owned;
+}
+
+std::optional<ScheduleIdentity>
+Database::read_schedule_identity(duckdb::Connection &conn, const char *query,
+                                 duckdb::Value key) {
+  auto result = executePrepared(conn, query, {std::move(key)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to read schedule identity: "
+               << (result ? result->GetError() : "prepare failed");
+    return std::nullopt;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) {
+    return std::nullopt;
+  }
+  return identityFromChunk(*chunk, 0);
+}
+
+bool Database::execute_schedule_update(duckdb::Connection &conn, const char *query,
+                                       duckdb::vector<duckdb::Value> values) {
+  auto result = executePrepared(conn, query, std::move(values));
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Schedule update failed: "
+               << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  return true;
+}
+
+std::optional<ScheduleCommit>
+Database::commit_schedule_change(const ScheduleMutation &mutation,
+                                 const std::string &timezone,
+                                 const SchedulePayloadBuilder &builder) {
+  if (mTxConn != nullptr) {
+    PLOG_ERROR << "Nested schedule transaction rejected";
+    return std::nullopt;
+  }
+
+  duckdb::Connection conn(*mDb);
+  Transaction tx(conn);
+  if (!tx.active()) {
+    PLOG_ERROR << "Failed to begin schedule transaction";
+    return std::nullopt;
+  }
+
+  struct ActiveScope {
+    Database &db;
+    ActiveScope(Database &d, duckdb::Connection &c) : db(d) {
+      db.mTxThread = std::this_thread::get_id();
+      db.mTxConn = &c;
+    }
+    ~ActiveScope() { db.mTxConn = nullptr; }
+  } scope(*this, conn);
+
+  try {
+    const auto changed = mutation();
+    if (!changed.has_value() || *changed <= 0) {
+      return std::nullopt;
+    }
+    const auto seriesId = *changed;
+
+    auto identity = read_schedule_identity(
+        conn, constance::kSelectScheduleIdentityBySeriesQuery,
+        duckdb::Value::BIGINT(seriesId));
+    if (!identity.has_value()) {
+      if (timezone.empty()) {
+        // Legacy series: local change only, nothing to publish.
+        if (!tx.commit()) {
+          return std::nullopt;
+        }
+        return ScheduleCommit{seriesId, {}, 0};
+      }
+      const auto uid = Poco::UUIDGenerator::defaultGenerator().createRandom().toString();
+      if (!execute_schedule_update(conn, constance::kInsertScheduleIdentityQuery,
+                                   {duckdb::Value::BIGINT(seriesId), duckdb::Value(uid),
+                                    duckdb::Value(timezone), nowTimestamp()})) {
+        return std::nullopt;
+      }
+    }
+    if (!execute_schedule_update(conn, constance::kBumpScheduleDesiredRevisionQuery,
+                                 {duckdb::Value::BIGINT(seriesId), nowTimestamp()})) {
+      return std::nullopt;
+    }
+    identity = read_schedule_identity(conn, constance::kSelectScheduleIdentityBySeriesQuery,
+                                      duckdb::Value::BIGINT(seriesId));
+    if (!identity.has_value()) {
+      return std::nullopt;
+    }
+
+    ScheduleSource source;
+    source.identity = *identity;
+    {
+      auto seriesResult = executePrepared(conn, constance::kSelectEventSeriesByIdQuery,
+                                          {duckdb::Value::BIGINT(seriesId)});
+      if (!seriesResult || seriesResult->HasError()) {
+        return std::nullopt;
+      }
+      auto chunk = seriesResult->Fetch();
+      if (!chunk || chunk->size() == 0) {
+        return std::nullopt;
+      }
+      source.series = DuckEventSeries(*chunk, 0);
+    }
+    {
+      auto overrides = executePrepared(conn, constance::kSelectScheduleOverridesQuery,
+                                       {duckdb::Value::BIGINT(seriesId)});
+      if (!overrides || overrides->HasError()) {
+        return std::nullopt;
+      }
+      while (auto chunk = overrides->Fetch()) {
+        for (duckdb::idx_t i = 0; i < chunk->size(); ++i) {
+          ScheduleOverrideSource item;
+          item.original_start_ms =
+              db_utils::toOptionalTimestampMs(chunk->GetValue(0, i)).value_or(0);
+          item.start_ms = db_utils::toOptionalTimestampMs(chunk->GetValue(1, i)).value_or(0);
+          item.end_ms = db_utils::toOptionalTimestampMs(chunk->GetValue(2, i)).value_or(0);
+          item.event_stat_id = db_utils::toInt32AsInt64(chunk->GetValue(3, i));
+          source.overrides.push_back(item);
+        }
+      }
+    }
+    {
+      auto exceptions = executePrepared(conn, constance::kSelectScheduleExceptionsQuery,
+                                        {duckdb::Value::BIGINT(seriesId)});
+      if (!exceptions || exceptions->HasError()) {
+        return std::nullopt;
+      }
+      while (auto chunk = exceptions->Fetch()) {
+        for (duckdb::idx_t i = 0; i < chunk->size(); ++i) {
+          source.exceptions.push_back(
+              db_utils::toOptionalTimestampMs(chunk->GetValue(0, i)).value_or(0));
+        }
+      }
+    }
+
+    const auto payload = builder(source);
+    if (!payload.has_value()) {
+      PLOG_WARNING << "Schedule payload builder rejected the change; rolling back";
+      return std::nullopt;
+    }
+
+    auto outbox = executePrepared(conn, constance::kSelectScheduleOutboxQuery,
+                                  {duckdb::Value(identity->series_uid)});
+    if (!outbox || outbox->HasError()) {
+      return std::nullopt;
+    }
+    const auto outboxChunk = outbox->Fetch();
+    const bool outboxExists = outboxChunk && outboxChunk->size() > 0;
+    const duckdb::vector<duckdb::Value> values{
+        duckdb::Value(identity->series_uid), duckdb::Value(*payload),
+        duckdb::Value::BIGINT(identity->desired_revision), nowTimestamp()};
+    if (!execute_schedule_update(conn,
+                                 outboxExists ? constance::kUpdateScheduleOutboxPendingQuery
+                                              : constance::kInsertScheduleOutboxQuery,
+                                 values)) {
+      return std::nullopt;
+    }
+
+    if (!tx.commit()) {
+      return std::nullopt;
+    }
+    return ScheduleCommit{seriesId, identity->series_uid, identity->desired_revision};
+  } catch (const std::exception &error) {
+    PLOG_ERROR << "Schedule transaction aborted: " << error.what();
+    return std::nullopt;
+  } catch (...) {
+    PLOG_ERROR << "Schedule transaction aborted";
+    return std::nullopt;
+  }
+}
+
+std::optional<ScheduleIdentity> Database::get_schedule_identity(const int64_t series_id) {
+  duckdb::Connection conn(*mDb);
+  return read_schedule_identity(conn, constance::kSelectScheduleIdentityBySeriesQuery,
+                                duckdb::Value::BIGINT(series_id));
+}
+
+std::optional<ScheduleIdentity>
+Database::get_schedule_identity_by_uid(const std::string &series_uid) {
+  duckdb::Connection conn(*mDb);
+  return read_schedule_identity(conn, constance::kSelectScheduleIdentityByUidQuery,
+                                duckdb::Value(series_uid));
+}
+
+std::optional<ScheduleOutbox> Database::get_schedule_outbox(const std::string &series_uid) {
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn, constance::kSelectScheduleOutboxQuery,
+                                {duckdb::Value(series_uid)});
+  if (!result || result->HasError()) {
+    return std::nullopt;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) {
+    return std::nullopt;
+  }
+  ScheduleOutbox outbox;
+  outbox.series_uid = chunk->GetValue(0, 0).ToString();
+  outbox.pending_payload = db_utils::toOptionalString(chunk->GetValue(1, 0));
+  outbox.pending_desired_revision = optionalBigint(chunk->GetValue(2, 0));
+  outbox.inflight_revision = optionalBigint(chunk->GetValue(3, 0));
+  outbox.inflight_payload = db_utils::toOptionalString(chunk->GetValue(4, 0));
+  outbox.inflight_hash = db_utils::toOptionalString(chunk->GetValue(5, 0));
+  outbox.inflight_desired_revision = optionalBigint(chunk->GetValue(6, 0));
+  return outbox;
+}
+
+std::vector<ScheduleIdentity> Database::list_schedule_series_pending_sync() {
+  duckdb::Connection conn(*mDb);
+  std::vector<ScheduleIdentity> identities;
+  auto result = conn.Query(constance::kSelectScheduleSeriesPendingSyncQuery);
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to list pending schedule series";
+    return identities;
+  }
+  while (auto chunk = result->Fetch()) {
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) {
+      if (auto identity = identityFromChunk(*chunk, i)) {
+        identities.push_back(std::move(*identity));
+      }
+    }
+  }
+  return identities;
+}
+
+bool Database::freeze_schedule_pending(const std::string &series_uid,
+                                       const int64_t expected_pending_desired,
+                                       const int64_t revision,
+                                       const std::string &payload,
+                                       const std::string &content_hash) {
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(
+      conn, constance::kFreezeScheduleOutboxQuery,
+      {duckdb::Value(series_uid), duckdb::Value::BIGINT(expected_pending_desired),
+       duckdb::Value::BIGINT(revision), duckdb::Value(payload),
+       duckdb::Value(content_hash), nowTimestamp()});
+  const auto rows = affectedRows(result.get());
+  return rows.has_value() && *rows == 1;
+}
+
+std::optional<ScheduleAck>
+Database::ack_schedule_inflight(const std::string &series_uid, const int64_t revision,
+                                const std::string &content_hash) {
+  duckdb::Connection conn(*mDb);
+  Transaction tx(conn);
+  if (!tx.active()) {
+    return std::nullopt;
+  }
+
+  auto outboxResult = executePrepared(conn, constance::kSelectScheduleOutboxQuery,
+                                      {duckdb::Value(series_uid)});
+  if (!outboxResult || outboxResult->HasError()) {
+    return std::nullopt;
+  }
+  auto chunk = outboxResult->Fetch();
+  if (!chunk || chunk->size() == 0) {
+    return std::nullopt;
+  }
+  const auto inflightRevision = optionalBigint(chunk->GetValue(3, 0));
+  if (!inflightRevision.has_value() || *inflightRevision != revision) {
+    return std::nullopt;
+  }
+  const bool hasNewer = !chunk->GetValue(1, 0).IsNull();
+
+  if (!execute_schedule_update(conn, constance::kClearScheduleInflightQuery,
+                               {duckdb::Value(series_uid), nowTimestamp()}) ||
+      !execute_schedule_update(
+          conn, constance::kAckScheduleIdentityQuery,
+          {duckdb::Value(series_uid), duckdb::Value::BIGINT(revision),
+           duckdb::Value(content_hash),
+           duckdb::Value(hasNewer ? schedule_sync_state::kPending
+                                  : schedule_sync_state::kSynced),
+           nowTimestamp()})) {
+    return std::nullopt;
+  }
+  if (!tx.commit()) {
+    return std::nullopt;
+  }
+  return ScheduleAck{hasNewer};
+}
+
+bool Database::release_schedule_inflight(const std::string &series_uid,
+                                         const std::string &pending_payload) {
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(
+      conn, constance::kReleaseScheduleInflightQuery,
+      {duckdb::Value(series_uid), duckdb::Value(pending_payload), nowTimestamp()});
+  const auto rows = affectedRows(result.get());
+  return rows.has_value() && *rows == 1;
+}
+
+std::optional<std::vector<std::string>>
+Database::clear_series_legacy_meeting(const int64_t series_id) {
+  if (series_id <= 0) {
+    return std::nullopt;
+  }
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  std::optional<Transaction> tx;
+  if (mTxConn == nullptr) {
+    tx.emplace(conn);
+    if (!tx->active()) {
+      return std::nullopt;
+    }
+  }
+
+  std::vector<std::string> refs;
+  auto selected = executePrepared(conn, constance::kSelectSeriesLegacyMeetingRefsQuery,
+                                  {duckdb::Value::BIGINT(series_id)});
+  if (!selected || selected->HasError()) {
+    return std::nullopt;
+  }
+  while (auto chunk = selected->Fetch()) {
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) {
+      refs.push_back(chunk->GetValue(0, i).ToString());
+    }
+  }
+  if (!execute_schedule_update(conn, constance::kClearSeriesLegacyMeetingQuery,
+                               {duckdb::Value::BIGINT(series_id), nowTimestamp()}) ||
+      !execute_schedule_update(conn, constance::kClearSeriesEventsLegacyMeetingQuery,
+                               {duckdb::Value::BIGINT(series_id)})) {
+    return std::nullopt;
+  }
+  if (tx && !tx->commit()) {
+    return std::nullopt;
+  }
+  return refs;
+}
+
+bool Database::set_schedule_sync_state(const std::string &series_uid,
+                                       const std::string &state,
+                                       const std::string &error) {
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(
+      conn, constance::kSetScheduleSyncStateQuery,
+      {duckdb::Value(series_uid), duckdb::Value(state),
+       error.empty() ? duckdb::Value() : duckdb::Value(error), nowTimestamp()});
+  const auto rows = affectedRows(result.get());
+  return rows.has_value() && *rows == 1;
+}
+
+bool Database::adopt_schedule_server_revision(const std::string &series_uid,
+                                              const int64_t server_revision,
+                                              const std::string &content_hash,
+                                              const bool allow_rewind) {
+  // Usable on its own or as part of a commit_schedule_change() mutation, in
+  // which case it joins that transaction instead of opening a nested one.
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  std::optional<Transaction> tx;
+  if (mTxConn == nullptr) {
+    tx.emplace(conn);
+    if (!tx->active()) {
+      return false;
+    }
+  }
+  const auto current = read_schedule_identity(
+      conn, constance::kSelectScheduleIdentityByUidQuery, duckdb::Value(series_uid));
+  if (!current.has_value() ||
+      (!allow_rewind && server_revision < current->acked_revision)) {
+    return false;
+  }
+  auto adopted = executePrepared(
+      conn, constance::kAdoptScheduleServerRevisionQuery,
+      {duckdb::Value(series_uid), duckdb::Value::BIGINT(server_revision),
+       duckdb::Value(content_hash), nowTimestamp()});
+  const auto rows = affectedRows(adopted.get());
+  if (!rows.has_value() || *rows != 1) {
+    return false;
+  }
+  if (!execute_schedule_update(conn, constance::kClearScheduleOutboxQuery,
+                               {duckdb::Value(series_uid), nowTimestamp()})) {
+    return false;
+  }
+  return !tx.has_value() || tx->commit();
+}
+
+std::string Database::ensure_schedule_invitation_key(const int64_t series_id) {
+  duckdb::Connection conn(*mDb);
+  Transaction tx(conn);
+  if (!tx.active()) {
+    return {};
+  }
+  const auto identity = read_schedule_identity(
+      conn, constance::kSelectScheduleIdentityBySeriesQuery, duckdb::Value::BIGINT(series_id));
+  if (!identity.has_value()) {
+    return {};
+  }
+  if (identity->invitation_key.has_value() && !identity->invitation_key->empty()) {
+    return *identity->invitation_key;
+  }
+  const auto key = Poco::UUIDGenerator::defaultGenerator().createRandom().toString();
+  if (!execute_schedule_update(conn, constance::kSetScheduleInvitationKeyQuery,
+                               {duckdb::Value::BIGINT(series_id), duckdb::Value(key),
+                                nowTimestamp()}) ||
+      !tx.commit()) {
+    return {};
+  }
+  return key;
+}
+
+bool Database::clear_schedule_invitation_key(const int64_t series_id) {
+  duckdb::Connection conn(*mDb);
+  return execute_schedule_update(conn, constance::kSetScheduleInvitationKeyQuery,
+                                 {duckdb::Value::BIGINT(series_id), duckdb::Value(),
+                                  nowTimestamp()});
+}
+
+bool Database::set_schedule_invitation_generation(const int64_t series_id,
+                                                  const int64_t generation) {
+  duckdb::Connection conn(*mDb);
+  return execute_schedule_update(conn, constance::kSetScheduleInvitationGenerationQuery,
+                                 {duckdb::Value::BIGINT(series_id),
+                                  duckdb::Value::BIGINT(generation), nowTimestamp()});
+}
+
+// --- Live call transcripts ---
+
+namespace {
+
+bool eventExists(duckdb::Connection &conn, const int64_t id) {
+  auto result = executePrepared(conn, constance::kEventExistsQuery,
+                                {duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) return false;
+  auto chunk = result->Fetch();
+  return chunk && chunk->size() > 0;
+}
+
+}  // namespace
+
+int64_t Database::add_transcript(const std::optional<int64_t> event_id, const std::string &consent_scope,
+                                 const std::optional<std::string> &model_id,
+                                 const std::optional<int64_t> consent_given_at_ms) {
+  if (event_id && *event_id <= 0) {
+    PLOG_WARNING << "Invalid event_id for Transcript";
+    return 0;
+  }
+  const auto now = nowMs();
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  std::optional<Transaction> tx;
+  if (ownedConn) {
+    tx.emplace(conn);
+    if (!tx->active()) return 0;
+  }
+  if (event_id && !eventExists(conn, *event_id)) {
+    PLOG_WARNING << "Rejected transcript for unknown event";
+    return 0;
+  }
+  auto result = executePrepared(
+      conn, constance::kInsertTranscriptQuery,
+      {db_utils::toDuckValue(event_id), duckdb::Value(consent_scope),
+       db_utils::toDuckTimestamp(consent_given_at_ms.value_or(now) * 1000),
+       db_utils::toDuckValue(model_id), db_utils::toDuckTimestamp(now * 1000),
+       db_utils::toDuckTimestamp(now * 1000)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to insert transcript: " << (result ? result->GetError() : "prepare failed");
+    return 0;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) {
+    PLOG_ERROR << "Empty result from RETURNING id in add_transcript";
+    return 0;
+  }
+  const auto id = static_cast<int64_t>(chunk->GetValue(0, 0).GetValue<int32_t>());
+  if (event_id) {
+    auto links = executePrepared(conn,
+        "INSERT INTO TranscriptClient SELECT DISTINCT $1, client_id FROM EventClient WHERE event_id = $2",
+        {duckdb::Value::BIGINT(id), duckdb::Value::BIGINT(*event_id)});
+    if (!links || links->HasError()) return 0;
+  }
+  if (tx && !tx->commit()) return 0;
+  return id;
+}
+
+std::unique_ptr<DuckTranscript> Database::get_transcript(const int64_t id) {
+  if (id <= 0) return nullptr;
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn, constance::kSelectTranscriptByIdQuery,
+                                {duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to get transcript (id=" << id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return nullptr;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) return nullptr;
+  return std::make_unique<DuckTranscript>(*chunk, 0);
+}
+
+std::vector<DuckTranscript> Database::get_transcripts_for_event(const int64_t event_id) {
+  std::vector<DuckTranscript> out;
+  if (event_id <= 0) return out;
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn, constance::kSelectTranscriptsByEventQuery,
+                                {duckdb::Value::BIGINT(event_id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to list transcripts (event_id=" << event_id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return out;
+  }
+  while (auto chunk = result->Fetch()) {
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) out.emplace_back(*chunk, i);
+  }
+  return out;
+}
+
+namespace {
+
+void checkpointBestEffort(duckdb::Connection &conn, const char *what) {
+  auto result = conn.Query("CHECKPOINT");
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "CHECKPOINT after " << what
+               << " failed: " << (result ? result->GetError() : "no result");
+  }
+}
+
+bool transcriptExists(duckdb::Connection &conn, const int64_t id) {
+  auto result = executePrepared(conn, constance::kTranscriptExistsQuery,
+                                {duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) return false;
+  auto chunk = result->Fetch();
+  return chunk && chunk->size() > 0;
+}
+
+}  // namespace
+
+bool Database::set_transcript_status(const int64_t id, const std::string &status) {
+  if (id <= 0 || (status != "recording" && status != "draft" && status != "reviewed")) {
+    PLOG_WARNING << "Rejected transcript status change (id=" << id << ")";
+    return false;
+  }
+  std::optional<duckdb::Connection> ownedConn;
+  // Own connection on purpose: transcript writes run on the session's executor/cleanup
+  // thread and must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
+  if (!transcriptExists(conn, id)) return false;
+  auto result = executePrepared(
+      conn, constance::kUpdateTranscriptStatusQuery,
+      {duckdb::Value(status), db_utils::toDuckTimestamp(nowMs() * 1000),
+       duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to update transcript status (id=" << id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  return true;
+}
+
+bool Database::revoke_transcript_consent(const int64_t id,
+                                         const std::optional<int64_t> at_ms) {
+  if (id <= 0) return false;
+  const auto now = nowMs();
+  std::optional<duckdb::Connection> ownedConn;
+  // Own connection on purpose: transcript writes run on the session's executor/cleanup
+  // thread and must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
+  if (!transcriptExists(conn, id)) return false;
+  auto result = executePrepared(
+      conn, constance::kRevokeTranscriptConsentQuery,
+      {db_utils::toDuckTimestamp(at_ms.value_or(now) * 1000),
+       db_utils::toDuckTimestamp(now * 1000), duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to revoke transcript consent (id=" << id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  return true;
+}
+
+int64_t Database::finalize_interrupted_transcripts() {
+  std::optional<duckdb::Connection> ownedConn;
+  // Own connection on purpose: transcript writes run on the session's executor/cleanup
+  // thread and must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
+  auto result = executePrepared(conn, constance::kFinalizeInterruptedTranscriptsQuery,
+                                {db_utils::toDuckTimestamp(nowMs() * 1000)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to finalize interrupted transcripts: "
+               << (result ? result->GetError() : "prepare failed");
+    return 0;
+  }
+  int64_t changed = 0;
+  while (auto chunk = result->Fetch()) changed += static_cast<int64_t>(chunk->size());
+  return changed;
+}
+
+bool Database::delete_transcript(const int64_t id) {
+  if (id <= 0) return false;
+  std::optional<duckdb::Connection> ownedConn;
+  // Own connection on purpose: transcript writes run on the session's executor/cleanup
+  // thread and must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
+  if (!transcriptExists(conn, id)) return false;
+  auto links = executePrepared(conn, "DELETE FROM TranscriptClient WHERE transcript_id = $1",
+                               {duckdb::Value::BIGINT(id)});
+  if (!links || links->HasError()) return false;
+  auto phrases = executePrepared(conn, constance::kDeletePhrasesByTranscriptIdQuery,
+                                 {duckdb::Value::BIGINT(id)});
+  if (!phrases || phrases->HasError()) {
+    PLOG_ERROR << "Failed to delete transcript phrases (transcript_id=" << id
+               << "): " << (phrases ? phrases->GetError() : "prepare failed");
+    return false;
+  }
+  auto result = executePrepared(conn, constance::kDeleteTranscriptByIdQuery,
+                                {duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to delete transcript (id=" << id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  checkpointBestEffort(conn, "delete_transcript");
+  return true;
+}
+
+bool Database::delete_all_transcripts() {
+  std::optional<duckdb::Connection> ownedConn;
+  // Own connection on purpose: transcript writes run on the session's executor/cleanup
+  // thread and must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
+  if (conn.Query("DELETE FROM TranscriptClient")->HasError()) return false;
+  auto phrases = executePrepared(conn, constance::kDeleteAllTranscriptPhrasesQuery, {});
+  if (!phrases || phrases->HasError()) {
+    PLOG_ERROR << "Failed to delete all transcript phrases: "
+               << (phrases ? phrases->GetError() : "prepare failed");
+    return false;
+  }
+  auto result = executePrepared(conn, constance::kDeleteAllTranscriptsQuery, {});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to delete all transcripts: "
+               << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  checkpointBestEffort(conn, "delete_all_transcripts");
+  return true;
+}
+
+int64_t Database::add_transcript_phrase(const DuckTranscriptPhrase &phrase) {
+  if (phrase.transcript_id <= 0 || phrase.text.empty() || phrase.end_ms < phrase.start_ms) {
+    PLOG_WARNING << "Rejected invalid transcript phrase (transcript_id="
+                 << phrase.transcript_id << ")";
+    return 0;
+  }
+  std::optional<duckdb::Connection> ownedConn;
+  // Own connection on purpose: phrases are written from a dedicated writer thread and
+  // must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
+  {
+    auto state = executePrepared(conn, constance::kSelectTranscriptWriteStateQuery,
+                                 {duckdb::Value::BIGINT(phrase.transcript_id)});
+    if (!state || state->HasError()) return 0;
+    auto state_chunk = state->Fetch();
+    if (!state_chunk || state_chunk->size() == 0) {
+      PLOG_WARNING << "Rejected phrase for unknown transcript (transcript_id="
+                   << phrase.transcript_id << ")";
+      return 0;
+    }
+    const auto revoked = db_utils::toBool(state_chunk->GetValue(1, 0));
+    if (state_chunk->GetValue(0, 0).ToString() != "recording" || revoked) {
+      PLOG_WARNING << "Rejected phrase for closed or revoked transcript (transcript_id="
+                   << phrase.transcript_id << ")";
+      return 0;
+    }
+  }
+  auto result = executePrepared(
+      conn, constance::kInsertTranscriptPhraseQuery,
+      {duckdb::Value::BIGINT(phrase.transcript_id), duckdb::Value(phrase.track_role),
+       db_utils::toDuckValue(phrase.speaker_name), duckdb::Value::BIGINT(phrase.start_ms),
+       duckdb::Value::BIGINT(phrase.end_ms), duckdb::Value(phrase.text)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to insert transcript phrase (transcript_id=" << phrase.transcript_id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return 0;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) {
+    PLOG_ERROR << "Empty result from RETURNING id in add_transcript_phrase";
+    return 0;
+  }
+  return static_cast<int64_t>(chunk->GetValue(0, 0).GetValue<int32_t>());
+}
+
+std::vector<DuckTranscriptPhrase> Database::get_transcript_phrases(const int64_t transcript_id) {
+  std::vector<DuckTranscriptPhrase> out;
+  if (transcript_id <= 0) return out;
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn, constance::kSelectTranscriptPhrasesQuery,
+                                {duckdb::Value::BIGINT(transcript_id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to list transcript phrases (transcript_id=" << transcript_id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return out;
+  }
+  while (auto chunk = result->Fetch()) {
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) out.emplace_back(*chunk, i);
+  }
+  return out;
+}
+
+bool Database::update_transcript_phrase_text(const int64_t phrase_id, const std::string &text) {
+  if (phrase_id <= 0 || text.empty()) return false;
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  auto owner = executePrepared(conn, constance::kSelectTranscriptIdOfPhraseQuery,
+                               {duckdb::Value::BIGINT(phrase_id)});
+  if (!owner || owner->HasError()) return false;
+  auto owner_chunk = owner->Fetch();
+  if (!owner_chunk || owner_chunk->size() == 0) return false;
+  const auto transcript_id =
+      static_cast<int64_t>(owner_chunk->GetValue(0, 0).GetValue<int32_t>());
+
+  auto result = executePrepared(conn, constance::kUpdateTranscriptPhraseTextQuery,
+                                {duckdb::Value(text), duckdb::Value::BIGINT(phrase_id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to update transcript phrase (id=" << phrase_id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  auto touch = executePrepared(conn, constance::kTouchTranscriptQuery,
+                               {db_utils::toDuckTimestamp(nowMs() * 1000),
+                                duckdb::Value::BIGINT(transcript_id)});
+  if (!touch || touch->HasError()) {
+    PLOG_ERROR << "Failed to bump transcript updated_at (id=" << transcript_id << ")";
+    return false;
+  }
+  return true;
+}
+
+bool Database::delete_transcript_phrase(const int64_t phrase_id) {
+  if (phrase_id <= 0) return false;
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  auto owner = executePrepared(conn, constance::kSelectTranscriptIdOfPhraseQuery,
+                               {duckdb::Value::BIGINT(phrase_id)});
+  if (!owner || owner->HasError()) return false;
+  auto owner_chunk = owner->Fetch();
+  if (!owner_chunk || owner_chunk->size() == 0) return false;
+  const auto transcript_id =
+      static_cast<int64_t>(owner_chunk->GetValue(0, 0).GetValue<int32_t>());
+  auto result = executePrepared(conn, constance::kDeleteTranscriptPhraseByIdQuery,
+                                {duckdb::Value::BIGINT(phrase_id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to delete transcript phrase (id=" << phrase_id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  auto touch = executePrepared(conn, constance::kTouchTranscriptQuery,
+                               {db_utils::toDuckTimestamp(nowMs() * 1000),
+                                duckdb::Value::BIGINT(transcript_id)});
+  if (!touch || touch->HasError()) {
+    PLOG_ERROR << "Failed to bump transcript updated_at (id=" << transcript_id << ")";
+    return false;
+  }
+  return true;
+}
+
+int64_t Database::purge_orphan_transcripts() {
+  std::optional<duckdb::Connection> ownedConn;
+  // Own connection on purpose: transcript writes run on the session's executor/cleanup
+  // thread and must not join (or race) a schedule transaction.
+  ownedConn.emplace(*mDb);
+  auto &conn = *ownedConn;
+  if (conn.Query("DELETE FROM TranscriptClient WHERE transcript_id NOT IN (SELECT id FROM Transcript) "
+                 "OR client_id NOT IN (SELECT id FROM Client)")->HasError()) return 0;
+  auto phrases = executePrepared(conn, constance::kPurgeOrphanTranscriptPhrasesQuery, {});
+  if (!phrases || phrases->HasError()) {
+    PLOG_ERROR << "Failed to purge orphan transcript phrases: "
+               << (phrases ? phrases->GetError() : "prepare failed");
+    return 0;
+  }
+  auto result = executePrepared(conn, constance::kPurgeOrphanTranscriptsQuery, {});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to purge orphan transcripts: "
+               << (result ? result->GetError() : "prepare failed");
+    return 0;
+  }
+  int64_t removed = 0;
+  while (auto chunk = result->Fetch()) removed += static_cast<int64_t>(chunk->size());
+  if (removed > 0) PLOG_WARNING << "Detached missing transcript events (count=" << removed << ")";
+  return removed;
+}
+
+std::vector<DuckTranscript> Database::get_transcripts_for_client(const int64_t client_id) {
+  std::vector<DuckTranscript> out;
+  if (client_id <= 0) return out;
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn, constance::kSelectTranscriptsByClientQuery,
+                                {duckdb::Value::BIGINT(client_id)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to list transcripts (client_id=" << client_id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return out;
+  }
+  while (auto chunk = result->Fetch()) {
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) out.emplace_back(*chunk, i);
+  }
+  return out;
+}
+
+std::vector<DuckTranscript> Database::get_transcripts() {
+  duckdb::Connection conn(*mDb);
+  auto result = conn.Query("SELECT id, event_id, status, consent_scope, consent_given_at, "
+                           "consent_revoked_at, model_id, created_at, updated_at FROM Transcript "
+                           "ORDER BY created_at DESC, id DESC");
+  if (!result || result->HasError()) throw std::runtime_error("Cannot list transcripts");
+  std::vector<DuckTranscript> rows;
+  while (auto chunk = result->Fetch())
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) rows.emplace_back(*chunk, i);
+  return rows;
+}
+
+std::vector<int64_t> Database::get_transcript_client_ids(const int64_t id) {
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn,
+      "SELECT tc.client_id FROM TranscriptClient tc JOIN Client c ON c.id = tc.client_id "
+      "WHERE tc.transcript_id = $1 ORDER BY tc.client_id", {duckdb::Value::BIGINT(id)});
+  if (!result || result->HasError()) throw std::runtime_error("Cannot read transcript clients");
+  std::vector<int64_t> ids;
+  while (auto chunk = result->Fetch())
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i)
+      ids.push_back(db_utils::toInt32AsInt64(chunk->GetValue(0, i)));
+  return ids;
+}
+
+bool Database::set_transcript_clients(const int64_t id, const std::vector<int64_t> &client_ids) {
+  duckdb::Connection conn(*mDb);
+  Transaction tx(conn);
+  if (!tx.active() || !transcriptExists(conn, id)) return false;
+  auto state = executePrepared(conn, constance::kSelectTranscriptWriteStateQuery,
+                               {duckdb::Value::BIGINT(id)});
+  auto chunk = state ? state->Fetch() : nullptr;
+  if (!chunk || chunk->size() == 0 || chunk->GetValue(0, 0).ToString() == "recording") return false;
+  std::set<int64_t> ids(client_ids.begin(), client_ids.end());
+  for (const auto client : ids) {
+    if (client <= 0) return false;
+    auto result = executePrepared(conn, "SELECT 1 FROM Client WHERE id = $1",
+                                  {duckdb::Value::BIGINT(client)});
+    if (!result || result->HasError()) return false;
+    auto found = result->Fetch();
+    if (!found || found->size() == 0) return false;
+  }
+  auto removed = executePrepared(conn, "DELETE FROM TranscriptClient WHERE transcript_id = $1",
+                                 {duckdb::Value::BIGINT(id)});
+  if (!removed || removed->HasError()) return false;
+  for (const auto client : ids) {
+    auto inserted = executePrepared(conn, "INSERT INTO TranscriptClient VALUES ($1, $2)",
+        {duckdb::Value::BIGINT(id), duckdb::Value::BIGINT(client)});
+    if (!inserted || inserted->HasError()) return false;
+  }
+  auto touched = executePrepared(conn, constance::kTouchTranscriptQuery,
+      {db_utils::toDuckTimestamp(nowMs() * 1000), duckdb::Value::BIGINT(id)});
+  return touched && !touched->HasError() && tx.commit();
+}
+
+int64_t Database::count_transcripts() {
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn, constance::kCountTranscriptsQuery, {});
+  if (!result || result->HasError()) return 0;
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) return 0;
+  return chunk->GetValue(0, 0).GetValue<int64_t>();
+}
+
+int64_t Database::count_transcript_phrases(const int64_t transcript_id) {
+  if (transcript_id <= 0) return 0;
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn, constance::kCountTranscriptPhrasesQuery,
+                                {duckdb::Value::BIGINT(transcript_id)});
+  if (!result || result->HasError()) return 0;
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) return 0;
+  return chunk->GetValue(0, 0).GetValue<int64_t>();
+}
+
+bool Database::rename_transcript_speaker(const int64_t transcript_id,
+                                         const std::string &track_role,
+                                         const std::string &new_name) {
+  if (transcript_id <= 0 || new_name.empty()) return false;
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  if (!transcriptExists(conn, transcript_id)) return false;
+  auto result = executePrepared(conn, constance::kRenameTranscriptSpeakerQuery,
+                                {duckdb::Value(new_name), duckdb::Value::BIGINT(transcript_id),
+                                 duckdb::Value(track_role)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to rename transcript speaker (transcript_id=" << transcript_id
+               << "): " << (result ? result->GetError() : "prepare failed");
+    return false;
+  }
+  auto touch = executePrepared(conn, constance::kTouchTranscriptQuery,
+                               {db_utils::toDuckTimestamp(nowMs() * 1000),
+                                duckdb::Value::BIGINT(transcript_id)});
+  if (!touch || touch->HasError()) {
+    PLOG_ERROR << "Failed to bump transcript updated_at (id=" << transcript_id << ")";
+    return false;
+  }
+  return true;
+}
+
 // --- Init ---
 
 void Database::add_demo_data() {
@@ -1421,17 +2468,32 @@ void Database::init_application_metadata() {
   if (!insertResult || insertResult->HasError()) {
     PLOG_ERROR << "Error initializing application metadata: "
                << (insertResult ? insertResult->GetError() : "unknown error");
-    return;
+    throw std::runtime_error("Cannot initialize database migration metadata");
   }
 
+  const auto metadata = get_application_metadata();
+  if (metadata.schema_version == 2) return;
+  if (metadata.schema_version != 1)
+    throw std::runtime_error("Unsupported database schema version");
+  Transaction tx(conn);
+  if (!tx.active()) throw std::runtime_error("Cannot start transcript migration");
+  auto migration = conn.Query(
+      "ALTER TABLE Transcript ALTER COLUMN event_id DROP NOT NULL;"
+      "CREATE TABLE IF NOT EXISTS TranscriptClient (transcript_id INTEGER NOT NULL, "
+      "client_id INTEGER NOT NULL, PRIMARY KEY(transcript_id, client_id));"
+      "INSERT INTO TranscriptClient SELECT DISTINCT t.id, ec.client_id "
+      "FROM Transcript t JOIN EventClient ec ON ec.event_id = t.event_id "
+      "ON CONFLICT DO NOTHING;");
+  if (!migration || migration->HasError())
+    throw std::runtime_error("Cannot migrate transcripts to schema 2");
   auto updateResult = executePrepared(
       conn, constance::kUpdateApplicationMetadataMigrationTime,
-      {duckdb::Value::INTEGER(1), duckdb::Value::INTEGER(1),
+      {duckdb::Value::INTEGER(2), duckdb::Value::INTEGER(1),
        db_utils::toDuckTimestamp(nowMs * 1000)});
   if (!updateResult || updateResult->HasError()) {
-    PLOG_ERROR << "Error updating application migration metadata: "
-               << (updateResult ? updateResult->GetError() : "unknown error");
+    throw std::runtime_error("Cannot update transcript migration metadata");
   }
+  if (!tx.commit()) throw std::runtime_error("Cannot commit transcript migration");
 }
 
 void Database::init_payment_status_table() {

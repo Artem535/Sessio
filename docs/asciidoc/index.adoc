@@ -17,6 +17,8 @@ include::09-recurring-events.adoc[]
 include::10-encrypted-backup-adr.adoc[]
 include::11-token-backend-account-model-adr.adoc[]
 include::12-invitation-security-model-adr.adoc[]
+include::15-calls-setup.adoc[leveloffset=+1]
+include::16-recurring-calls-staging-smoke.adoc[]
 
 == Roadmap
 

@@ -24,6 +24,7 @@ struct Meeting {
 class MeetingsRepository {
 public:
   explicit MeetingsRepository(SqliteConnection &conn) : conn_(conn) {}
+  SqliteConnection &connection() { return conn_; }
 
   Meeting create(AccountId accountId, const std::string &scheduledStart,
                   const std::string &scheduledEnd);

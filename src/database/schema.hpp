@@ -6,6 +6,7 @@
 #include <optional>
 #include <ostream>
 #include <string>
+#include <vector>
 
 using duckdb::DataChunk;
 using duckdb::idx_t;
@@ -426,6 +427,59 @@ inline std::ostream &operator<<(std::ostream &os, const DuckClientNote &note) {
   return os;
 }
 
+// --- DuckTranscript ---
+// status: "recording" | "draft" | "reviewed". Times are epoch milliseconds.
+struct DuckTranscript {
+  std::int64_t id = -1;
+  std::optional<std::int64_t> event_id = std::nullopt;
+  std::string status;
+  std::string consent_scope;
+  std::int64_t consent_given_at = 0;
+  std::optional<std::int64_t> consent_revoked_at = std::nullopt;
+  std::optional<std::string> model_id = std::nullopt;
+  std::int64_t created_at = 0;
+  std::int64_t updated_at = 0;
+
+  DuckTranscript() = default;
+  DuckTranscript(const duckdb::DataChunk &chunk, duckdb::idx_t index) {
+    id = db_utils::toInt32AsInt64(chunk.GetValue(0, index));
+    event_id = db_utils::toOptionalInt32AsInt64(chunk.GetValue(1, index));
+    status = chunk.GetValue(2, index).ToString();
+    consent_scope = chunk.GetValue(3, index).ToString();
+    consent_given_at = db_utils::toOptionalTimestampMs(chunk.GetValue(4, index)).value_or(0);
+    consent_revoked_at = db_utils::toOptionalTimestampMs(chunk.GetValue(5, index));
+    model_id = db_utils::toOptionalString(chunk.GetValue(6, index));
+    created_at = db_utils::toOptionalTimestampMs(chunk.GetValue(7, index)).value_or(0);
+    updated_at = db_utils::toOptionalTimestampMs(chunk.GetValue(8, index)).value_or(0);
+  }
+};
+
+// --- DuckTranscriptPhrase ---
+// start_ms / end_ms are milliseconds from the start of the call.
+struct DuckTranscriptPhrase {
+  std::int64_t id = -1;
+  std::int64_t transcript_id = -1;
+  std::string track_role;  // "practitioner" | "participant"
+  std::optional<std::string> speaker_name = std::nullopt;
+  std::int64_t start_ms = 0;
+  std::int64_t end_ms = 0;
+  std::string text;
+  bool edited = false;
+
+  DuckTranscriptPhrase() = default;
+  DuckTranscriptPhrase(const duckdb::DataChunk &chunk, duckdb::idx_t index) {
+    id = db_utils::toInt32AsInt64(chunk.GetValue(0, index));
+    transcript_id = db_utils::toInt32AsInt64(chunk.GetValue(1, index));
+    track_role = chunk.GetValue(2, index).ToString();
+    speaker_name = db_utils::toOptionalString(chunk.GetValue(3, index));
+    start_ms = chunk.GetValue(4, index).GetValue<int64_t>();
+    end_ms = chunk.GetValue(5, index).GetValue<int64_t>();
+    text = chunk.GetValue(6, index).ToString();
+    const auto edited_value = chunk.GetValue(7, index);
+    edited = !edited_value.IsNull() && db_utils::toBool(edited_value);
+  }
+};
+
 // --- DuckClientNoteAttachment ---
 struct DuckClientNoteAttachment {
   std::int64_t id = -1;
@@ -458,3 +512,69 @@ inline std::ostream &operator<<(std::ostream &os,
   print_optional(os, attachment.created_at) << "}";
   return os;
 }
+
+namespace pcm::database {
+
+namespace schedule_sync_state {
+// Persisted per-series delivery state. "Sending" and "waiting for network" are
+// transient and live only in the sync service.
+inline constexpr char kPending[] = "pending";
+inline constexpr char kSynced[] = "synced";
+inline constexpr char kConflict[] = "conflict";
+inline constexpr char kRejected[] = "rejected";
+} // namespace schedule_sync_state
+
+// Local schedule identity of a recurring series that is published to the
+// token backend. series_uid never changes after creation.
+struct ScheduleIdentity {
+  std::int64_t series_id = -1;
+  std::string series_uid;
+  std::string timezone;
+  std::int64_t invitation_generation = 0;
+  std::optional<std::string> invitation_key = std::nullopt;
+  std::int64_t desired_revision = 0;
+  std::int64_t acked_revision = 0;
+  std::string acked_content_hash;
+  std::string sync_state = schedule_sync_state::kPending;
+  std::string last_error;
+};
+
+struct ScheduleOutbox {
+  std::string series_uid;
+  std::optional<std::string> pending_payload = std::nullopt;
+  std::optional<std::int64_t> pending_desired_revision = std::nullopt;
+  std::optional<std::int64_t> inflight_revision = std::nullopt;
+  std::optional<std::string> inflight_payload = std::nullopt;
+  std::optional<std::string> inflight_hash = std::nullopt;
+  std::optional<std::int64_t> inflight_desired_revision = std::nullopt;
+};
+
+// Materialized per-occurrence Event row of a series (moved or status-changed).
+struct ScheduleOverrideSource {
+  std::int64_t original_start_ms = 0;
+  std::int64_t start_ms = 0;
+  std::int64_t end_ms = 0;
+  std::int64_t event_stat_id = 1;
+};
+
+// Everything the schedule snapshot builder may read. It carries no client
+// reference, notes or payment data beyond what DuckEventSeries already holds;
+// the builder decides what leaves the device.
+struct ScheduleSource {
+  DuckEventSeries series;
+  ScheduleIdentity identity;
+  std::vector<ScheduleOverrideSource> overrides;
+  std::vector<std::int64_t> exceptions;
+};
+
+struct ScheduleCommit {
+  std::int64_t series_id = -1;
+  std::string series_uid; // empty for legacy series without schedule identity
+  std::int64_t desired_revision = 0;
+};
+
+struct ScheduleAck {
+  bool has_newer_pending = false;
+};
+
+} // namespace pcm::database

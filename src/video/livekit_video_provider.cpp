@@ -1,226 +1,750 @@
 #include "livekit_video_provider.h"
+#include <QPointer>
+#include <utility>
 
 #include "audio_capture_adapter.h"
 #include "device_manager.h"
+#include "livekit_video_frame_source.h"
 #include "remote_audio_player.h"
-#include "remote_video_renderer.h"
+#include "screen_capture_adapter.h"
 #include "video_capture_adapter.h"
 
+#include <QElapsedTimer>
+#include <QJsonDocument>
+#include <QLoggingCategory>
+#include <QJsonObject>
 #include <QMetaObject>
+#include <QVideoFrame>
+#include <QVideoSink>
 #include <atomic>
 #include <chrono>
+#include <mutex>
+
+Q_LOGGING_CATEGORY(logVideoProvider, "pcm.video.provider")
+Q_LOGGING_CATEGORY(logLiveKit, "pcm.livekit")
 
 namespace pcm::video {
-
 namespace {
-// Reference-counted so livekit::initialize()/shutdown() run exactly once
-// each, regardless of how many LiveKitVideoProvider instances exist over
-// the app's lifetime — required because livekit::shutdown() must only run
-// after every livekit-holding object has been destroyed (see this plan's
-// Task 7 design notes / the spike's main.cpp shutdown-ordering fix,
-// commit 6b63162).
 std::atomic<int> gLiveKitRefCount{0};
 
-void acquireLiveKitRuntime() {
-  if (gLiveKitRefCount.fetch_add(1) == 0) {
-    livekit::initialize(livekit::LogLevel::Info);
-  }
+QString metadataRole(const QString &metadata) {
+  return QJsonDocument::fromJson(metadata.toUtf8()).object().value("role").toString();
 }
 
-void releaseLiveKitRuntime() {
-  if (gLiveKitRefCount.fetch_sub(1) == 1) {
-    livekit::shutdown();
+ParticipantSnapshot copyParticipant(const livekit::Participant &participant) {
+  ParticipantSnapshot result;
+  result.sid = QString::fromStdString(participant.sid());
+  result.value.id = QString::fromStdString(participant.identity());
+  result.value.displayName = QString::fromStdString(participant.name());
+  result.value.role = metadataRole(QString::fromStdString(participant.metadata()));
+  result.value.microphoneEnabled = false;
+  result.value.cameraEnabled = false;
+  if (const auto *remote = dynamic_cast<const livekit::RemoteParticipant *>(&participant)) {
+    for (const auto &[sid, publication] : remote->trackPublications()) {
+      if (publication->kind() == livekit::TrackKind::KIND_VIDEO && !publication->muted()) {
+        if (publication->source() == livekit::TrackSource::SOURCE_SCREENSHARE)
+          result.value.screenSharing = true;
+        else
+          result.value.cameraEnabled = true;
+      }
+      if (publication->kind() == livekit::TrackKind::KIND_AUDIO && !publication->muted())
+        result.value.microphoneEnabled = true;
+    }
+  } else {
+    result.value.isLocal = true;
   }
+  return result;
+}
+
+TrackSnapshot copyTrack(const livekit::Participant &participant,
+                        const livekit::TrackPublication &publication,
+                        std::shared_ptr<livekit::Track> track = {}) {
+  return {QString::fromStdString(participant.identity()),
+          QString::fromStdString(participant.sid()), QString::fromStdString(publication.sid()),
+          publication.kind(), publication.muted(), std::move(track),
+          publication.source() == livekit::TrackSource::SOURCE_SCREENSHARE};
 }
 } // namespace
 
-// Constructed before every other member (see the header's declaration-order
-// comment), so livekit::initialize() always runs before mVideoCapture/
-// mAudioCapture's constructors make their first LiveKit FFI call.
-LiveKitVideoProvider::LiveKitRuntimeGuard::LiveKitRuntimeGuard() {
-  acquireLiveKitRuntime();
-}
+// Each room owns a different bridge with an immutable generation. The mutex
+// protects target lifetime through copying + invokeMethod(), without touching
+// QObject/QPointer state on SDK threads. Invalidation waits for dispatch and the
+// bridge stays alive until Room destruction has removed/joined SDK listeners.
+class LiveKitVideoProvider::CallbackDelegate final : public livekit::RoomDelegate {
+public:
+  CallbackDelegate(LiveKitVideoProvider &target, livekit::Room &room, uint64_t generation)
+      : mTarget(&target), mRoom(&room), mGeneration(generation) {}
+  void invalidate() {
+    std::lock_guard lock(mMutex);
+    mTarget = nullptr;
+  }
 
-// Destroyed after every other member, so livekit::shutdown() only runs once
-// mVideoCapture/mAudioCapture/mRoom/the tracks are already gone.
+  void onParticipantConnected(livekit::Room &room,
+                              const livekit::ParticipantConnectedEvent &event) override {
+    if (!event.participant) return;
+    dispatch(room, [&] {
+      const auto snapshot = copyParticipant(*event.participant);
+      return [snapshot](LiveKitVideoProvider &target) { target.applyParticipant(snapshot, true); };
+    });
+  }
+
+  void onParticipantDisconnected(livekit::Room &room,
+                                 const livekit::ParticipantDisconnectedEvent &event) override {
+    if (!event.participant) return;
+    dispatch(room, [&] {
+      const auto id = QString::fromStdString(event.participant->identity());
+      const auto sid = QString::fromStdString(event.participant->sid());
+      return [id, sid](LiveKitVideoProvider &target) { target.applyDeparture(id, sid); };
+    });
+  }
+
+  void onTrackSubscribed(livekit::Room &room, const livekit::TrackSubscribedEvent &event) override {
+    if (!event.participant || !event.publication || !event.track) return;
+    dispatch(room, [&] {
+      const auto participant = copyParticipant(*event.participant);
+      const auto track = copyTrack(*event.participant, *event.publication, event.track);
+      return [participant, track](LiveKitVideoProvider &target) {
+        target.applyParticipant(participant, false);
+        target.applySubscribed(track);
+      };
+    });
+  }
+
+  void onTrackUnsubscribed(livekit::Room &room, const livekit::TrackUnsubscribedEvent &event) override {
+    if (!event.participant || !event.publication) return;
+    dispatch(room, [&] {
+      const auto track = copyTrack(*event.participant, *event.publication);
+      return [track](LiveKitVideoProvider &target) { target.applyUnsubscribed(track); };
+    });
+  }
+
+  void onTrackUnpublished(livekit::Room &room, const livekit::TrackUnpublishedEvent &event) override {
+    if (!event.participant || !event.publication) return;
+    dispatch(room, [&] {
+      const auto track = copyTrack(*event.participant, *event.publication);
+      return [track](LiveKitVideoProvider &target) { target.applyUnsubscribed(track); };
+    });
+  }
+
+  void onTrackMuted(livekit::Room &room, const livekit::TrackMutedEvent &event) override {
+    if (!event.participant || !event.publication) return;
+    dispatch(room, [&] {
+      const auto track = copyTrack(*event.participant, *event.publication);
+      return [track](LiveKitVideoProvider &target) { target.applyMuted(track, true); };
+    });
+  }
+
+  void onTrackUnmuted(livekit::Room &room, const livekit::TrackUnmutedEvent &event) override {
+    if (!event.participant || !event.publication) return;
+    dispatch(room, [&] {
+      const auto track = copyTrack(*event.participant, *event.publication);
+      return [track](LiveKitVideoProvider &target) { target.applyMuted(track, false); };
+    });
+  }
+
+  void onParticipantMetadataChanged(livekit::Room &room,
+                                   const livekit::ParticipantMetadataChangedEvent &event) override {
+    updateParticipant(room, event.participant);
+  }
+  void onParticipantNameChanged(livekit::Room &room,
+                               const livekit::ParticipantNameChangedEvent &event) override {
+    updateParticipant(room, event.participant);
+  }
+  void onParticipantsUpdated(livekit::Room &room,
+                             const livekit::ParticipantsUpdatedEvent &event) override {
+    for (const auto *participant : event.participants) updateParticipant(room, participant);
+  }
+
+  void onDisconnected(livekit::Room &room, const livekit::DisconnectedEvent &event) override {
+    dispatch(room, [&] {
+      const int reason = static_cast<int>(event.reason);
+      return [reason](LiveKitVideoProvider &target) {
+        target.teardown();
+        emit target.connectionLost(QStringLiteral("Room disconnected (reason code %1).").arg(reason));
+      };
+    });
+  }
+  void onReconnecting(livekit::Room &room, const livekit::ReconnectingEvent &) override {
+    dispatch(room, [] {
+      return [](LiveKitVideoProvider &target) { emit target.reconnecting(); };
+    });
+  }
+  void onReconnected(livekit::Room &room, const livekit::ReconnectedEvent &) override {
+    dispatch(room, [] {
+      return [](LiveKitVideoProvider &target) {
+        target.snapshotParticipants();
+        emit target.reconnected();
+      };
+    });
+  }
+
+private:
+  template <typename Prepare>
+  void dispatch(livekit::Room &room, Prepare prepare) {
+    std::lock_guard lock(mMutex);
+    if (mTarget && &room == mRoom) {
+      mTarget->queueCallback(mGeneration, prepare());
+    }
+  }
+
+  void updateParticipant(livekit::Room &room, const livekit::Participant *participant) {
+    if (!participant) return;
+    dispatch(room, [&] {
+      const auto snapshot = copyParticipant(*participant);
+      return [snapshot](LiveKitVideoProvider &target) { target.applyParticipant(snapshot, false); };
+    });
+  }
+  std::mutex mMutex;
+  LiveKitVideoProvider *mTarget;
+  const livekit::Room *mRoom;
+  const uint64_t mGeneration;
+};
+
+LiveKitVideoProvider::LiveKitRuntimeGuard::LiveKitRuntimeGuard() {
+  if (gLiveKitRefCount.fetch_add(1) == 0) {
+    livekit::initialize(livekit::LogLevel::Warn);
+    // The SDK's default sink is stderr, which a Windows GUI build does not have.
+    livekit::setLogCallback([](livekit::LogLevel level, const std::string &logger, const std::string &message) {
+      const auto text = QString::fromStdString(logger + ": " + message);
+      if (level >= livekit::LogLevel::Error) qCWarning(logLiveKit).noquote() << text;
+      else qCInfo(logLiveKit).noquote() << text;
+    });
+  }
+}
 LiveKitVideoProvider::LiveKitRuntimeGuard::~LiveKitRuntimeGuard() {
-  releaseLiveKitRuntime();
+  if (gLiveKitRefCount.fetch_sub(1) == 1) livekit::shutdown();
 }
 
 LiveKitVideoProvider::LiveKitVideoProvider(QObject *parent)
     : VideoProvider(parent), mDeviceManager(std::make_unique<DeviceManager>()),
       mVideoCapture(std::make_unique<VideoCaptureAdapter>()),
-      mAudioCapture(std::make_unique<AudioCaptureAdapter>()),
-      mRemoteVideo(new RemoteVideoRenderer()),
-      mRemoteAudio(std::make_unique<RemoteAudioPlayer>()) {
-  // mRuntimeGuard is not listed above: it has no arguments to pass, and its
-  // default constructor already ran before this init list's members
-  // because of its declaration order in the header (first). Do not add it
-  // here — doing so would not change construction order and only invites a
-  // future edit that reorders the list and silently breaks the guarantee.
-
-  // Local device failures are never network loss — routed to mediaError(),
-  // not connectionLost(), so they cannot drive VideoSession's
-  // Connected/Reconnecting/Failed graph (see video_provider.h).
-  connect(mVideoCapture.get(), &VideoCaptureAdapter::captureFailed, this,
-          &VideoProvider::mediaError);
-  connect(mAudioCapture.get(), &AudioCaptureAdapter::captureFailed, this,
-          &VideoProvider::mediaError);
-
-  // Camera/microphone capture starts in join(), not here: starting it at
-  // construction time — before any call is joined or even requested — is
-  // a privacy problem (the device's capture indicator lights up with no
-  // call in progress). See join()/leave() for the actual start/stop.
+      mAudioCapture(std::make_unique<AudioCaptureAdapter>()) {
+  // Runs on the GUI thread (AudioCaptureAdapter::onReadyRead), so reading
+  // mLocalIdentity is safe. The tap is gated by the real microphone state.
+  mAudioCapture->tap().setCallback(
+      [slot = mSinkSlot, this](const int16_t *samples, std::size_t count, int rate) {
+        const QString identity = mLocalIdentity;
+        if (identity.isEmpty()) {
+          return;
+        }
+        if (auto sink = slot->get()) {
+          sink->onAudio(identity, samples, count, rate);
+        }
+      });
+  mAudioCapture->tap().setSinkActive(false);
+  mAudioCapture->tap().setEnabled(mMicrophoneEnabled);
+  connect(mVideoCapture.get(), &VideoCaptureAdapter::captureFailed, this, &VideoProvider::mediaError);
+  connect(mAudioCapture.get(), &AudioCaptureAdapter::captureFailed, this, &VideoProvider::mediaError);
+  connect(mAudioCapture.get(), &AudioCaptureAdapter::captureInterrupted, this, [this] {
+    if (mRoom && !mLocalIdentity.isEmpty()) emit audioInterrupted(mLocalIdentity);
+  });
+  connect(mAudioCapture.get(), &AudioCaptureAdapter::captureResumed, this, [this] {
+    if (mRoom && !mLocalIdentity.isEmpty()) emit audioResumed(mLocalIdentity);
+  });
+  connect(mVideoCapture->previewSink(), &QVideoSink::videoFrameChanged, this,
+          [this](const QVideoFrame &frame) {
+    if (!mCameraEnabled) return;
+    if (const auto source = frameSource(mLocalIdentity); source && frame.isValid())
+      source->submitFrame(frame.toImage());
+  });
 }
 
-LiveKitVideoProvider::~LiveKitVideoProvider() {
-  // leave() already stops both capture adapters — no need to repeat it
-  // here (join() is the only place that starts them).
-  leave();
-  delete mRemoteVideo.data();
-  // No explicit releaseLiveKitRuntime() call here: mRuntimeGuard's own
-  // destructor handles it automatically, and — because it is declared
-  // first in the header — runs last, after mVideoCapture/mAudioCapture/
-  // mRoom/every track member above has already been destroyed by the
-  // implicit member-destruction that follows this destructor body. Adding
-  // a call here would double-release against the guard's own release.
+LiveKitVideoProvider::~LiveKitVideoProvider() { teardown(); }
+
+void LiveKitVideoProvider::queueCallback(uint64_t generation,
+                                        std::function<void(LiveKitVideoProvider &)> callback) {
+  uint64_t sequence;
+  {
+    std::lock_guard lock(mCallbackMutex);
+    sequence = ++mNextCallback;
+    mPendingCallbacks.emplace(sequence, std::move(callback));
+  }
+  // Qt owns only integer keys. SDK payloads remain ours so teardown can release
+  // every track before the runtime guard shuts down (before QObject destruction).
+  QMetaObject::invokeMethod(this, [this, generation, sequence] {
+    std::function<void(LiveKitVideoProvider &)> pending;
+    {
+      std::lock_guard lock(mCallbackMutex);
+      const auto it = mPendingCallbacks.find(sequence);
+      if (it == mPendingCallbacks.end()) return;
+      pending = std::move(it->second);
+      mPendingCallbacks.erase(it);
+    }
+    if (mRoom && generation == mGeneration) pending(*this);
+  }, Qt::QueuedConnection);
+}
+
+VideoFrameSource *LiveKitVideoProvider::screenSource(const QString &id) {
+  const auto it = mMedia.find(id);
+  return it == mMedia.end() ? nullptr : it->second->screen.get();
+}
+
+VideoFrameSource *LiveKitVideoProvider::frameSource(const QString &id) {
+  const auto it = mMedia.find(id);
+  return it == mMedia.end() ? nullptr : it->second->video.get();
 }
 
 void LiveKitVideoProvider::join(const QString &url, const QString &token) {
-  if (const auto camera = mDeviceManager->defaultCamera()) {
-    mVideoCapture->start(*camera);
-  }
-  if (const auto microphone = mDeviceManager->defaultMicrophone()) {
-    mAudioCapture->start(*microphone);
-  }
+  teardown();
+  const auto generation = mGeneration;
+  const auto camera = mSelectedCamera ? mSelectedCamera : mDeviceManager->defaultCamera();
+  if (camera) mVideoCapture->start(*camera);
+  const auto microphone = mSelectedMicrophone ? mSelectedMicrophone : mDeviceManager->defaultMicrophone();
+  if (microphone && mAudioCapture->start(*microphone))
+    mSelectedMicrophone = mAudioCapture->activeDevice();
 
   mRoom = std::make_unique<livekit::Room>();
-  mRoom->setDelegate(this);
-
+  mDelegate = std::make_unique<CallbackDelegate>(*this, *mRoom, generation);
+  mRoom->setDelegate(mDelegate.get());
   livekit::RoomOptions options;
   options.auto_subscribe = true;
   options.dynacast = false;
-  // The brief's original design left join_retries/connect_timeout unset
-  // (Rust SDK defaults). In practice that lets Room::connect() retry a
-  // failing initial join for well over 20 seconds even when the transport
-  // fails immediately (verified against a deliberately-refused localhost
-  // connection: the FFI layer logs the connection-refused error almost
-  // instantly, but connect() doesn't return until the retries/backoff are
-  // exhausted). That contradicts this class's contract that join() reports
-  // joinFailed() promptly rather than hanging, so both are bounded
-  // explicitly: no retry of the initial attempt, and a 5s cap per attempt.
   options.join_retries = 0;
   options.connect_timeout = std::chrono::seconds(5);
-
-  const bool connected = mRoom->connect(url.toStdString(), token.toStdString(), options);
+  bool connected = false;
+  try {
+    connected = mRoom->connect(url.toStdString(), token.toStdString(), options);
+  } catch (const std::exception &) {
+    // URLs/tokens and SDK exception text can contain secrets: use a fixed error.
+  }
   if (!connected) {
-    mRoom->setDelegate(nullptr);
-    mRoom.reset();
-    mVideoCapture->stop();
-    mAudioCapture->stop();
-    // Room::connect() above is itself a blocking, synchronous SDK call (see
-    // the vendored room.h: "Blocks until the FFI connect response arrives").
-    // Against a promptly-refused connection it can return in well under a
-    // millisecond — before the caller has had any chance to start its event
-    // loop. This class's header documents join() as asynchronous ("callers
-    // observe the outcome via signals"), and callers (including this
-    // class's own smoke test) follow the idiomatic
-    //   connect(provider, &VideoProvider::joinFailed, &loop, &QEventLoop::quit);
-    //   provider->join(...);
-    //   loop.exec();
-    // pattern. Emitting joinFailed() directly here would invoke that
-    // already-connected slot synchronously, inside join()'s own call frame —
-    // i.e. before loop.exec() is entered. QEventLoop::quit() delivered to a
-    // loop that isn't running yet has no effect on the future exec() call,
-    // so exec() would then block forever. Queuing the emission guarantees
-    // it is only delivered once the calling thread's event loop is actually
-    // pumping, which is what makes the async contract hold in practice.
-    QMetaObject::invokeMethod(
-        this,
-        [this]() {
-          // mRoom is already null at this point (reset just above), so this
-          // guard only trips if a NEW join() attempt started before this
-          // queued signal was delivered (giving mRoom a fresh, non-null
-          // value) — in that case, this stale joinFailed() belongs to an
-          // attempt the caller has already moved on from, and firing it
-          // would misattribute it to whatever join is now in progress.
-          if (mRoom) {
-            return;
-          }
-          emit joinFailed(QStringLiteral("Failed to connect to the video server."));
-        },
-        Qt::QueuedConnection);
+    teardown();
+    const auto failedGeneration = mGeneration;
+    QMetaObject::invokeMethod(this, [this, failedGeneration] {
+      if (mGeneration == failedGeneration && !mRoom)
+        emit joinFailed(QStringLiteral("Failed to connect to the video server."));
+    }, Qt::QueuedConnection);
     return;
   }
 
+  mCallClock.start();
+  snapshotParticipants();
+  // Token metadata is display-only. Older tokens simply yield an empty role.
+  const auto payload = QJsonDocument::fromJson(QByteArray::fromBase64(
+      token.section('.', 1, 1).toLatin1(), QByteArray::Base64UrlEncoding)).object();
+  if (auto local = participants()->participant(mLocalIdentity)) {
+    local->displayName = payload.value("name").toString();
+    local->role = metadataRole(payload.value("metadata").toString());
+    participants()->upsert(*local);
+  }
   publishTracks();
+  queueCallback(generation, [](LiveKitVideoProvider &target) { emit target.joined(); });
+}
 
-  // Deferred for the same reason as the joinFailed() emission above. Guarded
-  // the opposite way: this join succeeded (mRoom is non-null right now), so
-  // if mRoom is null by the time this runs, leave() (or a subsequent failed
-  // join()) has already ended the session this joined() would refer to.
-  //
-  // Posted before the already-present-participant check below (not after):
-  // onParticipantConnected() runs on a LiveKit-internal thread and queues
-  // its own event the instant a participant joins, which can race with
-  // this GUI-thread code at any point after connect() returns. Posting
-  // joined() first keeps its queue position as early as possible, so a
-  // real onParticipantConnected() event that got queued during
-  // publishTracks() (and would otherwise be silently dropped, since
-  // Joining has no transition for it) is much less likely to be ordered
-  // ahead of joined() — narrowing, though not eliminating, that window.
-  QMetaObject::invokeMethod(
-      this,
-      [this]() {
-        if (!mRoom) {
-          return;
-        }
-        emit joined();
-      },
-      Qt::QueuedConnection);
+void LiveKitVideoProvider::snapshotParticipants() {
+  if (!mRoom) return;
+  // The SDK synchronizes room snapshots but its participant/name/metadata and
+  // publication getters are plain. Copy only immutable identity/SID here;
+  // owner-event-thread callbacks safely enrich display/media fields afterwards.
+  if (const auto local = mRoom->localParticipant().lock()) {
+    mLocalIdentity = QString::fromStdString(local->identity());
+    if (!participants()->participant(mLocalIdentity)) {
+      applyParticipant({{mLocalIdentity, {}, {}, true, mMicrophoneEnabled, mCameraEnabled},
+                        QString::fromStdString(local->sid())}, true);
+    }
+  }
+  std::set<QString> present;
+  for (const auto &weak : mRoom->remoteParticipants()) {
+    if (const auto remote = weak.lock()) {
+      const auto id = QString::fromStdString(remote->identity());
+      present.insert(id);
+      const auto sid = QString::fromStdString(remote->sid());
+      const auto it = mMedia.find(id);
+      if (it == mMedia.end() || it->second->sid != sid)
+        applyParticipant({{id, {}, {}, false, false, false}, sid}, true);
+    }
+  }
+  std::vector<std::pair<QString, QString>> absent;
+  for (const auto &[id, media] : mMedia) {
+    if (id != mLocalIdentity && !present.contains(id)) absent.emplace_back(id, media->sid);
+  }
+  for (const auto &[id, sid] : absent) applyDeparture(id, sid);
+}
 
-  // onParticipantConnected() only fires for participants who join AFTER
-  // this connect() call — if the other party was already in the room (the
-  // common case for a scheduled call both sides join around the same
-  // time), that event never arrives and WaitingForClient would wait
-  // forever. Check for an already-present participant here instead.
-  if (!mRoom->remoteParticipants().empty()) {
-    // Queued after (not together with) joined() above so it is delivered
-    // strictly later: both are posted to the same object's event queue in
-    // FIFO order, so VideoSession is guaranteed to process
-    // Joining->WaitingForClient before WaitingForClient->Connected.
-    QMetaObject::invokeMethod(
-        this,
-        [this]() {
-          if (!mRoom) {
-            return;
+void LiveKitVideoProvider::applyParticipant(const ParticipantSnapshot &snapshot, bool allowInsert) {
+  const auto &id = snapshot.value.id;
+  if (id.isEmpty() || mDeparted.contains({id, snapshot.sid})) return;
+  auto it = mMedia.find(id);
+  const bool newIdentity = it == mMedia.end();
+  const bool sameParticipant = !newIdentity && it->second->sid == snapshot.sid;
+  if (newIdentity && !allowInsert) return;
+  if (!newIdentity && it->second->sid != snapshot.sid) {
+    if (!allowInsert) return;
+    mDeparted.insert({id, it->second->sid});
+    it->second->video->detach();
+    it->second->screen->detach();
+    it->second->screenSid.clear();
+    it->second->lastScreenSid.clear();
+    it->second->retiredScreenSids.clear();
+    it->second->audio->detach();
+    it->second->audioTrack.reset();
+    it->second->videoSid.clear();
+    it->second->audioSid.clear();
+    it->second->lastVideoSid.clear();
+    it->second->lastAudioSid.clear();
+    it->second->retiredVideoSids.clear();
+    it->second->retiredAudioSids.clear();
+    it->second->sid = snapshot.sid;
+  }
+  if (newIdentity) {
+    auto media = std::make_unique<ParticipantMedia>();
+    media->sid = snapshot.sid;
+    media->video = std::make_unique<LiveKitVideoFrameSource>();
+    media->screen = std::make_unique<LiveKitVideoFrameSource>();
+    media->audio = std::make_unique<RemoteAudioPlayer>();
+    media->audio->tap().setCallback(
+        [slot = mSinkSlot, id](const int16_t *samples, std::size_t count, int rate) {
+          if (auto sink = slot->get()) {
+            sink->onAudio(id, samples, count, rate);
           }
-          emit remoteParticipantConnected();
-        },
-        Qt::QueuedConnection);
+        });
+    media->audio->tap().setSinkActive(mSinkSlot->hasSink());
+    connect(media->audio.get(), &RemoteAudioPlayer::playbackFailed, this, &VideoProvider::mediaError);
+    mMedia.emplace(id, std::move(media)); // visible to rowsInserted observers
+  }
+  auto value = snapshot.value;
+  if (sameParticipant) {
+    // Display updates and duplicate connected events do not undo an unsubscribe
+    // or mute; effective track state is updated by its own SID-guarded handler.
+    if (const auto current = participants()->participant(id)) {
+      value.microphoneEnabled = current->microphoneEnabled;
+      value.cameraEnabled = current->cameraEnabled;
+      value.screenSharing = current->screenSharing;
+      value.isLocal = current->isLocal;
+    }
+  }
+  if (value.isLocal) {
+    value.screenSharing = mScreenTrack != nullptr;
+    value.microphoneEnabled = mMicrophoneEnabled;
+    value.cameraEnabled = mCameraEnabled;
+  }
+  participants()->upsert(value);
+  if (newIdentity) emit participantJoined(id);
+}
+
+void LiveKitVideoProvider::applyDeparture(const QString &id, const QString &sid) {
+  const auto it = mMedia.find(id);
+  if (it == mMedia.end() || it->second->sid != sid) return;
+  mDeparted.insert({id, sid});
+  participants()->remove(id);
+  qCInfo(logVideoProvider) << "remote participant left; closing its media";
+  mMedia.erase(it); // source/player destructors close blocked reads before join
+  qCInfo(logVideoProvider) << "remote participant media closed";
+  emit participantLeft(id);
+}
+
+void LiveKitVideoProvider::applySubscribed(const TrackSnapshot &snapshot) {
+  const auto it = mMedia.find(snapshot.id);
+  auto participant = participants()->participant(snapshot.id);
+  if (it == mMedia.end() || !participant || it->second->sid != snapshot.participantSid) return;
+  auto &media = *it->second;
+  try {
+    if (snapshot.kind == livekit::TrackKind::KIND_VIDEO && snapshot.screen) {
+      if (media.retiredScreenSids.contains(snapshot.sid)) return;
+      if (media.screenSid == snapshot.sid) return;
+      if (!media.lastScreenSid.isEmpty() && media.lastScreenSid != snapshot.sid)
+        media.retiredScreenSids.insert(media.lastScreenSid);
+      media.screen->attachTrack(snapshot.track);
+      media.screenSid = snapshot.sid;
+      media.lastScreenSid = snapshot.sid;
+      participant->screenSharing = !snapshot.muted;
+    } else if (snapshot.kind == livekit::TrackKind::KIND_VIDEO) {
+      if (media.retiredVideoSids.contains(snapshot.sid)) return;
+      if (media.videoSid == snapshot.sid) return;
+      if (!media.lastVideoSid.isEmpty() && media.lastVideoSid != snapshot.sid)
+        media.retiredVideoSids.insert(media.lastVideoSid);
+      media.video->attachTrack(snapshot.track);
+      media.videoSid = snapshot.sid;
+      media.lastVideoSid = snapshot.sid;
+      participant->cameraEnabled = !snapshot.muted;
+    } else if (snapshot.kind == livekit::TrackKind::KIND_AUDIO) {
+      if (media.retiredAudioSids.contains(snapshot.sid)) return;
+      if (media.audioSid == snapshot.sid) return;
+      if (!media.lastAudioSid.isEmpty() && media.lastAudioSid != snapshot.sid)
+        media.retiredAudioSids.insert(media.lastAudioSid);
+      media.audio->detach();
+      media.audioSid = snapshot.sid;
+      media.lastAudioSid = snapshot.sid;
+      media.audioTrack = snapshot.track;
+      const auto device = mSelectedSpeaker ? mSelectedSpeaker : mDeviceManager->defaultSpeaker();
+      if (device) media.audio->attachTrack(snapshot.track, *device);
+      participant->microphoneEnabled = !snapshot.muted;
+    }
+    participants()->upsert(*participant);
+  } catch (const std::exception &) {
+    emit mediaError(QStringLiteral("Failed to attach remote media."));
   }
 }
 
-void LiveKitVideoProvider::leave() {
-  if (mRemoteVideo) {
-    mRemoteVideo->detach();
-  }
-  mRemoteAudio->detach();
-  mRemoteAudioTrack.reset();
+void LiveKitVideoProvider::applyUnsubscribed(const TrackSnapshot &snapshot) {
+  const auto it = mMedia.find(snapshot.id);
+  auto participant = participants()->participant(snapshot.id);
+  if (it == mMedia.end() || !participant || it->second->sid != snapshot.participantSid) return;
+  auto &media = *it->second;
+  if (snapshot.kind == livekit::TrackKind::KIND_VIDEO && snapshot.screen &&
+      media.screenSid == snapshot.sid) {
+    media.screen->detach();
+    media.screenSid.clear();
+    participant->screenSharing = false;
+  } else if (snapshot.kind == livekit::TrackKind::KIND_VIDEO && !snapshot.screen &&
+             media.videoSid == snapshot.sid) {
+    media.video->detach();
+    media.videoSid.clear();
+    participant->cameraEnabled = false;
+  } else if (snapshot.kind == livekit::TrackKind::KIND_AUDIO && media.audioSid == snapshot.sid) {
+    media.audio->detach();
+    media.audioTrack.reset();
+    media.audioSid.clear();
+    participant->microphoneEnabled = false;
+  } else return;
+  participants()->upsert(*participant);
+}
 
+void LiveKitVideoProvider::applyMuted(const TrackSnapshot &snapshot, bool muted) {
+  const auto it = mMedia.find(snapshot.id);
+  auto participant = participants()->participant(snapshot.id);
+  if (it == mMedia.end() || !participant || it->second->sid != snapshot.participantSid) return;
+  auto &media = *it->second;
+  if (snapshot.kind == livekit::TrackKind::KIND_VIDEO && snapshot.screen &&
+      media.screenSid == snapshot.sid) {
+    participant->screenSharing = !muted;
+    if (muted) media.screen->clear();
+  } else if (snapshot.kind == livekit::TrackKind::KIND_VIDEO && !snapshot.screen &&
+             media.videoSid == snapshot.sid) {
+    participant->cameraEnabled = !muted;
+    if (muted) media.video->clear();
+  } else if (snapshot.kind == livekit::TrackKind::KIND_AUDIO && media.audioSid == snapshot.sid) {
+    participant->microphoneEnabled = !muted;
+  } else return;
+  participants()->upsert(*participant);
+}
+
+void LiveKitVideoProvider::updateLocalState() {
+  if (auto local = participants()->participant(mLocalIdentity)) {
+    local->microphoneEnabled = mMicrophoneEnabled;
+    local->cameraEnabled = mCameraEnabled;
+    local->screenSharing = mScreenTrack != nullptr;
+    if (!mCameraEnabled) {
+      if (auto source = frameSource(mLocalIdentity)) source->clear();
+    }
+    participants()->upsert(*local);
+  }
+}
+
+void LiveKitVideoProvider::setMicrophoneEnabled(bool enabled) {
+  if (mAudioTrack) {
+    // mute()/unmute() are documented (local_audio_track.h) to throw
+    // std::runtime_error on FFI failure. This is a local device/publish
+    // problem, never network loss, so it is routed through mediaError() —
+    // same rationale and same try/catch shape as publishTracks() below —
+    // rather than left to escape uncaught out of this slot (CallPage's mute
+    // button calls this directly).
+    try {
+      enabled ? mAudioTrack->unmute() : mAudioTrack->mute();
+    } catch (const std::exception &e) {
+      emit mediaError(QStringLiteral("Failed to %1 microphone: %2")
+                          .arg(enabled ? QStringLiteral("unmute") : QStringLiteral("mute"))
+                          .arg(e.what()));
+      return;
+    }
+  }
+  mMicrophoneEnabled = enabled;
+  mAudioCapture->tap().setEnabled(mMicrophoneEnabled);
+  updateLocalState();
+}
+
+void LiveKitVideoProvider::setCameraEnabled(bool enabled) {
+  if (mVideoTrack) {
+    // See setMicrophoneEnabled() above: mute()/unmute() can throw
+    // std::runtime_error on FFI failure (local_video_track.h), and that must
+    // surface as mediaError(), not escape this slot uncaught.
+    try {
+      enabled ? mVideoTrack->unmute() : mVideoTrack->mute();
+    } catch (const std::exception &e) {
+      emit mediaError(QStringLiteral("Failed to %1 camera: %2")
+                          .arg(enabled ? QStringLiteral("unmute") : QStringLiteral("mute"))
+                          .arg(e.what()));
+      return;
+    }
+  }
+  mCameraEnabled = enabled;
+  updateLocalState();
+}
+
+void LiveKitVideoProvider::startScreenShare(const ScreenCaptureTarget &target) {
+  if (!mRoom) return;
+  auto localParticipant = mRoom->localParticipant().lock();
+  if (!localParticipant) return;
+  // Starting again replaces the previous share; its capture and track are retired first.
+  stopScreenShare();
+  try {
+    auto capture = std::make_unique<ScreenCaptureAdapter>();
+    auto track = livekit::LocalVideoTrack::createLocalVideoTrack("screen", capture->videoSource());
+    livekit::TrackPublishOptions options;
+    options.source = livekit::TrackSource::SOURCE_SCREENSHARE;
+    options.dtx = false;
+    options.simulcast = false;
+    if (!capture->start(target)) {
+      emit mediaError(QStringLiteral("Nothing to share."));
+      return;
+    }
+    localParticipant->publishTrack(track, options);
+    connect(capture.get(), &ScreenCaptureAdapter::captureFailed, this, [this](const QString &reason) {
+      stopScreenShare();
+      emit mediaError(QStringLiteral("Screen sharing stopped: %1").arg(reason));
+    });
+    mScreenCapture = std::move(capture);
+    mScreenTrack = std::move(track);
+  } catch (const std::exception &e) {
+    mScreenCapture.reset();
+    emit mediaError(QStringLiteral("Failed to share the screen: %1").arg(e.what()));
+    return;
+  }
+  updateLocalState();
+  emit screenSharingChanged(true);
+}
+
+void LiveKitVideoProvider::stopScreenShare() {
+  if (!mScreenTrack && !mScreenCapture) return;
+  mScreenCapture.reset();
+  if (mScreenTrack) {
+    if (mRoom) {
+      if (auto localParticipant = mRoom->localParticipant().lock()) {
+        try {
+          localParticipant->unpublishTrack(mScreenTrack->sid());
+        } catch (const std::exception &) {
+          // A disconnected room may refuse; the local state is cleared regardless.
+        }
+      }
+    }
+    mScreenTrack.reset();
+  }
+  updateLocalState();
+  emit screenSharingChanged(false);
+}
+
+void LiveKitVideoProvider::switchCamera(const QCameraDevice &device) {
+  // Same livekit::VideoSource the whole call publishes from — start()
+  // only restarts the Qt-side QCamera/capture worker, so no republish is
+  // needed. Before join() there is no call to capture for yet: only remember the choice, so
+  // the camera light does not come on until the call actually starts.
+  mSelectedCamera = device;
+  if (mRoom) mVideoCapture->start(device);
+}
+
+void LiveKitVideoProvider::switchMicrophone(const QAudioDevice &device) {
+  if (!mRoom) {
+    mSelectedMicrophone = device;
+    return;
+  }
+  mPendingMicrophone = device;
+  if (mMicrophoneSwitchQueued) return;
+  mMicrophoneSwitchQueued = true;
+  const auto generation = mGeneration;
+  QMetaObject::invokeMethod(this, [this, generation] {
+    if (generation != mGeneration || !mRoom) return;
+    mMicrophoneSwitchQueued = false;
+    const auto selected = std::exchange(mPendingMicrophone, std::nullopt);
+    if (!selected) return;
+    const QPointer<LiveKitVideoProvider> self(this);
+    const bool opened = mAudioCapture->start(*selected);
+    if (!self || generation != mGeneration || !mRoom) return;
+    if (opened) {
+      mSelectedMicrophone = mAudioCapture->activeDevice();
+      emit microphoneChanged(*mSelectedMicrophone);
+    } else {
+      mSelectedMicrophone.reset();
+      setMicrophoneEnabled(false);
+      if (!self || generation != mGeneration || !mRoom) return;
+      emit microphoneChanged(QAudioDevice{});
+    }
+  }, Qt::QueuedConnection);
+}
+
+qint64 LiveKitVideoProvider::callElapsedMs() const {
+  return mCallClock.isValid() ? mCallClock.elapsed() : 0;
+}
+
+QAudioDevice LiveKitVideoProvider::selectedMicrophone() const {
+  if (mRoom) return mAudioCapture->activeDevice().value_or(QAudioDevice{});
+  return mSelectedMicrophone.value_or(QAudioDevice{});
+}
+
+void LiveKitVideoProvider::setAudioSink(std::shared_ptr<AudioSink> sink) {
+  const bool active = sink != nullptr;
+  mSinkSlot->set(std::move(sink));
+  mAudioCapture->tap().setSinkActive(active);
+  for (auto &[id, media] : mMedia) {
+    media->audio->tap().setSinkActive(active);
+  }
+}
+
+void LiveKitVideoProvider::switchSpeaker(const QAudioDevice &device) {
+  mSelectedSpeaker = device;
+  for (auto &[id, media] : mMedia) {
+    if (media->audioTrack) {
+      try {
+        media->audio->attachTrack(media->audioTrack, device);
+      } catch (const std::exception &) {
+        emit mediaError(QStringLiteral("Failed to switch audio output."));
+      }
+    }
+  }
+}
+
+
+void LiveKitVideoProvider::teardown() {
+  // Each step is logged with its time: a hang on leaving a call (seen on
+  // Windows, #142) has to show up in the log as the step that never finished.
+  const bool hadRoom = mRoom != nullptr;
+  QElapsedTimer clock;
+  clock.start();
+  const auto step = [&](const char *name) {
+    if (hadRoom) qCInfo(logVideoProvider) << "teardown:" << name << clock.elapsed() << "ms";
+  };
+  step("begin");
+  ++mGeneration;
+  mPendingMicrophone.reset();
+  mMicrophoneSwitchQueued = false;
+  mCallClock.invalidate();
+  if (mDelegate) mDelegate->invalidate();
+  {
+    std::lock_guard lock(mCallbackMutex);
+    mPendingCallbacks.clear();
+  }
+  if (mRoom) mRoom->setDelegate(nullptr);
+  step("delegate detached");
   mVideoCapture->stop();
   mAudioCapture->stop();
-
+  const bool wasSharing = mScreenTrack != nullptr;
+  mScreenCapture.reset();
+  step("capture stopped");
+  participants()->clear();
+  mMedia.clear();
+  mLocalIdentity.clear();
+  mDeparted.clear();
+  step("remote media closed");
   if (mRoom) {
-    unpublishTracks();
-    mRoom->setDelegate(nullptr);
-    mRoom.reset();
+    try {
+      unpublishTracks();
+    } catch (const std::exception &) {
+      // Teardown must finish even when a disconnected room refuses unpublish.
+    }
   }
-  // Always emitted, even if mRoom was already null (e.g. leave() called
-  // while a join() attempt was still in flight, or called a second time):
-  // VideoSession's Leaving state has exactly one way out, on this signal —
-  // emitting it only when mRoom was non-null left Leaving stranded forever
-  // whenever the room hadn't (or no longer) existed.
+  step("tracks unpublished");
+  mAudioTrack.reset();
+  mVideoTrack.reset();
+  mScreenTrack.reset();
+  mRoom.reset();
+  step("room closed");
+  mDelegate.reset();
+  step("done");
+  if (wasSharing) emit screenSharingChanged(false);
+}
+
+void LiveKitVideoProvider::leave() {
+  qCInfo(logVideoProvider) << "leave requested";
+  teardown();
   emit left();
 }
 
@@ -237,6 +761,9 @@ void LiveKitVideoProvider::publishTracks() {
     audioOptions.dtx = false;
     audioOptions.simulcast = false;
     localParticipant->publishTrack(mAudioTrack, audioOptions);
+    if (!mMicrophoneEnabled) {
+      mAudioTrack->mute();
+    }
   } catch (const std::exception &e) {
     emit mediaError(QStringLiteral("Failed to publish audio: %1").arg(e.what()));
   }
@@ -248,6 +775,9 @@ void LiveKitVideoProvider::publishTracks() {
     videoOptions.dtx = false;
     videoOptions.simulcast = true;
     localParticipant->publishTrack(mVideoTrack, videoOptions);
+    if (!mCameraEnabled) {
+      mVideoTrack->mute();
+    }
   } catch (const std::exception &e) {
     emit mediaError(QStringLiteral("Failed to publish video: %1").arg(e.what()));
   }
@@ -262,112 +792,14 @@ void LiveKitVideoProvider::unpublishTracks() {
     if (mVideoTrack) {
       localParticipant->unpublishTrack(mVideoTrack->sid());
     }
+    if (mScreenTrack) {
+      localParticipant->unpublishTrack(mScreenTrack->sid());
+    }
   }
   mAudioTrack.reset();
   mVideoTrack.reset();
+  mScreenTrack.reset();
 }
 
-void LiveKitVideoProvider::onTrackSubscribed(livekit::Room &, const livekit::TrackSubscribedEvent &event) {
-  if (!event.track) {
-    return;
-  }
-  const auto kind = event.track->kind();
-  auto track = event.track;
-
-  QMetaObject::invokeMethod(
-      this,
-      [this, track, kind]() {
-        if (!mRoom) {
-          return;
-        }
-        if (kind == livekit::TrackKind::KIND_VIDEO) {
-          if (mRemoteVideo) {
-            mRemoteVideo->attachTrack(track);
-          }
-        } else if (kind == livekit::TrackKind::KIND_AUDIO) {
-          mRemoteAudioTrack = track;
-          const auto device = mDeviceManager->defaultSpeaker();
-          if (device) {
-            mRemoteAudio->attachTrack(track, *device);
-          }
-        }
-      },
-      Qt::QueuedConnection);
-}
-
-void LiveKitVideoProvider::onParticipantConnected(livekit::Room &,
-                                                  const livekit::ParticipantConnectedEvent &) {
-  QMetaObject::invokeMethod(
-      this,
-      [this]() {
-        if (!mRoom) {
-          return;
-        }
-        emit remoteParticipantConnected();
-      },
-      Qt::QueuedConnection);
-}
-
-void LiveKitVideoProvider::onParticipantDisconnected(livekit::Room &,
-                                                     const livekit::ParticipantDisconnectedEvent &) {
-  // Fires on ANY remote participant leaving, not "the last one" — correct
-  // for this module's actual scope (one practitioner, one client, one
-  // remote participant ever expected), same 1:1 assumption already made by
-  // onTrackSubscribed()/RemoteVideoRenderer's single-track rendering.
-  QMetaObject::invokeMethod(
-      this,
-      [this]() {
-        if (!mRoom) {
-          return;
-        }
-        emit remoteParticipantDisconnected();
-      },
-      Qt::QueuedConnection);
-}
-
-void LiveKitVideoProvider::onDisconnected(livekit::Room &, const livekit::DisconnectedEvent &event) {
-  const auto reasonCode = static_cast<int>(event.reason);
-  QMetaObject::invokeMethod(
-      this,
-      [this, reasonCode]() {
-        // leave() clears the delegate before resetting mRoom, so a
-        // self-initiated disconnect from leave() itself should not reach
-        // this callback at all. This guard exists for the remaining race:
-        // the LiveKit-internal thread can read a still-non-null delegate_
-        // and start dispatching this event concurrently with leave()
-        // running on the GUI thread; by the time this queued lambda
-        // actually runs, mRoom may already be null.
-        if (!mRoom) {
-          return;
-        }
-        emit connectionLost(
-            QStringLiteral("Room disconnected (reason code %1).").arg(reasonCode));
-      },
-      Qt::QueuedConnection);
-}
-
-void LiveKitVideoProvider::onReconnecting(livekit::Room &, const livekit::ReconnectingEvent &) {
-  QMetaObject::invokeMethod(
-      this,
-      [this]() {
-        if (!mRoom) {
-          return;
-        }
-        emit reconnecting();
-      },
-      Qt::QueuedConnection);
-}
-
-void LiveKitVideoProvider::onReconnected(livekit::Room &, const livekit::ReconnectedEvent &) {
-  QMetaObject::invokeMethod(
-      this,
-      [this]() {
-        if (!mRoom) {
-          return;
-        }
-        emit reconnected();
-      },
-      Qt::QueuedConnection);
-}
 
 } // namespace pcm::video

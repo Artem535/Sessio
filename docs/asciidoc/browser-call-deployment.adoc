@@ -1,0 +1,29 @@
+= Browser guest deployment
+
+Build with Node 22+: `cd web/call-client && npm ci && npm run build`.
+Copy `dist/` into `/srv/sessio-call` on the authorized staging host.
+Render `deploy/nginx.conf.template` with an explicit variable allowlist (do not
+substitute nginx's `$uri`, `$host` and `$remote_addr`). Set CALL_HOST, TLS_CERT,
+TLS_KEY, TOKEN_UPSTREAM and LIVEKIT_WSS. Validate with `nginx -t` before reload.
+TLS certificates must be trusted by external guests; LiveKit must advertise WSS
+and a publicly reachable relay/UDP configuration.
+Native clients trust only `calls.sessio-pcm.ru` for HTTPS join links by default;
+set `SESSIO_CALL_HOST` to the approved deployment hostname when launching the app.
+The browser's Open in app action maps the same HTTPS origin to the native token
+backend; the proxy must expose the native `/v1/` API there as well.
+
+Configure both single and recurring invitation templates as
+`https://<CALL_HOST>/join#code={0}&passcode={1}`. The fragment is erased by the
+frontend after parsing. Never log full links, request bodies, names or JWTs.
+The provided proxy log uses a masked invitation path and omits query strings.
+Review upstream application and error logs under the same policy.
+
+Acceptance requires an external network: trusted HTTPS, working WSS and
+bidirectional audio/video among one native specialist, one browser guest and
+one native guest. Exercise permission denial, disabled devices, equal names,
+expired/revoked invitations, reconnect and repeated join. Record Windows
+Chrome/Edge/Firefox and Linux Chrome/Firefox versions; no Safari/mobile claim.
+Mocked browser tests establish the form/API contract only.
+
+No production installation has been performed. Keep the prior native invitation
+template for rollback; static frontend rollback does not alter stored schedules.

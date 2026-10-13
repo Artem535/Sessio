@@ -1,6 +1,8 @@
 #include "config.h"
+#include "controller/invitation_url.h"
 
 #include <cstdlib>
+#include <format>
 #include <stdexcept>
 
 namespace pcm::tokenbackend {
@@ -40,6 +42,13 @@ Config Config::fromEnv() {
   // error in any log. Failing at startup is the only way the operator finds
   // out at all.
   config.invitationBaseUrl = requireEnv("INVITATION_BASE_URL");
+  try {
+    static_cast<void>(formatInvitationUrl(config.invitationBaseUrl, "code", "passcode"));
+  } catch (const std::format_error &) {
+    throw std::runtime_error(
+        "invalid INVITATION_BASE_URL format template; use positional '{}' fields for code and "
+        "passcode");
+  }
 
   const char *ttlEnv = std::getenv("TOKEN_TTL_SECONDS");
   config.tokenTtlSeconds = ttlEnv ? std::atoi(ttlEnv) : 600;

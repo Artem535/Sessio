@@ -150,6 +150,68 @@ CREATE TABLE IF NOT EXISTS EventChangeLog (
     cancellation_reason TEXT,
     occurred_at TIMESTAMP NOT NULL
 );
+
+-- Local identity and delivery state of a recurring series published to the
+-- token backend. No foreign key: the identity must survive series edits that
+-- DuckDB would otherwise treat as key updates.
+CREATE TABLE IF NOT EXISTS ScheduleSeries (
+    series_id INTEGER PRIMARY KEY,
+    series_uid TEXT NOT NULL,
+    timezone TEXT NOT NULL,
+    invitation_generation BIGINT NOT NULL,
+    invitation_key TEXT,
+    desired_revision BIGINT NOT NULL,
+    acked_revision BIGINT NOT NULL,
+    acked_content_hash TEXT,
+    sync_state TEXT NOT NULL,
+    last_error TEXT,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
+
+-- One row per series: the latest queued snapshot and the immutable payload
+-- currently owned by a network request.
+CREATE TABLE IF NOT EXISTS ScheduleOutbox (
+    series_uid TEXT PRIMARY KEY,
+    pending_payload TEXT,
+    pending_desired_revision BIGINT,
+    inflight_revision BIGINT,
+    inflight_payload TEXT,
+    inflight_hash TEXT,
+    inflight_desired_revision BIGINT,
+    updated_at TIMESTAMP NOT NULL
+);
+
+-- Live call transcripts. status: recording | draft | reviewed. Phrase times are
+-- milliseconds from the start of the call (not timestamps).
+-- No foreign key on event_id: DuckDB treats updates of referenced rows as key updates
+-- (update_event would fail); Database::add_transcript checks the event exists.
+-- No foreign key on TranscriptPhrase.transcript_id either: DuckDB still counts rows deleted
+-- earlier in the same transaction as referencing, so the phrases-then-transcript cascade
+-- failed inside commit_schedule_change. Integrity is kept by add_transcript_phrase (checks
+-- the transcript), the explicit cascades, and purge_orphan_transcripts() at startup.
+CREATE TABLE IF NOT EXISTS Transcript (
+    id INTEGER PRIMARY KEY,
+    event_id INTEGER,
+    status TEXT NOT NULL,
+    consent_scope TEXT NOT NULL,
+    consent_given_at TIMESTAMP NOT NULL,
+    consent_revoked_at TIMESTAMP,
+    model_id TEXT,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS TranscriptPhrase (
+    id INTEGER PRIMARY KEY,
+    transcript_id INTEGER NOT NULL,
+    track_role TEXT NOT NULL,
+    speaker_name TEXT,
+    start_ms BIGINT NOT NULL,
+    end_ms BIGINT NOT NULL,
+    text TEXT NOT NULL,
+    edited BOOLEAN DEFAULT FALSE
+);
 )duckdb";
 
 constexpr auto kSchemaMigrations = R"duckdb(
@@ -213,6 +275,142 @@ ALTER TABLE EventSeriesException ADD COLUMN IF NOT EXISTS reason TEXT;
 ALTER TABLE ClientNote ADD COLUMN IF NOT EXISTS linked_event_id INTEGER;
 ALTER TABLE ClientNote ADD COLUMN IF NOT EXISTS linked_series_id INTEGER;
 ALTER TABLE ClientNote ADD COLUMN IF NOT EXISTS linked_occurrence_start TIMESTAMP;
+)duckdb";
+
+constexpr auto kSelectScheduleIdentityBySeriesQuery = R"duckdb(
+SELECT series_id, series_uid, timezone, invitation_generation, invitation_key,
+       desired_revision, acked_revision, acked_content_hash, sync_state, last_error
+FROM ScheduleSeries WHERE series_id = $1
+)duckdb";
+
+constexpr auto kSelectScheduleIdentityByUidQuery = R"duckdb(
+SELECT series_id, series_uid, timezone, invitation_generation, invitation_key,
+       desired_revision, acked_revision, acked_content_hash, sync_state, last_error
+FROM ScheduleSeries WHERE series_uid = $1
+)duckdb";
+
+constexpr auto kInsertScheduleIdentityQuery = R"duckdb(
+INSERT INTO ScheduleSeries (
+    series_id, series_uid, timezone, invitation_generation, invitation_key,
+    desired_revision, acked_revision, acked_content_hash, sync_state, last_error,
+    created_at, updated_at
+) VALUES ($1, $2, $3, 0, NULL, 0, 0, NULL, 'pending', NULL, $4, $4)
+)duckdb";
+
+// A new local edit always makes the series pending again, except while the
+// series is paused by a conflict: only an explicit publish resumes it.
+constexpr auto kBumpScheduleDesiredRevisionQuery = R"duckdb(
+UPDATE ScheduleSeries
+SET desired_revision = desired_revision + 1,
+    sync_state = CASE WHEN sync_state = 'conflict' THEN 'conflict' ELSE 'pending' END,
+    last_error = CASE WHEN sync_state = 'conflict' THEN last_error ELSE NULL END,
+    updated_at = $2
+WHERE series_id = $1
+)duckdb";
+
+constexpr auto kSelectScheduleOutboxQuery = R"duckdb(
+SELECT series_uid, pending_payload, pending_desired_revision, inflight_revision,
+       inflight_payload, inflight_hash, inflight_desired_revision
+FROM ScheduleOutbox WHERE series_uid = $1
+)duckdb";
+
+constexpr auto kInsertScheduleOutboxQuery = R"duckdb(
+INSERT INTO ScheduleOutbox (series_uid, pending_payload, pending_desired_revision, updated_at)
+VALUES ($1, $2, $3, $4)
+)duckdb";
+
+constexpr auto kUpdateScheduleOutboxPendingQuery = R"duckdb(
+UPDATE ScheduleOutbox
+SET pending_payload = $2, pending_desired_revision = $3, updated_at = $4
+WHERE series_uid = $1
+)duckdb";
+
+constexpr auto kFreezeScheduleOutboxQuery = R"duckdb(
+UPDATE ScheduleOutbox
+SET inflight_revision = $3, inflight_payload = $4, inflight_hash = $5,
+    inflight_desired_revision = pending_desired_revision,
+    pending_payload = NULL, pending_desired_revision = NULL, updated_at = $6
+WHERE series_uid = $1
+  AND inflight_payload IS NULL
+  AND pending_payload IS NOT NULL
+  AND pending_desired_revision = $2
+)duckdb";
+
+constexpr auto kClearScheduleInflightQuery = R"duckdb(
+UPDATE ScheduleOutbox
+SET inflight_revision = NULL, inflight_payload = NULL, inflight_hash = NULL,
+    inflight_desired_revision = NULL, updated_at = $2
+WHERE series_uid = $1
+)duckdb";
+
+// The server refused the in-flight snapshot without storing it: put it back in
+// the pending slot unless a newer local snapshot already replaced it.
+constexpr auto kReleaseScheduleInflightQuery = R"duckdb(
+UPDATE ScheduleOutbox
+SET pending_desired_revision = CASE WHEN pending_payload IS NULL
+        THEN inflight_desired_revision ELSE pending_desired_revision END,
+    pending_payload = COALESCE(pending_payload, $2),
+    inflight_revision = NULL, inflight_payload = NULL, inflight_hash = NULL,
+    inflight_desired_revision = NULL, updated_at = $3
+WHERE series_uid = $1 AND inflight_payload IS NOT NULL
+)duckdb";
+
+constexpr auto kClearScheduleOutboxQuery = R"duckdb(
+UPDATE ScheduleOutbox
+SET pending_payload = NULL, pending_desired_revision = NULL,
+    inflight_revision = NULL, inflight_payload = NULL, inflight_hash = NULL,
+    inflight_desired_revision = NULL, updated_at = $2
+WHERE series_uid = $1
+)duckdb";
+
+constexpr auto kAckScheduleIdentityQuery = R"duckdb(
+UPDATE ScheduleSeries
+SET acked_revision = $2, acked_content_hash = $3, sync_state = $4,
+    last_error = NULL, updated_at = $5
+WHERE series_uid = $1
+)duckdb";
+
+constexpr auto kSetScheduleSyncStateQuery = R"duckdb(
+UPDATE ScheduleSeries
+SET sync_state = $2, last_error = $3, updated_at = $4
+WHERE series_uid = $1
+)duckdb";
+
+constexpr auto kAdoptScheduleServerRevisionQuery = R"duckdb(
+UPDATE ScheduleSeries
+SET acked_revision = $2, acked_content_hash = $3, sync_state = 'pending',
+    last_error = NULL, updated_at = $4
+WHERE series_uid = $1
+)duckdb";
+
+constexpr auto kSelectScheduleSeriesPendingSyncQuery = R"duckdb(
+SELECT s.series_id, s.series_uid, s.timezone, s.invitation_generation, s.invitation_key,
+       s.desired_revision, s.acked_revision, s.acked_content_hash, s.sync_state, s.last_error
+FROM ScheduleSeries s
+JOIN ScheduleOutbox o ON o.series_uid = s.series_uid
+WHERE o.pending_payload IS NOT NULL OR o.inflight_payload IS NOT NULL
+ORDER BY s.series_id
+)duckdb";
+
+constexpr auto kSetScheduleInvitationKeyQuery = R"duckdb(
+UPDATE ScheduleSeries SET invitation_key = $2, updated_at = $3 WHERE series_id = $1
+)duckdb";
+
+constexpr auto kSetScheduleInvitationGenerationQuery = R"duckdb(
+UPDATE ScheduleSeries SET invitation_generation = $2, updated_at = $3 WHERE series_id = $1
+)duckdb";
+
+constexpr auto kSelectScheduleOverridesQuery = R"duckdb(
+SELECT original_occurrence_start, start_date, end_date, event_stat_id
+FROM Event
+WHERE series_id = $1 AND original_occurrence_start IS NOT NULL
+  AND start_date IS NOT NULL AND end_date IS NOT NULL
+ORDER BY original_occurrence_start
+)duckdb";
+
+constexpr auto kSelectScheduleExceptionsQuery = R"duckdb(
+SELECT occurrence_start FROM EventSeriesException
+WHERE series_id = $1 ORDER BY occurrence_start
 )duckdb";
 
 constexpr auto kInsertEventQuery = R"duckdb(
@@ -327,11 +525,43 @@ SET name = $1,
 WHERE id = $23
 )duckdb";
 
+// Every legacy single-meeting reference of a LiveKit series: the series row's
+// and those copied onto (or created for) its materialized occurrences.
+constexpr auto kSelectSeriesLegacyMeetingRefsQuery = R"duckdb(
+SELECT meeting_ref FROM EventSeries
+WHERE id = $1 AND provider_kind = 'LiveKit' AND meeting_ref IS NOT NULL AND TRIM(meeting_ref) <> ''
+UNION
+SELECT meeting_ref FROM Event
+WHERE series_id = $1 AND provider_kind = 'LiveKit' AND meeting_ref IS NOT NULL AND TRIM(meeting_ref) <> ''
+)duckdb";
+
+constexpr auto kClearSeriesLegacyMeetingQuery = R"duckdb(
+UPDATE EventSeries
+SET meeting_ref = NULL, invitation_state = NULL, meeting_url = '', updated_at = $2
+WHERE id = $1 AND provider_kind = 'LiveKit'
+)duckdb";
+
+constexpr auto kClearSeriesEventsLegacyMeetingQuery = R"duckdb(
+UPDATE Event
+SET meeting_ref = NULL, invitation_state = NULL, meeting_url = ''
+WHERE series_id = $1 AND provider_kind = 'LiveKit'
+)duckdb";
+
 constexpr auto kDeactivateEventSeriesQuery = R"duckdb(
 UPDATE EventSeries
 SET active = FALSE,
     updated_at = $2
 WHERE id = $1
+)duckdb";
+
+constexpr auto kDetachTranscriptsOfEventQuery =
+    "UPDATE Transcript SET event_id = NULL WHERE event_id = $1";
+
+constexpr auto kDetachTranscriptsOfSeriesOverridesQuery = R"duckdb(
+UPDATE Transcript SET event_id = NULL
+WHERE event_id IN (
+    SELECT id FROM Event
+    WHERE series_id = $1 AND original_occurrence_start >= $2)
 )duckdb";
 
 constexpr auto kDeleteEventSeriesOverridesFromQuery = R"duckdb(
@@ -461,6 +691,105 @@ INSERT INTO EventClient (id, client_id, event_id)
 SELECT COALESCE(MAX(id), 0) + 1, $1, $2
 FROM EventClient
 RETURNING id
+)duckdb";
+
+constexpr auto kInsertTranscriptQuery = R"duckdb(
+INSERT INTO Transcript (
+    id, event_id, status, consent_scope, consent_given_at, model_id,
+    created_at, updated_at
+)
+SELECT COALESCE(MAX(id), 0) + 1, $1, 'recording', $2, $3, $4, $5, $6
+FROM Transcript
+RETURNING id
+)duckdb";
+
+constexpr auto kSelectTranscriptByIdQuery = R"duckdb(
+SELECT id, event_id, status, consent_scope, consent_given_at,
+       consent_revoked_at, model_id, created_at, updated_at
+FROM Transcript WHERE id = $1
+)duckdb";
+
+constexpr auto kSelectTranscriptsByEventQuery = R"duckdb(
+SELECT id, event_id, status, consent_scope, consent_given_at,
+       consent_revoked_at, model_id, created_at, updated_at
+FROM Transcript WHERE event_id = $1 ORDER BY id
+)duckdb";
+
+constexpr auto kEventExistsQuery = "SELECT 1 FROM Event WHERE id = $1";
+constexpr auto kTranscriptExistsQuery = "SELECT 1 FROM Transcript WHERE id = $1";
+
+constexpr auto kUpdateTranscriptStatusQuery =
+    "UPDATE Transcript SET status = $1, updated_at = $2 WHERE id = $3";
+
+constexpr auto kRevokeTranscriptConsentQuery =
+    "UPDATE Transcript SET consent_revoked_at = $1, updated_at = $2 WHERE id = $3";
+
+constexpr auto kFinalizeInterruptedTranscriptsQuery = R"duckdb(
+UPDATE Transcript SET status = 'draft', updated_at = $1
+WHERE status = 'recording'
+RETURNING id
+)duckdb";
+
+constexpr auto kDeleteTranscriptByIdQuery = "DELETE FROM Transcript WHERE id = $1";
+constexpr auto kDeleteAllTranscriptsQuery = "DELETE FROM Transcript";
+
+constexpr auto kInsertTranscriptPhraseQuery = R"duckdb(
+INSERT INTO TranscriptPhrase (
+    id, transcript_id, track_role, speaker_name, start_ms, end_ms, text, edited
+)
+SELECT COALESCE(MAX(id), 0) + 1, $1, $2, $3, $4, $5, $6, FALSE
+FROM TranscriptPhrase
+RETURNING id
+)duckdb";
+
+constexpr auto kSelectTranscriptPhrasesQuery = R"duckdb(
+SELECT id, transcript_id, track_role, speaker_name, start_ms, end_ms, text, edited
+FROM TranscriptPhrase WHERE transcript_id = $1 ORDER BY start_ms, id
+)duckdb";
+
+constexpr auto kSelectTranscriptIdOfPhraseQuery =
+    "SELECT transcript_id FROM TranscriptPhrase WHERE id = $1";
+
+constexpr auto kUpdateTranscriptPhraseTextQuery =
+    "UPDATE TranscriptPhrase SET text = $1, edited = TRUE WHERE id = $2";
+
+constexpr auto kTouchTranscriptQuery =
+    "UPDATE Transcript SET updated_at = $1 WHERE id = $2";
+
+constexpr auto kDeleteTranscriptPhraseByIdQuery =
+    "DELETE FROM TranscriptPhrase WHERE id = $1";
+constexpr auto kDeletePhrasesByTranscriptIdQuery =
+    "DELETE FROM TranscriptPhrase WHERE transcript_id = $1";
+constexpr auto kDeleteAllTranscriptPhrasesQuery = "DELETE FROM TranscriptPhrase";
+
+constexpr auto kPurgeOrphanTranscriptPhrasesQuery = R"duckdb(
+DELETE FROM TranscriptPhrase
+WHERE transcript_id NOT IN (SELECT id FROM Transcript)
+)duckdb";
+constexpr auto kPurgeOrphanTranscriptsQuery = R"duckdb(
+UPDATE Transcript SET event_id = NULL WHERE event_id NOT IN (SELECT id FROM Event) RETURNING id
+)duckdb";
+
+constexpr auto kSelectTranscriptWriteStateQuery =
+    "SELECT status, consent_revoked_at IS NOT NULL FROM Transcript WHERE id = $1";
+
+constexpr auto kSelectTranscriptsByClientQuery = R"duckdb(
+SELECT t.id, t.event_id, t.status, t.consent_scope, t.consent_given_at,
+       t.consent_revoked_at, t.model_id, t.created_at, t.updated_at
+FROM Transcript t
+JOIN TranscriptClient ec ON ec.transcript_id = t.id
+JOIN Client c ON c.id = ec.client_id
+WHERE ec.client_id = $1
+ORDER BY t.created_at, t.id
+)duckdb";
+
+constexpr auto kCountTranscriptsQuery = "SELECT COUNT(*) FROM Transcript";
+constexpr auto kCountTranscriptPhrasesQuery =
+    "SELECT COUNT(*) FROM TranscriptPhrase WHERE transcript_id = $1";
+
+constexpr auto kRenameTranscriptSpeakerQuery = R"duckdb(
+UPDATE TranscriptPhrase SET speaker_name = $1
+WHERE transcript_id = $2 AND track_role = $3
 )duckdb";
 
 constexpr auto kInsertClientNoteQuery = R"duckdb(
