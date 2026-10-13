@@ -40,6 +40,7 @@ public:
   // While any screen is shared, the featured one fills the stage and every other tile
   // (screens and cameras) sits in a strip underneath. Empty or unknown: the first screen.
   void setFeaturedScreen(const QString &key);
+  void setParticipantsLarge(bool enabled) { mParticipantsLarge = enabled; layoutChildren(); }
   void refreshLayout() { layoutChildren(); }
 
 protected:
@@ -56,6 +57,7 @@ private:
   QPointer<QWidget> mWaitingBanner;
   QPointer<QWidget> mSharingBanner;
   QString mFeaturedScreen;
+  bool mParticipantsLarge{false};
 };
 
 } // namespace pcm::video::detail
@@ -166,6 +168,7 @@ private:
   QToolButton *mMicrophoneToggleButton{nullptr};
   QToolButton *mCameraToggleButton{nullptr};
   QToolButton *mFullscreenToggleButton{nullptr};
+  QToolButton *mParticipantsLayoutButton{nullptr};
   QToolButton *mDevicesButton{nullptr};
   QToolButton *mScreenShareButton{nullptr};
   QWidget *mSharingBanner{nullptr};

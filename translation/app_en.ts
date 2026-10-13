@@ -196,6 +196,14 @@
         <translation>Turn on camera</translation>
     </message>
     <message>
+        <source>Large participants</source>
+        <translation>Large participants</translation>
+    </message>
+    <message>
+        <source>Standard layout</source>
+        <translation>Standard layout</translation>
+    </message>
+    <message>
         <source>Enter fullscreen</source>
         <translation>Enter fullscreen</translation>
     </message>

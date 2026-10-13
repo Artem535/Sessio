@@ -139,19 +139,50 @@ void VideoStage::layoutChildren() {
   const int top = mNotesToggleWidget && !mNotesToggleWidget->isHidden() ? 64 : 12;
   ParticipantTile *local = nullptr;
   for (auto *tile : mTiles)
-    if (tile->isLocal())
+    if (tile->isLocal() && !tile->isScreen())
       local = tile;
   const bool solo = mTiles.size() == 1 || (mTiles.size() == 2 && local);
   // Waiting alone (just your own tile) is inset like the group grid, so its rounded corners show;
   // in a 1:1 call the main tile still fills the stage.
-  const bool fullBleed = solo && mTiles.size() == 2;
+  const bool fullBleed = !mParticipantsLarge && solo && mTiles.size() == 2;
   const QRect available = fullBleed ? rect() :
       QRect(12, top, std::max(0, width() - 24), std::max(0, height() - top - kBottomReserved));
   ParticipantTile *featured = nullptr;
   for (auto *tile : mTiles)
     if (tile->isScreen() && (!featured || tile->key() == mFeaturedScreen))
       featured = tile;
-  if (featured && !fullBleed) {
+  if (mParticipantsLarge) {
+    QVector<ParticipantTile *> remotes;
+    for (auto *tile : mTiles) {
+      if (tile->isScreen()) tile->hide();
+      else if (!tile->isLocal()) remotes.append(tile);
+    }
+    mTileHost->setGeometry(available);
+    const int sideWidth = local ? std::min(available.width() / 3, std::clamp(available.width() / 5, 120, 240)) : 0;
+    const int mainWidth = std::max(0, available.width() - sideWidth - (local ? 8 : 0));
+    const auto strategy = CallLayoutStrategy::select(remotes.size(), false, QSize(mainWidth, available.height()));
+    const int gridHeight = strategy.rows * strategy.tileSize.height() + std::max(0, strategy.rows - 1) * 8;
+    for (int i = 0; i < remotes.size() && strategy.columns > 0; ++i) {
+      auto *tile = remotes[i];
+      const int row = i / strategy.columns;
+      const int count = std::min(strategy.columns, int(remotes.size()) - row * strategy.columns);
+      const int rowWidth = count * strategy.tileSize.width() + (count - 1) * 8;
+      tile->setParent(mTileHost);
+      const QSize size = remotes.size() == 1 ? QSize(mainWidth, available.height()) : strategy.tileSize;
+      tile->setFixedSize(size);
+      tile->setCornerRadius(12);
+      tile->move(remotes.size() == 1 ? 0 : (mainWidth - rowWidth) / 2 + (i % strategy.columns) * (size.width() + 8),
+                 remotes.size() == 1 ? 0 : (available.height() - gridHeight) / 2 + row * (size.height() + 8));
+      tile->show();
+    }
+    if (local) {
+      local->setParent(mTileHost);
+      local->setFixedSize(sideWidth, std::min(available.height(), sideWidth * 9 / 16));
+      local->setCornerRadius(12);
+      local->move(mainWidth + 8, 0);
+      local->show();
+    }
+  } else if (featured && !fullBleed) {
     constexpr int kGap = 8;
     constexpr int kTileCornerRadius = 12;
     QVector<ParticipantTile *> strip;
@@ -479,6 +510,18 @@ void CallPage::buildConnectedScreen() {
   });
 
   mFullscreenToggleButton = new QToolButton(mConnectedView);
+  mParticipantsLayoutButton = new QToolButton(mConnectedView);
+  mParticipantsLayoutButton->setObjectName("participantsLayoutButton");
+  mParticipantsLayoutButton->setCheckable(true);
+  mParticipantsLayoutButton->setIcon(pcm::widgets::participantsLayoutIcon());
+  mParticipantsLayoutButton->setToolTip(tr("Large participants"));
+  mParticipantsLayoutButton->setAccessibleName(tr("Large participants"));
+  connect(mParticipantsLayoutButton, &QToolButton::toggled, this, [this](bool checked) {
+    const QString label = checked ? tr("Standard layout") : tr("Large participants");
+    mParticipantsLayoutButton->setToolTip(label);
+    mParticipantsLayoutButton->setAccessibleName(label);
+    mVideoStage->setParticipantsLarge(checked);
+  });
   mFullscreenToggleButton->setObjectName("fullscreenToggleButton");
   mFullscreenToggleButton->setCheckable(true);
   mFullscreenToggleButton->setIcon(pcm::widgets::fullscreenIcon(false));
@@ -568,7 +611,7 @@ void CallPage::buildConnectedScreen() {
   auto *controlBarLayout = new QHBoxLayout(mControlBar);
   controlBarLayout->setContentsMargins(12, 4, 12, 4);
   controlBarLayout->setSpacing(8);
-  for (auto *button : {mMicrophoneToggleButton, mCameraToggleButton, mScreenShareButton, mDevicesButton, mFullscreenToggleButton}) {
+  for (auto *button : {mMicrophoneToggleButton, mCameraToggleButton, mScreenShareButton, mDevicesButton, mParticipantsLayoutButton, mFullscreenToggleButton}) {
     button->setFixedSize(40, 40);
     button->setIconSize(QSize(20, 20));
   }
@@ -576,6 +619,7 @@ void CallPage::buildConnectedScreen() {
   controlBarLayout->addWidget(mCameraToggleButton);
   controlBarLayout->addWidget(mScreenShareButton);
   controlBarLayout->addWidget(mDevicesButton);
+  controlBarLayout->addWidget(mParticipantsLayoutButton);
   controlBarLayout->addWidget(mFullscreenToggleButton);
   controlBarLayout->addWidget(leaveButton);
   mVideoStage->setControlBarWidget(mControlBar);

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.31] - 2026-10-13
+
+### Added
+
+- Native calls offer a large participants layout with remote cameras in the
+  main area and your own video in a small tile on the right. Switch back to
+  the standard layout to view shared screens; fullscreen remains available.
+
 ## [0.2.29] - 2026-10-09
 
 ### Fixed

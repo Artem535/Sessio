@@ -196,6 +196,14 @@
         <translation>Включить камеру</translation>
     </message>
     <message>
+        <source>Large participants</source>
+        <translation>Участники крупно</translation>
+    </message>
+    <message>
+        <source>Standard layout</source>
+        <translation>Обычная раскладка</translation>
+    </message>
+    <message>
         <source>Enter fullscreen</source>
         <translation>Развернуть на весь экран</translation>
     </message>

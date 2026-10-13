@@ -138,6 +138,55 @@ TEST(CallPageTest, TwoRemotesAndLocalHaveEqualTilesAndCenteredLastRow) {
   EXPECT_GT(second->y(), first->y());
 }
 
+TEST(CallPageTest, LargeParticipantsToggleSeparatesSelfAndRestoresSharedScreen) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  provider->simulateParticipantJoined({"local", "Me", "client", true});
+  provider->simulateParticipantJoined({"first", "First"});
+  provider->simulateParticipantJoined({"second", "Second"});
+  provider->simulateScreenSharing("first", true);
+  auto *toggle = page.findChild<QToolButton *>("participantsLayoutButton");
+  ASSERT_NE(toggle, nullptr);
+  EXPECT_TRUE(toggle->isCheckable());
+  auto *stage = page.findChild<QWidget *>("videoStage");
+  auto *local = page.findChild<QWidget *>("participantTile_local");
+  auto *first = page.findChild<QWidget *>("participantTile_first");
+  auto *screen = page.findChild<QWidget *>("participantScreenTile_first");
+  ASSERT_NE(screen, nullptr);
+  toggle->setChecked(true);
+  for (const QSize size : {QSize(1280, 720), QSize(480, 720)}) {
+    resizeAndDeliverEvent(stage, size);
+    const QRect localRect(local->mapTo(stage, QPoint()), local->size());
+    const QRect remoteRect(first->mapTo(stage, QPoint()), first->size());
+    EXPECT_GT(localRect.left(), remoteRect.right());
+    EXPECT_TRUE(stage->rect().contains(localRect));
+    EXPECT_FALSE(screen->isVisibleTo(stage));
+  }
+  provider->simulateParticipantLeft("second");
+  EXPECT_EQ(page.findChild<QWidget *>("participantTile_first"), first);
+  if (qEnvironmentVariableIsSet("SESSIO_LAYOUT_SCREENSHOT")) {
+    auto *parent = stage->parentWidget();
+    stage->setParent(nullptr);
+    resizeAndDeliverEvent(stage, QSize(1280, 800));
+    stage->show();
+    QApplication::processEvents();
+    EXPECT_TRUE(stage->grab().save(qEnvironmentVariable("SESSIO_LAYOUT_SCREENSHOT")));
+    stage->hide();
+    stage->setParent(parent);
+  }
+  provider->simulateParticipantLeft("first");
+  EXPECT_TRUE(local->isVisibleTo(stage));
+  toggle->setChecked(false);
+  provider->simulateParticipantJoined({"first", "First"});
+  provider->simulateScreenSharing("first", true);
+  screen = page.findChild<QWidget *>("participantScreenTile_first");
+  ASSERT_NE(screen, nullptr);
+  EXPECT_TRUE(screen->isVisibleTo(stage));
+}
+
 TEST(CallPageTest, OneRemoteAndLocalUsePipAboveControlBar) {
   pcm::video::detail::VideoStage stage;
   auto *local = new pcm::video::ParticipantTile({"local", "Me", "", true}, &stage);
