@@ -16,4 +16,5 @@ set_target_properties(${TARGET_NAME} PROPERTIES AUTOMOC ON)
 target_include_directories(${TARGET_NAME} PRIVATE ${qlementine_SOURCE_DIR}/lib/include)
 target_include_directories(${TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Widgets qlementine
-    ${PROJECT_NAME}_database ${PROJECT_NAME}_widgets ${PROJECT_NAME}_call_transcription)
+    ${PROJECT_NAME}_database ${PROJECT_NAME}_widgets ${PROJECT_NAME}_call_transcription
+    ${PROJECT_NAME}_call_prompter_engine)

@@ -746,7 +746,7 @@ void SettingsDialog::setupTranscriptionSection() {
   mTranscriptionPanel = panel;
   panel->setEnabledState(pcm::app_settings::transcriptionEnabled());
   panel->setAutoStartState(pcm::app_settings::transcriptionAutoStart(), pcm::app_settings::prompterAutoStart());
-  panel->setPrompterRuntime(pcm::app_settings::prompterPython(), pcm::app_settings::prompterModel(), pcm::app_settings::prompterTemplate());
+  panel->setPrompterModel(pcm::app_settings::prompterModel());
   panel->setTuning(pcm::app_settings::transcriptionTuning());
   panel->setModelInfo(QStringLiteral("gigaam-v3-rnnt"),
       pcm::calltranscription::transcriptionModelsAvailable(
@@ -759,7 +759,7 @@ void SettingsDialog::setupTranscriptionSection() {
           &pcm::app_settings::setTranscriptionEnabled);
   connect(panel, &TranscriptionSettingsPanel::autoStartToggled, this, &pcm::app_settings::setTranscriptionAutoStart);
   connect(panel, &TranscriptionSettingsPanel::prompterAutoStartToggled, this, &pcm::app_settings::setPrompterAutoStart);
-  connect(panel, &TranscriptionSettingsPanel::prompterRuntimeChanged, this, &pcm::app_settings::setPrompterRuntime);
+  connect(panel, &TranscriptionSettingsPanel::prompterModelChanged, this, &pcm::app_settings::setPrompterModel);
   connect(panel, &TranscriptionSettingsPanel::tuningChanged, this,
           &pcm::app_settings::setTranscriptionTuning);
   connect(panel, &TranscriptionSettingsPanel::deleteAllRequested, this, [this, panel] {

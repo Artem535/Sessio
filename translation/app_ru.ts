@@ -3088,20 +3088,12 @@ They appear here after a call with transcription turned on.</source>
         <translation>Выберите локальный файл</translation>
     </message>
     <message>
-        <source>Python with LiteRT-LM installed</source>
-        <translation>Python с установленным LiteRT-LM</translation>
-    </message>
-    <message>
         <source>Gemma model (.litertlm)</source>
         <translation>Модель Gemma (.litertlm)</translation>
     </message>
     <message>
-        <source>Gemma chat template (.jinja)</source>
-        <translation>Шаблон диалога Gemma (.jinja)</translation>
-    </message>
-    <message>
-        <source>Choose an installed local runtime and model. Nothing is downloaded automatically. Prompter suggestions require your review.</source>
-        <translation>Выберите установленный локальный runtime и модель. Файлы не скачиваются автоматически. Проверяйте предложения суфлёра.</translation>
+        <source>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</source>
+        <translation>Выберите скачанную модель Gemma. Модель работает на этом компьютере, ничего не скачивается автоматически. Подсказки суфлёра требуют вашей проверки.</translation>
     </message>
     <message>
         <source>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</source>

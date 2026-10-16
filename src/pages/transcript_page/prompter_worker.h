@@ -1,31 +1,41 @@
 #pragma once
 #include <QJsonObject>
 #include <QObject>
-#include <QProcess>
+#include <QThread>
 #include <QTimer>
-#include <QStringList>
+#include <memory>
 
+#include "prompter_engine.h"
+
+// Runs the local prompter model inside Sessio on a dedicated thread, never on
+// the GUI thread. One request is processed at a time; stop() cancels it,
+// discards its result and releases the model memory.
 class PrompterWorker final : public QObject {
   Q_OBJECT
 public:
   explicit PrompterWorker(QObject *parent = nullptr);
+  explicit PrompterWorker(pcm::prompter::PrompterEngineFactory factory, QObject *parent = nullptr);
   ~PrompterWorker() override;
-  bool start(const QString &python, const QString &script, const QString &model, const QString &promptTemplate);
+  bool start(const QString &model);
   void stop();
   void send(const QJsonObject &request);
-  void consumeOutput(const QByteArray &bytes);
-  static QString bundledScript();
+  // The Gemma model shipped next to the application, or empty.
+  static QString bundledModel();
 signals:
   void ready();
   void resultReady(QJsonObject result);
   void failed();
 private:
+  struct Shared;
   void fail();
-  QProcess mProcess;
+  void finish(int generation, const QJsonObject &result);
+  pcm::prompter::PrompterEngineFactory mFactory;
+  std::shared_ptr<Shared> mShared;
+  QThread mThread;
+  QObject *mThreadContext = nullptr;
   QTimer mTimeout;
-  QByteArray mBuffer;
   QJsonObject mPending;
-  QStringList mRestart;
   QJsonObject mExpected;
+  int mGeneration = 0;
   bool mReady = false, mStopped = true;
 };

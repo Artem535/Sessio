@@ -16,7 +16,10 @@ All notable changes to this project will be documented in this file.
   of changes or cancellations. Accepted agreements can be added to client notes.
 - Transcript-owned prompter drafts and accepted agreements survive reopening and
   backups; saved client notes remain when their source transcript is deleted.
-  Runtime and model files are configured locally; no automatic model download.
+- The prompter model runs inside Sessio on its own thread through the LiteRT-LM
+  C++ API; no Python or external worker. Only the Gemma model file is chosen in
+  Settings, and nothing is downloaded automatically. The runtime library is
+  built once with `scripts/build-litert-lm.sh`.
 
 ## [0.2.31] - 2026-10-13
 

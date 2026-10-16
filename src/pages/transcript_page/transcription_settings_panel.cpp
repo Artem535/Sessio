@@ -36,28 +36,19 @@ TranscriptionSettingsPanel::TranscriptionSettingsPanel(QWidget *parent) : QWidge
   });
   auto *runtime = new QGroupBox(tr("Local prompter (experimental)"), this);
   auto *runtimeForm = new QFormLayout(runtime);
-  auto runtimeChanged = [this] {
-    emit prompterRuntimeChanged(mPython->text(), mPrompterModel->text(), mPrompterTemplate->text());
-  };
-  auto field = [this, runtime, runtimeForm, runtimeChanged](const QString &title, const char *name) {
-    auto *row = new QWidget(runtime);
-    auto *rowLayout = new QHBoxLayout(row);
-    rowLayout->setContentsMargins(0, 0, 0, 0);
-    auto *edit = new QLineEdit(row); edit->setObjectName(name);
-    auto *browse = new QPushButton(tr("Browse…"), row);
-    rowLayout->addWidget(edit, 1); rowLayout->addWidget(browse);
-    runtimeForm->addRow(title, row);
-    connect(edit, &QLineEdit::editingFinished, this, runtimeChanged);
-    connect(browse, &QPushButton::clicked, this, [this, edit, runtimeChanged] {
-      const auto path = QFileDialog::getOpenFileName(this, tr("Select a local file"), edit->text());
-      if (!path.isEmpty()) { edit->setText(path); runtimeChanged(); }
-    });
-    return edit;
-  };
-  mPython = field(tr("Python with LiteRT-LM installed"), "prompterPython");
-  mPrompterModel = field(tr("Gemma model (.litertlm)"), "prompterModel");
-  mPrompterTemplate = field(tr("Gemma chat template (.jinja)"), "prompterTemplate");
-  auto *runtimeNote = new QLabel(tr("Choose an installed local runtime and model. Nothing is downloaded automatically. Prompter suggestions require your review."), runtime);
+  auto *row = new QWidget(runtime);
+  auto *rowLayout = new QHBoxLayout(row);
+  rowLayout->setContentsMargins(0, 0, 0, 0);
+  mPrompterModel = new QLineEdit(row); mPrompterModel->setObjectName("prompterModel");
+  auto *browse = new QPushButton(tr("Browse…"), row);
+  rowLayout->addWidget(mPrompterModel, 1); rowLayout->addWidget(browse);
+  runtimeForm->addRow(tr("Gemma model (.litertlm)"), row);
+  connect(mPrompterModel, &QLineEdit::editingFinished, this, [this] { emit prompterModelChanged(mPrompterModel->text()); });
+  connect(browse, &QPushButton::clicked, this, [this] {
+    const auto path = QFileDialog::getOpenFileName(this, tr("Select a local file"), mPrompterModel->text());
+    if (!path.isEmpty()) { mPrompterModel->setText(path); emit prompterModelChanged(path); }
+  });
+  auto *runtimeNote = new QLabel(tr("Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review."), runtime);
   runtimeNote->setWordWrap(true);
   runtimeForm->addRow(runtimeNote);
   layout->addWidget(runtime);
@@ -158,9 +149,7 @@ void TranscriptionSettingsPanel::setAutoStartState(bool transcription, bool prom
   mAutoStart->setChecked(transcription);
   mPrompterAutoStart->setChecked(prompter && transcription);
 }
-void TranscriptionSettingsPanel::setPrompterRuntime(const QString &python, const QString &model, const QString &promptTemplate) {
-  mPython->setText(python); mPrompterModel->setText(model); mPrompterTemplate->setText(promptTemplate);
-}
+void TranscriptionSettingsPanel::setPrompterModel(const QString &model) { mPrompterModel->setText(model); }
 void TranscriptionSettingsPanel::setModelInfo(const QString &id, bool installed) {
   mModel->setText(tr("Model: %1 — %2").arg(id, installed ? tr("installed") : tr("not installed")));
 }

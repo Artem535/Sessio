@@ -1144,8 +1144,8 @@ void Application::connectSignals() {
     connect(worker, &PrompterWorker::resultReady, prompter, &CallPrompterController::handleResult);
     connect(worker, &PrompterWorker::failed, prompter, &CallPrompterController::workerFailed);
     auto startPrompter = [worker, prompter] {
-      if (worker->start(pcm::app_settings::prompterPython(), PrompterWorker::bundledScript(),
-                        pcm::app_settings::prompterModel(), pcm::app_settings::prompterTemplate()))
+      const auto configured = pcm::app_settings::prompterModel();
+      if (worker->start(configured.isEmpty() ? PrompterWorker::bundledModel() : configured))
         prompter->resume();
     };
     connect(prompterPanel, &PrompterPanel::pauseRequested, prompter, [worker, prompter] {
