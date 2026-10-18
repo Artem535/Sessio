@@ -28,4 +28,7 @@ endif()
 set_target_properties(sessio::litert_lm PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/src/call_prompter/litert")
 set(SESSIO_LITERTLM_FOUND ON)
+if(UNIX AND NOT APPLE)
+  file(GLOB SESSIO_LITERT_EXTRA_LIBS "${SESSIO_LITERT_DIR}/lib/libkissfft*.so*")
+endif()
 message(STATUS "Call prompter runtime: ${SESSIO_LITERT_LIBRARY}")

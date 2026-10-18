@@ -1,41 +1,51 @@
 #include "prompter_worker.h"
 #include <QApplication>
+#include <QElapsedTimer>
+#include <QEvent>
 #include <QFile>
 #include <QJsonArray>
 #include <QSignalSpy>
+#include <QPointer>
+#include <QSemaphore>
 #include <QTest>
 #include <QTemporaryDir>
 #include <QThread>
 #include <atomic>
+#include <thread>
 #include <gtest/gtest.h>
 
 namespace {
 
 struct Probe {
   std::atomic_int loads = 0, alive = 0, cancels = 0;
+  std::atomic_int destroyed = 0;
   std::atomic_bool block = false;
-  QThread *loadThread = nullptr;
+  std::atomic<QThread *> loadThread = nullptr, destroyThread = nullptr;
 };
 
 class FakeEngine final : public pcm::prompter::PrompterEngine {
 public:
-  explicit FakeEngine(Probe &probe) : mProbe(probe) { ++mProbe.alive; }
-  ~FakeEngine() override { --mProbe.alive; }
+  explicit FakeEngine(std::shared_ptr<Probe> probe) : mProbe(std::move(probe)) { ++mProbe->alive; }
+  ~FakeEngine() override {
+    mProbe->destroyThread = QThread::currentThread();
+    --mProbe->alive;
+    ++mProbe->destroyed;
+  }
   QJsonValue generate(const QString &, const QByteArray &) override {
-    while (mProbe.block && !mCancelled) QThread::msleep(5);
+    while (mProbe->block && !mCancelled) QThread::msleep(5);
     if (mCancelled) throw std::runtime_error("cancelled");
     return QJsonObject{{"events", QJsonArray{}}};
   }
-  void cancel() override { ++mProbe.cancels; mCancelled = true; }
+  void cancel() override { ++mProbe->cancels; mCancelled = true; }
 private:
-  Probe &mProbe;
+  std::shared_ptr<Probe> mProbe;
   std::atomic_bool mCancelled = false;
 };
 
-pcm::prompter::PrompterEngineFactory factory(Probe &probe) {
-  return [&probe](const QString &model) -> std::unique_ptr<pcm::prompter::PrompterEngine> {
-    ++probe.loads;
-    probe.loadThread = QThread::currentThread();
+pcm::prompter::PrompterEngineFactory factory(const std::shared_ptr<Probe> &probe) {
+  return [probe](const QString &model) -> std::unique_ptr<pcm::prompter::PrompterEngine> {
+    ++probe->loads;
+    probe->loadThread = QThread::currentThread();
     if (model.endsWith("broken")) return nullptr;
     return std::make_unique<FakeEngine>(probe);
   };
@@ -56,7 +66,7 @@ protected:
   }
   QTemporaryDir dir;
   QString model;
-  Probe probe;
+  std::shared_ptr<Probe> probe = std::make_shared<Probe>();
 };
 
 } // namespace
@@ -66,7 +76,7 @@ TEST_F(PrompterWorkerTest, MissingModelFailsWithoutLoading) {
   QSignalSpy failed(&worker, &PrompterWorker::failed);
   EXPECT_FALSE(worker.start(dir.filePath("absent.litertlm")));
   EXPECT_EQ(failed.count(), 1);
-  EXPECT_EQ(probe.loads, 0);
+  EXPECT_EQ(probe->loads, 0);
 }
 
 TEST_F(PrompterWorkerTest, ModelLoadsAndRunsOffTheGuiThread) {
@@ -77,7 +87,7 @@ TEST_F(PrompterWorkerTest, ModelLoadsAndRunsOffTheGuiThread) {
   worker.send(request(5)); // queued until the model is loaded
   ASSERT_TRUE(replies.wait(5000));
   EXPECT_EQ(ready.count(), 1);
-  EXPECT_NE(probe.loadThread, QThread::currentThread());
+  EXPECT_NE(probe->loadThread.load(), QThread::currentThread());
   const auto reply = replies.first().first().toJsonObject();
   EXPECT_EQ(reply["request_id"].toInt(), 5);
   EXPECT_TRUE(reply["events"].toArray().isEmpty());
@@ -111,13 +121,13 @@ TEST_F(PrompterWorkerTest, StopCancelsInferenceDropsItsResultAndReleasesTheModel
   QSignalSpy replies(&worker, &PrompterWorker::resultReady);
   ASSERT_TRUE(worker.start(model));
   ASSERT_TRUE(ready.wait(5000));
-  probe.block = true;
+  probe->block = true;
   worker.send(request(1));
   QTest::qWait(50);
   worker.stop();
-  for (int i = 0; i < 500 && probe.alive > 0; ++i) QTest::qWait(10);
-  EXPECT_EQ(probe.alive, 0);
-  EXPECT_GE(probe.cancels, 1);
+  for (int i = 0; i < 500 && probe->alive > 0; ++i) QTest::qWait(10);
+  EXPECT_EQ(probe->alive, 0);
+  EXPECT_GE(probe->cancels, 1);
   QTest::qWait(50);
   EXPECT_EQ(replies.count(), 0);
 }
@@ -131,7 +141,95 @@ TEST_F(PrompterWorkerTest, StopAndImmediateRestartLoadsAFreshModel) {
   ASSERT_TRUE(ready.wait(5000));
   QTest::qWait(50);
   EXPECT_EQ(ready.count(), 1);
-  EXPECT_EQ(probe.alive, 1);
+  EXPECT_EQ(probe->alive, 1);
+}
+
+TEST_F(PrompterWorkerTest, DestructionReturnsWhileFactoryIsBlockedAndLaterCleansUpOnModelThread) {
+  struct Gate {
+    QSemaphore entered, release, destructorReturned;
+    std::atomic_bool returned = false;
+  };
+  const auto gate = std::make_shared<Gate>();
+  auto worker = std::make_unique<PrompterWorker>([probe = probe, gate](const QString &) {
+    probe->loadThread = QThread::currentThread();
+    gate->entered.release();
+    gate->release.acquire();
+    auto engine = std::make_unique<FakeEngine>(probe);
+    gate->returned = true;
+    return engine;
+  });
+  QSignalSpy ready(worker.get(), &PrompterWorker::ready);
+  QSignalSpy replies(worker.get(), &PrompterWorker::resultReady);
+  QSignalSpy failed(worker.get(), &PrompterWorker::failed);
+  ASSERT_TRUE(worker->start(model));
+  worker->send(request(1));
+  const bool entered = gate->entered.tryAcquire(1, 5000);
+  if (!entered) gate->release.release();
+  ASSERT_TRUE(entered);
+  auto *modelThread = probe->loadThread.load();
+  QPointer<QThread> thread(modelThread);
+  QSignalSpy finished(modelThread, &QThread::finished);
+
+  // Bound a failure of the old joining destructor too: only the watchdog
+  // releases the factory if destruction incorrectly waits for it.
+  std::thread watchdog([gate] {
+    if (!gate->destructorReturned.tryAcquire(1, 1000)) gate->release.release();
+  });
+  QElapsedTimer timer;
+  timer.start();
+  worker.reset();
+  const auto elapsed = timer.elapsed();
+  gate->destructorReturned.release();
+  watchdog.join();
+  EXPECT_LT(elapsed, 500);
+  EXPECT_FALSE(gate->returned.load());
+  EXPECT_EQ(finished.count(), 0);
+
+  gate->release.release();
+  for (int i = 0; i < 500 && finished.isEmpty(); ++i) QTest::qWait(10);
+  EXPECT_EQ(finished.count(), 1);
+  for (int i = 0; i < 500 && thread; ++i) {
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    QTest::qWait(10);
+  }
+  EXPECT_TRUE(thread.isNull());
+  EXPECT_TRUE(gate->returned.load());
+  EXPECT_EQ(probe->destroyed, 1);
+  EXPECT_EQ(probe->alive, 0);
+  EXPECT_EQ(probe->destroyThread.load(), modelThread);
+  EXPECT_NE(probe->destroyThread.load(), QThread::currentThread());
+  EXPECT_EQ(ready.count(), 0);
+  EXPECT_EQ(replies.count(), 0);
+  EXPECT_EQ(failed.count(), 0);
+}
+
+TEST_F(PrompterWorkerTest, LoadedModelIsReleasedWithoutPumpingTheGuiEventLoop) {
+  auto worker = std::make_unique<PrompterWorker>(factory(probe));
+  QSignalSpy ready(worker.get(), &PrompterWorker::ready);
+  ASSERT_TRUE(worker->start(model));
+  ASSERT_TRUE(ready.wait(5000));
+  auto *modelThread = probe->loadThread.load();
+  QPointer<QThread> thread(modelThread);
+  const auto exited = std::make_shared<QSemaphore>();
+  QObject::connect(modelThread, &QThread::finished, modelThread, [exited] {
+    exited->release();
+  }, Qt::DirectConnection);
+
+  worker.reset();
+  // No GUI event processing here: finished must release the engine even if
+  // quit() skips the queued release and GUI deferred deletion cannot run yet.
+  EXPECT_TRUE(exited->tryAcquire(1, 5000));
+  EXPECT_EQ(probe->destroyed, 1);
+  EXPECT_EQ(probe->alive, 0);
+  EXPECT_EQ(probe->destroyThread.load(), modelThread);
+  EXPECT_NE(probe->destroyThread.load(), QThread::currentThread());
+  EXPECT_FALSE(thread.isNull());
+
+  for (int i = 0; i < 500 && thread; ++i) {
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    QTest::qWait(10);
+  }
+  EXPECT_TRUE(thread.isNull());
 }
 
 int main(int argc, char **argv) {

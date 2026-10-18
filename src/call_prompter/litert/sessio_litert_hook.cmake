@@ -4,6 +4,19 @@
 # exactly like LiteRT-LM's litert_lm_main, with every symbol hidden except
 # Sessio's sessio::litert interface.
 
+# The upstream super-build flattens LITERTLM_TOOLCHAIN_ARGS when forwarding it
+# to this project, retaining only its first element in the child cache.
+# Re-establish the settings here before any further ExternalProject is added.
+list(APPEND LITERTLM_TOOLCHAIN_ARGS
+  "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
+  "-DCMAKE_PROJECT_LiteRT_INCLUDE=${CMAKE_CURRENT_LIST_DIR}/sessio_litert_cpu.cmake")
+list(REMOVE_DUPLICATES LITERTLM_TOOLCHAIN_ARGS)
+set(LITERTLM_TOOLCHAIN_ARGS "${LITERTLM_TOOLCHAIN_ARGS}" CACHE STRING
+  "Compiler and LiteRT compatibility settings for external builds" FORCE)
+# Revisions are pinned by the build script. Re-running a build must not reset
+# patched dependency sources and needlessly invalidate all compiled objects.
+set_property(DIRECTORY PROPERTY EP_UPDATE_DISCONNECTED TRUE)
+
 function(_sessio_litert_add_library)
   if(NOT TARGET litert_lm_main)
     message(FATAL_ERROR "[Sessio] LiteRT-LM did not define litert_lm_main; cannot mirror its link line")
@@ -14,6 +27,10 @@ function(_sessio_litert_add_library)
   endif()
   get_target_property(_includes litert_lm_main INCLUDE_DIRECTORIES)
   get_target_property(_libraries litert_lm_main LINK_LIBRARIES)
+  # Upstream expands every vendor archive into the main program's link line.
+  # Match the CPU build's exclusion of Samsung's optional NPU subtree.
+  list(FILTER _libraries EXCLUDE REGEX "[/\\\\]vendors[/\\\\]samsung[/\\\\]")
+  set_property(TARGET litert_lm_main PROPERTY LINK_LIBRARIES "${_libraries}")
   # Only the command-line tool needs Python; the runtime does not.
   list(REMOVE_ITEM _libraries Python3::Python)
   target_include_directories(sessio_litert PRIVATE ${_includes} "${SESSIO_LITERT_SOURCE_DIR}")

@@ -10,6 +10,8 @@
 // Runs the local prompter model inside Sessio on a dedicated thread, never on
 // the GUI thread. One request is processed at a time; stop() cancels it,
 // discards its result and releases the model memory.
+// Destruction does not join the model thread: a synchronous model load cannot
+// be interrupted and must finish before its thread and model can be released.
 class PrompterWorker final : public QObject {
   Q_OBJECT
 public:
@@ -31,7 +33,7 @@ private:
   void finish(int generation, const QJsonObject &result);
   pcm::prompter::PrompterEngineFactory mFactory;
   std::shared_ptr<Shared> mShared;
-  QThread mThread;
+  QThread *mThread = nullptr;
   QObject *mThreadContext = nullptr;
   QTimer mTimeout;
   QJsonObject mPending;

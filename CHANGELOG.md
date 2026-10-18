@@ -20,6 +20,8 @@ All notable changes to this project will be documented in this file.
   C++ API; no Python or external worker. Only the Gemma model file is chosen in
   Settings, and nothing is downloaded automatically. The runtime library is
   built once with `scripts/build-litert-lm.sh`.
+  Closing while the model loads does not block the GUI; cancellation covers
+  both queued and active native inference tasks.
 
 ## [0.2.31] - 2026-10-13
 

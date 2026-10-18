@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QPointer>
 #include <QStandardPaths>
 #include <atomic>
 #include <mutex>
@@ -20,6 +21,9 @@ const char *kModelFile = "gemma-4-E4B-it.litertlm";
 // destroyed on that thread; only cancel() is called from the GUI thread.
 struct PrompterWorker::Shared {
   std::mutex mutex;
+  // Accessed only under mutex, including invokeMethod's receiver lookup. The
+  // GUI destructor clears it before QObject destruction can race with posting.
+  PrompterWorker *receiver = nullptr;
   std::shared_ptr<pcm::prompter::PrompterEngine> engine;
   std::atomic_int generation = 0;
   void cancel() {
@@ -29,6 +33,22 @@ struct PrompterWorker::Shared {
   std::shared_ptr<pcm::prompter::PrompterEngine> current() {
     std::lock_guard lock(mutex);
     return engine;
+  }
+  void post(std::function<void(PrompterWorker &)> callback) {
+    std::lock_guard lock(mutex);
+    if (!receiver) return;
+    QMetaObject::invokeMethod(receiver, [target = receiver, callback = std::move(callback)] {
+      callback(*target);
+    }, Qt::QueuedConnection);
+  }
+  // Called only on the model thread, including from QThread::finished when
+  // quit() bypasses the queued release. Destruction happens outside the lock.
+  void release() {
+    std::shared_ptr<pcm::prompter::PrompterEngine> released;
+    {
+      std::lock_guard lock(mutex);
+      released = std::move(engine);
+    }
   }
 };
 
@@ -40,22 +60,33 @@ PrompterWorker::PrompterWorker(QObject *parent)
 
 PrompterWorker::PrompterWorker(pcm::prompter::PrompterEngineFactory factory, QObject *parent)
     : QObject(parent), mFactory(std::move(factory)), mShared(std::make_shared<Shared>()) {
-  mThread.setObjectName("PrompterModel");
+  mShared->receiver = this;
+  // No GUI owner: synchronous loading can outlive PrompterWorker. Neither the
+  // thread nor its callbacks own or dereference that worker after destruction.
+  mThread = new QThread;
+  mThread->setObjectName("PrompterModel");
   mThreadContext = new QObject;
-  mThreadContext->moveToThread(&mThread);
-  connect(&mThread, &QThread::finished, mThreadContext, &QObject::deleteLater);
-  mThread.start(QThread::LowPriority);
+  mThreadContext->moveToThread(mThread);
+  connect(mThread, &QThread::finished, mThreadContext, [shared = mShared] {
+    shared->release();
+  }, Qt::DirectConnection);
+  connect(mThread, &QThread::finished, mThreadContext, &QObject::deleteLater);
+  // The GUI event loop must process deferred deletes to reclaim the QThread
+  // wrapper. If it has already stopped, the wrapper can survive until process
+  // exit; model/context cleanup still runs on the finishing model thread.
+  connect(mThread, &QThread::finished, mThread, &QObject::deleteLater);
+  mThread->start(QThread::LowPriority);
   mTimeout.setSingleShot(true);
   connect(&mTimeout, &QTimer::timeout, this, &PrompterWorker::fail);
 }
 
 PrompterWorker::~PrompterWorker() {
+  {
+    std::lock_guard lock(mShared->mutex);
+    mShared->receiver = nullptr;
+  }
   stop();
-  mThread.quit();
-  mThread.wait();
-  // The thread may exit before the queued release ran; nothing runs the model now.
-  std::lock_guard lock(mShared->mutex);
-  mShared->engine.reset();
+  mThread->quit();
 }
 
 QString PrompterWorker::bundledModel() {
@@ -76,21 +107,30 @@ bool PrompterWorker::start(const QString &model) {
   const int generation = ++mGeneration;
   mShared->generation = generation;
   mTimeout.start(kLoadTimeoutMs);
-  QMetaObject::invokeMethod(mThreadContext, [this, shared = mShared, factory = mFactory, model, generation] {
+  QMetaObject::invokeMethod(mThreadContext, [shared = mShared, factory = mFactory, model, generation] {
+    if (shared->generation != generation) return;
     std::shared_ptr<pcm::prompter::PrompterEngine> engine;
     try { engine = factory(model); } catch (...) {}
     const bool loaded = engine != nullptr;
-    if (shared->generation == generation) {
+    {
       std::lock_guard lock(shared->mutex);
-      shared->engine = std::move(engine);
+      if (shared->generation == generation) shared->engine = std::move(engine);
     }
     engine.reset(); // a superseded engine is released here, on the model thread
-    QMetaObject::invokeMethod(this, [this, generation, loaded] {
-      if (generation != mGeneration || mStopped) return;
-      if (!loaded) { fail(); return; }
-      mReady = true; mTimeout.stop(); emit ready();
-      if (!mPending.isEmpty()) { const auto request = mPending; mPending = {}; send(request); }
-    }, Qt::QueuedConnection);
+    shared->post([generation, loaded](PrompterWorker &worker) {
+      if (generation != worker.mGeneration || worker.mStopped) return;
+      if (!loaded) { worker.fail(); return; }
+      worker.mReady = true;
+      worker.mTimeout.stop();
+      // Signal handlers may delete the worker synchronously on this GUI thread.
+      QPointer<PrompterWorker> guard(&worker);
+      emit worker.ready();
+      if (guard && generation == worker.mGeneration && !worker.mStopped && !worker.mPending.isEmpty()) {
+        const auto request = worker.mPending;
+        worker.mPending = {};
+        worker.send(request);
+      }
+    });
   }, Qt::QueuedConnection);
   return true;
 }
@@ -100,11 +140,7 @@ void PrompterWorker::stop() {
   mShared->generation = ++mGeneration;
   mShared->cancel();
   QMetaObject::invokeMethod(mThreadContext, [shared = mShared] {
-    std::shared_ptr<pcm::prompter::PrompterEngine> engine;
-    {
-      std::lock_guard lock(shared->mutex);
-      engine = std::move(shared->engine);
-    }
+    shared->release();
   }, Qt::QueuedConnection);
 }
 
@@ -120,7 +156,7 @@ void PrompterWorker::send(const QJsonObject &request) {
   mExpected = request;
   mTimeout.start(kRequestTimeoutMs);
   const int generation = mGeneration;
-  QMetaObject::invokeMethod(mThreadContext, [this, shared = mShared, request, generation] {
+  QMetaObject::invokeMethod(mThreadContext, [shared = mShared, request, generation] {
     const auto engine = shared->current();
     if (!engine || shared->generation != generation) return;
     QJsonObject result;
@@ -134,7 +170,7 @@ void PrompterWorker::send(const QJsonObject &request) {
       for (const char *key : {"request_id", "session_generation", "ledger_revision"})
         if (request.contains(key)) result.insert(key, request.value(key));
     }
-    QMetaObject::invokeMethod(this, [this, generation, result] { finish(generation, result); }, Qt::QueuedConnection);
+    shared->post([generation, result](PrompterWorker &worker) { worker.finish(generation, result); });
   }, Qt::QueuedConnection);
 }
 
