@@ -46,5 +46,9 @@ QJsonValue parseModelReply(const QString &raw);
 // Gemma 4 chat format for one system and one user turn, thinking disabled,
 // without the leading <bos> (the engine adds it).
 QString renderGemmaPrompt(const QString &system, const QString &user);
+// The two halves of renderGemmaPrompt(). The system turn ends right before the
+// <|turn> special token, so it can be processed once and its KV cache reused.
+QString gemmaSystemTurn(const QString &system);
+QString gemmaUserTurn(const QString &user);
 
 } // namespace pcm::prompter

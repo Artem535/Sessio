@@ -166,6 +166,9 @@ void CallPrompterController::handleResult(const QJsonObject &result) {
     ids.insert(u.toObject()["id"].toString()); speakers.insert(u.toObject()["speaker"].toString());
   }
   for (const auto &r : mRequest["candidates"].toArray()) targets.insert(r.toObject()["id"].toString());
+  // Lookback phrases are context: an event citing only them was proposed by an earlier request.
+  QSet<QString> fresh;
+  for (const auto &p : mInFlightPhrases) fresh.insert(p.toObject()["id"].toString());
   QJsonArray proposed;
   for (const auto &value : result["events"].toArray()) {
     const auto event = value.toObject(); const auto kind = event["kind"].toString();
@@ -175,6 +178,9 @@ void CallPrompterController::handleResult(const QJsonObject &result) {
         (!target.isEmpty() && !targets.contains(target)) || !event["unresolved"].isBool()) {
       workerFailed(); return;
     }
+    bool citesFresh = false;
+    for (const auto &sourceId : event["evidence_ids"].toArray()) citesFresh = citesFresh || fresh.contains(sourceId.toString());
+    if (!citesFresh) continue;
     auto card = event;
     card["extracted_action"] = event["action"];
     QJsonArray snapshots;

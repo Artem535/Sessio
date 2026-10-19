@@ -20,6 +20,12 @@ All notable changes to this project will be documented in this file.
   C++ API; no Python or external worker. Only the Gemma model file is chosen in
   Settings, and nothing is downloaded automatically. The runtime library is
   built once with `scripts/build-litert-lm.sh`.
+- The prompter processes each fixed instruction prompt once and reuses it, so a
+  conversation window is analysed roughly two to four times faster after the
+  first one, with about 1 GB less memory.
+- A reschedule is shown as one "Proposed change" card instead of a cancellation
+  plus a new agreement, already processed phrases no longer produce repeated
+  cards, and times are written in digits.
   Closing while the model loads does not block the GUI; cancellation covers
   both queued and active native inference tasks.
 

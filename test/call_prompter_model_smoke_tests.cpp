@@ -27,7 +27,11 @@ protected:
     if (path.isEmpty()) return;
     const auto cache = qEnvironmentVariable("SESSIO_PROMPTER_CACHE_DIR", sCacheDir.path());
     QElapsedTimer timer; timer.start();
-    sEngine = createGemmaEngine(path, cache);
+    // SESSIO_PROMPTER_NO_PREFIX_CACHE=1 runs the uncached path; with
+    // SESSIO_PROMPTER_PRINT=1 the two runs' replies can be diffed.
+    GemmaOptions options;
+    options.reusePrefix = qEnvironmentVariableIsEmpty("SESSIO_PROMPTER_NO_PREFIX_CACHE");
+    sEngine = createGemmaEngine(path, cache, options);
     std::cout << "model loaded in " << timer.elapsed() / 1000.0 << " s\n";
   }
   static void TearDownTestSuite() { sEngine.reset(); }
@@ -42,12 +46,17 @@ protected:
                               {"ledger_revision", 0}, {"utterances", parse(utterances)},
                               {"candidates", parse(candidates)}};
     QElapsedTimer timer; timer.start();
-    const auto out = processRequest(request, [](const QString &system, const QByteArray &payload) {
-      return sEngine->generate(system, payload);
+    const bool print = !qEnvironmentVariableIsEmpty("SESSIO_PROMPTER_PRINT");
+    const auto out = processRequest(request, [print](const QString &system, const QByteArray &payload) {
+      const auto value = sEngine->generate(system, payload);
+      if (print) std::cout << "model " << QJsonDocument::fromJson("[" + dumpJson(value) + "]").toJson(QJsonDocument::Compact).toStdString() << "\n";
+      return value;
     });
     std::cout << ::testing::UnitTest::GetInstance()->current_test_info()->name() << ": "
               << timer.elapsed() / 1000.0 << " s, events=" << out["events"].toArray().size()
               << ", suggestions=" << out["suggestions"].toArray().size() << "\n";
+    if (!qEnvironmentVariableIsEmpty("SESSIO_PROMPTER_PRINT"))
+      std::cout << "reply " << QJsonDocument(out).toJson(QJsonDocument::Compact).toStdString() << "\n";
     return out;
   }
 

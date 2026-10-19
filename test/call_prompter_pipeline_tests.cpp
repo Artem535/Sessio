@@ -79,6 +79,32 @@ TEST_F(PipelineTest, ExactMatchAvoidsSecondModelCall) {
   EXPECT_EQ(payloads.size(), 1u);
 }
 
+TEST_F(PipelineTest, RescheduleReturnedAsCancelAndAcceptBecomesOneChange) {
+  request["candidates"] = json(R"([{"id":"meeting","text":"Встреча завтра в 15:00","participants":["Анна","Борис"]}])");
+  const auto cancel = event({{"kind", "cancel"}, {"action", "Встреча завтра в 15:00"}});
+  const auto moved = event({{"action", "Встреча в четверг в 16:00"}});
+  // Exact match resolves the cancellation; the new time needs the matcher,
+  // which (as in the live call) does not recognise it as the same meeting.
+  const auto out = run({QJsonObject{{"events", QJsonArray{cancel, moved}}}, json(R"({"matches":[]})"), QJsonObject{}});
+  ASSERT_EQ(out["events"].toArray().size(), 1);
+  const auto change = out["events"][0].toObject();
+  EXPECT_EQ(change["kind"].toString(), "accept");
+  EXPECT_EQ(change["action"].toString(), "Встреча в четверг в 16:00");
+  EXPECT_EQ(change["target_id"].toString(), "meeting");
+  EXPECT_FALSE(change["unresolved"].toBool());
+}
+
+TEST_F(PipelineTest, CancellationAndUnrelatedAgreementStaySeparate) {
+  request["utterances"] = json(R"([{"id":"1","speaker":"Анна","text":"Встречу завтра отменяем."},
+                                   {"id":"2","speaker":"Борис","text":"Хорошо."},
+                                   {"id":"3","speaker":"Анна","text":"А документы пришлю в пятницу."}])");
+  request["candidates"] = json(R"([{"id":"meeting","text":"Встреча завтра в 15:00","participants":["Анна","Борис"]}])");
+  const auto cancel = event({{"kind", "cancel"}, {"action", "Встреча завтра в 15:00"}, {"evidence_ids", QJsonArray{"1", "2"}}});
+  const auto docs = event({{"action", "Анна пришлёт документы в пятницу"}, {"evidence_ids", QJsonArray{"3"}}});
+  const auto out = run({QJsonObject{{"events", QJsonArray{cancel, docs}}}, json(R"({"matches":[]})"), QJsonObject{}});
+  EXPECT_EQ(out["events"].toArray().size(), 2);
+}
+
 TEST_F(PipelineTest, NeutralWindowSkipsTheDeadlineModelCall) {
   const auto out = run({json(R"({"events":[]})")});
   EXPECT_TRUE(out["suggestions"].toArray().isEmpty());

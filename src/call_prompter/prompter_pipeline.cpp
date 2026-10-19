@@ -148,6 +148,33 @@ void appendJson(QByteArray &out, const QJsonValue &value) {
   }
 }
 
+// A reschedule often comes back as "cancel the old record" plus "accept the
+// new time" citing the same phrases. Report it as one change of that record:
+// the accept takes over the cancellation's target and the cancel is dropped.
+QJsonArray mergeReschedules(const QJsonArray &events) {
+  QList<QJsonObject> list;
+  for (const auto &e : events) list << e.toObject();
+  QSet<int> dropped;
+  for (int a = 0; a < list.size(); ++a) {
+    auto &accept = list[a];
+    if (accept["kind"] != "accept" || accept["unresolved"].toBool() || !accept["target_id"].toString().isEmpty()) continue;
+    const auto evidence = stringSet(accept["evidence_ids"].toArray());
+    for (int c = 0; c < list.size(); ++c) {
+      const auto &cancel = list[c];
+      if (dropped.contains(c) || cancel["kind"] != "cancel" || cancel["unresolved"].toBool() ||
+          cancel["target_id"].toString().isEmpty() || !evidence.intersects(stringSet(cancel["evidence_ids"].toArray())))
+        continue;
+      accept["target_id"] = cancel["target_id"];
+      dropped.insert(c);
+      break;
+    }
+  }
+  QJsonArray out;
+  for (int i = 0; i < list.size(); ++i)
+    if (!dropped.contains(i)) out.append(list[i]);
+  return out;
+}
+
 } // namespace
 
 QByteArray dumpJson(const QJsonValue &value) {
@@ -186,9 +213,16 @@ QJsonValue parseModelReply(const QString &raw) {
   return doc.array().first();
 }
 
+QString gemmaSystemTurn(const QString &system) {
+  return QStringLiteral("<|turn>system\n") + system.trimmed() + QStringLiteral("<turn|>\n");
+}
+
+QString gemmaUserTurn(const QString &user) {
+  return QStringLiteral("<|turn>user\n") + user.trimmed() + QStringLiteral("<turn|>\n<|turn>model\n");
+}
+
 QString renderGemmaPrompt(const QString &system, const QString &user) {
-  return QStringLiteral("<|turn>system\n%1<turn|>\n<|turn>user\n%2<turn|>\n<|turn>model\n")
-      .arg(system.trimmed(), user.trimmed());
+  return gemmaSystemTurn(system) + gemmaUserTurn(user);
 }
 
 QJsonObject processRequest(const QJsonObject &request, const Generate &generate) {
@@ -292,6 +326,7 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
     resolved.insert("unresolved", unresolved);
     events.append(resolved);
   }
+  events = mergeReschedules(events);
 
   QJsonArray accepted;
   QSet<QString> acceptedIds;

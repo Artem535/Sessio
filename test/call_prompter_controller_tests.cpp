@@ -53,6 +53,40 @@ TEST_F(PrompterControllerTest, OnlyOneRequestInFlightAndRepliesDoNotAcceptCards)
   controller->flush();
   EXPECT_EQ(requests.count(), 2);
 }
+TEST_F(PrompterControllerTest, EventsSupportedOnlyByContextPhrasesAreNotProposedAgain) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  const auto p = phrase("Send document Friday");
+  controller->addPhrase(p); controller->flush();
+  controller->handleResult(reply(requests[0][0].toJsonObject(), p));
+  ASSERT_EQ(controller->cards().size(), 1);
+  const auto q = phrase("Fine");
+  controller->addPhrase(q); controller->flush();
+  ASSERT_EQ(requests.count(), 2);
+  const auto request = requests[1][0].toJsonObject();
+  ASSERT_EQ(request["utterances"].toArray().size(), 2); // p is context only
+  // The model restates the already processed agreement in other words.
+  auto restated = reply(request, p);
+  auto event = restated["events"][0].toObject();
+  event["action"] = "Send the document on Friday";
+  restated["events"] = QJsonArray{event};
+  controller->handleResult(restated);
+  EXPECT_EQ(controller->cards().size(), 1);
+}
+TEST_F(PrompterControllerTest, EventsCitingANewPhraseAlongsideContextAreProposed) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  const auto p = phrase("Send document Friday");
+  controller->addPhrase(p); controller->flush();
+  controller->handleResult(reply(requests[0][0].toJsonObject(), p));
+  const auto q = phrase("Yes, Monday instead");
+  controller->addPhrase(q); controller->flush();
+  auto moved = reply(requests[1][0].toJsonObject(), p);
+  auto event = moved["events"][0].toObject();
+  event["action"] = "Send document Monday";
+  event["evidence_ids"] = QJsonArray{QString::number(p.id), QString::number(q.id)};
+  moved["events"] = QJsonArray{event};
+  controller->handleResult(moved);
+  EXPECT_EQ(controller->cards().size(), 2);
+}
 TEST_F(PrompterControllerTest, LateReplyAfterEndCannotChangeStoredCards) {
   QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
   const auto p = phrase("Send document Friday");

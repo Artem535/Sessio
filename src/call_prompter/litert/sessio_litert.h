@@ -24,11 +24,25 @@ struct ModelOptions {
   int threads = 4;
   int contextTokens = 4096;
   std::string cacheDir; // compiled XNNPACK cache; empty disables it
+  // Load the MTP drafter. Only used by generate() calls without reusePrefix.
+  bool speculativeDecoding = false;
 };
 
 struct GenerateOptions {
   int maxOutputTokens = 384;
   int seed = 146;
+  // Keep the processed prefix (its KV cache) and reuse it for later calls with
+  // the same prefix instead of processing it again.
+  bool reusePrefix = true;
+};
+
+// Work done by one generate() call, for timing diagnostics.
+struct GenerateStats {
+  int prefillTokens = 0;
+  double prefillSeconds = 0;
+  int decodeTokens = 0;
+  double decodeSeconds = 0;
+  bool prefixReused = false;
 };
 
 enum class Status { Ok, Cancelled, ContextExceeded, Truncated, Failed };
@@ -38,8 +52,11 @@ enum class Status { Ok, Cancelled, ContextExceeded, Truncated, Failed };
 class SESSIO_LITERT_API Model {
 public:
   virtual ~Model();
-  // Runs one already formatted prompt (without <bos>) with greedy decoding.
-  virtual Status generate(const std::string &prompt, const GenerateOptions &options, std::string *reply) = 0;
+  // Runs one already formatted prompt, prefix + suffix (without <bos>), with
+  // greedy decoding. The prefix should end at a special-token boundary, e.g.
+  // right before the user turn, so splitting does not change tokenisation.
+  virtual Status generate(const std::string &prefix, const std::string &suffix, const GenerateOptions &options,
+                          std::string *reply, GenerateStats *stats = nullptr) = 0;
   virtual void cancel() = 0;
 };
 

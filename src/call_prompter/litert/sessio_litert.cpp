@@ -1,12 +1,14 @@
 #include "sessio_litert.h"
 #include "task_gate.h"
 
+#include <algorithm>
 #include <atomic>
 #include <filesystem>
 #include <mutex>
 #include <utility>
 #include <vector>
 
+#include "absl/time/time.h"
 #include "runtime/engine/engine.h"
 #include "runtime/engine/engine_factory.h"
 #include "runtime/engine/engine_settings.h"
@@ -40,23 +42,56 @@ Status taskStatus(TaskGate::Result result) {
 
 class LiteRtModel final : public Model {
 public:
-  LiteRtModel(std::unique_ptr<Engine> engine, int contextTokens)
-      : mEngine(std::move(engine)), mContextTokens(contextTokens) {}
+  LiteRtModel(std::unique_ptr<Engine> engine, int contextTokens, bool speculative)
+      : mEngine(std::move(engine)), mContextTokens(contextTokens), mSpeculative(speculative) {}
 
   ~LiteRtModel() override { cancel(); }
 
-  Status generate(const std::string &prompt, const GenerateOptions &options, std::string *reply) override {
+  Status generate(const std::string &prefix, const std::string &suffix, const GenerateOptions &options,
+                  std::string *reply, GenerateStats *stats) override {
     if (!mTasks.beginGeneration()) return Status::Cancelled;
+    GenerateStats local;
+    if (!stats) stats = &local;
+    *stats = {};
     // Encoding does not mutate the tokenizer; the API only lacks const.
     auto &tokenizer = const_cast<::litert::support::Tokenizer &>(mEngine->GetTokenizer());
-    const auto tokens = tokenizer.TextToTokenIds(prompt);
+    const auto tokens = tokenizer.TextToTokenIds(prefix + suffix);
     if (!tokens.ok()) return Status::Failed;
     if (static_cast<int>(tokens->size()) + options.maxOutputTokens > mContextTokens) return Status::ContextExceeded;
 
+    if (!options.reusePrefix) {
+      auto session = createSession(options);
+      if (!session) return Status::Failed;
+      return complete(*session, prefix + suffix, options, reply, stats);
+    }
+    Status failure = Status::Failed;
+    auto *cached = prefixSession(prefix, options, stats, &failure);
+    if (!cached) return failure;
+    const auto status = complete(*cached->session, suffix, options, reply, stats);
+    // A cancelled or failed session is not reusable: drop its cached prefix.
+    if (status == Status::Cancelled || status == Status::Failed) forget(prefix);
+    return status;
+  }
+
+  void cancel() override { mTasks.cancel(); }
+
+private:
+  struct Prefix {
+    std::string text;
+    std::unique_ptr<Engine::Session> session;
+  };
+  static constexpr const char *kCheckpoint = "sessio-prefix";
+  static constexpr size_t kMaxPrefixes = 3; // extraction, matching, deadline prompts
+
+  std::unique_ptr<Engine::Session> createSession(const GenerateOptions &options) {
     auto config = ::litert::lm::SessionConfig::CreateDefault();
     config.SetApplyPromptTemplateInSession(false);
     config.SetMaxOutputTokens(options.maxOutputTokens);
-    config.SetEnableSpeculativeDecoding(true);
+    // LiteRT-LM v0.18.0 cannot resize the speculative drafter's KV cache after
+    // RewindToCheckpoint ("Cannot auto-resize tensor kv_cache_v_N"), so prefix
+    // reuse decodes without it. Greedy outputs were identical either way on the
+    // smoke scenarios; Session::Clone() was not, so it is not used.
+    config.SetEnableSpeculativeDecoding(mSpeculative && !options.reusePrefix);
     // Same sampler as the validated Python runtime: top-p type with k=1 and
     // temperature 0, which is greedy.
     auto &sampler = config.GetMutableSamplerParams();
@@ -66,20 +101,60 @@ public:
     sampler.set_temperature(0.0f);
     sampler.set_seed(options.seed);
     auto created = mEngine->CreateSession(config);
-    if (!created.ok()) return Status::Failed;
-    std::unique_ptr<Engine::Session> session = std::move(*created);
-    return run(*session, prompt, options, reply);
+    return created.ok() ? std::move(*created) : nullptr;
   }
 
-  void cancel() override { mTasks.cancel(); }
+  // The session that has processed exactly `text`, rewound to that point.
+  Prefix *prefixSession(const std::string &text, const GenerateOptions &options, GenerateStats *stats,
+                        Status *failure) {
+    for (auto it = mPrefixes.begin(); it != mPrefixes.end(); ++it) {
+      if (it->text != text) continue;
+      if (!it->session->RewindToCheckpoint(kCheckpoint).ok()) {
+        mPrefixes.erase(it);
+        break;
+      }
+      std::rotate(mPrefixes.begin(), it, it + 1); // most recently used first
+      stats->prefixReused = true;
+      return &mPrefixes.front();
+    }
+    auto session = createSession(options);
+    if (!session) return nullptr;
+    const auto before = prefillTurns(*session);
+    if (const auto status = prefill(*session, text); status != Status::Ok) {
+      *failure = status;
+      return nullptr;
+    }
+    if (!session->SaveCheckpoint(kCheckpoint).ok()) return nullptr;
+    addTurns(*session, before, stats);
+    if (mPrefixes.size() >= kMaxPrefixes) mPrefixes.pop_back();
+    mPrefixes.insert(mPrefixes.begin(), Prefix{text, std::move(session)});
+    return &mPrefixes.front();
+  }
 
-private:
-  Status run(Engine::Session &session, const std::string &prompt, const GenerateOptions &options,
-                    std::string *reply) {
+  void forget(const std::string &text) {
+    std::erase_if(mPrefixes, [&text](const Prefix &p) { return p.text == text; });
+  }
+
+  static uint64_t prefillTurns(Engine::Session &session) {
+    const auto info = session.GetBenchmarkInfo();
+    return info.ok() ? info->GetTotalPrefillTurns() : 0;
+  }
+
+  static void addTurns(Engine::Session &session, uint64_t fromTurn, GenerateStats *stats) {
+    const auto info = session.GetBenchmarkInfo();
+    if (!info.ok()) return;
+    for (auto i = fromTurn; i < info->GetTotalPrefillTurns(); ++i)
+      if (const auto turn = info->GetPrefillTurn(static_cast<int>(i)); turn.ok()) {
+        stats->prefillTokens += static_cast<int>(turn->num_tokens);
+        stats->prefillSeconds += absl::ToDoubleSeconds(turn->duration);
+      }
+  }
+
+  Status prefill(Engine::Session &session, const std::string &text) {
     std::vector<::litert::lm::InputData> inputs;
-    inputs.emplace_back(::litert::lm::InputText(prompt));
+    inputs.emplace_back(::litert::lm::InputText(text));
     auto prefillOk = std::make_shared<std::atomic_bool>(true);
-    auto status = mTasks.run([&]() -> std::shared_ptr<TaskGate::Task> {
+    const auto status = mTasks.run([&]() -> std::shared_ptr<TaskGate::Task> {
       auto task = session.RunPrefillAsync(inputs, [prefillOk](auto response) {
         if (!response.ok()) *prefillOk = false;
       });
@@ -87,7 +162,15 @@ private:
       return std::make_shared<AsyncTask>(std::move(*task));
     });
     if (status != TaskGate::Result::Done) return taskStatus(status);
-    if (!*prefillOk) return Status::Failed;
+    return *prefillOk ? Status::Ok : Status::Failed;
+  }
+
+  // Prefills `text` after whatever the session already holds, then decodes.
+  Status complete(Engine::Session &session, const std::string &text, const GenerateOptions &options,
+                  std::string *reply, GenerateStats *stats) {
+    const auto before = prefillTurns(session);
+    if (const auto status = prefill(session, text); status != Status::Ok) return status;
+    addTurns(session, before, stats);
 
     struct Output {
       std::mutex mutex;
@@ -95,7 +178,7 @@ private:
       bool ok = true, done = false;
     };
     auto output = std::make_shared<Output>();
-    status = mTasks.run([&]() -> std::shared_ptr<TaskGate::Task> {
+    const auto status = mTasks.run([&]() -> std::shared_ptr<TaskGate::Task> {
       auto task = session.RunDecodeAsync([output](auto response) {
         std::lock_guard lock(output->mutex);
         if (!response.ok() || response->GetTexts().size() > 1) { output->ok = false; return; }
@@ -115,13 +198,17 @@ private:
     if (!benchmark.ok() || benchmark->GetTotalDecodeTurns() == 0) return Status::Failed;
     const auto turn = benchmark->GetDecodeTurn(static_cast<int>(benchmark->GetTotalDecodeTurns() - 1));
     if (!turn.ok()) return Status::Failed;
+    stats->decodeTokens = static_cast<int>(turn->num_tokens);
+    stats->decodeSeconds = absl::ToDoubleSeconds(turn->duration);
     if (turn->num_tokens >= static_cast<uint64_t>(options.maxOutputTokens)) return Status::Truncated;
     return Status::Ok;
   }
 
   std::unique_ptr<Engine> mEngine;
   const int mContextTokens;
+  const bool mSpeculative;
   TaskGate mTasks;
+  std::vector<Prefix> mPrefixes;
 };
 
 } // namespace
@@ -151,12 +238,12 @@ std::unique_ptr<Model> loadModel(const std::string &path, const ModelOptions &op
     main.SetBackendConfig(config);
   }
   auto advanced = main.GetAdvancedSettings().value_or(::litert::lm::AdvancedSettings());
-  advanced.enable_speculative_decoding = true;
+  advanced.enable_speculative_decoding = options.speculativeDecoding;
   main.SetAdvancedSettings(advanced);
   settings->GetMutableBenchmarkParams(); // enables the per-turn decode token count
   auto engine = ::litert::lm::EngineFactory::CreateDefault(std::move(*settings));
   if (!engine.ok()) return fail("model cannot be loaded");
-  return std::make_unique<LiteRtModel>(std::move(*engine), options.contextTokens);
+  return std::make_unique<LiteRtModel>(std::move(*engine), options.contextTokens, options.speculativeDecoding);
 }
 
 } // namespace sessio::litert

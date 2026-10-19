@@ -6,6 +6,8 @@ namespace pcm::prompter {
 
 bool gemmaRuntimeAvailable() { return false; }
 
-std::unique_ptr<PrompterEngine> createGemmaEngine(const QString &, const QString &) { return nullptr; }
+std::unique_ptr<PrompterEngine> createGemmaEngine(const QString &, const QString &, const GemmaOptions &) {
+  return nullptr;
+}
 
 } // namespace pcm::prompter
