@@ -62,7 +62,7 @@ TEST(ModelLocatorTest, CandidatesPerPlatform) {
 
 TEST(ModelLocatorTest, OverrideComesFirst) {
   const auto c = modelRootCandidates("/opt/app/bin", Platform::Linux, "/custom");
-  ASSERT_EQ(c.size(), 2u);
+  ASSERT_EQ(c.size(), 3u);
   EXPECT_EQ(c.front(), fs::path("/custom"));
 }
 
@@ -91,6 +91,23 @@ TEST(ModelLocatorTest, ReportsWhenNoCandidateExists) {
   const auto result = locateModels(dir.path / "bin", Platform::Linux);
   EXPECT_FALSE(result.paths.has_value());
   EXPECT_FALSE(result.error.empty());
+}
+
+TEST(ModelLocatorTest, FindsModelsDownloadedIntoTheBuildTree) {
+  TempDir dir;
+  writeModelTree(dir.path / "build" / "transcription-models");
+  const auto result = locateModels(dir.path / "build", Platform::Linux);
+  ASSERT_TRUE(result.paths.has_value()) << result.error;
+  EXPECT_EQ(result.paths->vad.parent_path(), dir.path / "build" / "transcription-models");
+}
+
+TEST(ModelLocatorTest, IncompleteInstalledTreeIsReportedOverAMissingBuildTree) {
+  TempDir dir;
+  const auto root = dir.path / "share" / "sessio" / "models";
+  writeModelTree(root);
+  fs::remove(root / "silero_vad.onnx");
+  const auto result = locateModels(dir.path / "bin", Platform::Linux);
+  EXPECT_NE(result.error.find("silero_vad.onnx"), std::string::npos) << result.error;
 }
 
 TEST(ModelLocatorTest, OverrideWinsOverPlatformDefault) {
