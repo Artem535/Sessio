@@ -1,0 +1,269 @@
+#include "client_notes_page.h"
+#include <QApplication>
+#include <QJsonObject>
+#include <QFile>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QSignalSpy>
+#include <QTextBrowser>
+#include <QTemporaryDir>
+#include <QTest>
+#include <gtest/gtest.h>
+
+namespace {
+class ClientNotesUiTest : public ::testing::Test {
+protected:
+  ClientNotesPage page{nullptr};
+  QJsonArray entries;
+  QString manual;
+  bool fail = false;
+  int writes = 0;
+  QStringList savedPaths;
+  QStringList draftPaths;
+  bool failDraftPaths = false;
+  int draftPathWrites = 0;
+  std::function<QStringList(const QStringList &)> canonicalizePaths;
+  void bind() {
+    page.setCallNoteActions(7, {
+      [this] { return entries; },
+      [this](const QString &text, const QStringList &paths, const QString &id) {
+        ++writes;
+        savedPaths = paths;
+        if (fail) return QString{};
+        const auto savedId = id.isEmpty() ? QString::number(entries.size() + 1) : id;
+        QJsonObject entry{{"id", savedId}, {"body_markdown", text}, {"created_at", 1234}};
+        bool updated = false;
+        for (qsizetype i = 0; i < entries.size(); ++i) {
+          if (entries[i].toObject()["id"].toString() == savedId) {
+            entry["attachments"] = entries[i].toObject()["attachments"];
+            entries[i] = entry; updated = true; break;
+          }
+        }
+        if (!updated) entries.append(entry);
+        if (id.isEmpty()) { manual.clear(); draftPaths.clear(); }
+        // The real controller emits changed synchronously during saving.
+        page.refresh();
+        return savedId;
+      }, {}, [this] { return manual; },
+      [this](const QString &text) { manual = text; return true; },
+      [this] { return draftPaths; },
+      [this](const QStringList &paths) {
+        ++draftPathWrites;
+        if (failDraftPaths) return false;
+        draftPaths = canonicalizePaths ? canonicalizePaths(paths) : paths;
+        page.refresh(); return true;
+      }
+    });
+  }
+  QPlainTextEdit *editor() { return page.findChild<QPlainTextEdit *>("notesComposer"); }
+  QPushButton *save() { return page.findChild<QPushButton *>("notesSave"); }
+};
+
+TEST_F(ClientNotesUiTest, CallWithoutClientSavesSeparateEntriesOnlyOnExplicitSave) {
+  bind();
+  editor()->setPlainText("**First**");
+  EXPECT_EQ(writes, 0);
+  EXPECT_EQ(manual, "**First**");
+  save()->click();
+  editor()->setPlainText("Second"); save()->click();
+  ASSERT_EQ(entries.size(), 2);
+  EXPECT_EQ(entries[0].toObject()["body_markdown"].toString(), "**First**");
+  EXPECT_TRUE(editor()->toPlainText().isEmpty());
+  EXPECT_TRUE(manual.isEmpty());
+}
+
+TEST_F(ClientNotesUiTest, FailedSaveKeepsTheDraftAndDoesNotSignalSuccess) {
+  bind(); fail = true;
+  QSignalSpy saved(&page, &ClientNotesPage::noteEntrySaved);
+  editor()->setPlainText("Keep this text"); save()->click();
+  EXPECT_EQ(editor()->toPlainText(), "Keep this text");
+  EXPECT_EQ(saved.count(), 0);
+  EXPECT_TRUE(entries.isEmpty());
+}
+
+TEST_F(ClientNotesUiTest, AttachmentPathsSurviveFailureAndAreRetriedOnExplicitSave) {
+  bind(); QTemporaryDir dir;
+  const auto path = dir.filePath("outline.md");
+  QFile file(path); ASSERT_TRUE(file.open(QIODevice::WriteOnly)); file.write("outline"); file.close();
+  page.addPendingAttachments({path});
+  fail = true; save()->click();
+  EXPECT_EQ(savedPaths, QStringList{path});
+  auto *pending = page.findChild<QListWidget *>(); ASSERT_NE(pending, nullptr);
+  EXPECT_EQ(pending->count(), 1);
+  fail = false; save()->click();
+  EXPECT_EQ(savedPaths, QStringList{path}); EXPECT_EQ(pending->count(), 0);
+  ASSERT_EQ(entries.size(), 1);
+}
+
+TEST_F(ClientNotesUiTest, DraftAttachmentsUseOwnedPathsAndCanBeReopenedAndRemoved) {
+  bind(); QTemporaryDir dir;
+  const auto source = dir.filePath("source.md");
+  const auto owned = dir.filePath("owned.md");
+  QFile file(source); ASSERT_TRUE(file.open(QIODevice::WriteOnly)); file.write("outline"); file.close();
+  ASSERT_TRUE(QFile::copy(source, owned));
+  canonicalizePaths = [owned](const QStringList &paths) { return paths.isEmpty() ? QStringList{} : QStringList{owned}; };
+  page.addPendingAttachments({source});
+  EXPECT_EQ(draftPaths, QStringList{owned});
+  auto *pending = page.findChild<QListWidget *>();
+  ASSERT_EQ(pending->count(), 1);
+  EXPECT_TRUE(pending->item(0)->text().contains("owned.md"));
+  ClientNotesPage reopened(nullptr);
+  reopened.setCallNoteActions(7, {{}, {}, {}, {}, {}, [this] { return draftPaths; }, {}});
+  ASSERT_EQ(reopened.findChild<QListWidget *>()->count(), 1);
+  EXPECT_TRUE(reopened.findChild<QListWidget *>()->item(0)->text().contains("owned.md"));
+  pending->itemDoubleClicked(pending->item(0));
+  EXPECT_TRUE(draftPaths.isEmpty()); EXPECT_EQ(pending->count(), 0);
+}
+
+TEST_F(ClientNotesUiTest, FailedDraftAttachmentPersistenceKeepsSelectionsAndReportsFailure) {
+  bind(); QTemporaryDir dir;
+  const auto source = dir.filePath("outline.md");
+  QFile file(source); ASSERT_TRUE(file.open(QIODevice::WriteOnly)); file.write("outline"); file.close();
+  failDraftPaths = true; page.addPendingAttachments({source}); page.refresh();
+  auto *pending = page.findChild<QListWidget *>(); ASSERT_EQ(pending->count(), 1);
+  EXPECT_TRUE(draftPaths.isEmpty());
+  auto *status = page.findChild<QLabel *>("notesSaveStatus"); ASSERT_NE(status, nullptr);
+  EXPECT_EQ(status->text(), ClientNotesPage::tr("Could not save — keep this page open"));
+  pending->itemDoubleClicked(pending->item(0));
+  EXPECT_EQ(pending->count(), 1);
+}
+
+TEST_F(ClientNotesUiTest, EntryEditAttachmentsNeverReplaceNewDraftAttachments) {
+  bind(); editor()->setPlainText("Saved entry"); save()->click();
+  QTemporaryDir dir;
+  const auto draftFile = dir.filePath("draft.md"), editFile = dir.filePath("edit.md");
+  for (const auto &path : {draftFile, editFile}) {
+    QFile file(path); ASSERT_TRUE(file.open(QIODevice::WriteOnly)); file.write("outline");
+  }
+  editor()->setPlainText("New draft"); page.addPendingAttachments({draftFile});
+  const int previousWrites = draftPathWrites;
+  page.findChild<QPushButton *>("notesEditEntry")->click();
+  page.addPendingAttachments({editFile});
+  EXPECT_EQ(draftPathWrites, previousWrites);
+  EXPECT_EQ(draftPaths, QStringList{draftFile});
+  manual += "\n\nAccepted AI"; page.refresh();
+  page.findChild<QPushButton *>("notesCancelEdit")->click();
+  EXPECT_EQ(editor()->toPlainText(), "New draft\n\nAccepted AI");
+  auto *pending = page.findChild<QListWidget *>(); ASSERT_EQ(pending->count(), 1);
+  EXPECT_TRUE(pending->item(0)->text().contains("draft.md"));
+}
+
+TEST_F(ClientNotesUiTest, AiAppendAndHistoryRefreshPreserveUndoAndExistingEntryWidgets) {
+  bind(); editor()->setPlainText("History"); save()->click();
+  auto *entryBody = page.findChild<QTextBrowser *>("notesEntryBody");
+  editor()->setPlainText("My text");
+  manual += "\n\nAI draft"; page.refresh();
+  EXPECT_EQ(editor()->toPlainText(), "My text\n\nAI draft");
+  EXPECT_EQ(page.findChild<QTextBrowser *>("notesEntryBody"), entryBody);
+  editor()->undo(); EXPECT_EQ(editor()->toPlainText(), "My text");
+  EXPECT_EQ(entries.size(), 1);
+}
+
+TEST_F(ClientNotesUiTest, EditingUpdatesTheSelectedEntryAndCancelRestoresUnsentText) {
+  bind(); editor()->setPlainText("First"); save()->click();
+  editor()->setPlainText("Unsent note");
+  page.findChild<QPushButton *>("notesEditEntry")->click();
+  editor()->setPlainText("Revision");
+  page.findChild<QPushButton *>("notesCancelEdit")->click();
+  EXPECT_EQ(editor()->toPlainText(), "Unsent note");
+  page.findChild<QPushButton *>("notesEditEntry")->click();
+  editor()->setPlainText("Revision"); save()->click();
+  ASSERT_EQ(entries.size(), 1);
+  EXPECT_EQ(entries[0].toObject()["body_markdown"].toString(), "Revision");
+  EXPECT_EQ(manual, "Unsent note");
+  EXPECT_EQ(editor()->toPlainText(), manual);
+}
+
+TEST_F(ClientNotesUiTest, EditingSavedEntryNeverReplacesThePersistedNewDraft) {
+  bind(); editor()->setPlainText("Saved entry"); save()->click();
+  editor()->setPlainText("Persistent new draft");
+  page.findChild<QPushButton *>("notesEditEntry")->click();
+  editor()->setPlainText("Unsaved entry revision");
+  EXPECT_EQ(manual, "Persistent new draft");
+  ClientNotesPage reopened(nullptr);
+  reopened.setCallNoteActions(7, {{}, {}, {}, [this] { return manual; }, {}});
+  EXPECT_EQ(reopened.findChild<QPlainTextEdit *>("notesComposer")->toPlainText(), "Persistent new draft");
+}
+
+TEST_F(ClientNotesUiTest, AiAppendDuringEntryEditingStaysInNewDraftAndSurvivesCancel) {
+  bind(); editor()->setPlainText("Saved entry"); save()->click();
+  editor()->setPlainText("New draft");
+  page.findChild<QPushButton *>("notesEditEntry")->click();
+  editor()->setPlainText("Entry revision");
+  manual += "\n\nAccepted AI text"; page.refresh();
+  EXPECT_EQ(editor()->toPlainText(), "Entry revision");
+  page.findChild<QPushButton *>("notesCancelEdit")->click();
+  EXPECT_EQ(editor()->toPlainText(), "New draft\n\nAccepted AI text");
+  EXPECT_EQ(manual, editor()->toPlainText());
+}
+
+TEST_F(ClientNotesUiTest, AiAppendDuringEntryEditingSurvivesSavingTheEntry) {
+  bind(); editor()->setPlainText("Saved entry"); save()->click();
+  editor()->setPlainText("New draft");
+  page.findChild<QPushButton *>("notesEditEntry")->click();
+  editor()->setPlainText("Entry revision");
+  manual += "\n\nAccepted AI text"; page.refresh(); save()->click();
+  EXPECT_EQ(entries[0].toObject()["body_markdown"].toString(), "Entry revision");
+  EXPECT_EQ(manual, "New draft\n\nAccepted AI text");
+  EXPECT_EQ(editor()->toPlainText(), manual);
+}
+
+TEST_F(ClientNotesUiTest, RebindingTheCallResetsEditingPreviewAndObsoleteCancelAction) {
+  bind(); editor()->setPlainText("Saved entry"); save()->click();
+  page.findChild<QPushButton *>("notesEditEntry")->click();
+  page.findChild<QPushButton *>("notesPreviewToggle")->click();
+  QString nextDraft = "Next call draft";
+  page.setCallNoteActions(8, {{}, {}, {}, [&nextDraft] { return nextDraft; },
+      [&nextDraft](const QString &text) { nextDraft = text; return true; }});
+  auto *cancel = page.findChild<QPushButton *>("notesCancelEdit");
+  EXPECT_TRUE(cancel->isHidden());
+  EXPECT_FALSE(page.findChild<QPushButton *>("notesPreviewToggle")->isChecked());
+  EXPECT_TRUE(page.findChild<QTextBrowser *>("notesPreview")->isHidden());
+  EXPECT_EQ(save()->text(), ClientNotesPage::tr("Add note"));
+  cancel->click();
+  EXPECT_EQ(editor()->toPlainText(), "Next call draft");
+  EXPECT_EQ(nextDraft, "Next call draft");
+}
+
+TEST_F(ClientNotesUiTest, ClearingTextOnAnEntryWithStoredAttachmentsDelegatesValidationToStorage) {
+  entries.append(QJsonObject{{"id", "with-file"}, {"body_markdown", "Remove this text"},
+      {"attachments", QJsonArray{QJsonObject{{"id", "file-id"}, {"file_name", "outline.pdf"}}}}});
+  bind();
+  page.findChild<QPushButton *>("notesEditEntry")->click();
+  editor()->clear(); save()->click();
+  EXPECT_EQ(writes, 1);
+  ASSERT_EQ(entries.size(), 1);
+  EXPECT_EQ(entries[0].toObject()["id"].toString(), "with-file");
+  EXPECT_TRUE(entries[0].toObject()["body_markdown"].toString().isEmpty());
+  EXPECT_EQ(entries[0].toObject()["attachments"].toArray().size(), 1);
+}
+
+TEST_F(ClientNotesUiTest, PreviewAndRefreshPreserveMarkdownAndCursorAtCompactWidths) {
+  bind(); page.show();
+  for (int width : {345, 440, 490}) {
+    page.resize(width, 850); QCoreApplication::processEvents();
+    editor()->setPlainText("**My text**\n\nAI proposal");
+    editor()->setFocus(); auto cursor = editor()->textCursor(); cursor.setPosition(3); editor()->setTextCursor(cursor);
+    page.refresh();
+    EXPECT_EQ(editor()->textCursor().position(), 3);
+    auto *preview = page.findChild<QPushButton *>("notesPreviewToggle"); preview->click();
+    EXPECT_EQ(page.findChild<QTextBrowser *>("notesPreview")->toPlainText(), "My text\nAI proposal");
+    preview->click();
+    EXPECT_LE(page.minimumSizeHint().width(), width);
+    EXPECT_EQ(page.width(), width);
+    EXPECT_EQ(editor()->toPlainText(), "**My text**\n\nAI proposal");
+  }
+}
+
+TEST_F(ClientNotesUiTest, CallComposerPrecedesTheAiAndHistoryFeed) {
+  bind();
+  auto *feed = page.findChild<QScrollArea *>(); ASSERT_NE(feed, nullptr);
+  EXPECT_LT(page.layout()->indexOf(editor()->parentWidget()), page.layout()->indexOf(feed->parentWidget()));
+}
+} // namespace
+
+int main(int argc, char **argv) {
+  QApplication app(argc, argv);
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

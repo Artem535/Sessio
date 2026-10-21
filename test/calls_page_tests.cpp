@@ -655,6 +655,27 @@ TEST(CallsPageTest, TranscribeRequestedIsRelayed) {
   EXPECT_EQ(spy.count(), 1);
 }
 
+TEST(CallsPageTest, SpecialistKeepsCallMaterialsAfterEndingAndCanReturnToCalls) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager devices;
+  CallsPage page(true, &devices, &client);
+  page.setVideoProviderFactoryForTesting([] { return new FakeVideoProvider; });
+  auto *materials = new QWidget;
+  page.setSidePanelWidget(materials);
+  submitJoinCode(page, "code", "123456");
+  auto *call = page.findChild<CallPage *>();
+  ASSERT_TRUE(QTest::qWaitFor([&] { return topStack(page)->currentWidget() == call; }, 2000));
+  call->onSessionStateChanged(pcm::video::VideoSessionState::Ended);
+  EXPECT_EQ(topStack(page)->currentWidget(), call);
+  EXPECT_TRUE(materials->isVisibleTo(&page));
+  auto *back = call->findChild<QPushButton *>("endedBackToCalls");
+  ASSERT_NE(back, nullptr);
+  back->click();
+  EXPECT_EQ(topStack(page)->currentWidget(), page.findChild<CallEntryWidget *>());
+}
+
 TEST(CallsPageTest, CallSessionEndsExactlyOnceOnCancellationOrJoinFailure) {
   for (bool cancel : {true, false}) {
     FakeTokenBackendServer server;

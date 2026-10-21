@@ -110,8 +110,12 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
 
   connect(mEntryWidget, &CallEntryWidget::shown, this, &CallsPage::upcomingMeetingsRefreshRequested);
   connect(mCallPage, &CallPage::transcribeRequested, this, &CallsPage::transcribeRequested);
-  connect(mCallPage, &CallPage::callEnded, this, [this]() {
+  connect(mCallPage, &CallPage::callEnded, this, [this, specialistMode]() {
     endCallSession();
+    if (!specialistMode || !mCallPage->hasSidePanelWidget())
+      mStack->setCurrentWidget(mEntryWidget);
+  });
+  connect(mCallPage, &CallPage::backToCallsRequested, this, [this] {
     mStack->setCurrentWidget(mEntryWidget);
   });
   connect(mCallPage, &CallPage::deviceCheckCanceled, this, [this]() {

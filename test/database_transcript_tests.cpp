@@ -124,7 +124,7 @@ TEST_F(TranscriptDbTest, PrompterMigrationUpdatesMigrationTimeOnlyOnce) {
   pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
   db_ = std::make_unique<pcm::database::Database>(conf);
   const auto migrated = db_->get_application_metadata();
-  EXPECT_EQ(migrated.schema_version, 3);
+  EXPECT_EQ(migrated.schema_version, 4);
   EXPECT_GT(migrated.last_migration_at, 1700000000000);
   db_.reset(); db_ = std::make_unique<pcm::database::Database>(conf);
   EXPECT_EQ(db_->get_application_metadata().last_migration_at, migrated.last_migration_at);
@@ -494,8 +494,8 @@ TEST_F(TranscriptDbTest, ExistingDataSurvivesTheTranscriptMigration) {
   EXPECT_NE(db_->get_event(event_id), nullptr);
 }
 
-TEST_F(TranscriptDbTest, SchemaVersionIsThree) {
-  EXPECT_EQ(db_->get_application_metadata().schema_version, 3);
+TEST_F(TranscriptDbTest, SchemaVersionIsFour) {
+  EXPECT_EQ(db_->get_application_metadata().schema_version, 4);
 }
 
 TEST_F(TranscriptDbTest, LegacyMigrationBackfillsOnceAndPreservesManualUnlinkAfterReopen) {
@@ -518,7 +518,7 @@ TEST_F(TranscriptDbTest, LegacyMigrationBackfillsOnceAndPreservesManualUnlinkAft
   }
   pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
   db_ = std::make_unique<pcm::database::Database>(conf);
-  EXPECT_EQ(db_->get_application_metadata().schema_version, 3);
+  EXPECT_EQ(db_->get_application_metadata().schema_version, 4);
   EXPECT_EQ(db_->get_transcript_client_ids(id), std::vector<int64_t>{clientId});
   const auto migrated = db_->get_transcript(id);
   ASSERT_NE(migrated, nullptr);
@@ -944,3 +944,6 @@ TEST_F(TranscriptDbTest, StatusAndRevokeWorkFromAnotherThreadDuringScheduleTrans
   EXPECT_TRUE(revokeOk);
   EXPECT_TRUE(errors.empty()) << "unexpected error log: " << (errors.empty() ? "" : errors[0]);
 }
+
+// Keep these in the existing target; no root/test CMake changes are needed.
+#include "call_material_database_tests.cpp"

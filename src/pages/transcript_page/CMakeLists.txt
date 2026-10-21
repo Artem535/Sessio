@@ -7,6 +7,9 @@ qt_add_library(${TARGET_NAME} STATIC
     call_transcription_controller.h call_transcription_controller.cpp
     call_side_panel.h call_side_panel.cpp
     call_prompter_controller.h call_prompter_controller.cpp
+    call_notes_controller.h call_notes_controller.cpp
+    call_notes_finalizer.h call_notes_finalizer.cpp
+    call_notes_panel.h call_notes_panel.cpp
     prompter_worker.h prompter_worker.cpp
     prompter_panel.h prompter_panel.cpp
     transcript_panel.h transcript_panel.cpp
@@ -17,4 +20,5 @@ target_include_directories(${TARGET_NAME} PRIVATE ${qlementine_SOURCE_DIR}/lib/i
 target_include_directories(${TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Widgets qlementine
     ${PROJECT_NAME}_database ${PROJECT_NAME}_widgets ${PROJECT_NAME}_call_transcription
+    ${PROJECT_NAME}_client_notes_page
     ${PROJECT_NAME}_call_prompter_engine)

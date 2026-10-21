@@ -11,6 +11,9 @@
 #ifdef SESSIO_CALL_TRANSCRIPTION
 #include "call_side_panel.h"
 #include "call_prompter_controller.h"
+#include "call_notes_controller.h"
+#include "call_notes_finalizer.h"
+#include "call_notes_panel.h"
 #include "prompter_panel.h"
 #include "prompter_worker.h"
 #include "transcript_panel.h"
@@ -39,6 +42,8 @@
 #include <QWidget>
 #include <QIcon>
 #include <QInputDialog>
+#include <QScrollArea>
+#include <QVBoxLayout>
 #include <QLineEdit>
 #include <QDateTime>
 #include <oclero/qlementine.hpp>
@@ -168,7 +173,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  QCoreApplication::setApplicationVersion("0.2.32");
+  QCoreApplication::setApplicationVersion("0.2.33");
   // Before anything that can log: on Windows this file and the crash dump are
   // the only trace a hang or crash leaves.
   const QString logDir =
@@ -1129,26 +1134,94 @@ void Application::connectSignals() {
 #ifdef SESSIO_CALL_TRANSCRIPTION
     auto *eventPage = dynamic_cast<QEventInfoPage *>(mMainWindow->getPage(MainWindow::Pages::eventInfo));
     auto *panel = new TranscriptPanel;
-    mCallNotesPanel = new ClientNotesPage(mDb);
+    mCallNotesPanel = new ClientNotesPage(mDb, callsPage);
+    auto *notes = new CallNotesController(mDb, this);
+    auto *notesPanel = new CallNotesPanel(notes);
+    notesPanel->setInlineMode(true);
+    mCallNotesPanel->setAiPanelWidget(notesPanel);
+    auto bindNotesEditor = [](ClientNotesPage *page, CallNotesController *storage) {
+      const QPointer<CallNotesController> guard(storage);
+      auto boundMaterial = std::make_shared<qint64>(-1);
+      auto refresh = [page, guard, boundMaterial] {
+        if (!guard) return;
+        if (*boundMaterial != guard->materialId()) {
+          *boundMaterial = guard->materialId();
+          page->setCallNoteActions(guard->materialId(), {
+            [guard] { return guard ? guard->noteEntries() : QJsonArray{}; },
+            [guard](const QString &text, const QStringList &paths, const QString &id) {
+              return guard ? guard->saveNoteEntry(text, paths, id) : QString{};
+            },
+            [guard](const QString &entry, const QString &attachment) {
+              return guard ? guard->noteAttachmentPath(entry, attachment) : QString{};
+            },
+            [guard] { return guard ? guard->manualText() : QString{}; },
+            [guard](const QString &text) { return guard && guard->setManualText(text); },
+            [guard] { return guard ? guard->draftAttachmentPaths() : QStringList{}; },
+            [guard](const QStringList &paths) { return guard && guard->setDraftAttachmentPaths(paths); }
+          });
+        } else page->refresh();
+      };
+      QObject::connect(storage, &CallNotesController::changed, page, refresh);
+      refresh();
+    };
+    bindNotesEditor(mCallNotesPanel, notes);
+    connect(notesPanel, &CallNotesPanel::editorRequested, mCallNotesPanel,
+            &ClientNotesPage::focusComposer);
+    connect(mCallNotesPanel, &ClientNotesPage::openEventRequested, mMainWindow.get(),
+            &MainWindow::returnToEvent);
     auto *sidePanel = new CallSidePanel(mCallNotesPanel, panel, callsPage);
     auto *prompter = new CallPrompterController(mDb, this);
     auto *worker = new PrompterWorker(this);
+    auto *finals = new CallNotesFinalizer(mDb, this);
     auto *prompterPanel = new PrompterPanel(prompter, mDb);
+    prompterPanel->setCallNoteSaver([notes](const QString &id, const QString &text) { return notes->appendAgreement(id, text); });
     sidePanel->setPrompterPanel(prompterPanel, prompterPanel->sharedHintWidget());
     connect(prompterPanel, &PrompterPanel::pendingCountChanged, sidePanel, &CallSidePanel::setPrompterPendingCount);
     connect(prompterPanel, &PrompterPanel::sourceRequested, sidePanel, [sidePanel, panel](qint64 id) {
       sidePanel->showTranscript(); panel->focusPhrase(id);
     });
     connect(prompterPanel, &PrompterPanel::noteSaved, mCallNotesPanel, &ClientNotesPage::refresh);
+    connect(prompterPanel, &PrompterPanel::noteSaved, mCallNotesPanel,
+            [page = mCallNotesPanel, sidePanel] { sidePanel->showNotes(); if (page) page->focusComposer(); });
     connect(prompter, &CallPrompterController::requestReady, worker, &PrompterWorker::send);
     connect(worker, &PrompterWorker::resultReady, prompter, &CallPrompterController::handleResult);
     connect(worker, &PrompterWorker::failed, prompter, &CallPrompterController::workerFailed);
-    auto startPrompter = [worker, prompter] {
+    connect(notes, &CallNotesController::requestReady, worker, &PrompterWorker::send);
+    connect(worker, &PrompterWorker::resultReady, notes, &CallNotesController::handleResult);
+    connect(worker, &PrompterWorker::failed, notes, &CallNotesController::workerFailed);
+    connect(worker, &PrompterWorker::stopped, notes, &CallNotesController::workerFailed);
+    connect(notes, &CallNotesController::cancelRequested, worker, [notes, worker](const QString &token) { worker->cancelNotes(notes->materialId(), token); });
+    auto notesWanted = std::make_shared<bool>(false);
+    connect(notesPanel, &CallNotesPanel::generationCancelled, notes, [notesWanted] { *notesWanted = false; });
+    connect(finals, &CallNotesFinalizer::requestReady, worker, &PrompterWorker::send);
+    connect(worker, &PrompterWorker::resultReady, finals, &CallNotesFinalizer::handleResult);
+    connect(worker, &PrompterWorker::failed, finals, &CallNotesFinalizer::workerFailed);
+    connect(worker, &PrompterWorker::stopped, finals, &CallNotesFinalizer::workerFailed);
+    connect(finals, &CallNotesFinalizer::cancelRequested, worker, &PrompterWorker::cancelNotes);
+    connect(notes, &CallNotesController::cancelRequested, finals, [notes, finals](const QString &) {
+      finals->cancel(notes->materialId());
+    });
+    connect(finals, &CallNotesFinalizer::materialChanged, notes, [notes](qint64 id) {
+      if (notes->materialId() == id) notes->refreshFromStorage();
+    });
+    connect(finals, &CallNotesFinalizer::generationRequested, worker, [worker, finals] {
+      const auto model = pcm::app_settings::prompterModel();
+      finals->setGenerationEnabled(worker->start(model.isEmpty() ? PrompterWorker::bundledModel() : model));
+    });
+    auto startPrompter = [worker, prompter, notes, notesWanted] {
       const auto configured = pcm::app_settings::prompterModel();
-      if (worker->start(configured.isEmpty() ? PrompterWorker::bundledModel() : configured))
+      if (worker->start(configured.isEmpty() ? PrompterWorker::bundledModel() : configured)) {
+        *notesWanted = true; notes->setGenerationEnabled(true);
         prompter->resume();
+      }
     };
-    connect(prompterPanel, &PrompterPanel::pauseRequested, prompter, [worker, prompter] {
+    auto startNotesModel = [worker, notes] {
+      const auto configured = pcm::app_settings::prompterModel();
+      notes->setGenerationEnabled(worker->start(configured.isEmpty() ? PrompterWorker::bundledModel() : configured));
+    };
+    connect(notes, &CallNotesController::generationRequested, worker, startNotesModel);
+    connect(prompterPanel, &PrompterPanel::pauseRequested, prompter, [worker, prompter, notes, notesWanted] {
+      *notesWanted = false; notes->cancel(); notes->setGenerationEnabled(false);
       prompter->pause(); worker->stop();
     });
     callsPage->setSidePanelWidget(sidePanel);
@@ -1188,19 +1261,25 @@ void Application::connectSignals() {
     auto *controller = mCallTranscription.data();
     auto manualPrompterRequested = std::make_shared<bool>(false);
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptStarted, prompter,
-            [prompter, worker, startPrompter, manualPrompterRequested](qint64 id) {
-      worker->stop(); prompter->beginTranscript(id);
+            [prompter, worker, notes, startPrompter, manualPrompterRequested](qint64 id) {
+      worker->stop(); prompter->beginTranscript(id); notes->attachTranscript(id);
       if (*manualPrompterRequested || pcm::app_settings::prompterAutoStart()) startPrompter();
       *manualPrompterRequested = false;
     });
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::phraseAdded,
             prompter, &CallPrompterController::addPhrase);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::phraseAdded,
+            notes, &CallNotesController::addPhrase);
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptionStopped,
-            prompter, [worker, prompter] { prompter->pause(); worker->stop(); });
+            prompter, [worker, prompter, notes] { notes->cancel(); notes->setGenerationEnabled(false); prompter->pause(); worker->stop(); });
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::consentRevoked,
-            prompter, [worker, prompter] { prompter->endCall(); worker->stop(); });
+            prompter, [worker, prompter, notes, notesWanted] { *notesWanted = false; notes->revoke(); prompter->endCall(); worker->stop(); });
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptDeleted,
             prompter, &CallPrompterController::transcriptDeleted);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptDeleted,
+            notes, &CallNotesController::transcriptDeleted);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptReady,
+            finals, &CallNotesFinalizer::transcriptReady);
     connect(prompterPanel, &PrompterPanel::startRequested, controller,
             [controller, prompter, startPrompter, manualPrompterRequested] {
       if (controller->active() && prompter->transcriptId()) { startPrompter(); return; }
@@ -1208,6 +1287,7 @@ void Application::connectSignals() {
       controller->onTranscribeRequested();
       *manualPrompterRequested = false;
     });
+    connect(notesPanel, &CallNotesPanel::startRequested, prompterPanel, &PrompterPanel::startRequested);
     auto refreshButton = [this, callsPage, modelsAvailable] {
       mCallTranscription->refreshAvailability();
       callsPage->setTranscribeButtonVisible(pcm::app_settings::transcriptionEnabled() &&
@@ -1216,15 +1296,29 @@ void Application::connectSignals() {
     connect(callsPage, &CallsPage::eventKnownForCurrentCall, this,
             [this](int64_t id) { mCurrentCallEventId = id; });
     connect(callsPage, &CallsPage::callSessionStarted, this,
-            [this, controller, refreshButton, prompter, worker](pcm::video::VideoSession *session) {
+            [this, controller, refreshButton, prompter, worker, notes, finals, notesWanted](pcm::video::VideoSession *session) {
+              finals->setCallActive(true);
               worker->stop();
+              *notesWanted = false;
+              notes->beginCall(mCurrentCallEventId);
+              std::optional<DuckClient> callClient;
+              if (mCurrentCallEventId) {
+                try { callClient = mDb->get_client_by_event(*mCurrentCallEventId); } catch (...) {}
+              }
+              if (mCallNotesPanel) mCallNotesPanel->setClientInfo(callClient);
               prompter->beginTranscript(0);
               controller->attachCall(session, mCurrentCallEventId);
               refreshButton();
             });
-    connect(callsPage, &CallsPage::callSessionEnded, this, [this, controller, refreshButton, prompter, worker] {
+    connect(callsPage, &CallsPage::callSessionEnded, this, [this, controller, refreshButton, prompter, worker, notes, finals, notesWanted] {
+      const bool finishingTranscript = controller->active();
       controller->detachCall();
       prompter->endCall(); worker->stop();
+      notes->setGenerationEnabled(false);
+      notes->finishCall();
+      if (*notesWanted && notes->transcriptId() > 0)
+        finals->enqueue(notes->materialId(), finishingTranscript ? notes->transcriptId() : 0);
+      finals->setCallActive(false);
       mCurrentCallEventId.reset();
       refreshButton();
     });
@@ -1248,6 +1342,77 @@ void Application::connectSignals() {
     mMainWindow->registerTranscriptListPage(listPage);
     mMainWindow->registerTranscriptPage(reviewPage);
     auto selectedEvent = std::make_shared<std::pair<int64_t, qint64>>(0, 0);
+    connect(notesPanel, &CallNotesPanel::sourceRequested, sidePanel,
+            [this, notes, sidePanel, panel, reviewPage, selectedEvent](qint64 id) {
+      if (panel->focusPhrase(id)) { sidePanel->showTranscript(); return; }
+      const auto transcript = notes->source(QString::number(id))["transcript_id"].toInteger();
+      if (transcript <= 0 || reviewPage->editing()) return;
+      *selectedEvent = {0, 0}; reviewPage->reloadTranscript(transcript, tr("Transcript"));
+      mMainWindow->openTranscriptPage();
+      if (auto *phrase = reviewPage->findChild<QWidget *>("phraseCard_" + QString::number(id))) {
+        if (auto *scroll = reviewPage->findChild<QScrollArea *>()) scroll->ensureWidgetVisible(phrase);
+        phrase->setFocus();
+      }
+    });
+    auto openMaterials = [this, notes, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, notesWanted, bindNotesEditor](qint64 materialId, qint64 transcriptId) {
+      auto *dialog = new QDialog(mMainWindow.get());
+      dialog->setAttribute(Qt::WA_DeleteOnClose);
+      dialog->setWindowTitle(tr("Call materials")); dialog->resize(500, 740);
+      CallNotesController *saved = notes;
+      if (notes->materialId() != materialId || materialId <= 0) {
+        saved = new CallNotesController(mDb, dialog);
+        if (materialId > 0) saved->openMaterial(materialId); else saved->openTranscript(transcriptId);
+        // The call owns its queued final, even when this review dialog closes.
+        // Saved views share the same scheduler as automatic finalization.
+        if (finals->contains(saved->materialId())) saved->refreshFromStorage();
+        connect(finals, &CallNotesFinalizer::materialChanged, saved, [saved](qint64 id) {
+          if (saved->materialId() == id) saved->refreshFromStorage();
+        });
+        connect(saved, &CallNotesController::generationRequested, saved, [saved, finals] {
+          saved->deferFinal(); finals->enqueue(saved->materialId());
+        });
+        connect(saved, &CallNotesController::cancelRequested, saved, [saved, finals](const QString &) {
+          finals->cancel(saved->materialId());
+        });
+      }
+      auto *view = new CallNotesPanel(saved, dialog);
+      view->setInlineMode(true);
+      auto *editor = new ClientNotesPage(mDb, dialog);
+      editor->setAiPanelWidget(view);
+      bindNotesEditor(editor, saved);
+      try {
+        const auto material = mDb->get_call_material(saved->materialId());
+        if (material.event_id) editor->setClientInfo(mDb->get_client_by_event(*material.event_id));
+      } catch (...) {}
+      connect(view, &CallNotesPanel::editorRequested, editor, &ClientNotesPage::focusComposer);
+      connect(editor, &ClientNotesPage::openEventRequested, mMainWindow.get(), &MainWindow::returnToEvent);
+      if (saved == notes) {
+        connect(view, &CallNotesPanel::startRequested, prompterPanel, &PrompterPanel::startRequested);
+        connect(view, &CallNotesPanel::generationCancelled, notes, [notesWanted] { *notesWanted = false; });
+      }
+      auto *body = new QVBoxLayout(dialog); body->addWidget(editor);
+      connect(view, &CallNotesPanel::sourceRequested, dialog, [this, saved, notes, panel, sidePanel, reviewPage, dialog, selectedEvent](qint64 phraseId) {
+        const auto source = saved->source(QString::number(phraseId));
+        if (saved == notes && panel->focusPhrase(phraseId)) { sidePanel->showTranscript(); dialog->close(); return; }
+        const auto transcript = source["transcript_id"].toInteger();
+        if (transcript <= 0 || reviewPage->editing()) return;
+        *selectedEvent = {0, 0};
+        reviewPage->reloadTranscript(transcript, tr("Transcript")); mMainWindow->openTranscriptPage();
+        auto *phrase = reviewPage->findChild<QWidget *>("phraseCard_" + QString::number(phraseId));
+        if (phrase) {
+          const auto scroll = reviewPage->findChild<QScrollArea *>();
+          if (scroll) scroll->ensureWidgetVisible(phrase);
+          phrase->setFocus();
+        }
+        dialog->close();
+      });
+      dialog->open();
+    };
+    connect(reviewPage, &TranscriptPage::openCallNotesRequested, this, [this, openMaterials](qint64 id) {
+      const auto material = mDb->get_call_material_for_transcript(id); openMaterials(material.id, id);
+    });
+    connect(listPage, &TranscriptListPage::openCallMaterialRequested, this,
+            [openMaterials](qint64 id) { openMaterials(id, 0); });
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptReady,
             listPage, [this, listPage, eventPage](qint64 id) {
               listPage->reload();
@@ -1297,7 +1462,13 @@ void Application::connectSignals() {
                 callsPage->setSidePanelWidget(mCallNotesPanel);
               }
               mCallNotesPanel->setClientInfo(client);
+#ifdef SESSIO_CALL_TRANSCRIPTION
+              // Call-owned notes work without a client. Keep their panel visible
+              // for standalone meetings as well as scheduled client calls.
+              callsPage->setSidePanelExpandedByDefault(true);
+#else
               callsPage->setSidePanelExpandedByDefault(client.has_value());
+#endif
             });
   }
 }

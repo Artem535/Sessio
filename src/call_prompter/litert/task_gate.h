@@ -23,6 +23,11 @@ public:
     return !std::exchange(mCancelled, false);
   }
 
+  void endGeneration() {
+    std::lock_guard lock(mMutex);
+    mCancelled = false;
+  }
+
   Result run(const std::function<std::shared_ptr<Task>()> &submit) {
     std::shared_ptr<Task> task;
     {

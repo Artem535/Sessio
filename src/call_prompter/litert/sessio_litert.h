@@ -20,12 +20,23 @@
 
 namespace sessio::litert {
 
+enum class Backend { CPU, GPU }; // GPU is hardware Vulkan, never a software adapter.
+
+struct RuntimeInfo {
+  Backend backend = Backend::CPU;
+  std::string device;
+  bool cpuFallback = false;
+  std::string fallbackReason; // fixed diagnostic, never model paths or prompt text
+};
+
 struct ModelOptions {
   int threads = 4;
   int contextTokens = 4096;
-  std::string cacheDir; // compiled XNNPACK cache; empty disables it
+  std::string cacheDir; // disk cache root; empty uses upstream's model-adjacent cache
   // Load the MTP drafter. Only used by generate() calls without reusePrefix.
   bool speculativeDecoding = false;
+  Backend backend = Backend::GPU;
+  bool allowCpuFallback = true; // initialization only; generation failures are not replayed
 };
 
 struct GenerateOptions {
@@ -58,10 +69,12 @@ public:
   virtual Status generate(const std::string &prefix, const std::string &suffix, const GenerateOptions &options,
                           std::string *reply, GenerateStats *stats = nullptr) = 0;
   virtual void cancel() = 0;
+  virtual RuntimeInfo runtimeInfo() const = 0;
 };
 
-// Loads a .litertlm model on the CPU backend. Null on failure; the reason is
-// a short diagnostic without paths or prompt text.
+// Loads the requested backend in-process. A failed GPU initialization can fall
+// back to CPU; runtimeInfo() and the initialization diagnostic report the result.
+// Null on failure; error is a short diagnostic without paths or prompt text.
 SESSIO_LITERT_API std::unique_ptr<Model> loadModel(const std::string &path, const ModelOptions &options,
                                                    std::string *error);
 

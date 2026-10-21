@@ -1,5 +1,6 @@
 #include "transcript_page.h"
 #include "prompter_panel.h"
+#include "call_notes_controller.h"
 #include "phrase_card_paint.h"
 #include "transcript_client_dialog.h"
 #include <QFileDialog>
@@ -113,6 +114,12 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
   navigation->addWidget(back); navigation->addStretch();
   mAttach = button(tr("Attach clients"), "transcriptAttachClients", this);
   navigation->addWidget(mAttach);
+  auto *notes = button(tr("Call notes"), "transcriptCallNotes", this);
+  navigation->addWidget(notes);
+  connect(notes, &QPushButton::clicked, this, [this] {
+    const auto id = mSelector->currentData().toLongLong();
+    if (id > 0) emit openCallNotesRequested(id);
+  });
   mAgreements = button(tr("Review agreements"), "transcriptAgreements", this);
   navigation->addWidget(mAgreements);
   connect(mAgreements, &QPushButton::clicked, this, [this] {
@@ -123,6 +130,8 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
     dialog->setWindowTitle(tr("Call agreements")); dialog->resize(460, 650);
     auto *controller = new CallPrompterController(mDb, dialog); controller->beginTranscript(id);
     auto *panel = new PrompterPanel(controller, mDb, dialog);
+    auto *notes = new CallNotesController(mDb, dialog); notes->openTranscript(id);
+    panel->setCallNoteSaver([notes](const QString &cardId, const QString &text) { return notes->appendAgreement(cardId, text); });
     panel->findChild<QPushButton *>("prompterStart")->hide();
     panel->findChild<QPushButton *>("prompterPause")->hide();
     auto *layout = new QVBoxLayout(dialog);

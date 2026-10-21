@@ -157,13 +157,21 @@ QJsonArray mergeReschedules(const QJsonArray &events) {
   QSet<int> dropped;
   for (int a = 0; a < list.size(); ++a) {
     auto &accept = list[a];
-    if (accept["kind"] != "accept" || accept["unresolved"].toBool() || !accept["target_id"].toString().isEmpty()) continue;
+    if (accept["kind"] != "accept" || accept["unresolved"].toBool()) continue;
+    const auto target = accept["target_id"].toString();
     const auto evidence = stringSet(accept["evidence_ids"].toArray());
     for (int c = 0; c < list.size(); ++c) {
       const auto &cancel = list[c];
       if (dropped.contains(c) || cancel["kind"] != "cancel" || cancel["unresolved"].toBool() ||
-          cancel["target_id"].toString().isEmpty() || !evidence.intersects(stringSet(cancel["evidence_ids"].toArray())))
+          cancel["target_id"].toString().isEmpty())
         continue;
+      // A change of a record already supersedes it; cancelling it as well
+      // would show two cards for one reschedule.
+      if (!target.isEmpty()) {
+        if (cancel["target_id"].toString() == target) dropped.insert(c);
+        continue;
+      }
+      if (!evidence.intersects(stringSet(cancel["evidence_ids"].toArray()))) continue;
       accept["target_id"] = cancel["target_id"];
       dropped.insert(c);
       break;

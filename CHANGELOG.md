@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.33] - 2026-10-21
+
+- Added native call notes with editable model drafts, source-linked key points,
+  and a separate final-note generation status after the call.
+- Saved call materials independently of clients and calendar events, including
+  calls without speech recognition; upgraded the local/backup schema to 4.
+- Updated the Notes, Transcript and Prompter tabs to use the reviewed native
+  layout, with local processing, retry/cancel and manual acceptance.
+- Preserved full note composition during calls: Markdown preview, separate
+  saved entries, editing and file attachments, with AI drafts inside the feed.
+- Added a larger notes view while keeping the call video visible.
+- Ran the local Gemma model on a hardware Vulkan GPU by default, with automatic
+  CPU fallback at load time; on a Radeon 780M decoding is about 3.5x faster and
+  peak memory drops from about 10 GiB to about 1-2.5 GiB.
+
 ## [0.2.32] - 2026-10-13
 
 ### Added

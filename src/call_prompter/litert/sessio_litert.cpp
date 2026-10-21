@@ -3,10 +3,16 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdio>
 #include <filesystem>
 #include <mutex>
 #include <utility>
 #include <vector>
+
+#ifdef SESSIO_LITERT_VULKAN
+#include <dlfcn.h>
+#include <vulkan/vulkan.h>
+#endif
 
 #include "absl/time/time.h"
 #include "runtime/engine/engine.h"
@@ -25,6 +31,48 @@ using ::litert::lm::Engine;
 using ::litert::lm::EngineSettings;
 using detail::TaskGate;
 
+// Pin WebGPU to an enumerated hardware Vulkan adapter. In particular, a
+// machine exposing only llvmpipe must take the explicit CPU fallback path.
+std::string vulkanDevice() {
+#ifdef SESSIO_LITERT_VULKAN
+  void *library = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+  if (!library) return {};
+  struct LibraryScope { void *handle; ~LibraryScope() { dlclose(handle); } } scope{library};
+  const auto create = reinterpret_cast<PFN_vkCreateInstance>(dlsym(library, "vkCreateInstance"));
+  const auto destroy = reinterpret_cast<PFN_vkDestroyInstance>(dlsym(library, "vkDestroyInstance"));
+  const auto enumerate = reinterpret_cast<PFN_vkEnumeratePhysicalDevices>(dlsym(library, "vkEnumeratePhysicalDevices"));
+  const auto properties = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(dlsym(library, "vkGetPhysicalDeviceProperties"));
+  if (!create || !destroy || !enumerate || !properties) return {};
+  VkApplicationInfo app{};
+  app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+  app.pApplicationName = "Sessio";
+  app.apiVersion = VK_API_VERSION_1_1;
+  VkInstanceCreateInfo config{};
+  config.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+  config.pApplicationInfo = &app;
+  VkInstance instance = VK_NULL_HANDLE;
+  if (create(&config, nullptr, &instance) != VK_SUCCESS) return {};
+  struct InstanceScope {
+    VkInstance instance; PFN_vkDestroyInstance destroy;
+    ~InstanceScope() { destroy(instance, nullptr); }
+  } instanceScope{instance, destroy};
+  uint32_t count = 0;
+  if (enumerate(instance, &count, nullptr) != VK_SUCCESS || !count) return {};
+  std::vector<VkPhysicalDevice> devices(count);
+  if (enumerate(instance, &count, devices.data()) != VK_SUCCESS) return {};
+  std::string integrated;
+  for (uint32_t i = 0; i < count; ++i) {
+    VkPhysicalDeviceProperties info{};
+    properties(devices[i], &info);
+    if (info.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) return info.deviceName;
+    if (info.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU && integrated.empty()) integrated = info.deviceName;
+  }
+  return integrated;
+#else
+  return {};
+#endif
+}
+
 class AsyncTask final : public TaskGate::Task {
 public:
   explicit AsyncTask(std::unique_ptr<Engine::Session::TaskController> controller)
@@ -42,14 +90,18 @@ Status taskStatus(TaskGate::Result result) {
 
 class LiteRtModel final : public Model {
 public:
-  LiteRtModel(std::unique_ptr<Engine> engine, int contextTokens, bool speculative)
-      : mEngine(std::move(engine)), mContextTokens(contextTokens), mSpeculative(speculative) {}
+  LiteRtModel(std::unique_ptr<Engine> engine, int contextTokens, bool speculative, RuntimeInfo info)
+      : mEngine(std::move(engine)), mContextTokens(contextTokens), mSpeculative(speculative), mInfo(std::move(info)) {}
 
   ~LiteRtModel() override { cancel(); }
 
   Status generate(const std::string &prefix, const std::string &suffix, const GenerateOptions &options,
                   std::string *reply, GenerateStats *stats) override {
     if (!mTasks.beginGeneration()) return Status::Cancelled;
+    struct GenerationScope {
+      TaskGate &gate;
+      ~GenerationScope() { gate.endGeneration(); }
+    } scope{mTasks};
     GenerateStats local;
     if (!stats) stats = &local;
     *stats = {};
@@ -74,6 +126,7 @@ public:
   }
 
   void cancel() override { mTasks.cancel(); }
+  RuntimeInfo runtimeInfo() const override { return mInfo; }
 
 private:
   struct Prefix {
@@ -207,6 +260,7 @@ private:
   std::unique_ptr<Engine> mEngine;
   const int mContextTokens;
   const bool mSpeculative;
+  const RuntimeInfo mInfo;
   TaskGate mTasks;
   std::vector<Prefix> mPrefixes;
 };
@@ -216,34 +270,61 @@ private:
 Model::~Model() = default;
 
 std::unique_ptr<Model> loadModel(const std::string &path, const ModelOptions &options, std::string *error) {
-  const auto fail = [error](const char *reason) -> std::unique_ptr<Model> {
-    if (error) *error = reason;
-    return nullptr;
-  };
   // Runtime diagnostics may quote prompts; keep errors only.
   ::litert::lm::SetMinLogSeverity(::litert::lm::LogSeverity::kError);
-  auto assets = ::litert::lm::ModelAssets::Create(path);
-  if (!assets.ok()) return fail("model file cannot be opened");
-  auto settings = EngineSettings::CreateDefault(std::move(*assets), ::litert::lm::Backend::CPU);
-  if (!settings.ok()) return fail("model settings are invalid");
-  auto &main = settings->GetMutableMainExecutorSettings();
-  main.SetMaxNumTokens(options.contextTokens);
-  std::error_code ignored;
-  if (!options.cacheDir.empty() && (std::filesystem::create_directories(options.cacheDir, ignored) ||
-                                    std::filesystem::is_directory(options.cacheDir, ignored)))
-    main.SetCacheDir(options.cacheDir);
-  if (auto cpu = main.MutableBackendConfig<::litert::lm::CpuConfig>(); cpu.ok()) {
-    auto config = *cpu;
-    config.number_of_threads = options.threads;
-    main.SetBackendConfig(config);
+  if (error) error->clear();
+  std::string reason;
+  const auto attempt = [&](Backend backend, const std::string &fallbackReason) -> std::unique_ptr<Model> {
+    const auto fail = [&](const char *text) -> std::unique_ptr<Model> { reason = text; return nullptr; };
+    RuntimeInfo info;
+    info.backend = backend;
+    info.cpuFallback = !fallbackReason.empty();
+    info.fallbackReason = fallbackReason;
+    if (backend == Backend::GPU) {
+      info.device = vulkanDevice();
+      if (info.device.empty()) return fail("hardware Vulkan device unavailable");
+    }
+    auto assets = ::litert::lm::ModelAssets::Create(path);
+    if (!assets.ok()) return fail("model file cannot be opened");
+    const auto requested = backend == Backend::GPU ? ::litert::lm::Backend::GPU : ::litert::lm::Backend::CPU;
+    auto settings = EngineSettings::CreateDefault(std::move(*assets), requested,
+        ::litert::lm::Backend::CPU, ::litert::lm::Backend::CPU, ::litert::lm::Backend::CPU);
+    if (!settings.ok()) return fail("model settings are invalid");
+    auto &main = settings->GetMutableMainExecutorSettings();
+    main.SetMaxNumTokens(options.contextTokens);
+    if (!options.cacheDir.empty()) {
+      std::error_code ignored;
+      const auto cache = std::filesystem::path(options.cacheDir) / (backend == Backend::GPU ? "vulkan" : "cpu");
+      std::filesystem::create_directories(cache, ignored);
+      if (ignored) return fail("runtime cache directory unavailable");
+      main.SetCacheDir(cache.string());
+    }
+    if (auto cpu = main.MutableBackendConfig<::litert::lm::CpuConfig>(); cpu.ok()) {
+      auto config = *cpu;
+      config.number_of_threads = options.threads;
+      main.SetBackendConfig(config);
+    }
+    auto advanced = main.GetAdvancedSettings().value_or(::litert::lm::AdvancedSettings());
+    advanced.enable_speculative_decoding = options.speculativeDecoding;
+    advanced.preferred_device_substr = info.device;
+    main.SetAdvancedSettings(advanced);
+    settings->GetMutableBenchmarkParams();
+    auto engine = ::litert::lm::EngineFactory::CreateDefault(std::move(*settings));
+    if (!engine.ok()) return fail(backend == Backend::GPU ? "Vulkan engine initialization failed" : "CPU engine initialization failed");
+    if ((*engine)->GetEngineSettings().GetMainExecutorSettings().GetBackend() != requested)
+      return fail("runtime backend does not match request");
+    std::fprintf(stderr, "Sessio LiteRT: requested=%s actual=%s device=%s fallback=%s\n",
+                 options.backend == Backend::GPU ? "Vulkan" : "CPU", backend == Backend::GPU ? "Vulkan" : "CPU",
+                 info.device.c_str(), fallbackReason.empty() ? "none" : fallbackReason.c_str());
+    return std::make_unique<LiteRtModel>(std::move(*engine), options.contextTokens, options.speculativeDecoding, std::move(info));
+  };
+  if (auto model = attempt(options.backend, {})) return model;
+  if (options.backend == Backend::GPU && options.allowCpuFallback) {
+    const auto gpuFailure = reason;
+    if (auto model = attempt(Backend::CPU, gpuFailure)) return model;
   }
-  auto advanced = main.GetAdvancedSettings().value_or(::litert::lm::AdvancedSettings());
-  advanced.enable_speculative_decoding = options.speculativeDecoding;
-  main.SetAdvancedSettings(advanced);
-  settings->GetMutableBenchmarkParams(); // enables the per-turn decode token count
-  auto engine = ::litert::lm::EngineFactory::CreateDefault(std::move(*settings));
-  if (!engine.ok()) return fail("model cannot be loaded");
-  return std::make_unique<LiteRtModel>(std::move(*engine), options.contextTokens, options.speculativeDecoding);
+  if (error) *error = reason;
+  return nullptr;
 }
 
 } // namespace sessio::litert

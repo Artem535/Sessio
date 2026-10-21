@@ -183,7 +183,7 @@ RestoreResult RestoreService::restore_backup(const std::string &backup_path,
       return result;
     }
     if (manifest.psybackup_format_version != 1 ||
-        (manifest.schema_version < 1 || manifest.schema_version > 3) || manifest.backup_format_version != 1) {
+        (manifest.schema_version < 1 || manifest.schema_version > 4) || manifest.backup_format_version != 1) {
       result.error = "backup format or schema version is not supported";
       return result;
     }
@@ -218,12 +218,50 @@ RestoreResult RestoreService::restore_backup(const std::string &backup_path,
       result.error = "failed to import database snapshot";
       return result;
     }
+    // A schema-4 snapshot must contain its call materials already. Do not let
+    // additive startup migration conceal missing export tables as empty notes.
+    if (manifest.schema_version == 4) {
+      duckdb::DuckDB raw(Poco::Path(stagedDatabase).append("database.db").toString());
+      duckdb::Connection conn(raw);
+      // Check the physical catalog independently of row counts or join
+      // optimization: an empty call/transcript set still requires both tables.
+      auto tables = conn.Query(
+          "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='main' "
+          "AND table_type='BASE TABLE' AND table_name IN ('CallMaterial','CallMaterialTranscript')");
+      if (!tables || tables->HasError()) {
+        result.error = "cannot validate schema-4 call material tables";
+        return result;
+      }
+      auto tableCount = tables->Fetch();
+      if (!tableCount || !tableCount->size() || tableCount->GetValue(0, 0).GetValue<int64_t>() != 2) {
+        result.error = "backup is missing schema-4 call material tables";
+        return result;
+      }
+      auto materials = conn.Query("SELECT id,revision,event_id,state_json,created_at FROM CallMaterial LIMIT 0");
+      auto links = conn.Query("SELECT material_id,transcript_id FROM CallMaterialTranscript LIMIT 0");
+      if (!materials || materials->HasError() || !links || links->HasError()) {
+        result.error = "backup is missing schema-4 call material tables";
+        return result;
+      }
+      auto invalid = conn.Query(
+          "SELECT 1 FROM CallMaterialTranscript t LEFT JOIN CallMaterial m ON m.id=t.material_id "
+          "LEFT JOIN Transcript s ON s.id=t.transcript_id WHERE m.id IS NULL OR s.id IS NULL LIMIT 1");
+      if (!invalid || invalid->HasError()) {
+        result.error = "cannot validate restored call material links";
+        return result;
+      }
+      auto chunk = invalid->Fetch();
+      if (chunk && chunk->size()) {
+        result.error = "backup contains orphan call material links";
+        return result;
+      }
+    }
     // Validate and migrate before replacing the workspace with a legacy snapshot.
     {
       pcm::config::Config conf;
       conf.db_conf.value_.db_pth = Poco::Path(stagedDatabase);
       pcm::database::Database migrated(conf);
-      if (migrated.get_application_metadata().schema_version != 3) {
+      if (migrated.get_application_metadata().schema_version != 4) {
         result.error = "restored database schema is not supported";
         return result;
       }

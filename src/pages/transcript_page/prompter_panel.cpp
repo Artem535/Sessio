@@ -1,4 +1,5 @@
 #include "prompter_panel.h"
+#include "phrase_card_paint.h"
 #include <QGroupBox>
 #include <QInputDialog>
 #include <QLabel>
@@ -9,6 +10,18 @@
 #include <QMessageBox>
 
 namespace {
+class ReviewCard final : public QGroupBox {
+public:
+  using QGroupBox::QGroupBox;
+protected:
+  void paintEvent(QPaintEvent *) override {
+    paintPhraseCard(this, false);
+    QPainter painter(this);
+    painter.setPen(palette().color(QPalette::WindowText));
+    auto heading = font(); heading.setWeight(QFont::DemiBold); painter.setFont(heading);
+    painter.drawText(rect().adjusted(14, 10, -14, -10), Qt::AlignLeft | Qt::AlignTop, title());
+  }
+};
 QLabel *plainLabel(const QString &text, QWidget *parent) {
   auto *label = new QLabel(text, parent); label->setTextFormat(Qt::PlainText);
   label->setWordWrap(true); label->setTextInteractionFlags(Qt::TextSelectableByMouse); return label;
@@ -17,7 +30,7 @@ QLabel *plainLabel(const QString &text, QWidget *parent) {
 PrompterPanel::PrompterPanel(CallPrompterController *controller, std::shared_ptr<pcm::database::Database> db, QWidget *parent)
     : QWidget(parent), mController(controller), mDb(std::move(db)) {
   auto *layout = new QVBoxLayout(this);
-  layout->setContentsMargins(8, 8, 8, 8);
+  layout->setContentsMargins(16, 16, 16, 12); layout->setSpacing(12);
   mStatus = plainLabel({}, this); mStatus->setObjectName("prompterStatus"); layout->addWidget(mStatus);
   auto *bar = new QHBoxLayout;
   mStart = new QPushButton(tr("Start prompter"), this); mStart->setObjectName("prompterStart");
@@ -25,18 +38,26 @@ PrompterPanel::PrompterPanel(CallPrompterController *controller, std::shared_ptr
   bar->addWidget(mStart); bar->addWidget(mPause); layout->addLayout(bar);
   connect(mStart, &QPushButton::clicked, this, &PrompterPanel::startRequested);
   connect(mPause, &QPushButton::clicked, this, &PrompterPanel::pauseRequested);
-  mHint = new QGroupBox(tr("You could clarify"), this);
+  mHint = new ReviewCard(tr("You could clarify"), this);
   auto *hintLayout = new QVBoxLayout(mHint);
+  hintLayout->setContentsMargins(14, fontMetrics().height() + 20, 14, 12);
   mHintText = plainLabel({}, mHint); hintLayout->addWidget(mHintText);
   auto *hide = new QPushButton(tr("Hide"), mHint); hintLayout->addWidget(hide);
   connect(hide, &QPushButton::clicked, this, [this] { mDismissedHint = mHintText->text(); mHint->hide(); });
   mHint->hide();
   auto *scroll = new QScrollArea(this); scroll->setWidgetResizable(true); scroll->setFrameShape(QFrame::NoFrame);
   auto *content = new QWidget(scroll); auto *body = new QVBoxLayout(content);
-  body->addWidget(plainLabel(tr("For review"), content));
-  mCards = new QVBoxLayout; body->addLayout(mCards);
+  body->setContentsMargins(0, 0, 4, 0); body->setSpacing(12);
+  auto heading = [content](const QString &text) {
+    auto *result = plainLabel(text, content); auto font = result->font();
+    font.setWeight(QFont::DemiBold); result->setFont(font); return result;
+  };
+  body->addWidget(heading(tr("For review")));
+  mCards = new QVBoxLayout; mCards->setSpacing(12); body->addLayout(mCards);
   mEmpty = plainLabel(tr("New agreements will appear here after completed phrases."), content); body->addWidget(mEmpty);
-  body->addWidget(plainLabel(tr("Accepted agreements"), content));
+  body->addWidget(mHint);
+  auto *divider = new QFrame(content); divider->setFrameShape(QFrame::HLine); body->addWidget(divider);
+  body->addWidget(heading(tr("Accepted agreements")));
   mRecords = plainLabel({}, content); body->addWidget(mRecords); body->addStretch();
   scroll->setWidget(content); layout->addWidget(scroll, 1);
   auto *notice = plainLabel(tr("Private suggestions. Check the source before saving."), this); layout->addWidget(notice);
@@ -62,8 +83,9 @@ void PrompterPanel::refresh() {
     if (decision == "pending") ++pending;
     QWidget *widget = mCardWidgets.value(id);
     if (!widget) {
-      auto *box = new QGroupBox(this); box->setObjectName("prompterCard"); widget = box;
+      auto *box = new ReviewCard(this); box->setObjectName("prompterCard"); widget = box;
       auto *layout = new QVBoxLayout(box);
+      layout->setContentsMargins(14, fontMetrics().height() + 20, 14, 12); layout->setSpacing(10);
       auto *text = plainLabel({}, box); text->setObjectName("action"); layout->addWidget(text);
       auto *warning = plainLabel(tr("The source was changed or deleted. Review the transcript."), box);
       warning->setObjectName("sourceWarning"); layout->addWidget(warning);
@@ -78,6 +100,8 @@ void PrompterPanel::refresh() {
         auto *quote = plainLabel(source["speaker"].toString() + ": «" + source["text"].toString() + "»", box);
         layout->addWidget(quote);
         auto *jump = new QPushButton(tr("Source · %1:%2").arg(ms / 60000).arg((ms / 1000) % 60, 2, 10, QLatin1Char('0')), box);
+        jump->setFlat(true); jump->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+        jump->setToolTip(source["text"].toString());
         layout->addWidget(jump);
         connect(jump, &QPushButton::clicked, this, [this, evidenceId] { emit sourceRequested(evidenceId.toLongLong()); });
       }
@@ -156,6 +180,18 @@ void PrompterPanel::saveNote(const QString &cardId) {
   QString decision;
   for (const auto &value : mController->cards()) if (value.toObject()["id"].toString() == cardId) decision = value.toObject()["decision"].toString();
   if (decision == "pending" && !mController->acceptCard(cardId)) return;
+  if (mCallNoteSaver) {
+    if (mSavedCallNotes.contains(cardId)) return;
+    QString text;
+    for (const auto &value : mController->cards())
+      if (value.toObject()["id"].toString() == cardId) text = value.toObject()["action"].toString();
+    if (!text.isEmpty() && mCallNoteSaver(cardId, text)) {
+      mSavedCallNotes.insert(cardId); emit noteSaved();
+      auto *widget = mCardWidgets.value(cardId);
+      if (widget) { auto *save = widget->findChild<QPushButton *>("save"); save->setEnabled(false); save->setText(tr("Saved to notes")); }
+    }
+    return;
+  }
   const auto clients = mController->clientIds();
   if (clients.empty()) {
     QMessageBox::information(this, tr("Agreement kept as a draft"),

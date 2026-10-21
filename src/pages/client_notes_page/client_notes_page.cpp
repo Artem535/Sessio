@@ -15,6 +15,10 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFrame>
+#include <QGridLayout>
+#include <QJsonObject>
+#include <QResizeEvent>
+#include <QSignalBlocker>
 #include <QHash>
 #include <QHBoxLayout>
 #include <QImageReader>
@@ -29,10 +33,12 @@
 #include <QTextBrowser>
 #include <QTextDocument>
 #include <QTimer>
+#include <QToolButton>
 #include <QTimeZone>
 #include <QUrl>
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <variant>
 
@@ -42,8 +48,8 @@ QFrame *makeSurface(QWidget *parent = nullptr) {
   frame->setObjectName("notesSurface");
   const QString styleSheet = QStringLiteral(
                                   "#notesSurface {"
-                                  " background: rgba(255, 255, 255, 0.05);"
-                                  " border: 1px solid rgba(255, 255, 255, 0.08);"
+                                  " background: palette(base);"
+                                  " border: 1px solid palette(mid);"
                                   " border-radius: %1px;"
                                   "}")
                                   .arg(pcm::widgets::constants::kCardCornerRadius);
@@ -62,6 +68,11 @@ ClientNotesPage::ClientNotesPage(std::shared_ptr<pcm::database::Database> db,
 
 void ClientNotesPage::setClientInfo(const std::optional<DuckClient> &client) {
   mCurrentClient = client;
+  if (mMaterialId > 0) {
+    mEntriesRendered = false;
+    refresh();
+    return;
+  }
   mPendingAttachments.clear();
   refreshPendingAttachments();
   mClientNameLabel->setText(client.has_value()
@@ -71,9 +82,144 @@ void ClientNotesPage::setClientInfo(const std::optional<DuckClient> &client) {
   reloadNotes();
 }
 
-void ClientNotesPage::refresh() { reloadNotes(); }
+void ClientNotesPage::refresh() {
+  if (mMaterialId > 0) {
+    if (!mSavingCallEntry && mEditingEntryId.isEmpty() && !mManualSaveFailed && mCallActions.manualText) {
+      const auto text = mCallActions.manualText();
+      if (text != mComposer->toPlainText()) {
+        const QSignalBlocker blocker(mComposer);
+        const auto previous = mComposer->toPlainText();
+        if (text.startsWith(previous) && !previous.isEmpty()) {
+          auto position = mComposer->textCursor();
+          auto end = mComposer->textCursor(); end.movePosition(QTextCursor::End);
+          end.insertText(text.mid(previous.size())); mComposer->setTextCursor(position);
+        } else {
+          mComposer->setPlainText(text);
+        }
+        updatePreview();
+      }
+    }
+    if (!mSavingCallEntry && !mSavingDraftAttachments && !mAttachmentSaveFailed &&
+        mEditingEntryId.isEmpty() && mCallActions.draftAttachmentPaths)
+      loadPendingAttachmentPaths(mCallActions.draftAttachmentPaths());
+    if (!mSavingCallEntry) reloadCallEntries();
+    return;
+  }
+  reloadNotes();
+}
+
+void ClientNotesPage::setCallNoteActions(qint64 materialId, CallNoteActions actions) {
+  // Host changes context only after flushing the previous call's draft.
+  mMaterialId = materialId;
+  mEntriesRendered = false;
+  mCallActions = std::move(actions);
+  mEditingEntryId.clear(); mSavedEditorText.clear(); mManualSaveFailed = false;
+  mSavingCallEntry = false; mSavingDraftAttachments = false; mAttachmentSaveFailed = false;
+  mCancelEditButton->hide(); mAddNoteButton->setText(tr("Add note"));
+  mPreviewButton->setChecked(false); mPreviewButton->setText(tr("Preview"));
+  mPreview->hide(); mPreview->clear(); mComposer->show(); mSaveStatusLabel->clear(); mSaveStatusLabel->hide();
+  { const QSignalBlocker blocker(mComposer); mComposer->clear(); }
+  mPendingAttachments.clear(); refreshPendingAttachments();
+  mSavedPendingAttachments.clear();
+  if (mCallActions.draftAttachmentPaths) loadPendingAttachmentPaths(mCallActions.draftAttachmentPaths());
+  auto *root = qobject_cast<QVBoxLayout *>(layout());
+  root->removeWidget(mComposerSurface);
+  root->insertWidget(1, mComposerSurface);
+  mClientNameLabel->setText(tr("Meeting notes"));
+  mOpenClientCardButton->hide(); mAppointmentSummaryLabel->hide();
+  mFeedFilterControl->hide(); mLinkSessionButton->hide();
+  mComposer->setEnabled(materialId > 0);
+  mAttachFilesButton->setEnabled(materialId > 0 && bool(mCallActions.save));
+  mAddNoteButton->setEnabled(materialId > 0 && bool(mCallActions.save));
+  mPendingAttachmentsList->setEnabled(true);
+  mJumpToTodayButton->hide(); mJumpToLatestButton->hide();
+  refresh();
+}
+
+void ClientNotesPage::setAiPanelWidget(QWidget *panel) {
+  if (mAiPanel == panel) return;
+  if (mAiPanel) {
+    mAiHost->layout()->removeWidget(mAiPanel);
+    mAiPanel->setParent(nullptr);
+  }
+  mAiPanel = panel;
+  if (panel) { mAiHost->layout()->addWidget(panel); panel->show(); }
+  mAiHost->setVisible(panel != nullptr);
+}
+
+void ClientNotesPage::focusComposer() {
+  mPreviewButton->setChecked(false);
+  mComposer->setFocus();
+}
+
+void ClientNotesPage::updatePreview() {
+  mPreview->setMarkdown(mComposer->toPlainText());
+}
+
+void ClientNotesPage::restoreCallDraft() {
+  // Reading the controller is essential here: AI or another view may have
+  // appended to the new draft while this view was editing a saved entry.
+  const auto draft = mCallActions.manualText ? mCallActions.manualText() : mSavedEditorText;
+  { const QSignalBlocker blocker(mComposer); mComposer->setPlainText(draft); }
+  if (mCallActions.draftAttachmentPaths) loadPendingAttachmentPaths(mCallActions.draftAttachmentPaths());
+  else { mPendingAttachments = mSavedPendingAttachments; refreshPendingAttachments(); }
+  mSavedEditorText.clear(); mSavedPendingAttachments.clear();
+  updatePreview();
+}
+
+void ClientNotesPage::loadPendingAttachmentPaths(const QStringList &paths) {
+  QStringList current;
+  for (const auto &attachment : mPendingAttachments) current.append(attachment.sourcePath);
+  if (current == paths) return;
+  mPendingAttachments.clear();
+  QMimeDatabase mime;
+  for (const auto &path : paths) {
+    const QFileInfo info(path);
+    const auto type = mime.mimeTypeForFile(info).name();
+    mPendingAttachments.append({path, info.fileName(), type, type.startsWith("image/")});
+  }
+  refreshPendingAttachments();
+}
+
+bool ClientNotesPage::saveDraftAttachmentPaths() {
+  if (mMaterialId <= 0 || !mEditingEntryId.isEmpty() || !mCallActions.setDraftAttachmentPaths) return true;
+  QStringList paths;
+  for (const auto &attachment : mPendingAttachments) paths.append(attachment.sourcePath);
+  mSavingDraftAttachments = true;
+  const bool saved = mCallActions.setDraftAttachmentPaths(paths);
+  mSavingDraftAttachments = false; mAttachmentSaveFailed = !saved;
+  if (saved && mCallActions.draftAttachmentPaths) loadPendingAttachmentPaths(mCallActions.draftAttachmentPaths());
+  mSaveStatusLabel->setText(saved ? tr("Draft saved") : tr("Could not save — keep this page open"));
+  mSaveStatusLabel->show();
+  return saved;
+}
 
 void ClientNotesPage::onAddNoteClicked() {
+  if (mMaterialId > 0) {
+    const auto markdown = mComposer->toPlainText();
+    if (!mCallActions.save || (mEditingEntryId.isEmpty() && markdown.trimmed().isEmpty() && mPendingAttachments.isEmpty())) return;
+    QStringList paths;
+    for (const auto &attachment : mPendingAttachments) paths.append(attachment.sourcePath);
+    mSavingCallEntry = true;
+    const auto id = mCallActions.save(markdown, paths, mEditingEntryId);
+    mSavingCallEntry = false;
+    mSaveStatusLabel->setVisible(true);
+    if (id.isEmpty()) {
+      mSaveStatusLabel->setText(tr("Could not save — keep this page open"));
+      return;
+    }
+    const bool wasEditing = !mEditingEntryId.isEmpty();
+    mEditingEntryId.clear(); mManualSaveFailed = false; mAttachmentSaveFailed = false;
+    { const QSignalBlocker blocker(mComposer); mComposer->clear(); }
+    mPendingAttachments.clear();
+    if (wasEditing || mCallActions.manualText || mCallActions.draftAttachmentPaths) restoreCallDraft();
+    refreshPendingAttachments(); updatePreview();
+    mCancelEditButton->hide(); mAddNoteButton->setText(tr("Add note"));
+    mSaveStatusLabel->setText(tr("Note saved"));
+    reloadCallEntries();
+    emit noteEntrySaved(id);
+    return;
+  }
   if (!mDb || !mCurrentClient.has_value() || mCurrentClient->id <= 0) {
     return;
   }
@@ -122,6 +268,11 @@ void ClientNotesPage::onAttachFilesClicked() {
     return;
   }
 
+  addPendingAttachments(filePaths);
+}
+
+void ClientNotesPage::addPendingAttachments(const QStringList &filePaths) {
+
   QMimeDatabase mimeDatabase;
   for (const auto &path : filePaths) {
     QFileInfo fileInfo(path);
@@ -138,6 +289,7 @@ void ClientNotesPage::onAttachFilesClicked() {
     mPendingAttachments.push_back(attachment);
   }
 
+  saveDraftAttachmentPaths();
   refreshPendingAttachments();
 }
 
@@ -151,7 +303,9 @@ void ClientNotesPage::onPendingAttachmentActivated(QListWidgetItem *item) {
     return;
   }
 
+  const auto previous = mPendingAttachments;
   mPendingAttachments.removeAt(row);
+  if (!saveDraftAttachmentPaths()) mPendingAttachments = previous;
   refreshPendingAttachments();
 }
 
@@ -209,7 +363,8 @@ void ClientNotesPage::buildUi() {
   // an event filter instead (see analytics_page.cpp for the same pattern).
   auto *headerSurface = new QFrame(this);
   headerSurface->installEventFilter(new pcm::widgets::SurfacePaintFilter(headerSurface));
-  auto *headerLayout = new QHBoxLayout(headerSurface);
+  auto *headerLayout = new QGridLayout(headerSurface);
+  mHeaderLayout = headerLayout;
   headerLayout->setContentsMargins(
       pcm::widgets::constants::kNotesHeaderHorizontalPadding,
       pcm::widgets::constants::kNotesHeaderVerticalPadding,
@@ -222,10 +377,11 @@ void ClientNotesPage::buildUi() {
   clientNameFont.setPointSize(clientNameFont.pointSize() + 2);
   clientNameFont.setBold(true);
   mClientNameLabel->setFont(clientNameFont);
-  mClientNameLabel->setStyleSheet("color: rgba(255, 255, 255, 0.92);");
+  mClientNameLabel->setWordWrap(true);
 
   mAppointmentSummaryLabel = new QLabel(headerSurface);
-  mAppointmentSummaryLabel->setStyleSheet("color: rgba(255, 255, 255, 0.65);");
+  mAppointmentSummaryLabel->setWordWrap(true);
+  mAppointmentSummaryLabel->setForegroundRole(QPalette::PlaceholderText);
   mAppointmentSummaryLabel->setVisible(false);
 
   mOpenClientCardButton = new QPushButton(tr("Open client card"), headerSurface);
@@ -245,10 +401,9 @@ void ClientNotesPage::buildUi() {
   mFeedFilterControl->addItem(tr("Notes"), {}, {}, QStringLiteral("notes"));
   mFeedFilterControl->setCurrentIndex(0);
 
-  headerLayout->addLayout(titleColumn);
-  headerLayout->addStretch();
-  headerLayout->addWidget(mFeedFilterControl);
-  headerLayout->addWidget(mOpenClientCardButton);
+  headerLayout->addLayout(titleColumn, 0, 0);
+  headerLayout->addWidget(mFeedFilterControl, 1, 0);
+  headerLayout->addWidget(mOpenClientCardButton, 2, 0);
   rootLayout->addWidget(headerSurface);
 
   auto *feedSurface = makeSurface(this);
@@ -268,7 +423,7 @@ void ClientNotesPage::buildUi() {
 
   mEmptyLabel = new QLabel(tr("No notes yet"), mFeedWidget);
   mEmptyLabel->setAlignment(Qt::AlignCenter);
-  mEmptyLabel->setStyleSheet("color: rgba(255, 255, 255, 0.55);");
+  mEmptyLabel->setForegroundRole(QPalette::PlaceholderText);
   mFeedLayout->addWidget(mEmptyLabel);
   mFeedLayout->addStretch();
 
@@ -288,7 +443,15 @@ void ClientNotesPage::buildUi() {
   feedSurfaceLayout->addLayout(jumpButtonsLayout);
   rootLayout->addWidget(feedSurface, 1);
 
+  // The AI card shares the note feed but is not destroyed by history refreshes.
+  mAiHost = new QWidget(mFeedWidget);
+  auto *aiLayout = new QVBoxLayout(mAiHost);
+  aiLayout->setContentsMargins(0, 0, 0, 0);
+  mAiHost->hide();
+  mFeedLayout->insertWidget(mFeedLayout->count() - 1, mAiHost);
+
   auto *composerSurface = makeSurface(this);
+  mComposerSurface = composerSurface;
   auto *composerLayout = new QVBoxLayout(composerSurface);
   composerLayout->setContentsMargins(
       pcm::widgets::constants::kNotesHeaderHorizontalPadding,
@@ -298,12 +461,14 @@ void ClientNotesPage::buildUi() {
   composerLayout->setSpacing(pcm::widgets::constants::kNotesComposerSpacing);
 
   mComposer = new QPlainTextEdit(composerSurface);
+  mComposer->setObjectName("notesComposer");
   mComposer->setPlaceholderText(tr("Write a note in Markdown..."));
   mComposer->setMinimumHeight(120);
   mComposer->installEventFilter(this);
 
   mSaveStatusLabel = new QLabel(composerSurface);
-  mSaveStatusLabel->setStyleSheet("color: rgba(120, 220, 150, 0.9);");
+  mSaveStatusLabel->setObjectName("notesSaveStatus");
+  mSaveStatusLabel->setWordWrap(true);
   mSaveStatusLabel->setVisible(false);
 
   mPendingAttachmentsList = new QListWidget(composerSurface);
@@ -313,40 +478,80 @@ void ClientNotesPage::buildUi() {
   mPendingAttachmentsList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   mPendingAttachmentsList->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
   mPendingAttachmentsList->setMaximumHeight(120);
-  mPendingAttachmentsList->setStyleSheet(
-      "QListWidget {"
-      " background: rgba(255, 255, 255, 0.03);"
-      " border: 1px solid rgba(255, 255, 255, 0.06);"
-      " border-radius: 10px;"
-      " color: rgba(255, 255, 255, 0.82);"
-      "}"
-      "QListWidget::item {"
-      " padding: 8px 10px;"
-      " border-bottom: 1px solid rgba(255, 255, 255, 0.05);"
-      "}"
-      "QListWidget::item:selected {"
-      " background: rgba(255, 255, 255, 0.06);"
-      "}");
+  mPendingAttachmentsList->setWordWrap(true);
 
   mAttachFilesButton = new QPushButton(tr("Attach files"), composerSurface);
   mAttachFilesButton->setCursor(Qt::PointingHandCursor);
   mLinkSessionButton = new QPushButton(tr("Link to a session"), composerSurface);
   mLinkSessionButton->setCursor(Qt::PointingHandCursor);
   mAddNoteButton = new QPushButton(tr("Add note"), composerSurface);
+  mAddNoteButton->setObjectName("notesSave");
   mAddNoteButton->setCursor(Qt::PointingHandCursor);
 
+  auto *tools = new QHBoxLayout;
+  for (const auto &format : {QStringLiteral("**"), QStringLiteral("*"), QStringLiteral("- ")}) {
+    // Formatting actions are compact tools, not full-width push actions.
+    // QPushButton's platform minimum was making this row impose 404 px.
+    auto *button = new QToolButton(composerSurface);
+    const bool bold = format == "**";
+    const bool italic = format == "*";
+    button->setText(bold ? QStringLiteral("B") : italic ? QStringLiteral("I") : QStringLiteral("•"));
+    auto font = button->font();
+    font.setBold(bold);
+    font.setItalic(italic);
+    button->setFont(font);
+    const auto name = bold ? tr("Bold") : italic ? tr("Italic") : tr("List");
+    button->setAccessibleName(name);
+    button->setToolTip(name);
+    connect(button, &QToolButton::clicked, this, [this, format] {
+      focusComposer();
+      auto cursor = mComposer->textCursor();
+      const auto selected = cursor.selectedText();
+      cursor.insertText(format == "- " ? QStringLiteral("\n- ") + selected : format + selected + format);
+      mComposer->setTextCursor(cursor);
+    });
+    tools->addWidget(button);
+  }
+  mPreviewButton = new QPushButton(tr("Preview"), composerSurface);
+  mPreviewButton->setObjectName("notesPreviewToggle"); mPreviewButton->setCheckable(true);
+  tools->addStretch(); tools->addWidget(mPreviewButton);
+  composerLayout->addLayout(tools);
   composerLayout->addWidget(mComposer);
+  mPreview = new QTextBrowser(composerSurface); mPreview->setObjectName("notesPreview");
+  mPreview->setOpenExternalLinks(true); mPreview->setMinimumHeight(120); mPreview->hide();
+  composerLayout->addWidget(mPreview);
   composerLayout->addWidget(mSaveStatusLabel);
   composerLayout->addWidget(mPendingAttachmentsList);
-  auto *actionsLayout = new QHBoxLayout();
+  auto *actionsLayout = new QGridLayout();
+  mComposerActions = actionsLayout;
   actionsLayout->setContentsMargins(0, 0, 0, 0);
   actionsLayout->setSpacing(pcm::widgets::constants::kNotesComposerSpacing);
-  actionsLayout->addWidget(mAttachFilesButton, 0);
-  actionsLayout->addWidget(mLinkSessionButton, 0);
-  actionsLayout->addStretch();
-  actionsLayout->addWidget(mAddNoteButton, 0);
+  actionsLayout->addWidget(mAttachFilesButton, 0, 0);
+  actionsLayout->addWidget(mLinkSessionButton, 1, 0);
+  actionsLayout->addWidget(mAddNoteButton, 2, 0);
+  mCancelEditButton = new QPushButton(tr("Cancel edit"), composerSurface);
+  mCancelEditButton->setObjectName("notesCancelEdit"); mCancelEditButton->hide();
+  composerLayout->addWidget(mCancelEditButton);
   composerLayout->addLayout(actionsLayout);
   rootLayout->addWidget(composerSurface);
+
+  connect(mPreviewButton, &QPushButton::toggled, this, [this](bool preview) {
+    updatePreview(); mPreview->setVisible(preview); mComposer->setVisible(!preview);
+    mPreviewButton->setText(preview ? tr("Edit") : tr("Preview"));
+  });
+  connect(mComposer, &QPlainTextEdit::textChanged, this, [this] {
+    updatePreview();
+    if (mMaterialId <= 0 || mSavingCallEntry || !mEditingEntryId.isEmpty() || !mCallActions.setManualText) return;
+    mManualSaveFailed = !mCallActions.setManualText(mComposer->toPlainText());
+    mSaveStatusLabel->setText(mManualSaveFailed || mAttachmentSaveFailed ? tr("Could not save — keep this page open") : tr("Draft saved"));
+    mSaveStatusLabel->show();
+  });
+  connect(mCancelEditButton, &QPushButton::clicked, this, [this] {
+    if (mEditingEntryId.isEmpty()) return;
+    mEditingEntryId.clear();
+    restoreCallDraft();
+    mCancelEditButton->hide(); mAddNoteButton->setText(tr("Add note")); focusComposer();
+  });
 
   connect(mAttachFilesButton, &QPushButton::clicked, this,
           &ClientNotesPage::onAttachFilesClicked);
@@ -622,7 +827,9 @@ void ClientNotesPage::clearNotes() {
   mTodayAnchorWidget = nullptr;
   while (mFeedLayout->count() > 0) {
     auto *item = mFeedLayout->takeAt(0);
-    if (item->widget()) {
+    if (item->widget() && item->widget() != mAiHost) {
+      item->widget()->hide();
+      for (auto *button : item->widget()->findChildren<QPushButton *>()) button->setObjectName({});
       item->widget()->deleteLater();
     }
     delete item;
@@ -630,9 +837,133 @@ void ClientNotesPage::clearNotes() {
 
   mEmptyLabel = new QLabel(mFeedWidget);
   mEmptyLabel->setAlignment(Qt::AlignCenter);
-  mEmptyLabel->setStyleSheet("color: rgba(255, 255, 255, 0.55);");
+  mEmptyLabel->setForegroundRole(QPalette::PlaceholderText);
   mFeedLayout->addWidget(mEmptyLabel);
+  if (mAiHost) mFeedLayout->addWidget(mAiHost);
   mFeedLayout->addStretch();
+}
+
+void ClientNotesPage::resizeEvent(QResizeEvent *event) {
+  QWidget::resizeEvent(event);
+  arrangeCompactUi();
+}
+
+void ClientNotesPage::arrangeCompactUi() {
+  const bool compact = width() < 620;
+  mHeaderLayout->removeWidget(mFeedFilterControl);
+  mHeaderLayout->removeWidget(mOpenClientCardButton);
+  mHeaderLayout->addWidget(mFeedFilterControl, compact ? 1 : 0, compact ? 0 : 1);
+  mHeaderLayout->addWidget(mOpenClientCardButton, compact ? 2 : 0, compact ? 0 : 2);
+  QList<QPushButton *> visibleActions;
+  int required = 0;
+  for (auto *button : {mAttachFilesButton, mLinkSessionButton, mAddNoteButton}) {
+    mComposerActions->removeWidget(button);
+    if (!button->isHidden()) {
+      visibleActions.append(button);
+      required += button->minimumSizeHint().width();
+    }
+  }
+  required += std::max(0, static_cast<int>(visibleActions.size()) - 1) * mComposerActions->horizontalSpacing();
+  const auto outerMargins = layout()->contentsMargins();
+  const auto composerMargins = mComposerSurface->layout()->contentsMargins();
+  const int available = width() - outerMargins.left() - outerMargins.right() -
+      composerMargins.left() - composerMargins.right();
+  const bool stackActions = required > available;
+  for (int i = 0; i < visibleActions.size(); ++i)
+    mComposerActions->addWidget(visibleActions[i], stackActions ? i : 0, stackActions ? 0 : i);
+  // A document's height depends on the actual viewport width, not the maximum bubble width.
+  for (auto *view : mFeedWidget->findChildren<QTextBrowser *>("notesEntryBody")) {
+    const int available = std::max(80, mScrollArea->viewport()->width() - 64);
+    view->document()->setTextWidth(available);
+    view->setFixedHeight(static_cast<int>(std::ceil(view->document()->size().height())) + 12);
+  }
+}
+
+void ClientNotesPage::reloadCallEntries() {
+  const auto entries = mCallActions.entries ? mCallActions.entries() : QJsonArray{};
+  if (mEntriesRendered && entries == mRenderedEntries) return;
+  mRenderedEntries = entries; mEntriesRendered = true;
+  const bool hasClient = mCurrentClient.has_value() && mCurrentClient->id > 0;
+  if (hasClient) {
+    // Reuse the existing client timeline, including Markdown previews, session
+    // links and attachments. Call entries remain in their own storage.
+    reloadNotes();
+    auto *history = new QLabel(tr("Client history"), mFeedWidget);
+    auto font = history->font(); font.setBold(true); history->setFont(font);
+    mFeedLayout->insertWidget(mFeedLayout->indexOf(mAiHost) + 1, history);
+  } else {
+    clearNotes();
+  }
+  mComposer->setEnabled(true); mAttachFilesButton->setEnabled(bool(mCallActions.save));
+  mAddNoteButton->setEnabled(bool(mCallActions.save));
+  mLinkSessionButton->hide(); mFeedFilterControl->hide();
+  mEmptyLabel->setText(tr("No notes yet")); mEmptyLabel->setVisible(entries.isEmpty() && !hasClient);
+  auto *heading = new QLabel(tr("This meeting"), mFeedWidget);
+  auto font = heading->font(); font.setBold(true); heading->setFont(font);
+  mFeedLayout->insertWidget(mFeedLayout->indexOf(mAiHost), heading);
+  for (const auto &entry : entries) addCallEntry(entry.toObject());
+  arrangeCompactUi();
+}
+
+void ClientNotesPage::addCallEntry(const QJsonObject &entry) {
+  auto *card = makeSurface(mFeedWidget);
+  card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
+  auto *layout = new QVBoxLayout(card); layout->setContentsMargins(12, 12, 12, 12);
+  auto *time = new QLabel(QDateTime::fromMSecsSinceEpoch(entry["created_at"].toInteger()).toLocalTime()
+                             .toString("dd.MM.yyyy HH:mm"), card);
+  time->setForegroundRole(QPalette::PlaceholderText); layout->addWidget(time);
+  auto *body = new QTextBrowser(card); body->setObjectName("notesEntryBody");
+  body->setFrameShape(QFrame::NoFrame); body->setOpenExternalLinks(true);
+  body->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  body->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  auto option = body->document()->defaultTextOption(); option.setWrapMode(QTextOption::WrapAnywhere);
+  body->document()->setDefaultTextOption(option);
+  body->setMarkdown(entry["body_markdown"].toString()); layout->addWidget(body);
+  const auto entryId = entry["id"].toString();
+  for (const auto &value : entry["attachments"].toArray()) {
+    const auto attachment = value.toObject();
+    auto *open = new QPushButton(attachment["file_name"].toString(), card);
+    open->setObjectName("notesOpenAttachment");
+    open->setToolTip(open->text());
+    open->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    const auto attachmentId = attachment["id"].toString();
+    open->setEnabled(bool(mCallActions.attachmentPath));
+    connect(open, &QPushButton::clicked, this, [this, entryId, attachmentId] {
+      const auto path = mCallActions.attachmentPath ? mCallActions.attachmentPath(entryId, attachmentId) : QString{};
+      if (!path.isEmpty()) QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    });
+    layout->addWidget(open);
+    if (attachment["mime_type"].toString().startsWith("image/")) {
+      auto *preview = new QLabel(card); preview->setObjectName("notesAttachmentPreview");
+      preview->hide(); layout->addWidget(preview);
+      auto *toggle = new QPushButton(tr("Preview"), card);
+      toggle->setCheckable(true); toggle->setEnabled(bool(mCallActions.attachmentPath));
+      connect(toggle, &QPushButton::toggled, this, [this, preview, entryId, attachmentId](bool shown) {
+        if (shown && mCallActions.attachmentPath) {
+          const auto path = mCallActions.attachmentPath(entryId, attachmentId);
+          if (path.isEmpty()) return;
+          QImageReader reader(path); reader.setAutoTransform(true);
+          const auto size = reader.size();
+          if (size.isValid()) reader.setScaledSize(size.scaled(240, 180, Qt::KeepAspectRatio));
+          preview->setPixmap(QPixmap::fromImage(reader.read()));
+        }
+        preview->setVisible(shown);
+      });
+      layout->addWidget(toggle, 0, Qt::AlignLeft);
+    }
+  }
+  auto *edit = new QPushButton(tr("Edit"), card); edit->setObjectName("notesEditEntry");
+  edit->setEnabled(bool(mCallActions.save)); layout->addWidget(edit, 0, Qt::AlignRight);
+  connect(edit, &QPushButton::clicked, this, [this, entryId, entry] {
+    // Preserve unsent text and pending files while visiting an existing entry.
+    if (!mEditingEntryId.isEmpty()) return;
+    mSavedEditorText = mComposer->toPlainText(); mEditingEntryId = entryId;
+    mSavedPendingAttachments = mPendingAttachments; mPendingAttachments.clear(); refreshPendingAttachments();
+    mComposer->setPlainText(entry["body_markdown"].toString());
+    mCancelEditButton->show(); mAddNoteButton->setText(tr("Save changes")); focusComposer();
+  });
+  const int beforeAi = mFeedLayout->indexOf(mAiHost);
+  mFeedLayout->insertWidget(beforeAi >= 0 ? beforeAi : mFeedLayout->count() - 1, card);
 }
 
 void ClientNotesPage::addNoteBubble(const DuckClientNote &note) {
@@ -642,8 +973,8 @@ void ClientNotesPage::addNoteBubble(const DuckClientNote &note) {
   bubble->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
   bubble->setStyleSheet(
       "#noteBubble {"
-      " background: rgba(255, 255, 255, 0.04);"
-      " border: 1px solid rgba(255, 255, 255, 0.08);"
+      " background: palette(base);"
+      " border: 1px solid palette(mid);"
       " border-radius: 12px;"
       "}");
 
@@ -663,9 +994,10 @@ void ClientNotesPage::addNoteBubble(const DuckClientNote &note) {
   timestampLabel->setText(createdAt.isValid()
                               ? createdAt.toString("dd.MM.yyyy HH:mm")
                               : tr("Unknown time"));
-  timestampLabel->setStyleSheet("color: rgba(255, 255, 255, 0.50);");
+  timestampLabel->setForegroundRole(QPalette::PlaceholderText);
 
   auto *bodyView = new QTextBrowser(bubble);
+  bodyView->setObjectName("notesEntryBody");
   bodyView->setFrameShape(QFrame::NoFrame);
   bodyView->setOpenExternalLinks(true);
   bodyView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -683,7 +1015,7 @@ void ClientNotesPage::addNoteBubble(const DuckClientNote &note) {
   bodyView->setStyleSheet(
       "QTextBrowser {"
       " background: transparent;"
-      " color: rgba(255, 255, 255, 0.92);"
+      " color: palette(text);"
       " border: none;"
       " padding: 0px;"
       " margin: 0px;"
@@ -772,7 +1104,7 @@ void ClientNotesPage::addSessionEntry(const DuckEvent &event) {
                                                 : tr("Unknown time"),
                               title));
   timeLabel->setStyleSheet(
-      "QPushButton { text-align: left; color: rgba(255, 255, 255, 0.90); "
+      "QPushButton { text-align: left; color: palette(button-text); "
       "font-weight: 600; background: transparent; border: none; padding: 0px; }");
 
   auto *detailLabel = new QLabel(card);
@@ -787,7 +1119,7 @@ void ClientNotesPage::addSessionEntry(const DuckEvent &event) {
                           QStringLiteral(" ") + pcm::app_settings::currencySymbol());
   }
   detailLabel->setText(detailText);
-  detailLabel->setStyleSheet("color: rgba(255, 255, 255, 0.55);");
+  detailLabel->setForegroundRole(QPalette::PlaceholderText);
   detailLabel->setVisible(!detailText.isEmpty());
 
   layout->addWidget(timeLabel);
@@ -814,7 +1146,7 @@ QLabel *ClientNotesPage::addDateDivider(const QDate &date) {
   divider->setAlignment(Qt::AlignCenter);
   divider->setText(QStringLiteral("— %1 —").arg(
       QLocale().toString(date, QLocale::LongFormat)));
-  divider->setStyleSheet("color: rgba(255, 255, 255, 0.45); background: transparent;");
+  divider->setForegroundRole(QPalette::PlaceholderText);
   mFeedLayout->insertWidget(mFeedLayout->count() - 1, divider);
   return divider;
 }
@@ -829,9 +1161,9 @@ void ClientNotesPage::addChangeLogEntry(const DuckEventChangeLog &entry) {
   line->setFlat(true);
   line->setCursor(Qt::PointingHandCursor);
   line->setStyleSheet(
-      "QPushButton { color: rgba(255, 255, 255, 0.45); background: transparent; "
+      "QPushButton { color: palette(placeholder-text); background: transparent; "
       "border: none; padding: 2px 0px; }"
-      "QPushButton:hover { color: rgba(255, 255, 255, 0.65); }");
+      "QPushButton:hover { color: palette(text); }");
 
   if (entry.event_current_start_date.has_value()) {
     const auto sessionAt = QDateTime::fromMSecsSinceEpoch(*entry.event_current_start_date,
@@ -886,14 +1218,14 @@ void ClientNotesPage::addAttachmentWidgets(
     nameButton->setStyleSheet(
         "QPushButton {"
         " text-align: left;"
-        " color: rgba(255, 255, 255, 0.84);"
-        " background: rgba(255, 255, 255, 0.04);"
-        " border: 1px solid rgba(255, 255, 255, 0.08);"
+        " color: palette(button-text);"
+        " background: palette(base);"
+        " border: 1px solid palette(mid);"
         " border-radius: 10px;"
         " padding: 8px 12px;"
         "}"
         "QPushButton:hover {"
-        " background: rgba(255, 255, 255, 0.07);"
+        " background: palette(alternate-base);"
         "}");
 
     auto *openButton = new QPushButton(tr("Open"));
@@ -916,7 +1248,7 @@ void ClientNotesPage::addAttachmentWidgets(
       previewLabel->setAlignment(Qt::AlignLeft);
       previewLabel->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
       previewLabel->setStyleSheet(
-          "background: rgba(255, 255, 255, 0.02);"
+          "background: palette(base);"
           "border-radius: 10px;");
       layout->addWidget(previewLabel);
 

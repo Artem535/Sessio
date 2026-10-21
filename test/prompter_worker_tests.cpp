@@ -71,6 +71,23 @@ protected:
 
 } // namespace
 
+TEST_F(PrompterWorkerTest, CancellingColdNotesDrainsTheOtherQueuedRequest) {
+  auto entered = std::make_shared<QSemaphore>();
+  auto gate = std::make_shared<QSemaphore>();
+  PrompterWorker worker([probe = probe, entered, gate](const QString &) -> std::unique_ptr<pcm::prompter::PrompterEngine> {
+    entered->release(); gate->acquire(); return std::make_unique<FakeEngine>(probe);
+  });
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.start(model));
+  ASSERT_TRUE(entered->tryAcquire(1, 5000));
+  auto one = request(1); one["task"] = "notes"; one["material_id"] = 1; one["request_token"] = "one";
+  worker.send(one);
+  auto two = request(2); two["task"] = "notes"; two["material_id"] = 2; two["request_token"] = "two";
+  worker.send(two); worker.cancelNotes(1, "one"); gate->release();
+  ASSERT_TRUE(replies.wait(5000)); ASSERT_EQ(replies.count(), 1);
+  EXPECT_EQ(replies[0][0].toJsonObject()["request_id"].toInt(), 2);
+}
+
 TEST_F(PrompterWorkerTest, MissingModelFailsWithoutLoading) {
   PrompterWorker worker(factory(probe));
   QSignalSpy failed(&worker, &PrompterWorker::failed);

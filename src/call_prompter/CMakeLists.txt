@@ -9,12 +9,14 @@ set(TARGET_NAME ${PROJECT_NAME}_call_prompter)
 add_library(${TARGET_NAME} STATIC
   prompter_pipeline.h
   prompter_pipeline.cpp
+  call_notes_pipeline.h
+  call_notes_pipeline.cpp
   prompter_engine.h
 )
 qt_add_resources(${TARGET_NAME} call_prompter_prompts
   PREFIX /call-prompter
   BASE prompts
-  FILES prompts/extract.txt prompts/match.txt)
+  FILES prompts/extract.txt prompts/match.txt prompts/notes.txt prompts/notes_merge.txt)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Core)
 

@@ -10,6 +10,7 @@ CallSidePanel::CallSidePanel(QWidget *notesPage, QWidget *transcriptPanel, QWidg
       mStack(new QStackedWidget(this)) {
   auto *layout = new QVBoxLayout(this);
   layout->setContentsMargins(0, 0, 0, 0);
+  layout->setSpacing(8);
   mSwitcher->addItem(tr("Notes"));
   mSwitcher->addItem(tr("Transcript"));
   mSwitcher->setItemsShouldExpand(true);
@@ -53,7 +54,13 @@ void CallSidePanel::setPrompterPanel(QWidget *panel, QWidget *sharedHint) {
   if (mStack->count() >= 3) return;
   mStack->addWidget(panel);
   mSwitcher->addItem(tr("Prompter"));
-  static_cast<QVBoxLayout *>(layout())->insertWidget(0, sharedHint);
+  // The hint belongs to the Prompter tab. Keep its existing widget and signal
+  // connections, and let the tab own its lifetime together with the cards.
+  if (sharedHint && !panel->isAncestorOf(sharedHint)) {
+    auto *body = panel->layout();
+    if (!body) body = new QVBoxLayout(panel);
+    body->addWidget(sharedHint);
+  }
 }
 void CallSidePanel::setPrompterPendingCount(int count) {
   if (mStack->count() >= 3) mSwitcher->setItemBadge(2, count > 0 ? QString::number(count) : QString());

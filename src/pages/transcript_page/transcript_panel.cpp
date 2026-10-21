@@ -1,5 +1,6 @@
 #include "transcript_panel.h"
 #include "phrase_card_paint.h"
+#include "accent_color.h"
 #include <QHBoxLayout>
 #include <QFrame>
 #include <QLabel>
@@ -37,10 +38,13 @@ QString timestamp(std::int64_t milliseconds) {
 
 TranscriptPanel::TranscriptPanel(QWidget *parent) : QWidget(parent) {
   auto *layout = new QVBoxLayout(this);
+  layout->setContentsMargins(16, 16, 16, 12); layout->setSpacing(12);
   auto *header = new QHBoxLayout;
-  header->addWidget(label(tr("Transcript"), "transcriptTitle", this));
+  auto *title = label(tr("Transcript"), "transcriptTitle", this);
+  auto titleFont = title->font(); titleFont.setWeight(QFont::DemiBold); title->setFont(titleFont);
+  header->addWidget(title);
   auto *badge = label(tr("Local"), "transcriptLocal", this);
-  badge->setFrameStyle(QFrame::StyledPanel); header->addStretch(); header->addWidget(badge);
+  header->addStretch(); header->addWidget(badge);
   layout->addLayout(header);
   mStatus = label({}, "transcriptStatus", this); layout->addWidget(mStatus);
   mReason = label({}, "transcriptStartReason", this); layout->addWidget(mReason); mReason->hide();
@@ -101,17 +105,20 @@ void TranscriptPanel::addPhrase(const DuckTranscriptPhrase &phrase) {
   auto *meta = new QHBoxLayout;
   auto *dot = label(QStringLiteral("●"), "speakerMarker", row);
   auto markerPalette = dot->palette();
-  markerPalette.setColor(QPalette::WindowText, practitioner ? palette().color(QPalette::Highlight) : QColor("#65bda9"));
+  markerPalette.setColor(QPalette::WindowText, practitioner ? pcm::widgets::accentColor(palette()) : palette().color(QPalette::WindowText));
   dot->setPalette(markerPalette);
+  dot->setWordWrap(false); dot->setFixedWidth(dot->fontMetrics().horizontalAdvance(QStringLiteral("●")) + 2);
   meta->addWidget(dot);
   auto *speaker = label(name, "phraseSpeaker", row);
-  QFont font = speaker->font(); font.setBold(true); font.setPointSize(11); speaker->setFont(font);
+  QFont font = speaker->font(); font.setWeight(QFont::DemiBold); speaker->setFont(font);
   meta->addWidget(speaker); meta->addStretch();
   const auto range = phrase.end_ms > phrase.start_ms ? timestamp(phrase.start_ms) + QStringLiteral(" – ") + timestamp(phrase.end_ms) : timestamp(phrase.start_ms);
-  meta->addWidget(label(range, "phraseTime", row));
+  auto *time = label(range, "phraseTime", row); time->setWordWrap(false);
+  time->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  time->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+  meta->addWidget(time, 0, Qt::AlignRight | Qt::AlignTop);
   layout->addLayout(meta);
   auto *text = label(QString::fromStdString(phrase.text), "phraseText", row);
-  auto textFont = text->font(); textFont.setPointSize(12); text->setFont(textFont);
   text->setTextInteractionFlags(Qt::TextSelectableByMouse); layout->addWidget(text);
   mRows->insertWidget(mRows->count() - 1, row); ++mPhraseCount;
 }

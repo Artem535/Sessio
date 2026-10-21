@@ -71,3 +71,11 @@ TEST(PrompterTaskGateTest, FailedSubmissionDoesNotPublishATask) {
   EXPECT_FALSE(gate.beginGeneration());
   EXPECT_TRUE(gate.beginGeneration());
 }
+TEST(PrompterTaskGateTest, CompletedCancelledGenerationDoesNotCancelTheNextRequest) {
+  TaskGate gate;
+  ASSERT_TRUE(gate.beginGeneration()); gate.cancel();
+  gate.endGeneration();
+  ASSERT_TRUE(gate.beginGeneration());
+  EXPECT_EQ(gate.run([] { return std::make_shared<FinishedTask>(); }), TaskGate::Result::Done);
+  gate.endGeneration();
+}

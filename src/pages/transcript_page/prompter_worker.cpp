@@ -1,5 +1,7 @@
 #include "prompter_worker.h"
 #include <QCoreApplication>
+#include <QCryptographicHash>
+#include <QHash>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -9,6 +11,7 @@
 #include <mutex>
 
 #include "prompter_pipeline.h"
+#include "call_notes_pipeline.h"
 
 namespace {
 constexpr int kLoadTimeoutMs = 180000; // first load compiles the XNNPACK cache
@@ -26,6 +29,10 @@ struct PrompterWorker::Shared {
   PrompterWorker *receiver = nullptr;
   std::shared_ptr<pcm::prompter::PrompterEngine> engine;
   std::atomic_int generation = 0;
+  std::atomic_int requestSerial = 0;
+  // Model-thread-only cache of deterministic note subproblems. Finalization
+  // reuses unchanged chunks; no source texts or replies are written to logs.
+  QHash<QByteArray, QJsonValue> notesCache;
   void cancel() {
     std::lock_guard lock(mutex);
     if (engine) engine->cancel();
@@ -44,6 +51,7 @@ struct PrompterWorker::Shared {
   // Called only on the model thread, including from QThread::finished when
   // quit() bypasses the queued release. Destruction happens outside the lock.
   void release() {
+    notesCache.clear();
     std::shared_ptr<pcm::prompter::PrompterEngine> released;
     {
       std::lock_guard lock(mutex);
@@ -103,7 +111,8 @@ bool PrompterWorker::start(const QString &model) {
     fail(); return false;
   }
   if (!mStopped) return true;
-  mStopped = false; mReady = false; mPending = {}; mExpected = {};
+  mModelPath = model;
+  mStopped = false; mReady = false; mPending = {}; mExpected = {}; mQueue.clear(); mReloadAfterCancel = false;
   const int generation = ++mGeneration;
   mShared->generation = generation;
   mTimeout.start(kLoadTimeoutMs);
@@ -129,6 +138,8 @@ bool PrompterWorker::start(const QString &model) {
         const auto request = worker.mPending;
         worker.mPending = {};
         worker.send(request);
+      } else if (guard && generation == worker.mGeneration && !worker.mStopped && worker.mExpected.isEmpty() && !worker.mQueue.isEmpty()) {
+        worker.send(worker.mQueue.dequeue());
       }
     });
   }, Qt::QueuedConnection);
@@ -136,38 +147,66 @@ bool PrompterWorker::start(const QString &model) {
 }
 
 void PrompterWorker::stop() {
-  mStopped = true; mReady = false; mTimeout.stop(); mPending = {}; mExpected = {};
+  const bool wasActive = !mStopped;
+  mStopped = true; mReady = false; mTimeout.stop(); mPending = {}; mExpected = {}; mQueue.clear(); mReloadAfterCancel = false;
+  ++mShared->requestSerial;
   mShared->generation = ++mGeneration;
   mShared->cancel();
   QMetaObject::invokeMethod(mThreadContext, [shared = mShared] {
     shared->release();
   }, Qt::QueuedConnection);
+  if (wasActive) emit stopped();
 }
 
 void PrompterWorker::fail() { stop(); emit failed(); }
 
 void PrompterWorker::send(const QJsonObject &request) {
   if (mStopped) { emit failed(); return; }
+  if ((!mReady && !mPending.isEmpty()) || (mReady && !mExpected.isEmpty())) {
+    if (mQueue.size() >= 8) {
+      auto rejected = request; rejected.remove("utterances"); rejected["error"] = "queue_full";
+      emit resultReady(rejected); return;
+    }
+    // Agreement extraction stays ahead of background note updates.
+    if (request["task"] != "notes") mQueue.prepend(request); else mQueue.enqueue(request);
+    return;
+  }
   if (!mReady) {
-    if (!mPending.isEmpty()) { fail(); return; }
     mPending = request; return;
   }
   if (QJsonDocument(request).toJson(QJsonDocument::Compact).size() > kMaxRequestBytes) { fail(); return; }
   mExpected = request;
-  mTimeout.start(kRequestTimeoutMs);
+  mTimeout.start(request["task"] == "notes" ? 10 * 60 * 1000 : kRequestTimeoutMs);
   const int generation = mGeneration;
-  QMetaObject::invokeMethod(mThreadContext, [shared = mShared, request, generation] {
-    const auto engine = shared->current();
+  const int serial = ++mShared->requestSerial;
+  QMetaObject::invokeMethod(mThreadContext, [shared = mShared, request, generation, serial] {
+    auto engine = shared->current();
     if (!engine || shared->generation != generation) return;
     QJsonObject result;
     try {
-      result = pcm::prompter::processRequest(request, [&engine](const QString &system, const QByteArray &payload) {
-        return engine->generate(system, payload);
-      });
+      auto generate = [&engine, shared, generation, serial, notes = request["task"] == "notes"](const QString &system, const QByteArray &payload) {
+        if (shared->generation != generation || shared->requestSerial != serial)
+          throw pcm::prompter::PipelineError("cancelled");
+        const auto key = QCryptographicHash::hash(system.toUtf8() + QByteArray(1, '\0') + payload, QCryptographicHash::Sha256);
+        if (notes && shared->notesCache.contains(key)) return shared->notesCache.value(key);
+        auto value = engine->generate(system, payload);
+        if (shared->generation != generation || shared->requestSerial != serial)
+          throw pcm::prompter::PipelineError("cancelled");
+        if (notes) {
+          if (shared->notesCache.size() >= 128) shared->notesCache.erase(shared->notesCache.begin());
+          shared->notesCache.insert(key, value);
+        }
+        return value;
+      };
+      if (request["task"] == "notes") {
+        result = {{"protocol_version", 1}, {"notes", pcm::prompter::processNotes(request["utterances"].toArray(), generate)}};
+        for (const char *key : {"request_id", "session_generation", "ledger_revision", "task", "material_id", "final", "request_token"})
+          result.insert(key, request.value(key));
+      } else result = pcm::prompter::processRequest(request, generate);
     } catch (...) {
       // Never expose exception texts: they may describe source text or prompts.
       result = {{"protocol_version", 1}, {"error", "inference_failed"}};
-      for (const char *key : {"request_id", "session_generation", "ledger_revision"})
+      for (const char *key : {"request_id", "session_generation", "ledger_revision", "task", "material_id", "final", "request_token"})
         if (request.contains(key)) result.insert(key, request.value(key));
     }
     shared->post([generation, result](PrompterWorker &worker) { worker.finish(generation, result); });
@@ -180,5 +219,32 @@ void PrompterWorker::finish(int generation, const QJsonObject &result) {
       result["session_generation"] != mExpected["session_generation"] ||
       result["ledger_revision"] != mExpected["ledger_revision"]) { fail(); return; }
   mExpected = {}; mTimeout.stop();
+  if (mReloadAfterCancel) {
+    // Cancellation may arrive after the model posted its reply. Decide here
+    // on the GUI thread, where cancelNotes and queue ownership are serialized.
+    // Release and reload before draining; never load a second model alongside
+    // the first, and do not report unrelated queued requests as stopped.
+    auto queued = std::move(mQueue);
+    mStopped = true; stop();
+    if (start(mModelPath)) mQueue = std::move(queued);
+    emit resultReady(result);
+    return;
+  }
+  QPointer<PrompterWorker> guard(this);
   emit resultReady(result);
+  if (guard && !mStopped && mExpected.isEmpty() && !mQueue.isEmpty()) send(mQueue.dequeue());
+}
+
+void PrompterWorker::cancelNotes(qint64 materialId, const QString &requestToken) {
+  const auto matches = [materialId, &requestToken](const QJsonObject &request) {
+    return request["task"] == "notes" && request["material_id"].toInteger() == materialId &&
+        (requestToken.isEmpty() || request["request_token"].toString() == requestToken);
+  };
+  for (qsizetype i = mQueue.size(); i > 0; --i)
+    if (matches(mQueue[i - 1])) mQueue.removeAt(i - 1);
+  if (matches(mPending)) mPending = {};
+  if (matches(mExpected)) {
+    mReloadAfterCancel = true;
+    ++mShared->requestSerial; mShared->cancel();
+  }
 }

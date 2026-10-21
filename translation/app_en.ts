@@ -162,6 +162,234 @@
     </message>
 </context>
 <context>
+    <name>CallNotesController</name>
+    <message>
+        <source>Could not save call materials. Reopen the call and try again.</source>
+        <translation>Could not save call materials. Reopen the call and try again.</translation>
+    </message>
+    <message>
+        <source>Forming the final meeting note…</source>
+        <translation>Forming the final meeting note…</translation>
+    </message>
+    <message>
+        <source>Updating conversation notes…</source>
+        <translation>Updating conversation notes…</translation>
+    </message>
+    <message>
+        <source>Waiting for local processing</source>
+        <translation>Waiting for local processing</translation>
+    </message>
+    <message>
+        <source>Final note saved with this call</source>
+        <translation>Final note saved with this call</translation>
+    </message>
+    <message>
+        <source>Notes updated through %1</source>
+        <translation>Notes updated through %1</translation>
+    </message>
+    <message>
+        <source>Local processing failed. You can retry.</source>
+        <translation>Local processing failed. You can retry.</translation>
+    </message>
+    <message>
+        <source>The transcript changed. Generate the note again.</source>
+        <translation>The transcript changed. Generate the note again.</translation>
+    </message>
+    <message>
+        <source>Processing cancelled. Your notes are saved.</source>
+        <translation>Processing cancelled. Your notes are saved.</translation>
+    </message>
+    <message>
+        <source>Processing was interrupted. You can retry.</source>
+        <translation>Processing was interrupted. You can retry.</translation>
+    </message>
+    <message>
+        <source>A saved transcript and a local model are required.</source>
+        <translation>A saved transcript and a local model are required.</translation>
+    </message>
+    <message>
+        <source>Notes are saved with this call. A client is optional.</source>
+        <translation>Notes are saved with this call. A client is optional.</translation>
+    </message>
+</context>
+<context>
+    <name>CallNotesPanel</name>
+    <message>
+        <source>Queued</source>
+        <translation>Queued</translation>
+    </message>
+    <message>
+        <source>Generating…</source>
+        <translation>Generating…</translation>
+    </message>
+    <message>
+        <source>Ready for review</source>
+        <translation>Ready for review</translation>
+    </message>
+    <message>
+        <source>Could not generate notes</source>
+        <translation>Could not generate notes</translation>
+    </message>
+    <message>
+        <source>Cancelled</source>
+        <translation>Cancelled</translation>
+    </message>
+    <message>
+        <source>Sources changed — review required</source>
+        <translation>Sources changed — review required</translation>
+    </message>
+    <message>
+        <source>Interrupted — retry available</source>
+        <translation>Interrupted — retry available</translation>
+    </message>
+    <message>
+        <source>Model unavailable</source>
+        <translation>Model unavailable</translation>
+    </message>
+    <message>
+        <source>Not started</source>
+        <translation>Not started</translation>
+    </message>
+    <message>
+        <source>My notes</source>
+        <translation>My notes</translation>
+    </message>
+    <message>
+        <source>Write your own notes here…</source>
+        <translation>Write your own notes here…</translation>
+    </message>
+    <message>
+        <source>Model draft</source>
+        <translation>Model draft</translation>
+    </message>
+    <message>
+        <source>Model notes will appear here after completed phrases. Your own notes are saved separately.</source>
+        <translation>Model notes will appear here after completed phrases. Your own notes are saved separately.</translation>
+    </message>
+    <message>
+        <source>Edit model draft</source>
+        <translation>Edit model draft</translation>
+    </message>
+    <message>
+        <source>To my notes</source>
+        <translation>To my notes</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Edit</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>Dismiss</translation>
+    </message>
+    <message>
+        <source>Start notes</source>
+        <translation>Start notes</translation>
+    </message>
+    <message>
+        <source>Generate final note</source>
+        <translation>Generate final note</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Key points</translation>
+    </message>
+    <message>
+        <source>AI draft and key points</source>
+        <translation>AI draft and key points</translation>
+    </message>
+    <message>
+        <source>Add to editor</source>
+        <translation>Add to editor</translation>
+    </message>
+    <message>
+        <source>Saved</source>
+        <translation>Saved</translation>
+    </message>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Could not save — keep this page open</translation>
+    </message>
+    <message numerus="yes">
+        <source>%1 · %n phrases</source>
+        <translation>
+            <numerusform>%1 · %n phrase</numerusform>
+            <numerusform>%1 · %n phrases</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Source · %1</source>
+        <translation>Source · %1</translation>
+    </message>
+    <message>
+        <source>Live notes · %1</source>
+        <translation>Live notes · %1</translation>
+    </message>
+    <message>
+        <source>Final note · %1</source>
+        <translation>Final note · %1</translation>
+    </message>
+    <message>
+        <source>Final meeting note</source>
+        <translation>Final meeting note</translation>
+    </message>
+    <message>
+        <source>Through %1</source>
+        <translation>Through %1</translation>
+    </message>
+    <message>
+        <source>Open a call to view or write notes.</source>
+        <translation>Open a call to view or write notes.</translation>
+    </message>
+    <message>
+        <source>The transcript changed. Generate the note again.</source>
+        <translation>The transcript changed. Generate the note again.</translation>
+    </message>
+    <message>
+        <source>The model draft changed. Your edit is kept below; cancel editing to review the new draft.</source>
+        <translation>The model draft changed. Your edit is kept below; cancel editing to review the new draft.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n points</source>
+        <translation>
+            <numerusform>%n point</numerusform>
+            <numerusform>%n points</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Added to my notes</source>
+        <translation>Added to my notes</translation>
+    </message>
+    <message>
+        <source>Added to editor</source>
+        <translation>Added to editor</translation>
+    </message>
+    <message>
+        <source>To editor</source>
+        <translation>To editor</translation>
+    </message>
+    <message>
+        <source>Save edit</source>
+        <translation>Save edit</translation>
+    </message>
+    <message>
+        <source>Cancel edit</source>
+        <translation>Cancel edit</translation>
+    </message>
+    <message>
+        <source>Retry notes</source>
+        <translation>Retry notes</translation>
+    </message>
+    <message>
+        <source>Retry final note</source>
+        <translation>Retry final note</translation>
+    </message>
+</context>
+<context>
     <name>CallPage</name>
     <message>
         <source>Connecting...</source>
@@ -174,6 +402,18 @@
     <message>
         <source>Call ended.</source>
         <translation>Call ended.</translation>
+    </message>
+    <message>
+        <source>Back to calls</source>
+        <translation>Back to calls</translation>
+    </message>
+    <message>
+        <source>Video and notes</source>
+        <translation>Video and notes</translation>
+    </message>
+    <message>
+        <source>Expand notes</source>
+        <translation>Expand notes</translation>
     </message>
     <message>
         <source>Waiting for others to join</source>
@@ -594,6 +834,14 @@
         <translation>%1 → Notes</translation>
     </message>
     <message>
+        <source>Meeting notes</source>
+        <translation>Meeting notes</translation>
+    </message>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Could not save — keep this page open</translation>
+    </message>
+    <message>
         <source>Note saved</source>
         <translation>Note saved</translation>
     </message>
@@ -624,6 +872,46 @@
     <message>
         <source>Write a note in Markdown...</source>
         <translation>Write a note in Markdown...</translation>
+    </message>
+    <message>
+        <source>Bold</source>
+        <translation>Bold</translation>
+    </message>
+    <message>
+        <source>Italic</source>
+        <translation>Italic</translation>
+    </message>
+    <message>
+        <source>List</source>
+        <translation>List</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Preview</translation>
+    </message>
+    <message>
+        <source>Cancel edit</source>
+        <translation>Cancel edit</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Edit</translation>
+    </message>
+    <message>
+        <source>Draft saved</source>
+        <translation>Draft saved</translation>
+    </message>
+    <message>
+        <source>Client history</source>
+        <translation>Client history</translation>
+    </message>
+    <message>
+        <source>This meeting</source>
+        <translation>This meeting</translation>
+    </message>
+    <message>
+        <source>Save changes</source>
+        <translation>Save changes</translation>
     </message>
     <message>
         <source>Canceled</source>
@@ -2719,8 +3007,8 @@ See you!</translation>
 <context>
     <name>TranscriptListPage</name>
     <message>
-        <source>Transcripts</source>
-        <translation>Transcripts</translation>
+        <source>Call materials</source>
+        <translation>Call materials</translation>
     </message>
     <message>
         <source>No transcripts yet.
@@ -2775,6 +3063,10 @@ They appear here after a call with transcription turned on.</translation>
         <source>Delete</source>
         <translation>Delete</translation>
     </message>
+    <message>
+        <source>Call notes · %1</source>
+        <translation>Call notes · %1</translation>
+    </message>
     <message numerus="yes">
         <source>%n transcripts</source>
         <translation>
@@ -2824,6 +3116,10 @@ They appear here after a call with transcription turned on.</translation>
     <message>
         <source>More actions</source>
         <translation>More actions</translation>
+    </message>
+    <message>
+        <source>Call notes</source>
+        <translation>Call notes</translation>
     </message>
     <message>
         <source>Review agreements</source>
@@ -3270,6 +3566,10 @@ Your previous data was kept.</translation>
     <message>
         <source>Keep as draft</source>
         <translation>Keep as draft</translation>
+    </message>
+    <message>
+        <source>Call materials</source>
+        <translation>Call materials</translation>
     </message>
     <message>
         <source>Transcript</source>

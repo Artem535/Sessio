@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QThread>
 #include <QTimer>
+#include <QQueue>
 #include <memory>
 
 #include "prompter_engine.h"
@@ -21,12 +22,14 @@ public:
   bool start(const QString &model);
   void stop();
   void send(const QJsonObject &request);
+  void cancelNotes(qint64 materialId, const QString &requestToken = {});
   // The Gemma model shipped next to the application, or empty.
   static QString bundledModel();
 signals:
   void ready();
   void resultReady(QJsonObject result);
   void failed();
+  void stopped();
 private:
   struct Shared;
   void fail();
@@ -38,6 +41,9 @@ private:
   QTimer mTimeout;
   QJsonObject mPending;
   QJsonObject mExpected;
+  QQueue<QJsonObject> mQueue;
+  QString mModelPath;
   int mGeneration = 0;
   bool mReady = false, mStopped = true;
+  bool mReloadAfterCancel = false;
 };

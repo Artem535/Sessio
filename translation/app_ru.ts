@@ -162,6 +162,236 @@
     </message>
 </context>
 <context>
+    <name>CallNotesController</name>
+    <message>
+        <source>Could not save call materials. Reopen the call and try again.</source>
+        <translation>Не удалось сохранить материалы. Откройте звонок заново и повторите попытку.</translation>
+    </message>
+    <message>
+        <source>Forming the final meeting note…</source>
+        <translation>Формируется итог встречи…</translation>
+    </message>
+    <message>
+        <source>Updating conversation notes…</source>
+        <translation>Обновляются заметки разговора…</translation>
+    </message>
+    <message>
+        <source>Waiting for local processing</source>
+        <translation>В очереди на локальную обработку</translation>
+    </message>
+    <message>
+        <source>Final note saved with this call</source>
+        <translation>Итог сохранён у этого звонка</translation>
+    </message>
+    <message>
+        <source>Notes updated through %1</source>
+        <translation>Заметки обновлены до %1</translation>
+    </message>
+    <message>
+        <source>Local processing failed. You can retry.</source>
+        <translation>Ошибка локальной обработки. Можно повторить попытку.</translation>
+    </message>
+    <message>
+        <source>The transcript changed. Generate the note again.</source>
+        <translation>Транскрипция изменилась. Сформируйте заметку заново.</translation>
+    </message>
+    <message>
+        <source>Processing cancelled. Your notes are saved.</source>
+        <translation>Обработка отменена. Ваши заметки сохранены.</translation>
+    </message>
+    <message>
+        <source>Processing was interrupted. You can retry.</source>
+        <translation>Обработка прервалась. Можно повторить попытку.</translation>
+    </message>
+    <message>
+        <source>A saved transcript and a local model are required.</source>
+        <translation>Нужны сохранённая транскрипция и локальная модель.</translation>
+    </message>
+    <message>
+        <source>Notes are saved with this call. A client is optional.</source>
+        <translation>Заметки сохраняются у звонка. Выбирать клиента необязательно.</translation>
+    </message>
+</context>
+<context>
+    <name>CallNotesPanel</name>
+    <message>
+        <source>Queued</source>
+        <translation>В очереди</translation>
+    </message>
+    <message>
+        <source>Generating…</source>
+        <translation>Формируется…</translation>
+    </message>
+    <message>
+        <source>Ready for review</source>
+        <translation>Готово к проверке</translation>
+    </message>
+    <message>
+        <source>Could not generate notes</source>
+        <translation>Не удалось сформировать заметки</translation>
+    </message>
+    <message>
+        <source>Cancelled</source>
+        <translation>Отменено</translation>
+    </message>
+    <message>
+        <source>Sources changed — review required</source>
+        <translation>Источники изменились — нужна проверка</translation>
+    </message>
+    <message>
+        <source>Interrupted — retry available</source>
+        <translation>Прервано — можно повторить</translation>
+    </message>
+    <message>
+        <source>Model unavailable</source>
+        <translation>Модель недоступна</translation>
+    </message>
+    <message>
+        <source>Not started</source>
+        <translation>Не запущено</translation>
+    </message>
+    <message>
+        <source>My notes</source>
+        <translation>Мои заметки</translation>
+    </message>
+    <message>
+        <source>Write your own notes here…</source>
+        <translation>Запишите свои заметки…</translation>
+    </message>
+    <message>
+        <source>Model draft</source>
+        <translation>Черновик от модели</translation>
+    </message>
+    <message>
+        <source>Model notes will appear here after completed phrases. Your own notes are saved separately.</source>
+        <translation>Заметки модели появятся после законченных реплик. Ваши записи сохраняются отдельно.</translation>
+    </message>
+    <message>
+        <source>Edit model draft</source>
+        <translation>Редактирование черновика модели</translation>
+    </message>
+    <message>
+        <source>To my notes</source>
+        <translation>В мои заметки</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Править</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>Отклонить</translation>
+    </message>
+    <message>
+        <source>Start notes</source>
+        <translation>Запустить заметки</translation>
+    </message>
+    <message>
+        <source>Generate final note</source>
+        <translation>Сформировать итог</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Ключевые моменты</translation>
+    </message>
+    <message>
+        <source>AI draft and key points</source>
+        <translation>Черновик ИИ и ключевые моменты</translation>
+    </message>
+    <message>
+        <source>Add to editor</source>
+        <translation>Добавить в редактор</translation>
+    </message>
+    <message>
+        <source>Saved</source>
+        <translation>Сохранено</translation>
+    </message>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Не удалось сохранить — не закрывайте страницу</translation>
+    </message>
+    <message numerus="yes">
+        <source>%1 · %n phrases</source>
+        <translation>
+            <numerusform>%1 · %n реплика</numerusform>
+            <numerusform>%1 · %n реплики</numerusform>
+            <numerusform>%1 · %n реплик</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Source · %1</source>
+        <translation>Источник · %1</translation>
+    </message>
+    <message>
+        <source>Live notes · %1</source>
+        <translation>Во время звонка · %1</translation>
+    </message>
+    <message>
+        <source>Final note · %1</source>
+        <translation>Итог · %1</translation>
+    </message>
+    <message>
+        <source>Final meeting note</source>
+        <translation>Итог встречи</translation>
+    </message>
+    <message>
+        <source>Through %1</source>
+        <translation>До %1</translation>
+    </message>
+    <message>
+        <source>Open a call to view or write notes.</source>
+        <translation>Откройте звонок, чтобы просматривать и писать заметки.</translation>
+    </message>
+    <message>
+        <source>The transcript changed. Generate the note again.</source>
+        <translation>Транскрипция изменилась. Сформируйте заметку заново.</translation>
+    </message>
+    <message>
+        <source>The model draft changed. Your edit is kept below; cancel editing to review the new draft.</source>
+        <translation>Черновик модели изменился. Ваша правка сохранена в редакторе. Отмените редактирование, чтобы проверить новый черновик.</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n points</source>
+        <translation>
+            <numerusform>%n пункт</numerusform>
+            <numerusform>%n пункта</numerusform>
+            <numerusform>%n пунктов</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Added to my notes</source>
+        <translation>Добавлено в мои заметки</translation>
+    </message>
+    <message>
+        <source>Added to editor</source>
+        <translation>Добавлено в редактор</translation>
+    </message>
+    <message>
+        <source>To editor</source>
+        <translation>В редактор</translation>
+    </message>
+    <message>
+        <source>Save edit</source>
+        <translation>Сохранить правку</translation>
+    </message>
+    <message>
+        <source>Cancel edit</source>
+        <translation>Отменить правку</translation>
+    </message>
+    <message>
+        <source>Retry notes</source>
+        <translation>Повторить заметки</translation>
+    </message>
+    <message>
+        <source>Retry final note</source>
+        <translation>Повторить итог</translation>
+    </message>
+</context>
+<context>
     <name>CallPage</name>
     <message>
         <source>Connecting...</source>
@@ -174,6 +404,18 @@
     <message>
         <source>Call ended.</source>
         <translation>Звонок завершён.</translation>
+    </message>
+    <message>
+        <source>Back to calls</source>
+        <translation>К звонкам</translation>
+    </message>
+    <message>
+        <source>Video and notes</source>
+        <translation>Видео и заметки</translation>
+    </message>
+    <message>
+        <source>Expand notes</source>
+        <translation>Развернуть заметки</translation>
     </message>
     <message>
         <source>Waiting for others to join</source>
@@ -596,6 +838,14 @@
         <translation>%1 → Заметки</translation>
     </message>
     <message>
+        <source>Meeting notes</source>
+        <translation>Заметки встречи</translation>
+    </message>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Не удалось сохранить — не закрывайте страницу</translation>
+    </message>
+    <message>
         <source>Note saved</source>
         <translation>Заметка сохранена</translation>
     </message>
@@ -626,6 +876,46 @@
     <message>
         <source>Write a note in Markdown...</source>
         <translation>Напишите заметку в Markdown...</translation>
+    </message>
+    <message>
+        <source>Bold</source>
+        <translation>Полужирный</translation>
+    </message>
+    <message>
+        <source>Italic</source>
+        <translation>Курсив</translation>
+    </message>
+    <message>
+        <source>List</source>
+        <translation>Список</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Просмотр</translation>
+    </message>
+    <message>
+        <source>Cancel edit</source>
+        <translation>Отменить правку</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Править</translation>
+    </message>
+    <message>
+        <source>Draft saved</source>
+        <translation>Черновик сохранён</translation>
+    </message>
+    <message>
+        <source>Client history</source>
+        <translation>История клиента</translation>
+    </message>
+    <message>
+        <source>This meeting</source>
+        <translation>Эта встреча</translation>
+    </message>
+    <message>
+        <source>Save changes</source>
+        <translation>Сохранить изменения</translation>
     </message>
     <message>
         <source>Canceled</source>
@@ -2723,8 +3013,8 @@ See you!</source>
 <context>
     <name>TranscriptListPage</name>
     <message>
-        <source>Transcripts</source>
-        <translation>Транскрипты</translation>
+        <source>Call materials</source>
+        <translation>Материалы звонков</translation>
     </message>
     <message>
         <source>No transcripts yet.
@@ -2780,6 +3070,10 @@ They appear here after a call with transcription turned on.</source>
         <source>Delete</source>
         <translation>Удалить</translation>
     </message>
+    <message>
+        <source>Call notes · %1</source>
+        <translation>Заметки звонка · %1</translation>
+    </message>
     <message numerus="yes">
         <source>%n transcripts</source>
         <translation>
@@ -2830,6 +3124,10 @@ They appear here after a call with transcription turned on.</source>
     <message>
         <source>More actions</source>
         <translation>Другие действия</translation>
+    </message>
+    <message>
+        <source>Call notes</source>
+        <translation>Заметки звонка</translation>
     </message>
     <message>
         <source>Review agreements</source>
@@ -3278,6 +3576,10 @@ Your previous data was kept.</source>
     <message>
         <source>Keep as draft</source>
         <translation>Оставить как черновик</translation>
+    </message>
+    <message>
+        <source>Call materials</source>
+        <translation>Материалы звонков</translation>
     </message>
     <message>
         <source>Transcript</source>

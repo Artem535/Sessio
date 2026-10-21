@@ -29,6 +29,14 @@ struct PrompterState {
   std::string json;
 };
 
+struct CallMaterialState {
+  int64_t id = 0;
+  int64_t revision = 0;
+  std::optional<int64_t> event_id;
+  std::string json;
+  int64_t created_at = 0;  // Epoch milliseconds.
+};
+
 struct ClientMonthlyStats {
   int year = 0;
   int month = 0;
@@ -114,6 +122,21 @@ public:
   bool set_transcript_clients(int64_t transcript_id, const std::vector<int64_t> &client_ids);
   std::vector<int64_t> get_transcript_client_ids(int64_t transcript_id);
   PrompterState get_prompter_state(int64_t transcript_id);
+  int64_t create_call_material(std::optional<int64_t> event_id);
+  // Adopts a late transcript event when unassociated, rejects conflicting
+  // events, and never clears an existing event for a standalone transcript.
+  bool link_call_material_transcript(int64_t material_id, int64_t transcript_id);
+  CallMaterialState get_call_material(int64_t material_id);
+  CallMaterialState get_call_material_for_transcript(int64_t transcript_id);
+  std::vector<CallMaterialState> get_call_materials();
+  std::vector<int64_t> get_call_material_transcript_ids(int64_t material_id);
+  // Compare-and-swap: initial revision is 0; every save or source invalidation
+  // increments it. JSON must be an object (maximum 4 MiB). manual_notes and
+  // manual_text, when present, are strings preserved on source invalidation.
+  // ended and idle statuses are preserved; nonempty non-idle string statuses
+  // become stale; null/empty statuses are omitted. Other fields are derived
+  // and cleared. Never changes old prompter JSON.
+  bool save_call_material(int64_t material_id, int64_t expected_revision, const std::string &json);
   bool save_prompter_state(int64_t transcript_id, int64_t expected_revision, const std::string &json);
   int64_t save_prompter_note(int64_t transcript_id, const std::string &card_id,
                             int64_t client_id, const std::string &body);
@@ -242,6 +265,8 @@ private:
   void init_tables();
   void apply_schema_migrations();
   void init_prompter_schema();
+  void init_call_material_schema();
+  static bool invalidate_call_materials(duckdb::Connection &conn, int64_t transcript_id);
   void init_application_metadata();
   void init_payment_status_table();
   void init_event_status_table();

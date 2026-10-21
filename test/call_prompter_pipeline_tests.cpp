@@ -94,6 +94,17 @@ TEST_F(PipelineTest, RescheduleReturnedAsCancelAndAcceptBecomesOneChange) {
   EXPECT_FALSE(change["unresolved"].toBool());
 }
 
+TEST_F(PipelineTest, CancelOfARecordTheChangeAlreadyTargetsIsDropped) {
+  request["candidates"] = json(R"([{"id":"meeting","text":"Встреча завтра в 15:00","participants":["Анна","Борис"]}])");
+  const auto cancel = event({{"kind", "cancel"}, {"action", "Встреча завтра в 15:00"}, {"evidence_ids", QJsonArray{"1"}}});
+  const auto moved = event({{"action", "Встреча в четверг в 16:00"}, {"evidence_ids", QJsonArray{"2"}}});
+  // Both events resolve to the same record: the matcher finds the moved meeting too.
+  const auto out = run({QJsonObject{{"events", QJsonArray{cancel, moved}}}, json(R"({"matches":["meeting"]})"), QJsonObject{}});
+  ASSERT_EQ(out["events"].toArray().size(), 1);
+  EXPECT_EQ(out["events"][0]["kind"].toString(), "accept");
+  EXPECT_EQ(out["events"][0]["target_id"].toString(), "meeting");
+}
+
 TEST_F(PipelineTest, CancellationAndUnrelatedAgreementStaySeparate) {
   request["utterances"] = json(R"([{"id":"1","speaker":"Анна","text":"Встречу завтра отменяем."},
                                    {"id":"2","speaker":"Борис","text":"Хорошо."},

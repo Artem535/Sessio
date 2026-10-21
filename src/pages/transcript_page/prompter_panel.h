@@ -3,6 +3,8 @@
 #include <QWidget>
 #include <QHash>
 #include <QPointer>
+#include <QSet>
+#include <functional>
 
 class QLabel;
 class QPushButton;
@@ -14,6 +16,7 @@ public:
   PrompterPanel(CallPrompterController *controller, std::shared_ptr<pcm::database::Database> db, QWidget *parent = nullptr);
   QWidget *sharedHintWidget() const { return mHint; }
   void refresh();
+  void setCallNoteSaver(std::function<bool(const QString &, const QString &)> saver) { mCallNoteSaver = std::move(saver); }
 signals:
   void startRequested();
   void pauseRequested();
@@ -34,4 +37,6 @@ private:
   QVBoxLayout *mCards;
   QHash<QString, QWidget *> mCardWidgets;
   QString mDismissedHint;
+  std::function<bool(const QString &, const QString &)> mCallNoteSaver;
+  QSet<QString> mSavedCallNotes;
 };

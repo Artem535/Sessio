@@ -39,7 +39,7 @@ TEST(DatabaseTest, PersistsApplicationMetadataAcrossRestart) {
     first = db.get_application_metadata();
   }
 
-  ASSERT_EQ(first.schema_version, 1);
+  ASSERT_EQ(first.schema_version, 4);
   ASSERT_EQ(first.backup_format_version, 1);
   ASSERT_FALSE(first.workspace_uuid.empty());
   ASSERT_GT(first.created_at, 0);

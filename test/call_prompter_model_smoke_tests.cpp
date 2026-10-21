@@ -3,6 +3,7 @@
 // points to gemma-4-E4B-it.litertlm. Uses no user settings or transcripts.
 #include "prompter_engine.h"
 #include "prompter_pipeline.h"
+#include "call_notes_pipeline.h"
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QJsonArray>
@@ -145,6 +146,43 @@ TEST_F(ModelSmokeTest, CancellationStopsAnActiveNativeRequest) {
   sEngine->cancel();
   ASSERT_EQ(request.wait_for(std::chrono::seconds(10)), std::future_status::ready);
   EXPECT_TRUE(request.get());
+}
+
+TEST_F(ModelSmokeTest, CallNotesPreserveCorrectionAndCiteOriginalSources) {
+  const QJsonArray sources{
+    QJsonObject{{"id", "n1"}, {"speaker", "Анна"}, {"text", "Обсудили подготовку к выступлению. Я сначала попробую репетицию перед одним знакомым."}, {"start_ms", 0}, {"end_ms", 1000}},
+    QJsonObject{{"id", "n2"}, {"speaker", "Анна"}, {"text", "Я отправлю план во вторник. Нет, поправка: в четверг."}, {"start_ms", 1000}, {"end_ms", 2000}},
+    QJsonObject{{"id", "n3"}, {"speaker", "Борис"}, {"text", "Хорошо, ждём план в четверг."}, {"start_ms", 2000}, {"end_ms", 3000}}};
+  const auto out = processNotes(sources, [](const QString &system, const QByteArray &payload) {
+    const auto value = sEngine->generate(system, payload);
+    std::cout << "synthetic notes stage: " << dumpJson(value).toStdString() << '\n';
+    return value;
+  });
+  const auto json = QString::fromUtf8(QJsonDocument(out).toJson(QJsonDocument::Compact));
+  std::cout << "synthetic call notes: " << json.toStdString() << '\n';
+  EXPECT_FALSE(out["note"].toObject()["text"].toString().isEmpty());
+  EXPECT_FALSE(json.contains(QStringLiteral("вторник"), Qt::CaseInsensitive));
+  EXPECT_TRUE(json.contains(QStringLiteral("четверг"), Qt::CaseInsensitive));
+}
+
+TEST_F(ModelSmokeTest, LongCallNotesIncludeTheLateCancellation) {
+  QJsonArray sources;
+  for (int i = 0; i < 6; ++i) {
+    sources.append(QJsonObject{{"id", QStringLiteral("long%1").arg(i)}, {"speaker", "Анна"},
+      {"text", "Обсуждаем организацию встречи. Выберем тихое помещение, проверим микрофон и проектор. Подготовим материалы для участников. Пока только обсуждаем варианты, точного решения нет."},
+      {"start_ms", i * 1000}, {"end_ms", (i + 1) * 1000}});
+  }
+  sources.append(QJsonObject{{"id", "last"}, {"speaker", "Борис"}, {"text", "Окончательная поправка: встреча отменена. Подготовка больше не нужна."}, {"start_ms", 6000}, {"end_ms", 7000}});
+  int calls = 0;
+  const auto out = processNotes(sources, [&calls](const QString &system, const QByteArray &payload) {
+    ++calls; const auto value = sEngine->generate(system, payload);
+    std::cout << "synthetic long notes stage: " << dumpJson(value).toStdString() << '\n';
+    return value;
+  });
+  const auto json = QString::fromUtf8(QJsonDocument(out).toJson(QJsonDocument::Compact));
+  std::cout << "synthetic long call notes (" << calls << " calls): " << json.toStdString() << '\n';
+  EXPECT_GT(calls, 1); EXPECT_TRUE(json.contains(QStringLiteral("отмен"), Qt::CaseInsensitive));
+  EXPECT_TRUE(json.contains(QStringLiteral("last")));
 }
 
 int main(int argc, char **argv) {

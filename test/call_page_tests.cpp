@@ -11,7 +11,10 @@
 #include <QLabel>
 #include <QLayout>
 #include <QMenu>
+#include <QOpenGLWidget>
 #include <QPointer>
+#include <QPlatformSurfaceEvent>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QSignalSpy>
@@ -20,6 +23,8 @@
 #include <QToolButton>
 #include <QTest>
 #include <QTextDocument>
+#include <QVBoxLayout>
+#include <QWindow>
 #include <gtest/gtest.h>
 #ifdef SESSIO_TEST_AUDIO_DEVICE_PRIVATE
 #include <QtMultimedia/private/qaudiodevice_p.h>
@@ -85,6 +90,100 @@ TEST(CallPageTest, StartsOnDeviceCheckScreen) {
   CallPage page(&deviceManager);
   EXPECT_NE(page.findChild<QWidget *>("deviceCheckWidget"), nullptr);
   EXPECT_EQ(page.findChild<QWidget *>("connectedView"), nullptr);
+}
+
+TEST(CallPageTest, ReservesAnOpenGLSurfaceBeforeTheWindowIsShown) {
+  // Without it the first video tile recreates the shown native window.
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *surface = page.findChild<QOpenGLWidget *>("glSurfaceAnchor");
+  ASSERT_NE(surface, nullptr);
+  EXPECT_TRUE(surface->isHidden());
+}
+
+TEST(CallPageTest, PreviewToCallAndFirstVideoFrameKeepTheNativeWindow) {
+  if (QGuiApplication::platformName() == "offscreen" ||
+      QGuiApplication::platformName() == "minimal") {
+    GTEST_SKIP() << "Requires a native OpenGL platform (for example xcb under Xvfb)";
+  }
+  QWidget window;
+  auto *layout = new QVBoxLayout(&window);
+  pcm::video::DeviceManager devices;
+  auto *page = new CallPage(&devices, &window);
+  layout->addWidget(page);
+  auto *provider = new FakeVideoProvider;
+  VideoSession session(provider);
+  page->attachSession(&session);
+  QApplication::processEvents();
+  // Exercise window composition without opening any real capture devices or
+  // initializing LiveKit: substitute only the device-check screen's content.
+  auto *deviceCheck = page->findChild<QWidget *>("deviceCheckWidget");
+  ASSERT_NE(deviceCheck, nullptr);
+  auto *stack = qobject_cast<QStackedWidget *>(deviceCheck->parentWidget());
+  ASSERT_NE(stack, nullptr);
+  stack->removeWidget(deviceCheck);
+  deviceCheck->hide();
+  auto *preview = new QWidget(stack);
+  stack->addWidget(preview);
+  stack->setCurrentWidget(preview);
+  window.resize(1000, 700);
+  window.show();
+  ASSERT_TRUE(QTest::qWaitForWindowExposed(&window));
+  QPointer<QWindow> nativeWindow = window.windowHandle();
+  ASSERT_NE(nativeWindow, nullptr);
+  ASSERT_EQ(nativeWindow->surfaceType(), QSurface::OpenGLSurface);
+  const auto nativeId = window.winId();
+  class SurfaceObserver final : public QObject {
+  public:
+    int destroyed{0};
+    int hidden{0};
+    int nativeIdChanges{0};
+    int minimized{0};
+    bool eventFilter(QObject *object, QEvent *event) override {
+      if (event->type() == QEvent::PlatformSurface &&
+          static_cast<QPlatformSurfaceEvent *>(event)->surfaceEventType() ==
+              QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed)
+        ++destroyed;
+      if (event->type() == QEvent::Hide) ++hidden;
+      if (event->type() == QEvent::WinIdChange) ++nativeIdChanges;
+      if (event->type() == QEvent::WindowStateChange) {
+        if (auto *widget = qobject_cast<QWidget *>(object); widget && widget->isMinimized())
+          ++minimized;
+      }
+      return false;
+    }
+  } observer;
+  nativeWindow->installEventFilter(&observer);
+  window.installEventFilter(&observer);
+  page->onSessionStateChanged(VideoSessionState::Joining);
+  provider->simulateParticipantJoined({"local", "Local", "client", true});
+  page->onSessionStateChanged(VideoSessionState::WaitingForParticipants);
+  auto *renderer = page->findChild<QOpenGLWidget *>("participantRenderer");
+  ASSERT_NE(renderer, nullptr);
+  QSignalSpy frameSwapped(renderer, &QOpenGLWidget::frameSwapped);
+  QImage frame(16, 9, QImage::Format_RGBA8888);
+  frame.fill(Qt::blue);
+  provider->frameSource("local")->submitFrame(frame);
+  ASSERT_TRUE(QTest::qWaitFor([&] { return !frameSwapped.isEmpty(); }, 3000))
+      << "Test requires a rendered frame on a working native OpenGL platform";
+  ASSERT_TRUE(renderer->isVisible());
+  ASSERT_TRUE(renderer->isValid()) << "Test requires working OpenGL";
+  const QImage rendered = renderer->grabFramebuffer();
+  ASSERT_FALSE(rendered.isNull());
+  EXPECT_EQ(rendered.pixelColor(rendered.width() / 2, rendered.height() / 2), QColor(Qt::blue));
+  provider->simulateParticipantJoined({"remote"});
+  page->onSessionStateChanged(VideoSessionState::Connected);
+  QApplication::processEvents();
+  EXPECT_EQ(observer.destroyed, 0);
+  EXPECT_EQ(observer.hidden, 0);
+  EXPECT_EQ(observer.nativeIdChanges, 0);
+  EXPECT_EQ(observer.minimized, 0);
+  EXPECT_EQ(window.windowHandle(), nativeWindow.data());
+  EXPECT_EQ(window.winId(), nativeId);
+  EXPECT_TRUE(window.isVisible());
+  EXPECT_FALSE(window.isMinimized());
+  if (nativeWindow) nativeWindow->removeEventFilter(&observer);
+  window.removeEventFilter(&observer);
 }
 
 TEST(CallPageTest, GroupStageCreatesEveryIdentityAndRetainsSurvivorOnDeparture) {
@@ -912,6 +1011,21 @@ TEST(CallPageTest, NotesPanelIsResizableViaASplitterWithAUsableMinimumWidth) {
   EXPECT_GE(host->minimumWidth(), 160);
 }
 
+TEST(CallPageTest, CallMaterialsRemainAvailableAfterEndAndReturnOnNextCall) {
+  pcm::video::DeviceManager devices; CallPage page(&devices);
+  auto *materials = new QWidget;
+  page.setSidePanelWidget(materials); page.setSidePanelToggleVisible(true);
+  page.onSessionStateChanged(VideoSessionState::Connected);
+  auto *liveHost = materials->parentWidget();
+  page.onSessionStateChanged(VideoSessionState::Ended);
+  auto *endedHost = page.findChild<QWidget *>("endedSidePanelHost");
+  ASSERT_NE(endedHost, nullptr); EXPECT_EQ(materials->parentWidget(), endedHost);
+  EXPECT_FALSE(endedHost->isHidden());
+  page.onSessionStateChanged(VideoSessionState::Connected);
+  EXPECT_EQ(materials->parentWidget(), liveHost);
+  EXPECT_TRUE(endedHost->isHidden());
+}
+
 TEST(CallPageTest, SidePanelToggleHiddenByDefaultUntilMadeVisible) {
   pcm::video::DeviceManager deviceManager;
   CallPage page(&deviceManager);
@@ -1267,6 +1381,31 @@ TEST(CallPageTest, OpenSidePanelExpandsToggle) {
   EXPECT_FALSE(host->isHidden());
   EXPECT_TRUE(page.findChild<QToolButton *>("notesToggleButton")->isChecked());
 }
+
+TEST(CallPageTest, NotesFocusKeepsVideoAndCallControlsInTheSameWindow) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  resizeAndDeliverEvent(&page, QSize(1200, 850));
+  auto *notes = new QPlainTextEdit;
+  notes->insertPlainText("Keep **Markdown**");
+  auto cursor = notes->textCursor(); cursor.setPosition(4); notes->setTextCursor(cursor);
+  page.setSidePanelWidget(notes);
+  page.setSidePanelToggleVisible(true); page.openSidePanel();
+  page.onSessionStateChanged(VideoSessionState::Connected);
+  page.setNotesFocused(true);
+  auto *splitter = page.findChild<QSplitter *>("videoSplitter");
+  EXPECT_EQ(splitter->orientation(), Qt::Vertical);
+  EXPECT_FALSE(page.findChild<QWidget *>("videoStage")->isHidden());
+  EXPECT_LE(page.findChild<QWidget *>("videoStage")->maximumHeight(), 240);
+  EXPECT_TRUE(page.findChild<QPushButton *>("leaveButton")->isVisibleTo(&page));
+  page.setNotesFocused(false);
+  EXPECT_EQ(splitter->orientation(), Qt::Horizontal);
+  EXPECT_EQ(notes->parentWidget(), page.findChild<QWidget *>("sidePanelHost"));
+  EXPECT_EQ(notes->textCursor().position(), 4);
+  EXPECT_EQ(notes->toPlainText(), "Keep **Markdown**");
+  EXPECT_TRUE(notes->document()->isUndoAvailable());
+}
+
 
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
