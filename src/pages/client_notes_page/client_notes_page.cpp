@@ -673,7 +673,7 @@ void ClientNotesPage::reloadNotes() {
     const auto timestampMs = timestampOf(item);
     const auto itemDate =
         timestampMs > 0
-            ? QDateTime::fromMSecsSinceEpoch(timestampMs, QTimeZone::systemTimeZone()).date()
+            ? QDateTime::fromMSecsSinceEpoch(timestampMs, QTimeZone(QTimeZone::LocalTime)).date()
             : QDate();
     if (itemDate.isValid() && itemDate != previousDate) {
       auto *divider = addDateDivider(itemDate);
@@ -714,7 +714,7 @@ void ClientNotesPage::updateAppointmentSummary(const QVector<DuckEvent> &events)
     if (!event.has_value() || !event->start_date.has_value()) {
       return {};
     }
-    return QDateTime::fromMSecsSinceEpoch(*event->start_date, QTimeZone::systemTimeZone())
+    return QDateTime::fromMSecsSinceEpoch(*event->start_date, QTimeZone(QTimeZone::LocalTime))
         .toString("dd.MM.yyyy HH:mm");
   };
 
@@ -778,7 +778,7 @@ void ClientNotesPage::updateLinkButtonText() {
     return;
   }
   const auto startAt = QDateTime::fromMSecsSinceEpoch(*mPendingLinkedEvent->start_date,
-                                                       QTimeZone::systemTimeZone());
+                                                       QTimeZone(QTimeZone::LocalTime));
   mLinkSessionButton->setText(tr("Linked: %1").arg(startAt.toString("dd.MM HH:mm")));
 }
 
@@ -800,7 +800,7 @@ void ClientNotesPage::onLinkSessionButtonClicked() {
     const auto &event = sortedEvents.at(i);
     const auto startAt = event.start_date.has_value()
                              ? QDateTime::fromMSecsSinceEpoch(*event.start_date,
-                                                              QTimeZone::systemTimeZone())
+                                                              QTimeZone(QTimeZone::LocalTime))
                              : QDateTime{};
     const auto title = QString::fromStdString(event.name.value_or(tr("Session").toStdString()));
     auto *action = menu.addAction(QString("%1 · %2").arg(
@@ -989,7 +989,7 @@ void ClientNotesPage::addNoteBubble(const DuckClientNote &note) {
   auto *timestampLabel = new QLabel(bubble);
   const auto createdAt =
       note.created_at.has_value()
-          ? QDateTime::fromMSecsSinceEpoch(*note.created_at, QTimeZone::systemTimeZone())
+          ? QDateTime::fromMSecsSinceEpoch(*note.created_at, QTimeZone(QTimeZone::LocalTime))
           : QDateTime{};
   timestampLabel->setText(createdAt.isValid()
                               ? createdAt.toString("dd.MM.yyyy HH:mm")
@@ -1040,7 +1040,7 @@ void ClientNotesPage::addNoteBubble(const DuckClientNote &note) {
       linkLabel->setFlat(true);
       linkLabel->setCursor(Qt::PointingHandCursor);
       const auto startAt = QDateTime::fromMSecsSinceEpoch(*linkedEvent->start_date,
-                                                           QTimeZone::systemTimeZone());
+                                                           QTimeZone(QTimeZone::LocalTime));
       linkLabel->setText(QStringLiteral("🔗 %1").arg(startAt.toString("dd.MM.yyyy HH:mm")));
       linkLabel->setStyleSheet(
           QStringLiteral("QPushButton { text-align: left; color: %1; "
@@ -1048,7 +1048,7 @@ void ClientNotesPage::addNoteBubble(const DuckClientNote &note) {
               .arg(pcm::widgets::cssRgba(pcm::widgets::accentColor(), 0.9)));
       const auto linkedId = linkedEvent->id;
       const auto dayStartMs =
-          QDateTime(startAt.date(), QTime(0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+          QDateTime(startAt.date(), QTime(0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
       connect(linkLabel, &QPushButton::clicked, this, [this, linkedId, dayStartMs]() {
         emit openEventRequested(linkedId, dayStartMs);
       });
@@ -1096,7 +1096,7 @@ void ClientNotesPage::addSessionEntry(const DuckEvent &event) {
   timeLabel->setCursor(Qt::PointingHandCursor);
   const auto startAt =
       event.start_date.has_value()
-          ? QDateTime::fromMSecsSinceEpoch(*event.start_date, QTimeZone::systemTimeZone())
+          ? QDateTime::fromMSecsSinceEpoch(*event.start_date, QTimeZone(QTimeZone::LocalTime))
           : QDateTime{};
   const auto title = QString::fromStdString(event.name.value_or(tr("Session").toStdString()));
   timeLabel->setText(QString("%1 · %2")
@@ -1132,7 +1132,7 @@ void ClientNotesPage::addSessionEntry(const DuckEvent &event) {
   const auto eventId = event.id;
   const auto dayStartMs =
       startAt.isValid()
-          ? QDateTime(startAt.date(), QTime(0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch()
+          ? QDateTime(startAt.date(), QTime(0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch()
           : 0;
   connect(timeLabel, &QPushButton::clicked, this, [this, eventId, dayStartMs]() {
     emit openEventRequested(eventId, dayStartMs);
@@ -1167,7 +1167,7 @@ void ClientNotesPage::addChangeLogEntry(const DuckEventChangeLog &entry) {
 
   if (entry.event_current_start_date.has_value()) {
     const auto sessionAt = QDateTime::fromMSecsSinceEpoch(*entry.event_current_start_date,
-                                                           QTimeZone::systemTimeZone());
+                                                           QTimeZone(QTimeZone::LocalTime));
     line->setToolTip(tr("Session: %1").arg(sessionAt.toString("dd.MM.yyyy HH:mm")));
   }
 
@@ -1175,9 +1175,9 @@ void ClientNotesPage::addChangeLogEntry(const DuckEventChangeLog &entry) {
   qint64 dayStartMs = 0;
   if (entry.event_current_start_date.has_value()) {
     const auto startAt = QDateTime::fromMSecsSinceEpoch(*entry.event_current_start_date,
-                                                         QTimeZone::systemTimeZone());
+                                                         QTimeZone(QTimeZone::LocalTime));
     dayStartMs =
-        QDateTime(startAt.date(), QTime(0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+        QDateTime(startAt.date(), QTime(0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   }
   connect(line, &QPushButton::clicked, this, [this, eventId, dayStartMs]() {
     emit openEventRequested(eventId, dayStartMs);

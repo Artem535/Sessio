@@ -35,5 +35,7 @@
 Vulkan на Radeon 780M: decode 21–23 против 5–6 ток/с на CPU, prefill 400–550 против
 45–62 ток/с, пиковый RSS 1,1 против 10,4 ГиБ (`test/litert_backend_bench.cpp`).
 Приложение переведено на Vulkan-рантайм с откатом на CPU при загрузке.
-Модельные smoke-тесты на Vulkan: 10/11; «договорённость без срока» на GPU воздерживается,
-на CPU проходит. Нерешённые падения календаря/резолвера/single-instance — вне этой работы.
+Модельные smoke-тесты: 11/11 на Vulkan и CPU после правила «обещание без срока»
+в `extract.txt`. Тесты календаря/резолвера чинились заменой `QTimeZone::systemTimeZone()`
+на `QTimeZone::LocalTime` (в distrobox Qt не знает IANA-имя пояса и уходит в UTC);
+изоляция темы платформы, TMPDIR single-instance и окна `AudioTap` убрали остальные падения.

@@ -33,7 +33,7 @@ namespace {
 DuckEvent appointment(QDate date) {
   DuckEvent event;
   event.name = "Appointment";
-  event.start_date = QDateTime(date, QTime(10, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+  event.start_date = QDateTime(date, QTime(10, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   event.end_date = *event.start_date + 3600000;
   event.duration = 3600;
   event.event_stat_id = 1;
@@ -699,7 +699,7 @@ TEST_F(CalendarLayoutTest, InspectorShowsLabelledFieldsAndFullWidthButtons) {
 }
 TEST_F(CalendarLayoutTest, FirstMeetingOfTheDayIsScrolledIntoView) {
   auto event = appointment(QDate::currentDate());
-  event.start_date = QDateTime(QDate::currentDate(), QTime(16, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+  event.start_date = QDateTime(QDate::currentDate(), QTime(16, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   event.end_date = *event.start_date + 3600000;
   model->addEvent(event);
   QEventInfoPage page(model.get(), nullptr, nullptr);
@@ -810,7 +810,7 @@ TEST_F(CalendarLayoutTest, DialogFormKeepsTheBaseInsetAndButtonOrder) {
 }
 TEST_F(CalendarLayoutTest, TimelineScrollsOnlyWhenTheDisplayedDateChanges) {
   auto event = appointment(QDate::currentDate());
-  event.start_date = QDateTime(QDate::currentDate(), QTime(16, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+  event.start_date = QDateTime(QDate::currentDate(), QTime(16, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   event.end_date = *event.start_date + 3600000;
   model->addEvent(event);
   QEventInfoPage page(model.get(), nullptr, nullptr);

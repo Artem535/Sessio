@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
 - Ran the local Gemma model on a hardware Vulkan GPU by default, with automatic
   CPU fallback at load time; on a Radeon 780M decoding is about 3.5x faster and
   peak memory drops from about 10 GiB to about 1-2.5 GiB.
+- The prompter now also proposes an accepted promise that has no deadline yet.
+- Fixed calendar and recurring-meeting times shifted by the UTC offset on systems
+  where Qt cannot name the local timezone (for example, containers).
 
 ## [0.2.32] - 2026-10-13
 

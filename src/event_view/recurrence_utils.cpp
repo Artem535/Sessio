@@ -46,7 +46,7 @@ icaltimetype toIcalFloatingTime(const QDateTime &dateTime) {
 QDateTime fromIcalFloatingTime(const icaltimetype &time) {
   return QDateTime(QDate(time.year, time.month, time.day),
                    QTime(time.hour, time.minute, time.second),
-                   QTimeZone::systemTimeZone());
+                   QTimeZone(QTimeZone::LocalTime));
 }
 
 } // namespace
@@ -91,7 +91,7 @@ QVector<QDateTime> occurrences(const DuckEventSeries &series,
     return occurrences;
   }
 
-  const auto localTz = QTimeZone::systemTimeZone();
+  const auto localTz = QTimeZone(QTimeZone::LocalTime);
   const auto seriesStart =
       QDateTime::fromMSecsSinceEpoch(*series.start_date, QTimeZone::UTC).toTimeZone(localTz);
   if (!seriesStart.isValid()) {
@@ -170,7 +170,7 @@ std::optional<QVector<QDateTime>> occurrencesInTimezone(const DuckEventSeries &s
   result.reserve(static_cast<qsizetype>(resolution.occurrences.size()));
   for (const auto &occurrence : resolution.occurrences) {
     result.append(QDateTime::fromMSecsSinceEpoch(occurrence.startMs, QTimeZone::UTC)
-                      .toTimeZone(QTimeZone::systemTimeZone()));
+                      .toTimeZone(QTimeZone(QTimeZone::LocalTime)));
   }
   return result;
 }
@@ -509,7 +509,7 @@ DaySummary computeDaySummary(const QVector<DuckEvent> &events,
 
   const bool validWorkHours = workDayStart.isValid() && workDayEnd.isValid() &&
                               workDayStart < workDayEnd;
-  const auto dayEnd = QDateTime(selectedDate, workDayEnd, QTimeZone::systemTimeZone());
+  const auto dayEnd = QDateTime(selectedDate, workDayEnd, QTimeZone(QTimeZone::LocalTime));
   const bool showFutureInfo = validWorkHours && nowMs < dayEnd.toMSecsSinceEpoch();
 
   if (!showFutureInfo) {
@@ -538,8 +538,8 @@ DaySummary computeDaySummary(const QVector<DuckEvent> &events,
     }
   }
 
-  const auto dayStart = QDateTime(selectedDate, workDayStart, QTimeZone::systemTimeZone());
-  const auto now = QDateTime::fromMSecsSinceEpoch(nowMs, QTimeZone::systemTimeZone());
+  const auto dayStart = QDateTime(selectedDate, workDayStart, QTimeZone(QTimeZone::LocalTime));
+  const auto now = QDateTime::fromMSecsSinceEpoch(nowMs, QTimeZone(QTimeZone::LocalTime));
 
   auto sortedBusy = busyIntervals;
   std::sort(sortedBusy.begin(), sortedBusy.end(),
@@ -600,7 +600,7 @@ std::optional<DuckEvent> resolveNoteLink(pcm::database::Database &db, const Duck
 
   const auto occurrenceStart =
       QDateTime::fromMSecsSinceEpoch(*note.linked_occurrence_start_ms, QTimeZone::UTC)
-          .toTimeZone(QTimeZone::systemTimeZone());
+          .toTimeZone(QTimeZone(QTimeZone::LocalTime));
   const auto virtualId =
       -(series->id * 1'000'000LL + static_cast<int64_t>(occurrenceStart.date().toJulianDay()));
   return buildVirtualOccurrence(*series, occurrenceStart, virtualId);

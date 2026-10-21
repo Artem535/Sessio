@@ -86,7 +86,7 @@ QString weekdayToken(const QDate &date) {
 }
 
 QString rruleDateTimeUtc(const QDate &date) {
-  return QDateTime(date, QTime(23, 59, 59), QTimeZone::systemTimeZone())
+  return QDateTime(date, QTime(23, 59, 59), QTimeZone(QTimeZone::LocalTime))
       .toUTC()
       .toString(QStringLiteral("yyyyMMdd'T'HHmmss'Z'"));
 }
@@ -192,7 +192,7 @@ QEventDetailsWidget::~QEventDetailsWidget() = default;
 
 
 void QEventDetailsWidget::initUi() {
-  const auto localTz = QTimeZone::systemTimeZone();
+  const auto localTz = QTimeZone(QTimeZone::LocalTime);
   mUI->mEventDate->setTimeZone(localTz);
   mUI->mTimeFrom->setTimeZone(localTz);
   mUI->mTimeTo->setTimeZone(localTz);
@@ -969,7 +969,7 @@ std::optional<int64_t> QEventDetailsWidget::recurrenceUntilMs() const {
   }
 
   return QDateTime(mRepeatUntilDateEdit->date(), QTime(23, 59, 59),
-                   QTimeZone::systemTimeZone())
+                   QTimeZone(QTimeZone::LocalTime))
       .toUTC()
       .toMSecsSinceEpoch();
 }
@@ -1122,10 +1122,10 @@ void QEventDetailsWidget::onApplyClicked() {
   if (mCurrentEvent) {
     const auto startDateTime = QDateTime(mUI->mEventDate->date(),
                                          mUI->mTimeFrom->time(),
-                                         QTimeZone::systemTimeZone());
+                                         QTimeZone(QTimeZone::LocalTime));
     const auto endDateTime = QDateTime(mUI->mEventDate->date(),
                                        mUI->mTimeTo->time(),
-                                       QTimeZone::systemTimeZone());
+                                       QTimeZone(QTimeZone::LocalTime));
     qCDebug(logEventDetails) << "Apply event from form:"
                              << "date=" << mUI->mEventDate->date()
                              << "timeFrom=" << mUI->mTimeFrom->time()
@@ -1600,10 +1600,10 @@ DuckEvent QEventDetailsWidget::collectEventData() const {
   DuckEvent event;
   event.name = mUI->mTitle->text().toStdString();
   event.start_date = QDateTime(mUI->mEventDate->date(), mUI->mTimeFrom->time(),
-                               QTimeZone::systemTimeZone())
+                               QTimeZone(QTimeZone::LocalTime))
                          .toMSecsSinceEpoch();
   event.end_date = QDateTime(mUI->mEventDate->date(), mUI->mTimeTo->time(),
-                             QTimeZone::systemTimeZone())
+                             QTimeZone(QTimeZone::LocalTime))
                        .toMSecsSinceEpoch();
   event.is_work_event = mEventTypeSwitch->isChecked();
   event.duration = (event.end_date.value_or(0) - event.start_date.value_or(0)) / 1000; // in seconds
@@ -1629,10 +1629,10 @@ DuckEvent QEventDetailsWidget::liveCandidateEvent() const {
     event.original_occurrence_start = persisted.original_occurrence_start;
   }
   event.start_date = QDateTime(mUI->mEventDate->date(), mUI->mTimeFrom->time(),
-                               QTimeZone::systemTimeZone())
+                               QTimeZone(QTimeZone::LocalTime))
                          .toMSecsSinceEpoch();
   event.end_date = QDateTime(mUI->mEventDate->date(), mUI->mTimeTo->time(),
-                             QTimeZone::systemTimeZone())
+                             QTimeZone(QTimeZone::LocalTime))
                        .toMSecsSinceEpoch();
   event.buffer_before_minutes = mBufferBeforeSpinBox->value();
   event.buffer_after_minutes = mBufferAfterSpinBox->value();
@@ -1688,7 +1688,7 @@ void QEventDetailsWidget::onSuggestFreeSlotClicked() {
   }
   const auto durationMs = *candidate.end_date - *candidate.start_date;
   const auto dayEndMs = QDateTime(mUI->mEventDate->date(), pcm::app_settings::workDayEnd(),
-                                  QTimeZone::systemTimeZone())
+                                  QTimeZone(QTimeZone::LocalTime))
                             .toMSecsSinceEpoch();
 
   auto cursor = *candidate.start_date;

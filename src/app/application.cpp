@@ -518,7 +518,7 @@ void Application::refreshUpcomingMeetings() {
   }
 
   const auto today = QDate::currentDate();
-  const auto localTz = QTimeZone::systemTimeZone();
+  const auto localTz = QTimeZone(QTimeZone::LocalTime);
   const auto dayStartMs = QDateTime(today, QTime(0, 0), localTz).toMSecsSinceEpoch();
   const auto dayEndMs =
       QDateTime(today.addDays(1), QTime(0, 0), localTz).toMSecsSinceEpoch() - 1;
@@ -1049,7 +1049,7 @@ void Application::checkUpcomingEventNotifications() {
 
 void Application::notifyUpcomingSeriesOccurrences(const int64_t nowMs,
                                                    const int64_t windowEndMs) {
-  const auto localTz = QTimeZone::systemTimeZone();
+  const auto localTz = QTimeZone(QTimeZone::LocalTime);
   const auto rangeStart =
       QDateTime::fromMSecsSinceEpoch(nowMs, QTimeZone::UTC).toTimeZone(localTz);
   const auto rangeEnd =

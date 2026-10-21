@@ -351,14 +351,14 @@ void QEventInfoPage::onCalendarClicked(const QDate &date) {
 
 void QEventInfoPage::openEventOnDay(const int64_t eventId, const qint64 dayMs) {
   const auto date =
-      QDateTime::fromMSecsSinceEpoch(dayMs, QTimeZone::systemTimeZone()).date();
+      QDateTime::fromMSecsSinceEpoch(dayMs, QTimeZone(QTimeZone::LocalTime)).date();
   onCalendarClicked(date);
   editEventWithDialog(eventId);
 }
 
 void QEventInfoPage::showEventOnDay(const int64_t eventId, const qint64 dayMs) {
   onCalendarClicked(
-      QDateTime::fromMSecsSinceEpoch(dayMs, QTimeZone::systemTimeZone()).date());
+      QDateTime::fromMSecsSinceEpoch(dayMs, QTimeZone(QTimeZone::LocalTime)).date());
   onTimelineEventSelected(eventId);
 }
 
@@ -918,9 +918,9 @@ QVector<QPair<QDateTime, QDateTime>> QEventInfoPage::currentBusyIntervals() cons
     }
 
     const auto start =
-        QDateTime::fromMSecsSinceEpoch(*event.start_date, QTimeZone::systemTimeZone());
+        QDateTime::fromMSecsSinceEpoch(*event.start_date, QTimeZone(QTimeZone::LocalTime));
     const auto end =
-        QDateTime::fromMSecsSinceEpoch(*event.end_date, QTimeZone::systemTimeZone());
+        QDateTime::fromMSecsSinceEpoch(*event.end_date, QTimeZone(QTimeZone::LocalTime));
     if (!start.isValid() || !end.isValid() || start >= end) {
       continue;
     }

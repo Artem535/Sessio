@@ -80,7 +80,7 @@ void DaySummaryWidget::setSummary(const pcm::recurrence::DaySummary &summary) {
 
   if (summary.nextSession.has_value() && summary.nextSession->start_date.has_value()) {
     const auto nextAt = QDateTime::fromMSecsSinceEpoch(*summary.nextSession->start_date,
-                                                        QTimeZone::systemTimeZone());
+                                                        QTimeZone(QTimeZone::LocalTime));
     mNextSessionLabel->setText(tr("Next session: %1").arg(nextAt.toString("HH:mm")));
     mNextSessionLabel->setVisible(true);
   } else {
@@ -103,7 +103,7 @@ void DaySummaryWidget::setSummary(const pcm::recurrence::DaySummary &summary) {
       continue;
     }
     const auto startAt =
-        QDateTime::fromMSecsSinceEpoch(*event.start_date, QTimeZone::systemTimeZone());
+        QDateTime::fromMSecsSinceEpoch(*event.start_date, QTimeZone(QTimeZone::LocalTime));
     const auto clientName =
         QString::fromStdString(event.client_name.value_or(std::string{}));
     auto *row = new QPushButton(this);

@@ -72,7 +72,7 @@ protected:
   }
 
   std::optional<DuckEvent> virtualOn(int64_t startMs) {
-    const auto date = QDateTime::fromMSecsSinceEpoch(startMs, QTimeZone::systemTimeZone()).date();
+    const auto date = QDateTime::fromMSecsSinceEpoch(startMs, QTimeZone(QTimeZone::LocalTime)).date();
     mModel->loadEventsForDay(date);
     for (const auto &event : mModel->events()) {
       if (event.start_date == startMs) {
@@ -284,7 +284,7 @@ TEST_F(TimelineSeriesTest, RemovingAPublishedOccurrenceNeverInvalidatesAMeetingW
   const auto seriesId = model.addEventSeries(liveKitEvent(), 0, kRule, std::nullopt, "Europe/Berlin");
   ASSERT_GT(seriesId, 0);
   const auto second = kFirst + 7 * kDay + kHour;
-  const auto date = QDateTime::fromMSecsSinceEpoch(second, QTimeZone::systemTimeZone()).date();
+  const auto date = QDateTime::fromMSecsSinceEpoch(second, QTimeZone(QTimeZone::LocalTime)).date();
   model.loadEventsForDay(date);
   int64_t id = 0;
   for (const auto &event : model.events()) {
@@ -305,7 +305,7 @@ TEST_F(TimelineSeriesTest, AddingAnOccurrenceToALegacySeriesDoesNotEnterTheOutbo
   ASSERT_GT(seriesId, 0);
   // The legacy calendar follows the machine's wall clock, so look the day up
   // instead of assuming an instant.
-  mModel->loadEventsForDay(QDateTime::fromMSecsSinceEpoch(kFirst + 7 * kDay, QTimeZone::systemTimeZone()).date());
+  mModel->loadEventsForDay(QDateTime::fromMSecsSinceEpoch(kFirst + 7 * kDay, QTimeZone(QTimeZone::LocalTime)).date());
   ASSERT_FALSE(mModel->events().isEmpty());
   auto occurrence = mModel->events().first();
   occurrence.id = -1;
