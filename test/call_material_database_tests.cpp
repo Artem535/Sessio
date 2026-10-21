@@ -339,3 +339,37 @@ TEST_F(TranscriptDbTest, CallMaterialCleanupPreservesManualNotesAndOtherSegments
   EXPECT_EQ(db_->get_call_material(standalone).id, standalone);
   EXPECT_FALSE(db_->get_call_material(standalone).event_id.has_value());
 }
+
+TEST_F(TranscriptDbTest, CallMaterialsForClientIncludeEventAndTranscriptLinks) {
+  DuckClient c1, c2;
+  c1.name = std::string{"First"};
+  c2.name = std::string{"Second"};
+  const auto client = db_->add_client(c1), other = db_->add_client(c2);
+  ASSERT_GT(client, 0);
+  ASSERT_GT(other, 0);
+  const auto event = makeEvent();
+  ASSERT_GT(db_->add_event_client(event, client), 0);
+  const auto byEvent = db_->create_call_material(event);
+  const auto byTranscript = db_->create_call_material(std::nullopt);
+  const auto transcript = db_->add_transcript(std::nullopt, "live_local_v1");
+  ASSERT_TRUE(db_->link_call_material_transcript(byTranscript, transcript));
+  ASSERT_TRUE(db_->set_transcript_status(transcript, "draft"));
+  ASSERT_TRUE(db_->set_transcript_clients(transcript, {client}));
+  const auto both = db_->create_call_material(event);
+  const auto t2 = db_->add_transcript(event, "live_local_v1");
+  ASSERT_TRUE(db_->link_call_material_transcript(both, t2));
+  ASSERT_TRUE(db_->set_transcript_status(t2, "draft"));
+  ASSERT_TRUE(db_->set_transcript_clients(t2, {client}));
+  db_->create_call_material(std::nullopt);  // unrelated
+  const auto foreign = db_->create_call_material(std::nullopt);
+  const auto t3 = db_->add_transcript(std::nullopt, "live_local_v1");
+  ASSERT_TRUE(db_->link_call_material_transcript(foreign, t3));
+  ASSERT_TRUE(db_->set_transcript_status(t3, "draft"));
+  ASSERT_TRUE(db_->set_transcript_clients(t3, {other}));
+
+  const auto found = db_->get_call_materials_for_client(client);
+  std::vector<int64_t> ids;
+  for (const auto &m : found) ids.push_back(m.id);
+  EXPECT_EQ(ids, (std::vector<int64_t>{both, byTranscript, byEvent}));
+  EXPECT_TRUE(db_->get_call_materials_for_client(0).empty());
+}

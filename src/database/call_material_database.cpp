@@ -159,6 +159,21 @@ std::vector<CallMaterialState> Database::get_call_materials() {
   return states;
 }
 
+std::vector<CallMaterialState> Database::get_call_materials_for_client(int64_t client_id) {
+  if (client_id <= 0) return {};
+  duckdb::Connection conn(*mDb);
+  auto result = query(conn,
+      "SELECT m.id,m.revision,m.event_id,m.state_json,m.created_at FROM CallMaterial m "
+      "WHERE m.event_id IN (SELECT event_id FROM EventClient WHERE client_id=$1) "
+      "OR m.id IN (SELECT t.material_id FROM CallMaterialTranscript t "
+      "JOIN TranscriptClient c ON c.transcript_id=t.transcript_id WHERE c.client_id=$1) "
+      "ORDER BY m.created_at DESC,m.id DESC", {duckdb::Value::BIGINT(client_id)});
+  std::vector<CallMaterialState> states;
+  while (auto chunk = result->Fetch())
+    for (duckdb::idx_t row = 0; row < chunk->size(); ++row) states.push_back(readMaterial(*chunk, row));
+  return states;
+}
+
 std::vector<int64_t> Database::get_call_material_transcript_ids(int64_t material_id) {
   duckdb::Connection conn(*mDb);
   auto result = query(conn, "SELECT transcript_id FROM CallMaterialTranscript WHERE material_id=$1 "

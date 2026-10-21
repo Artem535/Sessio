@@ -129,6 +129,8 @@ public:
   CallMaterialState get_call_material(int64_t material_id);
   CallMaterialState get_call_material_for_transcript(int64_t transcript_id);
   std::vector<CallMaterialState> get_call_materials();
+  // Call materials of one client, via the call's event or a linked transcript.
+  std::vector<CallMaterialState> get_call_materials_for_client(int64_t client_id);
   std::vector<int64_t> get_call_material_transcript_ids(int64_t material_id);
   // Compare-and-swap: initial revision is 0; every save or source invalidation
   // increments it. JSON must be an object (maximum 4 MiB). manual_notes and
