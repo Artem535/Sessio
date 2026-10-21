@@ -9,7 +9,7 @@
 #include <memory>
 
 // Persists manual call notes independently of client records. Model proposals
-// remain source-linked drafts; accepting them never replaces manual text.
+// remain source-linked drafts and never replace manual text.
 class CallNotesController final : public QObject {
   Q_OBJECT
 public:

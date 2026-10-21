@@ -13,13 +13,23 @@ QJsonObject shownPacket(const QJsonObject &state) {
 }
 }
 
+QJsonArray loadMaterialAgreements(pcm::database::Database &db, int64_t materialId) {
+  QJsonArray records;
+  try {
+    for (const auto transcript : db.get_call_material_transcript_ids(materialId))
+      for (const auto &value : parse(db.get_prompter_state(transcript).json)["records"].toArray())
+        records.append(value);
+  } catch (...) {}
+  return records;
+}
+
 std::vector<MeetingRecord> loadMeetingHistory(pcm::database::Database &db, int64_t clientId,
                                               qint64 excludeMaterialId) {
   std::vector<MeetingRecord> result;
   for (const auto &material : db.get_call_materials_for_client(clientId)) {
     if (material.id == excludeMaterialId) continue;
     const auto state = parse(material.json);
-    if (!state["ended"].toBool()) continue;
+    if (!state["ended"].toBool(true)) continue;
     MeetingRecord record;
     record.materialId = material.id;
     record.startMs = material.created_at;
@@ -37,13 +47,10 @@ std::vector<MeetingRecord> loadMeetingHistory(pcm::database::Database &db, int64
     const auto entries = state["manual_entries"].toArray();
     record.noteCount = static_cast<int>(entries.size());
     if (!entries.isEmpty()) record.firstNote = entries.first().toObject()["body_markdown"].toString().trimmed();
-    for (const auto transcript : db.get_call_material_transcript_ids(material.id)) {
-      const auto prompter = parse(db.get_prompter_state(transcript).json);
-      for (const auto &value : prompter["records"].toArray()) {
-        const auto r = value.toObject();
-        if (r["active"].toBool(true) && !r["text"].toString().trimmed().isEmpty())
-          record.agreements.append(r["text"].toString().trimmed());
-      }
+    for (const auto &value : loadMaterialAgreements(db, material.id)) {
+      const auto r = value.toObject();
+      if (r["active"].toBool(true) && !r["text"].toString().trimmed().isEmpty())
+        record.agreements.append(r["text"].toString().trimmed());
     }
     result.push_back(std::move(record));
   }

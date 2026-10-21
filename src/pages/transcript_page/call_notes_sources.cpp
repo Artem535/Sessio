@@ -122,6 +122,7 @@ QPushButton *makeSourceLink(CallNotesController *controller, const QJsonObject &
 }
 
 QString summaryCoverage(CallNotesController *controller) {
+  if (!controller) return {};
   const auto count = static_cast<int>(controller->draft()["evidence_ids"].toArray().size());
   if (count == 0) return {};
   if (controller->ended() && controller->finalStatus() == "ready")

@@ -14,6 +14,7 @@
 #include "call_notes_controller.h"
 #include "call_notes_finalizer.h"
 #include "call_notes_page.h"
+#include "meeting_history.h"
 #include "prompter_panel.h"
 #include "prompter_worker.h"
 #include "transcript_panel.h"
@@ -1216,6 +1217,10 @@ void Application::connectSignals() {
     const MeetingControllerFactory meetingControllers = [this, finals](qint64 materialId, QObject *parent) {
       auto *saved = new CallNotesController(mDb, parent);
       saved->openMaterial(materialId);
+      if (finals->contains(materialId)) saved->refreshFromStorage();
+      connect(saved, &CallNotesController::cancelRequested, saved, [saved, finals](const QString &) {
+        finals->cancel(saved->materialId());
+      });
       connect(finals, &CallNotesFinalizer::materialChanged, saved, [saved](qint64 id) {
         if (saved->materialId() == id) saved->refreshFromStorage();
       });
@@ -1392,7 +1397,7 @@ void Application::connectSignals() {
         phrase->setFocus();
       }
     });
-    auto openMaterials = [this, notes, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting](qint64 materialId, qint64 transcriptId) {
+    auto openMaterials = [this, notes, prompter, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting](qint64 materialId, qint64 transcriptId) {
       auto *dialog = new QDialog(mMainWindow.get());
       dialog->setAttribute(Qt::WA_DeleteOnClose);
       dialog->setWindowTitle(tr("Call materials")); dialog->resize(500, 740);
@@ -1419,11 +1424,12 @@ void Application::connectSignals() {
         const auto material = mDb->get_call_material(saved->materialId());
         std::optional<DuckClient> client;
         if (material.event_id) {
-          client = mDb->get_client_by_event(*material.event_id);
-          page->setClient(client);
+          try { client = mDb->get_client_by_event(*material.event_id); } catch (...) {}
+          if (client) page->setClient(client);
         }
         page->setMeeting(describeMeeting(material.event_id, client, material.created_at), tr("ended"));
       } catch (...) {}
+      page->setAgreements(saved == notes ? prompter->records() : loadMaterialAgreements(*mDb, saved->materialId()));
       page->setControllerFactory(meetingControllers);
       connect(page->editor(), &ClientNotesPage::openEventRequested, mMainWindow.get(), &MainWindow::returnToEvent);
       if (saved == notes)
@@ -1488,7 +1494,11 @@ void Application::connectSignals() {
     refreshButton();
 #endif
     connect(callsPage, &CallsPage::eventKnownForCurrentCall, this,
+#ifdef SESSIO_CALL_TRANSCRIPTION
+            [this, callsPage, notesPage](const int64_t eventId) {
+#else
             [this, callsPage](const int64_t eventId) {
+#endif
               std::optional<DuckClient> client;
               try {
                 client = mDb->get_client_by_event(eventId);
@@ -1499,12 +1509,13 @@ void Application::connectSignals() {
                 mCallNotesPanel = new ClientNotesPage(mDb, callsPage);
                 callsPage->setSidePanelWidget(mCallNotesPanel);
               }
-              mCallNotesPanel->setClientInfo(client);
 #ifdef SESSIO_CALL_TRANSCRIPTION
+              notesPage->setClient(client);  // also refreshes the editor and meeting history
               // Call-owned notes work without a client. Keep their panel visible
               // for standalone meetings as well as scheduled client calls.
               callsPage->setSidePanelExpandedByDefault(true);
 #else
+              mCallNotesPanel->setClientInfo(client);
               callsPage->setSidePanelExpandedByDefault(client.has_value());
 #endif
             });

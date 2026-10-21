@@ -745,6 +745,11 @@ void ClientNotesPage::updateJumpButtonsVisibility() {
   if (!mScrollArea || !mJumpToLatestButton || !mJumpToTodayButton) {
     return;
   }
+  if (mEmbedded) {
+    mJumpToLatestButton->setVisible(false);
+    mJumpToTodayButton->setVisible(false);
+    return;
+  }
   auto *scrollBar = mScrollArea->verticalScrollBar();
   mJumpToLatestButton->setVisible(scrollBar->value() < scrollBar->maximum());
 

@@ -140,6 +140,8 @@ void MeetingHistoryList::populate(QWidget *details, const MeetingRecord &meeting
     connect(points, &KeyPointsWidget::sourceRequested, this, &MeetingHistoryList::sourceRequested);
     layout->addWidget(summary);
     layout->addWidget(points);
+    summary->setVisible(summary->hasContent());
+    connect(summary, &AiSummaryWidget::contentChanged, summary, [summary] { summary->setVisible(summary->hasContent()); });
     points->setVisible(points->hasContent());
     connect(points, &KeyPointsWidget::contentChanged, points, [points] { points->setVisible(points->hasContent()); });
     const auto entries = controller->noteEntries();

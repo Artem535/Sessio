@@ -1,6 +1,7 @@
 #include "meeting_history.h"
 #include "meeting_history_widgets.h"
 #include "call_notes_controller.h"
+#include "ai_summary_widget.h"
 #include <QDateTime>
 #include <QLabel>
 #include <QPushButton>
@@ -135,6 +136,42 @@ TEST_F(MeetingHistoryTest, CardShowsCountersAndSwapsPreviewForBodyWhenExpanded) 
   EXPECT_EQ(note->text(), "Own note");
   toggle->click();
   EXPECT_TRUE(preview->isVisible());
+}
+
+TEST_F(MeetingHistoryTest, MissingEndedKeyCountsAsEnded) {
+  const auto id = db->create_call_material(std::nullopt);
+  const auto transcript = db->add_transcript(std::nullopt, "live_local_v1");
+  ASSERT_TRUE(db->link_call_material_transcript(id, transcript));
+  ASSERT_TRUE(db->set_transcript_status(transcript, "draft"));
+  ASSERT_TRUE(db->set_transcript_clients(transcript, {client}));
+  const auto revision = db->get_call_material(id).revision;
+  ASSERT_TRUE(db->save_call_material(id, revision, "{}"));
+  EXPECT_EQ(loadMeetingHistory(*db, client, 0).size(), 1u);
+}
+
+TEST_F(MeetingHistoryTest, MaterialAgreementsCollectTranscriptRecords) {
+  const auto id = meeting({});
+  EXPECT_TRUE(loadMaterialAgreements(*db, id).isEmpty());
+  const auto transcript = db->get_call_material_transcript_ids(id).front();
+  const QJsonObject state{{"records", QJsonArray{QJsonObject{{"text", "Walk daily"}, {"active", true}}}}};
+  ASSERT_TRUE(db->save_prompter_state(transcript, db->get_prompter_state(transcript).revision, QJsonDocument(state).toJson(QJsonDocument::Compact).toStdString()));
+  const auto records = loadMaterialAgreements(*db, id);
+  ASSERT_EQ(records.size(), 1);
+  EXPECT_EQ(records[0].toObject()["text"].toString(), "Walk daily");
+}
+
+TEST_F(MeetingHistoryTest, ExpandedCardHidesEmptySummary) {
+  const auto id = meeting({});
+  MeetingHistoryList list;
+  list.setControllerFactory([&](qint64 mid, QObject *parent) {
+    auto *c = new CallNotesController(db, parent); c->openMaterial(mid); return c;
+  });
+  list.setMeetings(loadMeetingHistory(*db, client, 0), {});
+  list.show();
+  list.expand(id);
+  auto *summary = list.findChild<AiSummaryWidget *>();
+  ASSERT_NE(summary, nullptr);
+  EXPECT_FALSE(summary->isVisible());
 }
 
 int main(int argc, char **argv) {
