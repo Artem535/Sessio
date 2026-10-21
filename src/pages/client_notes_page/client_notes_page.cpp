@@ -144,17 +144,6 @@ void ClientNotesPage::setEmbedded(bool embedded) {
   if (mMaterialId > 0) { mEntriesRendered = false; refresh(); }
 }
 
-void ClientNotesPage::setAiPanelWidget(QWidget *panel) {
-  if (mAiPanel == panel) return;
-  if (mAiPanel) {
-    mAiHost->layout()->removeWidget(mAiPanel);
-    mAiPanel->setParent(nullptr);
-  }
-  mAiPanel = panel;
-  if (panel) { mAiHost->layout()->addWidget(panel); panel->show(); }
-  mAiHost->setVisible(panel != nullptr);
-}
-
 void ClientNotesPage::focusComposer() {
   mPreviewButton->setChecked(false);
   mComposer->setFocus();
@@ -451,13 +440,6 @@ void ClientNotesPage::buildUi() {
   jumpButtonsLayout->addWidget(mJumpToLatestButton);
   feedSurfaceLayout->addLayout(jumpButtonsLayout);
   rootLayout->addWidget(feedSurface, 1);
-
-  // The AI card shares the note feed but is not destroyed by history refreshes.
-  mAiHost = new QWidget(mFeedWidget);
-  auto *aiLayout = new QVBoxLayout(mAiHost);
-  aiLayout->setContentsMargins(0, 0, 0, 0);
-  mAiHost->hide();
-  mFeedLayout->insertWidget(mFeedLayout->count() - 1, mAiHost);
 
   auto *composerSurface = makeSurface(this);
   mComposerSurface = composerSurface;
@@ -836,7 +818,7 @@ void ClientNotesPage::clearNotes() {
   mTodayAnchorWidget = nullptr;
   while (mFeedLayout->count() > 0) {
     auto *item = mFeedLayout->takeAt(0);
-    if (item->widget() && item->widget() != mAiHost) {
+    if (item->widget()) {
       item->widget()->hide();
       for (auto *button : item->widget()->findChildren<QPushButton *>()) button->setObjectName({});
       item->widget()->deleteLater();
@@ -848,7 +830,6 @@ void ClientNotesPage::clearNotes() {
   mEmptyLabel->setAlignment(Qt::AlignCenter);
   mEmptyLabel->setForegroundRole(QPalette::PlaceholderText);
   mFeedLayout->addWidget(mEmptyLabel);
-  if (mAiHost) mFeedLayout->addWidget(mAiHost);
   mFeedLayout->addStretch();
 }
 
@@ -904,7 +885,7 @@ void ClientNotesPage::reloadCallEntries() {
     reloadNotes();
     auto *history = new QLabel(tr("Client history"), mFeedWidget);
     auto font = history->font(); font.setBold(true); history->setFont(font);
-    mFeedLayout->insertWidget(mFeedLayout->indexOf(mAiHost) + 1, history);
+    mFeedLayout->insertWidget(mFeedLayout->count() - 1, history);
   } else {
     clearNotes();
   }
@@ -915,7 +896,7 @@ void ClientNotesPage::reloadCallEntries() {
   if (!mEmbedded) {
     auto *heading = new QLabel(tr("This meeting"), mFeedWidget);
     auto font = heading->font(); font.setBold(true); heading->setFont(font);
-    mFeedLayout->insertWidget(mFeedLayout->indexOf(mAiHost), heading);
+    mFeedLayout->insertWidget(mFeedLayout->count() - 1, heading);
   }
   for (const auto &entry : entries) addCallEntry(entry.toObject());
   arrangeCompactUi();
@@ -978,8 +959,7 @@ void ClientNotesPage::addCallEntry(const QJsonObject &entry) {
     mComposer->setPlainText(entry["body_markdown"].toString());
     mCancelEditButton->show(); mAddNoteButton->setText(tr("Save changes")); focusComposer();
   });
-  const int beforeAi = mFeedLayout->indexOf(mAiHost);
-  mFeedLayout->insertWidget(beforeAi >= 0 ? beforeAi : mFeedLayout->count() - 1, card);
+  mFeedLayout->insertWidget(mFeedLayout->count() - 1, card);
 }
 
 void ClientNotesPage::addNoteBubble(const DuckClientNote &note) {
