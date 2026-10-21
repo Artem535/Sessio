@@ -2,6 +2,88 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="ru_RU">
 <context>
+    <name>AgreementsWidget</name>
+    <message>
+        <source>Agreements</source>
+        <translation>Договорённости</translation>
+    </message>
+</context>
+<context>
+    <name>AiSummaryWidget</name>
+    <message>
+        <source>AI summary</source>
+        <translation>Итог ИИ</translation>
+    </message>
+    <message>
+        <source>Delete AI summary</source>
+        <translation>Удалить итог ИИ</translation>
+    </message>
+    <message>
+        <source>Delete the AI summary of this meeting? Your own notes are kept.</source>
+        <translation>Удалить итог ИИ этой встречи? Ваши заметки останутся.</translation>
+    </message>
+    <message>
+        <source>Edit AI summary</source>
+        <translation>Изменить итог ИИ</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Изменить</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Сохранить</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Повторить</translation>
+    </message>
+    <message>
+        <source>Create again</source>
+        <translation>Создать заново</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Удалить</translation>
+    </message>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Не удалось сохранить — не закрывайте страницу</translation>
+    </message>
+    <message>
+        <source>updating…</source>
+        <translation>обновляется…</translation>
+    </message>
+    <message>
+        <source>ready</source>
+        <translation>готов</translation>
+    </message>
+    <message>
+        <source>outdated</source>
+        <translation>устарел</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>ошибка</translation>
+    </message>
+    <message>
+        <source>The transcript changed after this summary.</source>
+        <translation>Транскрипт изменился после этого итога.</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Обновить</translation>
+    </message>
+    <message>
+        <source>Turn on transcription to get a summary</source>
+        <translation>Включите транскрипцию, чтобы получить итог</translation>
+    </message>
+</context>
+<context>
     <name>AnalyticsPage</name>
     <message>
         <source>Total clients</source>
@@ -229,138 +311,53 @@
     </message>
 </context>
 <context>
-    <name>CallNotesPanel</name>
+    <name>CallNotesPage</name>
+    <message>
+        <source>This meeting</source>
+        <translation>Эта встреча</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>История</translation>
+    </message>
+    <message>
+        <source>Meeting</source>
+        <translation>Встреча</translation>
+    </message>
     <message>
         <source>My notes</source>
         <translation>Мои заметки</translation>
     </message>
-    <message>
-        <source>Write your own notes here…</source>
-        <translation>Запишите свои заметки…</translation>
-    </message>
-    <message>
-        <source>Model draft</source>
-        <translation>Черновик от модели</translation>
-    </message>
-    <message>
-        <source>Model notes will appear here after completed phrases. Your own notes are saved separately.</source>
-        <translation>Заметки модели появятся после законченных реплик. Ваши записи сохраняются отдельно.</translation>
-    </message>
-    <message>
-        <source>Edit model draft</source>
-        <translation>Редактирование черновика модели</translation>
-    </message>
-    <message>
-        <source>To my notes</source>
-        <translation>В мои заметки</translation>
-    </message>
-    <message>
-        <source>Edit</source>
-        <translation>Править</translation>
-    </message>
-    <message>
-        <source>Dismiss</source>
-        <translation>Отклонить</translation>
-    </message>
-    <message>
-        <source>Start notes</source>
-        <translation>Запустить заметки</translation>
-    </message>
-    <message>
-        <source>Generate final note</source>
-        <translation>Сформировать итог</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation>Отмена</translation>
-    </message>
-    <message>
-        <source>Key points</source>
-        <translation>Ключевые моменты</translation>
-    </message>
-    <message>
-        <source>AI draft and key points</source>
-        <translation>Черновик ИИ и ключевые моменты</translation>
-    </message>
-    <message>
-        <source>Add to editor</source>
-        <translation>Добавить в редактор</translation>
-    </message>
-    <message>
-        <source>Saved</source>
-        <translation>Сохранено</translation>
-    </message>
-    <message>
-        <source>Could not save — keep this page open</source>
-        <translation>Не удалось сохранить — не закрывайте страницу</translation>
-    </message>
+</context>
+<context>
+    <name>CallNotesSources</name>
     <message numerus="yes">
         <source>%1 · %n phrases</source>
         <translation>
-            <numerusform>%1 · %n реплика</numerusform>
-            <numerusform>%1 · %n реплики</numerusform>
-            <numerusform>%1 · %n реплик</numerusform>
+            <numerusform>%1 · %n фраза</numerusform>
+            <numerusform>%1 · %n фразы</numerusform>
+            <numerusform>%1 · %n фраз</numerusform>
         </translation>
     </message>
     <message>
         <source>Source · %1</source>
         <translation>Источник · %1</translation>
     </message>
-    <message>
-        <source>Final meeting note</source>
-        <translation>Итог встречи</translation>
-    </message>
-    <message>
-        <source>Through %1</source>
-        <translation>До %1</translation>
-    </message>
-    <message>
-        <source>Open a call to view or write notes.</source>
-        <translation>Откройте звонок, чтобы просматривать и писать заметки.</translation>
-    </message>
-    <message>
-        <source>The transcript changed. Generate the note again.</source>
-        <translation>Транскрипция изменилась. Сформируйте заметку заново.</translation>
-    </message>
-    <message>
-        <source>The model draft changed. Your edit is kept below; cancel editing to review the new draft.</source>
-        <translation>Черновик модели изменился. Ваша правка сохранена в редакторе. Отмените редактирование, чтобы проверить новый черновик.</translation>
-    </message>
     <message numerus="yes">
-        <source>%n points</source>
+        <source>whole meeting · %n phrases</source>
         <translation>
-            <numerusform>%n пункт</numerusform>
-            <numerusform>%n пункта</numerusform>
-            <numerusform>%n пунктов</numerusform>
+            <numerusform>вся встреча · %n фраза</numerusform>
+            <numerusform>вся встреча · %n фразы</numerusform>
+            <numerusform>вся встреча · %n фраз</numerusform>
         </translation>
     </message>
-    <message>
-        <source>Added to my notes</source>
-        <translation>Добавлено в мои заметки</translation>
-    </message>
-    <message>
-        <source>Added to editor</source>
-        <translation>Добавлено в редактор</translation>
-    </message>
-    <message>
-        <source>To editor</source>
-        <translation>В редактор</translation>
-    </message>
-    <message>
-        <source>Save edit</source>
-        <translation>Сохранить правку</translation>
-    </message>
-    <message>
-        <source>Cancel edit</source>
-        <translation>Отменить правку</translation>
-    </message>
-    <message>
-        <source>Retry notes</source>
-        <translation>Повторить заметки</translation>
-    </message>
-    <message>
-        <source>Retry final note</source>
-        <translation>Повторить итог</translation>
+    <message numerus="yes">
+        <source>through %1 · %n phrases</source>
+        <translation>
+            <numerusform>до %1 · %n фраза</numerusform>
+            <numerusform>до %1 · %n фразы</numerusform>
+            <numerusform>до %1 · %n фраз</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -878,14 +875,6 @@
         <translation>Черновик сохранён</translation>
     </message>
     <message>
-        <source>Client history</source>
-        <translation>История клиента</translation>
-    </message>
-    <message>
-        <source>This meeting</source>
-        <translation>Эта встреча</translation>
-    </message>
-    <message>
         <source>Save changes</source>
         <translation>Сохранить изменения</translation>
     </message>
@@ -1160,6 +1149,13 @@
     </message>
 </context>
 <context>
+    <name>KeyPointsWidget</name>
+    <message>
+        <source>Key points</source>
+        <translation>Ключевые пункты</translation>
+    </message>
+</context>
+<context>
     <name>MainWindow</name>
     <message>
         <source>: APP_TITLE</source>
@@ -1251,6 +1247,44 @@
     </message>
 </context>
 <context>
+    <name>MeetingHistory</name>
+    <message>
+        <source>%1 · %2 min</source>
+        <translation>%1 · %2 мин</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n note(s)</source>
+        <translation>
+            <numerusform>%n заметка</numerusform>
+            <numerusform>%n заметки</numerusform>
+            <numerusform>%n заметок</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>AI summary · %1</source>
+        <translation>Итог ИИ · %1</translation>
+    </message>
+    <message>
+        <source>AI summary</source>
+        <translation>Итог ИИ</translation>
+    </message>
+</context>
+<context>
+    <name>MeetingHistoryList</name>
+    <message>
+        <source>Show</source>
+        <translation>Показать</translation>
+    </message>
+    <message>
+        <source>Without a meeting</source>
+        <translation>Без встречи</translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation>Скрыть</translation>
+    </message>
+</context>
+<context>
     <name>MonthCalendarWidget</name>
     <message>
         <source>+%1 more</source>
@@ -1266,6 +1300,13 @@
     <message>
         <source>Next year</source>
         <translation>Следующий год</translation>
+    </message>
+</context>
+<context>
+    <name>NotesWidgetFrame</name>
+    <message>
+        <source>More actions</source>
+        <translation>Ещё действия</translation>
     </message>
 </context>
 <context>
@@ -1293,6 +1334,17 @@
     <message>
         <source>Client: %1</source>
         <translation>Клиент: %1</translation>
+    </message>
+</context>
+<context>
+    <name>PreviousMeetingWidget</name>
+    <message>
+        <source>Last time</source>
+        <translation>В прошлый раз</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>Открыть</translation>
     </message>
 </context>
 <context>
@@ -3568,6 +3620,14 @@ Your previous data was kept.</source>
     <message>
         <source>Keep as draft</source>
         <translation>Оставить как черновик</translation>
+    </message>
+    <message>
+        <source>live</source>
+        <translation>идёт</translation>
+    </message>
+    <message>
+        <source>ended</source>
+        <translation>завершена</translation>
     </message>
     <message>
         <source>Call materials</source>

@@ -4,12 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [0.2.33] - 2026-10-21
 
-- Added native call notes with editable model drafts, source-linked key points,
-  and a separate final-note generation status after the call.
+- Added native call notes with source-linked key points and a separate
+  final-note generation status after the call.
 - Saved call materials independently of clients and calendar events, including
   calls without speech recognition; upgraded the local/backup schema to 4.
-- Updated the Notes, Transcript and Prompter tabs to use the reviewed native
-  layout, with local processing, retry/cancel and manual acceptance.
+- Reworked the call Notes tab into a page of cards: meeting, my notes, AI
+  summary, key points and agreements, each with its own status and labelled
+  actions; the AI summary is kept with the call without an accept step.
+- Added "Last time" and a History view with the client's earlier meetings.
 - Preserved full note composition during calls: Markdown preview, separate
   saved entries, editing and file attachments, with AI drafts inside the feed.
 - Added a larger notes view while keeping the call video visible.

@@ -2,6 +2,88 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="en_US">
 <context>
+    <name>AgreementsWidget</name>
+    <message>
+        <source>Agreements</source>
+        <translation>Agreements</translation>
+    </message>
+</context>
+<context>
+    <name>AiSummaryWidget</name>
+    <message>
+        <source>AI summary</source>
+        <translation>AI summary</translation>
+    </message>
+    <message>
+        <source>Delete AI summary</source>
+        <translation>Delete AI summary</translation>
+    </message>
+    <message>
+        <source>Delete the AI summary of this meeting? Your own notes are kept.</source>
+        <translation>Delete the AI summary of this meeting? Your own notes are kept.</translation>
+    </message>
+    <message>
+        <source>Edit AI summary</source>
+        <translation>Edit AI summary</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Edit</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Save</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Retry</translation>
+    </message>
+    <message>
+        <source>Create again</source>
+        <translation>Create again</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Delete</translation>
+    </message>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Could not save — keep this page open</translation>
+    </message>
+    <message>
+        <source>updating…</source>
+        <translation>updating…</translation>
+    </message>
+    <message>
+        <source>ready</source>
+        <translation>ready</translation>
+    </message>
+    <message>
+        <source>outdated</source>
+        <translation>outdated</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>failed</translation>
+    </message>
+    <message>
+        <source>The transcript changed after this summary.</source>
+        <translation>The transcript changed after this summary.</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Update</translation>
+    </message>
+    <message>
+        <source>Turn on transcription to get a summary</source>
+        <translation>Turn on transcription to get a summary</translation>
+    </message>
+</context>
+<context>
     <name>AnalyticsPage</name>
     <message>
         <source>Total clients</source>
@@ -229,71 +311,26 @@
     </message>
 </context>
 <context>
-    <name>CallNotesPanel</name>
+    <name>CallNotesPage</name>
+    <message>
+        <source>This meeting</source>
+        <translation>This meeting</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>History</translation>
+    </message>
+    <message>
+        <source>Meeting</source>
+        <translation>Meeting</translation>
+    </message>
     <message>
         <source>My notes</source>
         <translation>My notes</translation>
     </message>
-    <message>
-        <source>Write your own notes here…</source>
-        <translation>Write your own notes here…</translation>
-    </message>
-    <message>
-        <source>Model draft</source>
-        <translation>Model draft</translation>
-    </message>
-    <message>
-        <source>Model notes will appear here after completed phrases. Your own notes are saved separately.</source>
-        <translation>Model notes will appear here after completed phrases. Your own notes are saved separately.</translation>
-    </message>
-    <message>
-        <source>Edit model draft</source>
-        <translation>Edit model draft</translation>
-    </message>
-    <message>
-        <source>To my notes</source>
-        <translation>To my notes</translation>
-    </message>
-    <message>
-        <source>Edit</source>
-        <translation>Edit</translation>
-    </message>
-    <message>
-        <source>Dismiss</source>
-        <translation>Dismiss</translation>
-    </message>
-    <message>
-        <source>Start notes</source>
-        <translation>Start notes</translation>
-    </message>
-    <message>
-        <source>Generate final note</source>
-        <translation>Generate final note</translation>
-    </message>
-    <message>
-        <source>Cancel</source>
-        <translation>Cancel</translation>
-    </message>
-    <message>
-        <source>Key points</source>
-        <translation>Key points</translation>
-    </message>
-    <message>
-        <source>AI draft and key points</source>
-        <translation>AI draft and key points</translation>
-    </message>
-    <message>
-        <source>Add to editor</source>
-        <translation>Add to editor</translation>
-    </message>
-    <message>
-        <source>Saved</source>
-        <translation>Saved</translation>
-    </message>
-    <message>
-        <source>Could not save — keep this page open</source>
-        <translation>Could not save — keep this page open</translation>
-    </message>
+</context>
+<context>
+    <name>CallNotesSources</name>
     <message numerus="yes">
         <source>%1 · %n phrases</source>
         <translation>
@@ -305,60 +342,19 @@
         <source>Source · %1</source>
         <translation>Source · %1</translation>
     </message>
-    <message>
-        <source>Final meeting note</source>
-        <translation>Final meeting note</translation>
-    </message>
-    <message>
-        <source>Through %1</source>
-        <translation>Through %1</translation>
-    </message>
-    <message>
-        <source>Open a call to view or write notes.</source>
-        <translation>Open a call to view or write notes.</translation>
-    </message>
-    <message>
-        <source>The transcript changed. Generate the note again.</source>
-        <translation>The transcript changed. Generate the note again.</translation>
-    </message>
-    <message>
-        <source>The model draft changed. Your edit is kept below; cancel editing to review the new draft.</source>
-        <translation>The model draft changed. Your edit is kept below; cancel editing to review the new draft.</translation>
-    </message>
     <message numerus="yes">
-        <source>%n points</source>
+        <source>whole meeting · %n phrases</source>
         <translation>
-            <numerusform>%n point</numerusform>
-            <numerusform>%n points</numerusform>
+            <numerusform>whole meeting · %n phrase</numerusform>
+            <numerusform>whole meeting · %n phrases</numerusform>
         </translation>
     </message>
-    <message>
-        <source>Added to my notes</source>
-        <translation>Added to my notes</translation>
-    </message>
-    <message>
-        <source>Added to editor</source>
-        <translation>Added to editor</translation>
-    </message>
-    <message>
-        <source>To editor</source>
-        <translation>To editor</translation>
-    </message>
-    <message>
-        <source>Save edit</source>
-        <translation>Save edit</translation>
-    </message>
-    <message>
-        <source>Cancel edit</source>
-        <translation>Cancel edit</translation>
-    </message>
-    <message>
-        <source>Retry notes</source>
-        <translation>Retry notes</translation>
-    </message>
-    <message>
-        <source>Retry final note</source>
-        <translation>Retry final note</translation>
+    <message numerus="yes">
+        <source>through %1 · %n phrases</source>
+        <translation>
+            <numerusform>through %1 · %n phrase</numerusform>
+            <numerusform>through %1 · %n phrases</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -874,14 +870,6 @@
         <translation>Draft saved</translation>
     </message>
     <message>
-        <source>Client history</source>
-        <translation>Client history</translation>
-    </message>
-    <message>
-        <source>This meeting</source>
-        <translation>This meeting</translation>
-    </message>
-    <message>
         <source>Save changes</source>
         <translation>Save changes</translation>
     </message>
@@ -1155,6 +1143,13 @@
     </message>
 </context>
 <context>
+    <name>KeyPointsWidget</name>
+    <message>
+        <source>Key points</source>
+        <translation>Key points</translation>
+    </message>
+</context>
+<context>
     <name>MainWindow</name>
     <message>
         <source>: APP_TITLE</source>
@@ -1246,6 +1241,43 @@
     </message>
 </context>
 <context>
+    <name>MeetingHistory</name>
+    <message>
+        <source>%1 · %2 min</source>
+        <translation>%1 · %2 min</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n note(s)</source>
+        <translation>
+            <numerusform>%n note</numerusform>
+            <numerusform>%n notes</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>AI summary · %1</source>
+        <translation>AI summary · %1</translation>
+    </message>
+    <message>
+        <source>AI summary</source>
+        <translation>AI summary</translation>
+    </message>
+</context>
+<context>
+    <name>MeetingHistoryList</name>
+    <message>
+        <source>Show</source>
+        <translation>Show</translation>
+    </message>
+    <message>
+        <source>Without a meeting</source>
+        <translation>Without a meeting</translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation>Hide</translation>
+    </message>
+</context>
+<context>
     <name>MonthCalendarWidget</name>
     <message>
         <source>+%1 more</source>
@@ -1261,6 +1293,13 @@
     <message>
         <source>Next year</source>
         <translation>Next year</translation>
+    </message>
+</context>
+<context>
+    <name>NotesWidgetFrame</name>
+    <message>
+        <source>More actions</source>
+        <translation>More actions</translation>
     </message>
 </context>
 <context>
@@ -1288,6 +1327,17 @@
     <message>
         <source>Client: %1</source>
         <translation>Client: %1</translation>
+    </message>
+</context>
+<context>
+    <name>PreviousMeetingWidget</name>
+    <message>
+        <source>Last time</source>
+        <translation>Last time</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>Open</translation>
     </message>
 </context>
 <context>
@@ -3558,6 +3608,14 @@ Your previous data was kept.</translation>
     <message>
         <source>Keep as draft</source>
         <translation>Keep as draft</translation>
+    </message>
+    <message>
+        <source>live</source>
+        <translation>live</translation>
+    </message>
+    <message>
+        <source>ended</source>
+        <translation>ended</translation>
     </message>
     <message>
         <source>Call materials</source>
