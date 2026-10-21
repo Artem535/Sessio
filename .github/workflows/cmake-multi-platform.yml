@@ -17,8 +17,92 @@ env:
   VCPKG_COMMIT: 62159a45e18f3a9ac0548628dcaf74fcb60c6ff9
 
 jobs:
+  # The call prompter runtime (libsessio_litert on LiteRT-LM v0.18.0, Vulkan
+  # with CPU fallback). The upstream super-build takes hours, so install/ is
+  # cached and rebuilt only when the build scripts or the shim change: the shim
+  # has no stable ABI, so a runtime built from an older sessio_litert.h must
+  # never be linked into the app.
+  litert-runtime:
+    name: LiteRT-LM runtime (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      # The prebuilt Dawn/WebGPU libraries are LFS objects; the GPU script
+      # downloads and SHA-checks only the five it needs.
+      GIT_LFS_SKIP_SMUDGE: "1"
+      JOBS: "4"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore runtime cache
+        id: cache-litert
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/sessio-litert
+          key: litert-lm-v0.18.0-${{ runner.os }}-${{ hashFiles('scripts/build-litert-lm.sh', 'scripts/build-litert-lm-gpu.sh', 'src/call_prompter/litert/**', 'test/litert_gpu_runtime_smoke.cpp') }}
+
+      - name: Free disk space
+        if: steps.cache-litert.outputs.cache-hit != 'true'
+        run: |
+          # The CPU build tree alone is ~18 GB.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          build_root=/mnt/sessio-litert-build
+          if ! sudo mkdir -p "$build_root" 2>/dev/null; then build_root="$RUNNER_TEMP/sessio-litert-build"; mkdir -p "$build_root"; fi
+          sudo chown "$(id -u):$(id -g)" "$build_root"
+          echo "LITERT_BUILD_ROOT=$build_root" >> "$GITHUB_ENV"
+          df -h / "$build_root"
+
+      - name: Install LiteRT-LM build dependencies
+        if: steps.cache-litert.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake curl patchelf openjdk-17-jdk-headless \
+            python3-dev zlib1g-dev libssl-dev libcurl4-openssl-dev
+          gcc --version | head -1; cmake --version | head -1; java -version; cargo --version; python3 --version
+
+      - name: Build CPU runtime
+        if: steps.cache-litert.outputs.cache-hit != 'true'
+        run: scripts/build-litert-lm.sh "$LITERT_BUILD_ROOT/cpu"
+
+      - name: Build Vulkan runtime
+        if: steps.cache-litert.outputs.cache-hit != 'true'
+        run: |
+          bash scripts/build-litert-lm-gpu.sh "$LITERT_BUILD_ROOT/gpu" "$LITERT_BUILD_ROOT/cpu"
+          rm -rf "$RUNNER_TEMP/sessio-litert"
+          cp -a "$LITERT_BUILD_ROOT/gpu/install" "$RUNNER_TEMP/sessio-litert"
+
+      - name: Save runtime cache
+        if: steps.cache-litert.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/sessio-litert
+          key: ${{ steps.cache-litert.outputs.cache-primary-key }}
+
+      - name: Verify runtime
+        run: |
+          lib="$RUNNER_TEMP/sessio-litert/lib"
+          ls -la "$lib"
+          for so in libsessio_litert.so libLiteRt.so libLiteRtWebGpuAccelerator.so libwebgpu_dawn.so; do
+            test -f "$lib/$so" || { echo "::error::$so missing from the runtime"; exit 1; }
+          done
+          # Every sibling resolves through $ORIGIN; libvulkan is dlopen()ed.
+          if ldd "$lib"/*.so | grep 'not found'; then
+            echo "::error::Unresolved runtime dependency"
+            exit 1
+          fi
+
+      - name: Upload runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: sessio-litert-runtime
+          path: ${{ runner.temp }}/sessio-litert
+          retention-days: 3
+          if-no-files-found: error
+
   build:
     name: Build ${{ matrix.os }}
+    needs: litert-runtime
     runs-on: ${{ matrix.os }}
     env:
       QT_QPA_PLATFORM: offscreen
@@ -226,9 +310,18 @@ jobs:
         if: runner.os != 'Linux'
         run: cmake --preset vcpkg-release
 
+      - name: Download call prompter runtime
+        if: runner.os == 'Linux'
+        uses: actions/download-artifact@v4
+        with:
+          name: sessio-litert-runtime
+          path: ${{ runner.temp }}/sessio-litert
+
       - name: Configure (Linux, with transcription tests)
         if: runner.os == 'Linux'
-        run: cmake --preset vcpkg-release -DSESSIO_BUILD_TRANSCRIPTION_TESTS=ON
+        run: >
+          cmake --preset vcpkg-release -DSESSIO_BUILD_TRANSCRIPTION_TESTS=ON
+          "-DSESSIO_LITERT_DIR=${{ runner.temp }}/sessio-litert"
 
       # The models are downloaded at build time into this directory (see
       # cmake/FetchTranscriptionModels.cmake); restoring it skips ~200 MB.
@@ -440,6 +533,15 @@ jobs:
             echo "::error::RPM must not Require the bundled sherpa-onnx/ONNX Runtime libraries"
             exit 1
           fi
+          # The prompter runtime and its LiteRT/Dawn plugins are bundled too.
+          if rpm -qp --requires build-release/packages/*.rpm | grep -Ei 'sessio_litert|LiteRt|webgpu|kissfft'; then
+            echo "::error::RPM must not Require the bundled LiteRT-LM runtime"
+            exit 1
+          fi
+          for so in libsessio_litert.so libLiteRt.so libLiteRtWebGpuAccelerator.so libwebgpu_dawn.so; do
+            rpm -qlp build-release/packages/*.rpm | grep -E "^/usr/lib(64)?/sessio/$so\$" ||
+              { echo "::error::$so is missing from the RPM"; exit 1; }
+          done
           for dep in 'qt6-qtbase >= 6.8' qt6-qtbase-gui qt6-qtsvg qt6-qtwayland qt6-qtmultimedia qtkeychain-qt6; do
             rpm -qp --requires build-release/packages/*.rpm | grep -Fx "$dep"
           done

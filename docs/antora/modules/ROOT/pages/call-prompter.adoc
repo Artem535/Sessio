@@ -142,6 +142,14 @@ cmake -S . -B build -DSESSIO_LITERT_DIR=$HOME/.cache/sessio-litert-lm-gpu/instal
 Без `SESSIO_LITERT_DIR` Sessio собирается с заглушкой: суфлёр сообщает, что runtime недоступен.
 Windows и macOS пока не проверены.
 
+В CI Linux-пакеты собираются с Vulkan-runtime: job `litert-runtime` запускает оба скрипта
+на `ubuntu-latest` и кэширует `install/`. Ключ кэша зависит от версии LiteRT-LM, обоих скриптов,
+`src/call_prompter/litert/` и smoke-теста. Пересборка занимает несколько часов
+и запускается только после изменения шима или скриптов.
+RPM кладёт все библиотеки runtime в `/usr/lib*/sessio` и не объявляет их системными зависимостями.
+Модель в пакет не входит; Vulkan нужен только для GPU-режима (на Fedora пакет `vulkan-loader`),
+без него суфлёр работает на CPU.
+
 Скрипт закрепляет ревизии TensorFlow, LiteRT, RE2 и SafeInt, включает PIC для
 разделяемой библиотеки и исключает Samsung NPU-плагин из CPU-сборки.
 На Linux также нужен `patchelf`: библиотека KissFFT поставляется рядом с

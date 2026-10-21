@@ -17,6 +17,9 @@ All notable changes to this project will be documented in this file.
   CPU fallback at load time; on a Radeon 780M decoding is about 3.5x faster and
   peak memory drops from about 10 GiB to about 1-2.5 GiB.
 - The prompter now also proposes an accepted promise that has no deadline yet.
+- Linux packages built by CI now include the local prompter runtime (Vulkan
+  with CPU fallback), so the prompter and call notes work after installing
+  the RPM; the Gemma model is still configured separately.
 - Fixed a crash of the sharing app when the screen-sharing portal reported an
   error (for example, on Wayland when the share could not be started).
 - Fixed calendar and recurring-meeting times shifted by the UTC offset on systems
