@@ -1175,7 +1175,7 @@ void Application::connectSignals() {
     auto *finals = new CallNotesFinalizer(mDb, this);
     auto *prompterPanel = new PrompterPanel(prompter, mDb);
     prompterPanel->setCallNoteSaver([notes](const QString &id, const QString &text) { return notes->appendAgreement(id, text); });
-    sidePanel->setPrompterPanel(prompterPanel, prompterPanel->sharedHintWidget());
+    notesPage->setPrompterPanel(prompterPanel);
     connect(prompterPanel, &PrompterPanel::pendingCountChanged, sidePanel, &CallSidePanel::setPrompterPendingCount);
     connect(prompterPanel, &PrompterPanel::sourceRequested, sidePanel, [sidePanel, panel](qint64 id) {
       sidePanel->showTranscript(); panel->focusPhrase(id);

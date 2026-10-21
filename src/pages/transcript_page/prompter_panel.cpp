@@ -45,7 +45,7 @@ PrompterPanel::PrompterPanel(CallPrompterController *controller, std::shared_ptr
   auto *hide = new QPushButton(tr("Hide"), mHint); hintLayout->addWidget(hide);
   connect(hide, &QPushButton::clicked, this, [this] { mDismissedHint = mHintText->text(); mHint->hide(); });
   mHint->hide();
-  auto *scroll = new QScrollArea(this); scroll->setWidgetResizable(true); scroll->setFrameShape(QFrame::NoFrame);
+  auto *scroll = mScroll = new QScrollArea(this); scroll->setWidgetResizable(true); scroll->setFrameShape(QFrame::NoFrame);
   auto *content = new QWidget(scroll); auto *body = new QVBoxLayout(content);
   body->setContentsMargins(0, 0, 4, 0); body->setSpacing(12);
   auto heading = [content](const QString &text) {
@@ -57,8 +57,9 @@ PrompterPanel::PrompterPanel(CallPrompterController *controller, std::shared_ptr
   mEmpty = plainLabel(tr("New agreements will appear here after completed phrases."), content); body->addWidget(mEmpty);
   body->addWidget(mHint);
   auto *divider = new QFrame(content); divider->setFrameShape(QFrame::HLine); body->addWidget(divider);
-  body->addWidget(heading(tr("Accepted agreements")));
+  auto *acceptedHeading = heading(tr("Accepted agreements")); body->addWidget(acceptedHeading);
   mRecords = plainLabel({}, content); body->addWidget(mRecords); body->addStretch();
+  mAcceptedSection = {divider, acceptedHeading, mRecords};
   scroll->setWidget(content); layout->addWidget(scroll, 1);
   auto *notice = plainLabel(tr("Private suggestions. Check the source before saving."), this); layout->addWidget(notice);
   connect(controller, &CallPrompterController::cardsChanged, this, &PrompterPanel::refresh);
@@ -67,6 +68,17 @@ PrompterPanel::PrompterPanel(CallPrompterController *controller, std::shared_ptr
     mStart->setEnabled(mController && !mController->running());
   });
   refresh();
+}
+void PrompterPanel::setEmbedded(bool embedded) {
+  if (!embedded || mScroll->isHidden()) return;
+  auto *layout = static_cast<QVBoxLayout *>(this->layout());
+  layout->setContentsMargins(0, 0, 0, 0);
+  auto *content = mScroll->takeWidget();
+  layout->insertWidget(layout->indexOf(mScroll), content);
+  content->layout()->setContentsMargins(0, 0, 0, 0);
+  content->setAutoFillBackground(false);  // QScrollArea turned it on
+  mScroll->hide();
+  for (auto *widget : mAcceptedSection) widget->hide();
 }
 void PrompterPanel::refresh() {
   if (!mController) return;
@@ -172,7 +184,8 @@ void PrompterPanel::refresh() {
     const auto record = value.toObject();
     if (record["active"].toBool(true)) records << QStringLiteral("• ") + record["text"].toString();
   }
-  mRecords->setText(records.join("\n\n")); mEmpty->setVisible(pending == 0);
+  mRecords->setText(records.join("\n\n"));
+  if (mScroll->isHidden()) mRecords->hide(); mEmpty->setVisible(pending == 0);
   emit pendingCountChanged(pending);
 }
 void PrompterPanel::saveNote(const QString &cardId) {

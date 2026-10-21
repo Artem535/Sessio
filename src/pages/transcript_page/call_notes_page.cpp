@@ -7,6 +7,7 @@
 #include "meeting_history.h"
 #include "meeting_history_widgets.h"
 #include "notes_widget_frame.h"
+#include "prompter_panel.h"
 #include <QButtonGroup>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -50,7 +51,7 @@ CallNotesPage::CallNotesPage(std::shared_ptr<pcm::database::Database> db, CallNo
   contentLayout->setSpacing(10);
 
   mCurrent = new QWidget(content);
-  auto *column = new QVBoxLayout(mCurrent);
+  auto *column = mColumn = new QVBoxLayout(mCurrent);
   column->setContentsMargins(0, 0, 0, 0);
   column->setSpacing(10);
   mPrevious = new PreviousMeetingWidget(mCurrent);
@@ -62,7 +63,7 @@ CallNotesPage::CallNotesPage(std::shared_ptr<pcm::database::Database> db, CallNo
   mMeetingDetails->setWordWrap(true);
   mMeeting->body()->addWidget(mMeetingDetails);
   column->addWidget(mMeeting);
-  auto *notesCard = new NotesWidgetFrame(tr("My notes"), mCurrent);
+  auto *notesCard = mNotesCard = new NotesWidgetFrame(tr("My notes"), mCurrent);
   notesCard->setObjectName("myNotesCard");
   mEditor = new ClientNotesPage(mDb, notesCard);
   mEditor->setEmbedded(true);
@@ -130,6 +131,19 @@ void CallNotesPage::setAgreements(const QJsonArray &records) {
 
 void CallNotesPage::setControllerFactory(MeetingControllerFactory factory) {
   mHistory->setControllerFactory(std::move(factory));
+}
+
+void CallNotesPage::setPrompterPanel(PrompterPanel *panel) {
+  if (mPrompter || !panel) return;
+  mPrompter = new NotesWidgetFrame(tr("Prompter"), mCurrent);
+  mPrompter->setObjectName("prompterNotesCard");
+  panel->setEmbedded(true);
+  mPrompter->body()->addWidget(panel);
+  mColumn->insertWidget(mColumn->indexOf(mNotesCard) + 1, mPrompter);
+  connect(panel, &PrompterPanel::pendingCountChanged, mPrompter, [frame = mPrompter, this](int count) {
+    frame->setStatus(count > 0 ? tr("%n new", nullptr, count) : QString());
+  });
+  panel->refresh();
 }
 
 void CallNotesPage::showHistory(qint64 materialId) {

@@ -24,7 +24,7 @@ CallSidePanel::CallSidePanel(QWidget *notesPage, QWidget *transcriptPanel, QWidg
   connect(mSwitcher, &oclero::qlementine::SegmentedControl::currentIndexChanged,
           this, [this] {
     const int index = mSwitcher->currentIndex();
-    if (index != 0 && (!mTranscriptionAvailable || (index != 1 && (index != 2 || mStack->count() < 3)))) {
+    if (index != 0 && (!mTranscriptionAvailable || index != 1)) {
       showNotes();
       return;
     }
@@ -50,21 +50,6 @@ void CallSidePanel::showTranscript() {
 }
 
 bool CallSidePanel::transcriptShown() const { return mStack->currentIndex() == 1; }
-void CallSidePanel::setPrompterPanel(QWidget *panel, QWidget *sharedHint) {
-  if (mStack->count() >= 3) return;
-  mStack->addWidget(panel);
-  mSwitcher->addItem(tr("Prompter"));
-  // The hint belongs to the Prompter tab. Keep its existing widget and signal
-  // connections, and let the tab own its lifetime together with the cards.
-  if (sharedHint && !panel->isAncestorOf(sharedHint)) {
-    auto *body = panel->layout();
-    if (!body) body = new QVBoxLayout(panel);
-    body->addWidget(sharedHint);
-  }
-}
 void CallSidePanel::setPrompterPendingCount(int count) {
-  if (mStack->count() >= 3) mSwitcher->setItemBadge(2, count > 0 ? QString::number(count) : QString());
-}
-void CallSidePanel::showPrompter() {
-  if (mTranscriptionAvailable && mStack->count() >= 3) mSwitcher->setCurrentIndex(2);
+  mSwitcher->setItemBadge(0, count > 0 ? QString::number(count) : QString());
 }

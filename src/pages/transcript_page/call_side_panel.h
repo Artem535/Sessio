@@ -13,9 +13,8 @@ public:
   void setTranscriptionAvailable(bool available);
   void showNotes();
   void showTranscript();
-  void setPrompterPanel(QWidget *panel, QWidget *sharedHint);
+  // Prompter suggestions live on the Notes page; badge its tab with their count.
   void setPrompterPendingCount(int count);
-  void showPrompter();
   [[nodiscard]] bool transcriptShown() const;
 signals:
   void pageChanged(bool transcriptShown);

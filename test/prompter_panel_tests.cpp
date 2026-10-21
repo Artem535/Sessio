@@ -1,6 +1,9 @@
 #include "prompter_panel.h"
-#include "call_side_panel.h"
-#include "transcript_panel.h"
+#include "call_notes_controller.h"
+#include "call_notes_page.h"
+#include "notes_widget_frame.h"
+#include <QLabel>
+#include <QScrollArea>
 #include <QApplication>
 #include <QDir>
 #include <QJsonArray>
@@ -40,17 +43,26 @@ TEST(PrompterPanelTest, RealPanelKeepsReviewActionsAndSourceLinksAtNarrowWidth) 
       {"participants", QJsonArray{"Анна", "Борис"}}, {"evidence_ids", evidence}, {"target_id", ""}, {"unresolved", false}}};
   reply["suggestions"] = QJsonArray{QJsonObject{{"text", "К какому дню будут готовы документы?"}, {"evidence_ids", evidence}}};
   reply["rejected"] = QJsonArray{}; controller.handleResult(reply);
-  auto *transcript = new TranscriptPanel; transcript->addPhrase(a); transcript->addPhrase(b);
-  CallSidePanel side(new QWidget, transcript);
+  CallNotesController notes(db);
+  CallNotesPage side(db, &notes);
   auto *panel = new PrompterPanel(&controller, db);
   EXPECT_FALSE(panel->findChild<QPushButton *>("prompterStart")->isEnabled());
   controller.pause();
   EXPECT_TRUE(panel->findChild<QPushButton *>("prompterStart")->isEnabled());
   controller.resume();
   EXPECT_FALSE(panel->findChild<QPushButton *>("prompterStart")->isEnabled());
-  side.setPrompterPanel(panel, panel->sharedHintWidget());
-  side.setPrompterPendingCount(1); side.showPrompter(); side.resize(420, 800); side.show();
+  side.setPrompterPanel(panel); side.resize(420, 800); side.show();
   QCoreApplication::processEvents();
+  // The prompter is a card on the notes page: no scroll of its own, pending
+  // count in the chip, accepted agreements left to the Agreements card.
+  auto *card = side.findChild<NotesWidgetFrame *>("prompterNotesCard");
+  ASSERT_NE(card, nullptr);
+  EXPECT_TRUE(card->isAncestorOf(panel));
+  EXPECT_EQ(card->findChild<QLabel *>("notesWidgetStatus")->text(), CallNotesPage::tr("%n new", nullptr, 1));
+  for (auto *scroll : panel->findChildren<QScrollArea *>()) EXPECT_TRUE(scroll->isHidden());
+  for (auto *label : panel->findChildren<QLabel *>())
+    if (label->text() == PrompterPanel::tr("Accepted agreements")) EXPECT_FALSE(label->isVisibleTo(panel));
+  EXPECT_TRUE(panel->isAncestorOf(panel->sharedHintWidget()));
   QSignalSpy sources(panel, &PrompterPanel::sourceRequested);
   const auto buttons = panel->findChildren<QPushButton *>();
   bool found = false;
@@ -62,6 +74,7 @@ TEST(PrompterPanelTest, RealPanelKeepsReviewActionsAndSourceLinksAtNarrowWidth) 
     QDir().mkpath(screenshots);
     auto *style = dynamic_cast<oclero::qlementine::QlementineStyle *>(QApplication::style());
     ASSERT_NE(style, nullptr);
+    QTest::qWait(200);  // let the page lay out before grabbing
     ASSERT_TRUE(side.grab().save(QDir(screenshots).filePath("prompter-light.png")));
     style->setThemeJsonPath(QStringLiteral(SESSIO_SOURCE_DIR) + "/resources/themes/qlementine_dark.json");
     QTest::qWait(300);

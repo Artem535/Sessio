@@ -16,6 +16,9 @@ public:
   PrompterPanel(CallPrompterController *controller, std::shared_ptr<pcm::database::Database> db, QWidget *parent = nullptr);
   QWidget *sharedHintWidget() const { return mHint; }
   void refresh();
+  // Card on the call notes page: no own scroll area and no accepted-agreements
+  // list (the page shows those in its Agreements card).
+  void setEmbedded(bool embedded);
   void setCallNoteSaver(std::function<bool(const QString &, const QString &)> saver) { mCallNoteSaver = std::move(saver); }
 signals:
   void startRequested();
@@ -28,6 +31,8 @@ private:
   QPointer<CallPrompterController> mController;
   std::shared_ptr<pcm::database::Database> mDb;
   QLabel *mStatus;
+  QScrollArea *mScroll;
+  QList<QWidget *> mAcceptedSection;
   QWidget *mHint;
   QLabel *mHintText;
   QLabel *mRecords;

@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - Reworked the call Notes tab into a page of cards: meeting, my notes, AI
   summary, key points and agreements, each with its own status and labelled
   actions; the AI summary is kept with the call without an accept step.
+- Moved the prompter from its own tab into a card on the Notes page; the count
+  of new suggestions is shown on the card and on the Notes tab.
 - Added "Last time" and a History view with the client's earlier meetings.
 - Preserved full note composition during calls: Markdown preview, separate
   saved entries, editing and file attachments, with AI drafts inside the feed.

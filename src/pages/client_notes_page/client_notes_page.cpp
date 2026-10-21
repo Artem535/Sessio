@@ -426,6 +426,9 @@ void ClientNotesPage::buildUi() {
   mFeedLayout->addStretch();
 
   mScrollArea->setWidget(mFeedWidget);
+  // Let the rounded surface show through instead of a square viewport fill.
+  mScrollArea->viewport()->setAutoFillBackground(false);
+  mFeedWidget->setAutoFillBackground(false);
   feedSurfaceLayout->addWidget(mScrollArea);
 
   mJumpToTodayButton = new QPushButton(tr("Jump to today"), feedSurface);

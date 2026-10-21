@@ -16,6 +16,8 @@ class KeyPointsWidget;
 class AgreementsWidget;
 class NotesWidgetFrame;
 class QLabel;
+class QVBoxLayout;
+class PrompterPanel;
 
 // Notes page of a call: «This meeting | History» switch over one scroll area
 // with a column of cards (last time, meeting, my notes, summary, key points,
@@ -30,6 +32,8 @@ public:
   void setMeeting(const QString &details, const QString &status);
   void setAgreements(const QJsonArray &records);
   void setControllerFactory(MeetingControllerFactory factory);
+  // Shows the live prompter as a card after «My notes»; the page owns it.
+  void setPrompterPanel(PrompterPanel *panel);
   void showHistory(qint64 materialId);
   bool historyMode() const;
 signals:
@@ -46,6 +50,9 @@ private:
   qint64 mClientId = 0;
   QWidget *mSwitch = nullptr;
   QWidget *mCurrent = nullptr;
+  QVBoxLayout *mColumn = nullptr;
+  NotesWidgetFrame *mNotesCard = nullptr;
+  NotesWidgetFrame *mPrompter = nullptr;
   PreviousMeetingWidget *mPrevious = nullptr;
   NotesWidgetFrame *mMeeting = nullptr;
   QLabel *mMeetingDetails = nullptr;

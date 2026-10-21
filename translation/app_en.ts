@@ -328,6 +328,17 @@
         <source>My notes</source>
         <translation>My notes</translation>
     </message>
+    <message>
+        <source>Prompter</source>
+        <translation>Prompter</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n new</source>
+        <translation>
+            <numerusform>%n new</numerusform>
+            <numerusform>%n new</numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>CallNotesSources</name>
@@ -552,10 +563,6 @@
     <message>
         <source>Transcript</source>
         <translation>Transcript</translation>
-    </message>
-    <message>
-        <source>Prompter</source>
-        <translation>Prompter</translation>
     </message>
 </context>
 <context>

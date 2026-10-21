@@ -328,6 +328,18 @@
         <source>My notes</source>
         <translation>Мои заметки</translation>
     </message>
+    <message>
+        <source>Prompter</source>
+        <translation>Суфлёр</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n new</source>
+        <translation>
+            <numerusform>%n новая</numerusform>
+            <numerusform>%n новые</numerusform>
+            <numerusform>%n новых</numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>CallNotesSources</name>
@@ -557,10 +569,6 @@
     <message>
         <source>Transcript</source>
         <translation>Транскрипция</translation>
-    </message>
-    <message>
-        <source>Prompter</source>
-        <translation>Суфлёр</translation>
     </message>
 </context>
 <context>
