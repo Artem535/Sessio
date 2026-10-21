@@ -1,4 +1,9 @@
 #include "notes_widget_frame.h"
+#include "ai_summary_widget.h"
+#include "call_notes_controller.h"
+#include <QPlainTextEdit>
+#include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QApplication>
 #include <QLabel>
 #include <QMenu>
@@ -23,6 +28,106 @@ TEST(NotesWidgetFrameTest, ShowsTitleStatusChipAndLabelledActions) {
   EXPECT_FALSE(more->accessibleName().isEmpty());
   EXPECT_TRUE(more->menu()->actions().contains(remove));
   frame.setStatus({}); EXPECT_TRUE(chip->isHidden());
+}
+
+// Produces a controller with one ready live draft and one key point.
+struct NotesFixture {
+  QTemporaryDir dir;
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir.path().toStdString())}};
+  std::shared_ptr<pcm::database::Database> db = std::make_shared<pcm::database::Database>(conf);
+  CallNotesController controller{db};
+  DuckTranscriptPhrase phrase;
+  void generate(const QString &text = QStringLiteral("Prepare a short outline."),
+                const QString &pointText = QStringLiteral("Outline is due")) {
+    const auto id = db->add_transcript(std::nullopt, "live_local_v1");
+    controller.beginCall(); controller.attachTranscript(id); controller.setGenerationEnabled(true);
+    phrase.transcript_id = id; phrase.track_role = "participant";
+    phrase.speaker_name = "Participant"; phrase.text = "I will prepare a short outline.";
+    phrase.start_ms = 73000; phrase.end_ms = 76000;
+    phrase.id = db->add_transcript_phrase(phrase);
+    QSignalSpy requests(&controller, &CallNotesController::requestReady);
+    controller.addPhrase(phrase); controller.flush();
+    ASSERT_FALSE(requests.isEmpty());
+    auto reply = requests.last().first().toJsonObject();
+    const QJsonObject note{{"text", text}, {"evidence_ids", QJsonArray{QString::number(phrase.id)}}};
+    auto point = note; point["text"] = pointText;
+    reply["notes"] = QJsonObject{{"note", note}, {"key_points", QJsonArray{point}}};
+    controller.handleResult(reply);
+    ASSERT_EQ(controller.draft()["text"].toString(), text);
+  }
+};
+
+class AiSummaryTest : public ::testing::Test, public NotesFixture {};
+
+TEST_F(AiSummaryTest, ShowsSummaryWithoutAcceptOrEditorButtons) {
+  generate();
+  AiSummaryWidget widget(&controller);
+  EXPECT_TRUE(widget.hasContent());
+  EXPECT_EQ(widget.findChild<QLabel *>("aiSummaryText")->text(), "Prepare a short outline.");
+  for (auto *button : widget.findChildren<QPushButton *>()) {
+    EXPECT_FALSE(button->text().isEmpty()) << "every button is labelled";
+    EXPECT_FALSE(button->text().contains("editor", Qt::CaseInsensitive));
+  }
+  EXPECT_EQ(widget.findChild<QLabel *>("notesWidgetStatus")->text(), "ready");
+}
+
+TEST_F(AiSummaryTest, EditSavesTextInPlace) {
+  generate();
+  AiSummaryWidget widget(&controller);
+  widget.show();
+  widget.findChild<QPushButton *>("aiSummaryEdit")->click();
+  auto *editor = widget.findChild<QPlainTextEdit *>("aiSummaryEditor");
+  ASSERT_FALSE(editor->isHidden());
+  editor->setPlainText("Revised summary");
+  widget.findChild<QPushButton *>("aiSummarySave")->click();
+  EXPECT_EQ(controller.draft()["text"].toString(), "Revised summary");
+  EXPECT_TRUE(editor->isHidden());
+}
+
+TEST_F(AiSummaryTest, DeletingSummaryAsksForConfirmation) {
+  generate();
+  AiSummaryWidget widget(&controller);
+  int asked = 0; bool answer = false;
+  widget.setDeleteConfirmation([&](QWidget *) { ++asked; return answer; });
+  auto *remove = widget.findChild<QAction *>("aiSummaryDelete");
+  remove->trigger();
+  EXPECT_EQ(asked, 1); EXPECT_FALSE(controller.draft().isEmpty());
+  answer = true; remove->trigger();
+  EXPECT_TRUE(controller.draft().isEmpty());
+  EXPECT_FALSE(widget.hasContent());
+}
+
+TEST_F(AiSummaryTest, AiSummaryErrorShowsReasonAndRetryInsideCard) {
+  generate();
+  QSignalSpy requests(&controller, &CallNotesController::requestReady);
+  controller.addPhrase(phrase); controller.flush();
+  ASSERT_FALSE(requests.isEmpty());
+  auto failed = requests.last().first().toJsonObject();
+  failed["error"] = "x"; failed["reason"] = "invalid_output";
+  controller.handleResult(failed);
+  AiSummaryWidget widget(&controller);
+  widget.show();
+  QSignalSpy retry(&widget, &AiSummaryWidget::retryRequested);
+  auto *problem = widget.findChild<QLabel *>("aiSummaryProblem");
+  EXPECT_FALSE(problem->isHidden());
+  EXPECT_TRUE(problem->text().contains("could not be used"));
+  widget.findChild<QPushButton *>("aiSummaryRetry")->click();
+  EXPECT_EQ(retry.count(), 1);
+}
+
+TEST_F(AiSummaryTest, SourceLinkRequestsThePhrase) {
+  generate();
+  AiSummaryWidget widget(&controller);
+  QSignalSpy sources(&widget, &AiSummaryWidget::sourceRequested);
+  auto links = widget.findChildren<QPushButton *>("callNotesSource");
+  ASSERT_FALSE(links.isEmpty()); links.first()->click();
+  ASSERT_EQ(sources.count(), 1);
+  EXPECT_EQ(sources.first().first().toLongLong(), phrase.id);
+}
+
+TEST_F(AiSummaryTest, EmptyIdleControllerHasNoContent) {
+  AiSummaryWidget widget(&controller);
+  EXPECT_FALSE(widget.hasContent());
 }
 
 int main(int argc, char **argv) {

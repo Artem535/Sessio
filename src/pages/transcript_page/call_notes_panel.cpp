@@ -1,5 +1,6 @@
 #include "call_notes_panel.h"
 #include "call_notes_controller.h"
+#include "call_notes_sources.h"
 #include "accent_color.h"
 #include <QFrame>
 #include <QApplication>
@@ -364,65 +365,8 @@ void CallNotesPanel::arrangeActions() {
 }
 
 void CallNotesPanel::populateSources(QVBoxLayout *layout, const QJsonObject &note, bool compact) {
-  QList<std::pair<qint64, QJsonObject>> sources;
-  QSet<qint64> seen;
-  for (const auto &value : note["evidence_ids"].toArray()) {
-    const auto id = value.toString(); const auto source = mController->source(id);
-    bool validId = false; const auto phraseId = id.toLongLong(&validId);
-    if (source.isEmpty() || !validId || phraseId <= 0 || seen.contains(phraseId)) continue;
-    sources.append({phraseId, source}); seen.insert(phraseId);
-  }
-  if (sources.isEmpty()) return;
-  std::sort(sources.begin(), sources.end(), [](const auto &left, const auto &right) {
-    const auto l = left.second, r = right.second;
-    if (l["transcript_id"] != r["transcript_id"])
-      return l["transcript_id"].toInteger() < r["transcript_id"].toInteger();
-    return l["start_ms"].toInteger() < r["start_ms"].toInteger();
-  });
-  const auto time = [](qint64 ms) {
-    ms = std::max<qint64>(0, ms);
-    return QStringLiteral("%1:%2").arg(ms / 60000).arg(ms / 1000 % 60, 2, 10, QLatin1Char('0'));
-  };
-  const auto start = time(sources.first().second["start_ms"].toInteger());
-  QString range = start;
-  if (sources.first().second["transcript_id"] == sources.last().second["transcript_id"])
-    range += QStringLiteral("–") + time(sources.last().second["end_ms"].toInteger());
-  const auto caption = compact ? start : tr("%1 · %n phrases", nullptr, static_cast<int>(sources.size())).arg(range);
-  auto *jump = new QPushButton(caption, this);
-  jump->setProperty("compactSource", compact);
-  jump->setAccessibleName(tr("Source · %1").arg(caption));
-  if (!compact) jump->setIcon(noteIcon(NoteGlyph::Quote));
-  jump->setIconSize(QSize(16, 16));
-  jump->setObjectName("callNotesSource"); jump->setFlat(true); jump->setAutoDefault(false);
-  jump->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
-  auto font = jump->font(); font.setBold(false); jump->setFont(font);
-  auto colors = jump->palette(); colors.setColor(QPalette::ButtonText, pcm::widgets::accentColor(palette())); jump->setPalette(colors);
-  QStringList quotes;
-  for (const auto &entry : sources)
-    quotes.append(entry.second["speaker"].toString() + QStringLiteral(": ") + entry.second["text"].toString());
-  const auto quote = quotes.join(QStringLiteral("\n\n"));
-  jump->setToolTip(QStringLiteral("<qt>") + quote.toHtmlEscaped().replace('\n', QStringLiteral("<br/>")) + QStringLiteral("</qt>"));
-  jump->setAccessibleDescription(quote);
-  jump->setProperty("validPhraseId", true); jump->setEnabled(mController->sourcesCurrent());
-  connect(jump, &QPushButton::clicked, this, [this, id = sources.first().first] { emit sourceRequested(id); });
-  if (sources.size() > 1) {
-    jump->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(jump, &QWidget::customContextMenuRequested, this, [this, jump, sources, time](const QPoint &position) {
-      auto *menu = new QMenu(this);
-      connect(menu, &QMenu::aboutToHide, menu, &QObject::deleteLater);
-      for (const auto &entry : sources) {
-        const auto text = time(entry.second["start_ms"].toInteger()) + QStringLiteral(" · ") +
-            entry.second["speaker"].toString() + QStringLiteral(": ") + entry.second["text"].toString().left(80);
-        auto *action = menu->addAction(text);
-        connect(action, &QAction::triggered, this, [this, id = entry.first] {
-          if (mController && mController->sourcesCurrent() && !mController->source(QString::number(id)).isEmpty())
-            emit sourceRequested(id);
-        });
-      }
-      menu->popup(jump->mapToGlobal(position));
-    });
-  }
-  layout->addWidget(jump);
+  auto *link = makeSourceLink(mController, note, compact, this, [this](qint64 id) { emit sourceRequested(id); });
+  if (link) layout->addWidget(link);
 }
 
 void CallNotesPanel::refresh() {
