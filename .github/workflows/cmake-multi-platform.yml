@@ -59,7 +59,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential cmake curl patchelf openjdk-17-jdk-headless \
             python3-dev zlib1g-dev libssl-dev libcurl4-openssl-dev
-          gcc --version | head -1; cmake --version | head -1; java -version; cargo --version; python3 --version
+          # LiteRT-LM's shim prepares its Python build tools through uv.
+          pipx install uv
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          gcc --version | head -1; cmake --version | head -1; java -version; cargo --version; python3 --version; "$HOME/.local/bin/uv" --version
 
       - name: Build CPU runtime
         if: steps.cache-litert.outputs.cache-hit != 'true'
