@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QLoggingCategory>
 #include <QPointer>
 #include <QStandardPaths>
 #include <atomic>
@@ -12,6 +13,8 @@
 
 #include "prompter_pipeline.h"
 #include "call_notes_pipeline.h"
+
+Q_LOGGING_CATEGORY(logPrompterWorker, "pcm.prompter.worker")
 
 namespace {
 constexpr int kLoadTimeoutMs = 180000; // first load compiles the XNNPACK cache
@@ -183,8 +186,9 @@ void PrompterWorker::send(const QJsonObject &request) {
     auto engine = shared->current();
     if (!engine || shared->generation != generation) return;
     QJsonObject result;
+    QList<QByteArray> cached; // replies cached by this request; dropped if it fails
     try {
-      auto generate = [&engine, shared, generation, serial, notes = request["task"] == "notes"](const QString &system, const QByteArray &payload) {
+      auto generate = [&engine, &cached, shared, generation, serial, notes = request["task"] == "notes"](const QString &system, const QByteArray &payload) {
         if (shared->generation != generation || shared->requestSerial != serial)
           throw pcm::prompter::PipelineError("cancelled");
         const auto key = QCryptographicHash::hash(system.toUtf8() + QByteArray(1, '\0') + payload, QCryptographicHash::Sha256);
@@ -194,7 +198,7 @@ void PrompterWorker::send(const QJsonObject &request) {
           throw pcm::prompter::PipelineError("cancelled");
         if (notes) {
           if (shared->notesCache.size() >= 128) shared->notesCache.erase(shared->notesCache.begin());
-          shared->notesCache.insert(key, value);
+          shared->notesCache.insert(key, value); cached.append(key);
         }
         return value;
       };
@@ -204,8 +208,15 @@ void PrompterWorker::send(const QJsonObject &request) {
           result.insert(key, request.value(key));
       } else result = pcm::prompter::processRequest(request, generate);
     } catch (...) {
-      // Never expose exception texts: they may describe source text or prompts.
-      result = {{"protocol_version", 1}, {"error", "inference_failed"}};
+      // Greedy decoding repeats a rejected reply for the same input, so a
+      // cached copy would make every retry fail the same way.
+      for (const auto &key : cached) shared->notesCache.remove(key);
+      // PipelineError texts are fixed codes in src/call_prompter; anything
+      // else may describe source text or prompts and is never logged.
+      QString code = QStringLiteral("unexpected");
+      try { throw; } catch (const pcm::prompter::PipelineError &error) { code = QString::fromLatin1(error.what()); } catch (...) {}
+      qCWarning(logPrompterWorker) << request["task"].toString("agreements") << "request failed:" << code;
+      result = {{"protocol_version", 1}, {"error", "inference_failed"}, {"reason", pcm::prompter::failureReason(code)}};
       for (const char *key : {"request_id", "session_generation", "ledger_revision", "task", "material_id", "final", "request_token"})
         if (request.contains(key)) result.insert(key, request.value(key));
     }

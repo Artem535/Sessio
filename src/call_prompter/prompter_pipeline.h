@@ -18,6 +18,11 @@ public:
   using std::runtime_error::runtime_error;
 };
 
+// Groups a PipelineError message into what the user can act on:
+// "invalid_output" (the model's reply was unusable), "too_long" (input over
+// the model budget), "cancelled", or "runtime" (anything else).
+QString failureReason(const QString &pipelineError);
+
 // Top-level model input. Keys keep their insertion order, as the prompts were
 // validated with that exact serialisation.
 using Payload = std::vector<std::pair<QString, QJsonValue>>;

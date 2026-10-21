@@ -188,8 +188,24 @@
         <translation>Заметки обновлены до %1</translation>
     </message>
     <message>
-        <source>Local processing failed. You can retry.</source>
-        <translation>Ошибка локальной обработки. Можно повторить попытку.</translation>
+        <source>The model&apos;s reply could not be used for this transcript. Write the note yourself or edit the transcript and retry.</source>
+        <translation>Ответ модели не подошёл для этой транскрипции. Напишите заметку сами или исправьте транскрипцию и повторите.</translation>
+    </message>
+    <message>
+        <source>The model&apos;s reply could not be used. Retry once more of the conversation is transcribed.</source>
+        <translation>Ответ модели не подошёл. Повторите, когда разговор продолжится.</translation>
+    </message>
+    <message>
+        <source>The transcript is too long for local notes.</source>
+        <translation>Транскрипция слишком длинная для локальных заметок.</translation>
+    </message>
+    <message>
+        <source>Could not save the generated notes. Try again.</source>
+        <translation>Не удалось сохранить заметки модели. Повторите попытку.</translation>
+    </message>
+    <message>
+        <source>The local model did not respond. Try again.</source>
+        <translation>Локальная модель не ответила. Повторите попытку.</translation>
     </message>
     <message>
         <source>The transcript changed. Generate the note again.</source>
@@ -214,42 +230,6 @@
 </context>
 <context>
     <name>CallNotesPanel</name>
-    <message>
-        <source>Queued</source>
-        <translation>В очереди</translation>
-    </message>
-    <message>
-        <source>Generating…</source>
-        <translation>Формируется…</translation>
-    </message>
-    <message>
-        <source>Ready for review</source>
-        <translation>Готово к проверке</translation>
-    </message>
-    <message>
-        <source>Could not generate notes</source>
-        <translation>Не удалось сформировать заметки</translation>
-    </message>
-    <message>
-        <source>Cancelled</source>
-        <translation>Отменено</translation>
-    </message>
-    <message>
-        <source>Sources changed — review required</source>
-        <translation>Источники изменились — нужна проверка</translation>
-    </message>
-    <message>
-        <source>Interrupted — retry available</source>
-        <translation>Прервано — можно повторить</translation>
-    </message>
-    <message>
-        <source>Model unavailable</source>
-        <translation>Модель недоступна</translation>
-    </message>
-    <message>
-        <source>Not started</source>
-        <translation>Не запущено</translation>
-    </message>
     <message>
         <source>My notes</source>
         <translation>Мои заметки</translation>
@@ -325,14 +305,6 @@
     <message>
         <source>Source · %1</source>
         <translation>Источник · %1</translation>
-    </message>
-    <message>
-        <source>Live notes · %1</source>
-        <translation>Во время звонка · %1</translation>
-    </message>
-    <message>
-        <source>Final note · %1</source>
-        <translation>Итог · %1</translation>
     </message>
     <message>
         <source>Final meeting note</source>

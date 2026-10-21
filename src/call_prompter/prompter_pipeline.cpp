@@ -233,6 +233,21 @@ QString renderGemmaPrompt(const QString &system, const QString &user) {
   return gemmaSystemTurn(system) + gemmaUserTurn(user);
 }
 
+QString failureReason(const QString &error) {
+  if (error == QLatin1String("cancelled")) return QStringLiteral("cancelled");
+  if (error.contains(QLatin1String("budget")) || error.contains(QLatin1String("count exceeded")))
+    return error.startsWith(QLatin1String("output")) ? QStringLiteral("invalid_output") : QStringLiteral("too_long");
+  // "invalid notes source*" rejects the request's own utterances, not the reply.
+  if (error == QLatin1String("invalid notes source") || error == QLatin1String("invalid notes source fields"))
+    return QStringLiteral("runtime");
+  if (error.startsWith(QLatin1String("invalid notes")) || error.startsWith(QLatin1String("invalid empty")) ||
+      error == QLatin1String("invalid extraction") || error == QLatin1String("reply is not JSON") ||
+      error == QLatin1String("malformed code fence") || error == QLatin1String("output truncated") ||
+      error == QLatin1String("too many events"))
+    return QStringLiteral("invalid_output");
+  return QStringLiteral("runtime");
+}
+
 QJsonObject processRequest(const QJsonObject &request, const Generate &generate) {
   if (!request.value("protocol_version").isDouble() || request.value("protocol_version").toDouble() != 1)
     throw PipelineError("unsupported protocol");

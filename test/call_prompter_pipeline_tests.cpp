@@ -181,3 +181,16 @@ TEST(PipelineFormatTest, ReplyParserAcceptsFencesAndRejectsProse) {
   EXPECT_TRUE(parseModelReply("  true ").toBool());
   EXPECT_THROW(parseModelReply("Here are the events"), PipelineError);
 }
+
+TEST(PipelineFailureReasonTest, GroupsFixedErrorCodesForTheUser) {
+  using pcm::prompter::failureReason;
+  EXPECT_EQ(failureReason("invalid notes evidence count"), "invalid_output");
+  EXPECT_EQ(failureReason("invalid notes evidence source"), "invalid_output");
+  EXPECT_EQ(failureReason("reply is not JSON"), "invalid_output");
+  EXPECT_EQ(failureReason("output budget exceeded"), "invalid_output");
+  EXPECT_EQ(failureReason("notes transcript budget exceeded"), "too_long");
+  EXPECT_EQ(failureReason("context budget exceeded"), "too_long");
+  EXPECT_EQ(failureReason("invalid notes source"), "runtime");
+  EXPECT_EQ(failureReason("cancelled"), "cancelled");
+  EXPECT_EQ(failureReason("unexpected"), "runtime");
+}

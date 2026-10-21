@@ -137,17 +137,6 @@ void divider(QVBoxLayout *layout, QWidget *parent) {
   auto *line = new QFrame(parent); line->setFrameShape(QFrame::HLine);
   layout->addWidget(line);
 }
-QString stateText(const QString &state) {
-  if (state == "queued") return CallNotesPanel::tr("Queued");
-  if (state == "running") return CallNotesPanel::tr("Generating…");
-  if (state == "ready") return CallNotesPanel::tr("Ready for review");
-  if (state == "error") return CallNotesPanel::tr("Could not generate notes");
-  if (state == "cancelled") return CallNotesPanel::tr("Cancelled");
-  if (state == "stale") return CallNotesPanel::tr("Sources changed — review required");
-  if (state == "interrupted") return CallNotesPanel::tr("Interrupted — retry available");
-  if (state == "unavailable") return CallNotesPanel::tr("Model unavailable");
-  return CallNotesPanel::tr("Not started");
-}
 }
 
 CallNotesPanel::CallNotesPanel(CallNotesController *controller, QWidget *parent)
@@ -218,7 +207,8 @@ CallNotesPanel::CallNotesPanel(CallNotesController *controller, QWidget *parent)
   generation->addWidget(mStart); generation->addWidget(mFinal); generation->addWidget(mCancel);
   layout->addLayout(generation); divider(layout, body);
   auto *pointsHeader = new QHBoxLayout;
-  pointsHeader->addWidget(label(tr("Key points"), "callNotesPointsTitle", body, true), 1);
+  mPointsTitle = label(tr("Key points"), "callNotesPointsTitle", body, true);
+  pointsHeader->addWidget(mPointsTitle, 1);
   mPointCount = label({}, "callNotesPointCount", body); pointsHeader->addWidget(mPointCount); layout->addLayout(pointsHeader);
   mPointCount->setForegroundRole(QPalette::PlaceholderText);
   mPointCount->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Preferred);
@@ -460,20 +450,26 @@ void CallNotesPanel::refresh() {
       live == "running" || final == "running";
   const bool current = mController->sourcesCurrent();
   const bool conflict = mEditing && draft != mEditOrigin;
-  mLiveStatus->setText(tr("Live notes · %1").arg(stateText(hasDraft && !current && !mController->ended() ? QStringLiteral("stale") : live)));
-  mLiveStatus->setVisible((!hasDraft && (live == "running" || live == "queued")) ||
-      (live != "ready" && live != "idle" && live != "running" && live != "queued"));
-  mFinalStatus->setText(tr("Final note · %1").arg(stateText(final)));
-  mFinalStatus->setVisible(mController->ended() || (!final.isEmpty() && final != "idle"));
+  // One status line: the live state during the call, the final note's after it.
+  // The footer only repeats nothing; it shows the quiet idle/ready summary.
+  const auto state = mController->ended() ? final : live;
+  const bool quiet = state == "idle" || state == "ready";
+  auto *line = mController->ended() ? mFinalStatus : mLiveStatus;
+  (line == mFinalStatus ? mLiveStatus : mFinalStatus)->hide();
+  auto lineText = mController->statusText();
+  if (hasDraft && !current) lineText = tr("The transcript changed. Generate the note again.");
+  if (conflict) lineText = tr("The model draft changed. Your edit is kept below; cancel editing to review the new draft.");
+  line->setText(lineText);
+  const bool showLine = mMaterialId > 0 && (!quiet || (hasDraft && !current) || conflict);
+  line->setVisible(showLine);
   mTitle->setText(mController->ended() && final == "ready" ? tr("Final meeting note") : tr("Model draft"));
   const auto processed = mController->processedThroughMs();
   mCoverage->setText(hasDraft ? tr("Through %1").arg(QStringLiteral("%1:%2").arg(processed / 60000)
       .arg(processed / 1000 % 60, 2, 10, QLatin1Char('0'))) : QString{});
-  mStatus->setText(mMaterialId > 0 ? mController->statusText() : tr("Open a call to view or write notes."));
-  if (hasDraft && !current) mStatus->setText(tr("The transcript changed. Generate the note again."));
-  if (conflict) mStatus->setText(tr("The model draft changed. Your edit is kept below; cancel editing to review the new draft."));
+  mStatus->setText(mMaterialId <= 0 ? tr("Open a call to view or write notes.")
+                   : showLine ? QString{} : mController->statusText());
   mDraftText->setText((mEditing ? mEditOrigin : draft)["text"].toString()); mDraftText->setVisible(!mEditing);
-  mEditor->setVisible(mEditing); mDraftCard->setVisible(hasDraft || mEditing); mEmpty->setVisible(!hasDraft && !mEditing);
+  mEditor->setVisible(mEditing); mDraftCard->setVisible(hasDraft || mEditing); mEmpty->setVisible(!hasDraft && !mEditing && (state == "idle" || state == "running" || state == "queued"));
   QJsonArray sources;
   for (const auto &id : draft["evidence_ids"].toArray()) sources.append(mController->source(id.toString()));
   for (const auto &point : points)
@@ -497,6 +493,7 @@ void CallNotesPanel::refresh() {
     source->setEnabled(source->property("validPhraseId").toBool() && current && !conflict);
   mPointCount->setText(tr("%n points", nullptr, mPoints->count()));
   mPointCount->setVisible(mPoints->count() > 0);
+  mPointsTitle->setVisible(mPoints->count() > 0);
   const bool editable = hasDraft && current && !busy && (!mEditing || draft == mEditOrigin);
   mAccept->setEnabled(editable && !draft["accepted"].toBool());
   mAccept->setText(draft["accepted"].toBool() && hasDraft ?

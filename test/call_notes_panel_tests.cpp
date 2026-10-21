@@ -319,6 +319,32 @@ TEST_F(CallNotesPanelTest, NativeCallShowsFullNotesBesideVideoAndInExpandedMode)
   }
 }
 
+TEST_F(CallNotesPanelTest, UnusableModelReplyShowsOneSpecificStatusLine) {
+  const auto id = db->add_transcript(std::nullopt, "live_local_v1");
+  controller.beginCall(); controller.attachTranscript(id); controller.setGenerationEnabled(true);
+  phrase.transcript_id = id; phrase.track_role = "participant";
+  phrase.speaker_name = "Participant"; phrase.text = "I will prepare a short outline.";
+  phrase.start_ms = 0; phrase.end_ms = 3000;
+  phrase.id = db->add_transcript_phrase(phrase);
+  QSignalSpy requests(&controller, &CallNotesController::requestReady);
+  controller.addPhrase(phrase); controller.flush();
+  ASSERT_FALSE(requests.isEmpty());
+  auto reply = requests.last().first().toJsonObject();
+  reply.remove("utterances");
+  reply["error"] = "inference_failed"; reply["reason"] = "invalid_output";
+  controller.handleResult(reply);
+  ASSERT_EQ(controller.liveStatus(), "error");
+
+  const auto *line = panel.findChild<QLabel *>("callNotesLiveStatus");
+  EXPECT_FALSE(line->isHidden());
+  EXPECT_TRUE(line->text().contains("could not be used"));
+  EXPECT_TRUE(panel.findChild<QLabel *>("callNotesFinalStatus")->isHidden());
+  EXPECT_TRUE(panel.findChild<QLabel *>("callNotesEmpty")->isHidden());
+  EXPECT_TRUE(panel.findChild<QLabel *>("callNotesPointsTitle")->isHidden());
+  EXPECT_TRUE(panel.findChild<QLabel *>("callNotesStatus")->text().isEmpty());
+  EXPECT_FALSE(panel.findChild<QPushButton *>("callNotesStart")->isHidden());
+}
+
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
   app.setStyle(new oclero::qlementine::QlementineStyle(&app));

@@ -188,8 +188,24 @@
         <translation>Notes updated through %1</translation>
     </message>
     <message>
-        <source>Local processing failed. You can retry.</source>
-        <translation>Local processing failed. You can retry.</translation>
+        <source>The model&apos;s reply could not be used for this transcript. Write the note yourself or edit the transcript and retry.</source>
+        <translation>The model&apos;s reply could not be used for this transcript. Write the note yourself or edit the transcript and retry.</translation>
+    </message>
+    <message>
+        <source>The model&apos;s reply could not be used. Retry once more of the conversation is transcribed.</source>
+        <translation>The model&apos;s reply could not be used. Retry once more of the conversation is transcribed.</translation>
+    </message>
+    <message>
+        <source>The transcript is too long for local notes.</source>
+        <translation>The transcript is too long for local notes.</translation>
+    </message>
+    <message>
+        <source>Could not save the generated notes. Try again.</source>
+        <translation>Could not save the generated notes. Try again.</translation>
+    </message>
+    <message>
+        <source>The local model did not respond. Try again.</source>
+        <translation>The local model did not respond. Try again.</translation>
     </message>
     <message>
         <source>The transcript changed. Generate the note again.</source>
@@ -214,42 +230,6 @@
 </context>
 <context>
     <name>CallNotesPanel</name>
-    <message>
-        <source>Queued</source>
-        <translation>Queued</translation>
-    </message>
-    <message>
-        <source>Generating…</source>
-        <translation>Generating…</translation>
-    </message>
-    <message>
-        <source>Ready for review</source>
-        <translation>Ready for review</translation>
-    </message>
-    <message>
-        <source>Could not generate notes</source>
-        <translation>Could not generate notes</translation>
-    </message>
-    <message>
-        <source>Cancelled</source>
-        <translation>Cancelled</translation>
-    </message>
-    <message>
-        <source>Sources changed — review required</source>
-        <translation>Sources changed — review required</translation>
-    </message>
-    <message>
-        <source>Interrupted — retry available</source>
-        <translation>Interrupted — retry available</translation>
-    </message>
-    <message>
-        <source>Model unavailable</source>
-        <translation>Model unavailable</translation>
-    </message>
-    <message>
-        <source>Not started</source>
-        <translation>Not started</translation>
-    </message>
     <message>
         <source>My notes</source>
         <translation>My notes</translation>
@@ -324,14 +304,6 @@
     <message>
         <source>Source · %1</source>
         <translation>Source · %1</translation>
-    </message>
-    <message>
-        <source>Live notes · %1</source>
-        <translation>Live notes · %1</translation>
-    </message>
-    <message>
-        <source>Final note · %1</source>
-        <translation>Final note · %1</translation>
     </message>
     <message>
         <source>Final meeting note</source>

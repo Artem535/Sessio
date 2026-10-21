@@ -201,6 +201,7 @@ void CallNotesController::dispatch(bool final) {
       {"request_id", ++mRequestId}, {"session_generation", mGeneration}, {"ledger_revision", mRevision},
       {"final", final}, {"utterances", inputs}};
   mState[final ? "final_status" : "live_status"] = "running";
+  mState.remove("error_reason");
   if (!persist()) return;
   mInFlight = true; emit changed(); emit requestReady(mRequest);
 }
@@ -225,9 +226,11 @@ void CallNotesController::transcriptDeleted(qint64 id) {
     revoke();
   } catch (...) { revoke(); }
 }
-void CallNotesController::workerFailed() {
+void CallNotesController::workerFailed() { fail(QStringLiteral("runtime")); }
+void CallNotesController::fail(const QString &reason) {
   if (!mInFlight) return;
   mState[mRequest["final"].toBool() ? "final_status" : "live_status"] = "error";
+  mState["error_reason"] = reason;
   mInFlight = false; mFinalPending = false; mBatch.stop(); mEnabled = false;
   ++mGeneration; mRequest = {}; persist(); emit changed();
 }
@@ -235,7 +238,9 @@ void CallNotesController::handleResult(const QJsonObject &result) {
   if (!mInFlight || result["task"] != "notes" || result["material_id"] != mMaterialId ||
       result["request_id"] != mRequest["request_id"] || result["session_generation"] != mGeneration ||
       result["request_token"] != mRequest["request_token"] || result["ledger_revision"] != mRequest["ledger_revision"]) return;
-  if (result.contains("error") || !result["notes"].isObject()) { workerFailed(); return; }
+  if (result.contains("error") || !result["notes"].isObject()) {
+    fail(result["reason"].toString(QStringLiteral("runtime"))); return;
+  }
   const bool final = mRequest["final"].toBool();
   const auto inputs = mRequest["utterances"].toArray();
   QJsonArray current;
@@ -247,15 +252,15 @@ void CallNotesController::handleResult(const QJsonObject &result) {
   }
   auto notes = result["notes"].toObject();
   if (!notes["note"].isObject() || !validItem(notes["note"].toObject(), allowed) ||
-      !notes["key_points"].isArray() || notes["key_points"].toArray().size() > 8) { workerFailed(); return; }
+      !notes["key_points"].isArray() || notes["key_points"].toArray().size() > 8) { fail(QStringLiteral("invalid_output")); return; }
   for (const auto &point : notes["key_points"].toArray())
-    if (!point.isObject() || !validItem(point.toObject(), allowed)) { workerFailed(); return; }
+    if (!point.isObject() || !validItem(point.toObject(), allowed)) { fail(QStringLiteral("invalid_output")); return; }
   if (final && current != inputs) {
     mInFlight = false; mFinalPending = true; flush(); return;
   }
   // Another view may have saved manual text while inference was running.
   // Merge the validated proposal onto that revision, preserving manual edits.
-  if (!syncStored()) { workerFailed(); return; }
+  if (!syncStored()) { fail(QStringLiteral("storage")); return; }
   notes["sources"] = inputs; notes["id"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
   mState[final ? "final" : "live"] = notes;
   mState[final ? "final_status" : "live_status"] = "ready";
@@ -525,7 +530,17 @@ QString CallNotesController::statusText() const {
   if (status == "running") return mEnded ? tr("Forming the final meeting note…") : tr("Updating conversation notes…");
   if (status == "queued") return tr("Waiting for local processing");
   if (status == "ready") return mEnded ? tr("Final note saved with this call") : tr("Notes updated through %1").arg(timeLabel(mState["processed_ms"].toInteger()));
-  if (status == "error") return tr("Local processing failed. You can retry.");
+  if (status == "error") {
+    const auto reason = mState["error_reason"].toString();
+    // Decoding is greedy: the same transcript gives the same reply, so a retry
+    // only helps once the input changes (more phrases, an edited source).
+    if (reason == "invalid_output")
+      return mEnded ? tr("The model's reply could not be used for this transcript. Write the note yourself or edit the transcript and retry.")
+                    : tr("The model's reply could not be used. Retry once more of the conversation is transcribed.");
+    if (reason == "too_long") return tr("The transcript is too long for local notes.");
+    if (reason == "storage") return tr("Could not save the generated notes. Try again.");
+    return tr("The local model did not respond. Try again.");
+  }
   if (status == "stale") return tr("The transcript changed. Generate the note again.");
   if (status == "cancelled") return tr("Processing cancelled. Your notes are saved.");
   if (status == "interrupted") return tr("Processing was interrupted. You can retry.");

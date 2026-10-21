@@ -129,7 +129,9 @@ TEST_F(PrompterWorkerTest, InferenceErrorsReachTheControllerWithoutDetails) {
   const auto reply = replies.first().first().toJsonObject();
   EXPECT_EQ(reply["error"].toString(), "inference_failed");
   EXPECT_EQ(reply["request_id"].toInt(), 9);
-  EXPECT_EQ(reply.size(), 5);
+  // Only a fixed category, never the exception text.
+  EXPECT_EQ(reply["reason"].toString(), "runtime");
+  EXPECT_EQ(reply.size(), 6);
 }
 
 TEST_F(PrompterWorkerTest, StopCancelsInferenceDropsItsResultAndReleasesTheModel) {

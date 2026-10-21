@@ -46,6 +46,7 @@ private:
   QLabel *mFinalStatus;
   QLabel *mStatus;
   QLabel *mPointCount;
+  QLabel *mPointsTitle = nullptr;
   QWidget *mDraftCard;
   QWidget *mViewport;
   QVBoxLayout *mSources;

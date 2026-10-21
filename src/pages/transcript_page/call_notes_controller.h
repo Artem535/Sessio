@@ -67,6 +67,7 @@ private:
   void load(qint64 materialId);
   QJsonArray phrases() const;
   void dispatch(bool final);
+  void fail(const QString &reason);
   std::shared_ptr<pcm::database::Database> mDb;
   QString mAttachmentRoot;
   QTimer mBatch;
