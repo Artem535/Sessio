@@ -58,7 +58,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake curl patchelf openjdk-17-jdk-headless \
-            python3-dev zlib1g-dev libssl-dev libcurl4-openssl-dev
+            python3-dev zlib1g-dev libssl-dev libcurl4-openssl-dev \
+            libvulkan-dev
           # LiteRT-LM's shim prepares its Python build tools through uv.
           pipx install uv
           # pipx's bin dir differs between runner images; ask pipx itself.
