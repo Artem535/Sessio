@@ -22,16 +22,16 @@ bool ScreenCaptureAdapter::start(const ScreenCaptureTarget &target) {
   mWorkerThread.start();
 
   if (target.window.isValid()) {
-    mWindowCapture = std::make_unique<QWindowCapture>();
+    mWindowCapture = std::make_unique<QWindowCapture>(this);
     connect(mWindowCapture.get(), &QWindowCapture::errorOccurred, this,
-            [this](QWindowCapture::Error, const QString &message) { emit captureFailed(message); });
+            [this](QWindowCapture::Error, const QString &message) { reportFailure(message); });
     mWindowCapture->setWindow(target.window);
     mSession.setWindowCapture(mWindowCapture.get());
     mWindowCapture->start();
   } else {
-    mScreenCapture = std::make_unique<QScreenCapture>();
+    mScreenCapture = std::make_unique<QScreenCapture>(this);
     connect(mScreenCapture.get(), &QScreenCapture::errorOccurred, this,
-            [this](QScreenCapture::Error, const QString &message) { emit captureFailed(message); });
+            [this](QScreenCapture::Error, const QString &message) { reportFailure(message); });
     mScreenCapture->setScreen(target.screen);
     mSession.setScreenCapture(mScreenCapture.get());
     mScreenCapture->start();
@@ -41,7 +41,17 @@ bool ScreenCaptureAdapter::start(const ScreenCaptureTarget &target) {
   return true;
 }
 
+void ScreenCaptureAdapter::reportFailure(const QString &message) {
+  // Qt emits errorOccurred from inside the capture's own code (on Wayland, a
+  // portal D-Bus reply). Our listeners destroy the capture on failure, so
+  // deliver it once Qt has returned; a capture replaced meanwhile is ignored.
+  QMetaObject::invokeMethod(this, [this, message, generation = mGeneration] {
+    if (generation == mGeneration && mActive) emit captureFailed(message);
+  }, Qt::QueuedConnection);
+}
+
 void ScreenCaptureAdapter::stop() {
+  ++mGeneration;
   if (mScreenCapture) {
     mScreenCapture->stop();
     mSession.setScreenCapture(nullptr);

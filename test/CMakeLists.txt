@@ -377,6 +377,20 @@ target_link_libraries(Sessio_video_capture_adapter_smoke_test PRIVATE
 add_test(NAME VideoCaptureAdapterSmokeTest COMMAND Sessio_video_capture_adapter_smoke_test)
 set_tests_properties(VideoCaptureAdapterSmokeTest PROPERTIES TIMEOUT 30)
 
+# Screen capture adapter: failure delivery must let the caller destroy the
+# capture safely (crash in libQt6Core when sharing via the Wayland portal).
+add_executable(Sessio_screen_capture_adapter_tests
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_worker.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/frame_convert.cpp
+    screen_capture_adapter_tests.cpp
+)
+target_include_directories(Sessio_screen_capture_adapter_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_screen_capture_adapter_tests PRIVATE
+    Qt6::Gui Qt6::Multimedia Qt6::Test GTest::gtest LiveKit::livekit)
+set_target_properties(Sessio_screen_capture_adapter_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_screen_capture_adapter_tests)
+
 # Audio capture adapter smoke test (own main(), not GoogleTest — mirrors the
 # video capture adapter smoke test above). Proves repeated start/destroy
 # cycles on the GUI thread never hang, per this plan's Task 9 lifecycle-stress

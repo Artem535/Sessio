@@ -41,6 +41,7 @@ signals:
 
 private:
   void onVideoFrameChanged(const QVideoFrame &frame);
+  void reportFailure(const QString &message);
 
   std::shared_ptr<livekit::VideoSource> mVideoSource;
   std::unique_ptr<QScreenCapture> mScreenCapture;
@@ -51,6 +52,7 @@ private:
   std::unique_ptr<ScreenCaptureWorker> mWorker;
   QElapsedTimer mSinceLastFrame;
   bool mActive{false};
+  quint64 mGeneration{0}; // bumped by stop(): failures of a replaced capture are dropped
 };
 
 } // namespace pcm::video
