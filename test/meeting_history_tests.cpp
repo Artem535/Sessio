@@ -1,4 +1,12 @@
 #include "meeting_history.h"
+#include "meeting_history_widgets.h"
+#include "call_notes_controller.h"
+#include <QDateTime>
+#include <QLabel>
+#include <QPushButton>
+#include <QRegularExpression>
+#include <QSignalSpy>
+#include <QToolButton>
 #include <QApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -61,6 +69,44 @@ TEST_F(MeetingHistoryTest, HistoryGroupsNotesWithoutMeetingSeparately) {
   const auto notes = loadNotesWithoutMeeting(*db, client);
   ASSERT_EQ(notes.size(), 1);
   EXPECT_EQ(notes[0], "Loose note");
+}
+
+TEST(PreviousMeetingWidgetTest, PreviousMeetingShowsLatestCompletedMeetingOfClient) {
+  PreviousMeetingWidget widget;
+  EXPECT_TRUE(widget.isHidden());
+  MeetingRecord record;
+  record.materialId = 7; record.startMs = QDateTime(QDate(2026, 10, 14), QTime(15, 30)).toMSecsSinceEpoch();
+  record.durationMs = 50 * 60000; record.summary = "Anxiety before meetings";
+  record.agreements = {"Breathing practice", "Sleep diary", "Walk", "Fourth"};
+  widget.setMeeting(record);
+  EXPECT_FALSE(widget.isHidden());
+  EXPECT_TRUE(widget.findChild<QLabel *>("previousMeetingDate")->text().startsWith("14.10"));
+  EXPECT_EQ(widget.findChild<QLabel *>("previousMeetingPreview")->text(), "Anxiety before meetings");
+  EXPECT_EQ(widget.findChildren<QLabel *>("previousMeetingAgreement").size(), 3);
+  QSignalSpy open(&widget, &PreviousMeetingWidget::openRequested);
+  widget.findChild<QPushButton *>("previousMeetingOpen")->click();
+  ASSERT_EQ(open.count(), 1); EXPECT_EQ(open[0][0].toLongLong(), 7);
+  widget.setMeeting(std::nullopt); EXPECT_TRUE(widget.isHidden());
+}
+
+TEST_F(MeetingHistoryTest, ExpandingAMeetingShowsItsWidgetsAndCollapsesOthers) {
+  const auto first = meeting({{"final", QJsonObject{{"note", QJsonObject{{"text", "First"}}}}}});
+  const auto second = meeting({{"final", QJsonObject{{"note", QJsonObject{{"text", "Second"}}}}}});
+  MeetingHistoryList list;
+  int created = 0;
+  list.setControllerFactory([&](qint64 id, QObject *parent) {
+    ++created; auto *c = new CallNotesController(db, parent); c->openMaterial(id); return c;
+  });
+  list.setMeetings(loadMeetingHistory(*db, client, 0), {"Loose"});
+  EXPECT_EQ(list.findChildren<QToolButton *>(QRegularExpression("^historyRow_")).size(), 2);
+  EXPECT_EQ(list.findChild<QLabel *>("historyLooseNote")->text(), "Loose");
+  list.expand(first);
+  auto *firstBody = list.findChild<QWidget *>(QStringLiteral("historyBody_%1").arg(first));
+  ASSERT_NE(firstBody, nullptr); EXPECT_FALSE(firstBody->isHidden());
+  EXPECT_EQ(firstBody->findChild<QLabel *>("aiSummaryText")->text(), "First");
+  list.expand(second);
+  EXPECT_TRUE(firstBody->isHidden());
+  EXPECT_EQ(created, 2);
 }
 
 int main(int argc, char **argv) {
