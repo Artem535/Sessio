@@ -1,6 +1,10 @@
 #include "notes_widget_frame.h"
 #include "ai_summary_widget.h"
 #include "call_notes_controller.h"
+#include "key_points_widget.h"
+#include "agreements_widget.h"
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QPlainTextEdit>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -139,6 +143,38 @@ TEST_F(AiSummaryTest, SourceLinkDisablesWhenTranscriptChanges) {
 TEST_F(AiSummaryTest, EmptyIdleControllerHasNoContent) {
   AiSummaryWidget widget(&controller);
   EXPECT_FALSE(widget.hasContent());
+}
+
+class KeyPointsTest : public ::testing::Test, public NotesFixture {};
+
+TEST_F(KeyPointsTest, ListsPointsWithCompactSource) {
+  generate();
+  KeyPointsWidget widget(&controller);
+  ASSERT_TRUE(widget.hasContent());
+  const auto rows = widget.findChildren<QWidget *>("keyPointRow");
+  ASSERT_EQ(rows.size(), 1);
+  EXPECT_EQ(rows[0]->findChild<QLabel *>("keyPointText")->text(), "Outline is due");
+  EXPECT_EQ(rows[0]->findChild<QPushButton *>("callNotesSource")->text(), "1:13");
+  EXPECT_EQ(widget.findChild<QLabel *>("notesWidgetStatus")->text(), "1");
+}
+
+TEST_F(KeyPointsTest, KeyPointMatchingSummaryTextIsHidden) {
+  generate(QStringLiteral("Same text."), QStringLiteral("Same text."));
+  KeyPointsWidget widget(&controller);
+  EXPECT_TRUE(widget.findChildren<QWidget *>("keyPointRow").isEmpty());
+  EXPECT_FALSE(widget.hasContent());
+}
+
+TEST(AgreementsWidgetTest, ShowsActiveAgreementsOnly) {
+  AgreementsWidget widget;
+  EXPECT_FALSE(widget.hasContent());
+  widget.setRecords(QJsonArray{
+      QJsonObject{{"id", "a"}, {"text", "Keep a sleep diary"}, {"active", true}},
+      QJsonObject{{"id", "b"}, {"text", "Cancelled call"}, {"active", false}}});
+  const auto rows = widget.findChildren<QLabel *>("agreementRow");
+  ASSERT_EQ(rows.size(), 1);
+  EXPECT_EQ(rows[0]->text(), "Keep a sleep diary");
+  EXPECT_TRUE(widget.hasContent());
 }
 
 int main(int argc, char **argv) {

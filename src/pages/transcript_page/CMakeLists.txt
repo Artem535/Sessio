@@ -13,6 +13,8 @@ qt_add_library(${TARGET_NAME} STATIC
     notes_widget_frame.h notes_widget_frame.cpp
     call_notes_sources.h call_notes_sources.cpp
     ai_summary_widget.h ai_summary_widget.cpp
+    key_points_widget.h key_points_widget.cpp
+    agreements_widget.h agreements_widget.cpp
     prompter_worker.h prompter_worker.cpp
     prompter_panel.h prompter_panel.cpp
     transcript_panel.h transcript_panel.cpp
