@@ -39,4 +39,6 @@ private:
   QPushButton *mRetry;
   QJsonObject mRenderedDraft;
   bool mEditing = false;
+  bool mRenderedCurrent = true;
+  qint64 mMaterialId = 0;
 };

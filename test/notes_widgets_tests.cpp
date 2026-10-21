@@ -125,6 +125,17 @@ TEST_F(AiSummaryTest, SourceLinkRequestsThePhrase) {
   EXPECT_EQ(sources.first().first().toLongLong(), phrase.id);
 }
 
+TEST_F(AiSummaryTest, SourceLinkDisablesWhenTranscriptChanges) {
+  generate();
+  AiSummaryWidget widget(&controller);
+  auto *link = widget.findChild<QPushButton *>("callNotesSource");
+  ASSERT_NE(link, nullptr); EXPECT_TRUE(link->isEnabled());
+  db->update_transcript_phrase_text(phrase.id, "Corrected");
+  emit controller.changed();
+  link = widget.findChild<QPushButton *>("callNotesSource");
+  ASSERT_NE(link, nullptr); EXPECT_FALSE(link->isEnabled());
+}
+
 TEST_F(AiSummaryTest, EmptyIdleControllerHasNoContent) {
   AiSummaryWidget widget(&controller);
   EXPECT_FALSE(widget.hasContent());

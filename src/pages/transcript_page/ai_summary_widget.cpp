@@ -73,6 +73,8 @@ bool AiSummaryWidget::hasContent() const {
 void AiSummaryWidget::refresh() {
   if (!mController) { setEnabled(false); return; }
   const auto draft = mController->draft();
+  if (mController->materialId() != mMaterialId) { mMaterialId = mController->materialId(); mEditing = false; }
+  if (draft["text"].toString().trimmed().isEmpty()) mEditing = false;
   const bool hasText = !draft["text"].toString().trimmed().isEmpty();
   const auto state = mController->ended() ? mController->finalStatus() : mController->liveStatus();
   const bool busy = mController->busy() || state == "running" || state == "queued";
@@ -81,11 +83,12 @@ void AiSummaryWidget::refresh() {
   mText->setText(draft["text"].toString()); mText->setVisible(hasText && !mEditing);
   mEditor->setVisible(mEditing);
   mCoverage->setText(summaryCoverage(mController)); mCoverage->setVisible(hasText && !mEditing);
-  if (draft != mRenderedDraft) {
+  const bool current = mController->sourcesCurrent();
+  if (draft != mRenderedDraft || current != mRenderedCurrent) {
     while (auto *item = mSources->takeAt(0)) { delete item->widget(); delete item; }
     if (auto *link = makeSourceLink(mController, draft, false, this, [this](qint64 id) { emit sourceRequested(id); }))
       mSources->addWidget(link);
-    mRenderedDraft = draft;
+    mRenderedDraft = draft; mRenderedCurrent = current;
   }
   QString problem;
   bool canRetry = false;
