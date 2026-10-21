@@ -16,6 +16,9 @@ bool prompterAutoStart();
 void setPrompterAutoStart(bool enabled);
 QString prompterModel();
 void setPrompterModel(const QString &model);
+// "auto" (GPU, CPU fallback), "gpu" or "cpu"; applies at the next model load.
+QString prompterAcceleration();
+void setPrompterAcceleration(const QString &mode);
 // Speech detection and recogniser parameters; always returned clamped to their valid ranges.
 pcm::transcription::TranscriptionTuning transcriptionTuning();
 void setTranscriptionTuning(const pcm::transcription::TranscriptionTuning &tuning);

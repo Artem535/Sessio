@@ -3353,6 +3353,26 @@ They appear here after a call with transcription turned on.</translation>
         <translation>Gemma model (.litertlm)</translation>
     </message>
     <message>
+        <source>Automatic (GPU, otherwise CPU)</source>
+        <translation>Automatic (GPU, otherwise CPU)</translation>
+    </message>
+    <message>
+        <source>GPU only</source>
+        <translation>GPU only</translation>
+    </message>
+    <message>
+        <source>CPU only</source>
+        <translation>CPU only</translation>
+    </message>
+    <message>
+        <source>The GPU is several times faster and uses less memory, but on an integrated GPU it can make the desktop stutter. The CPU needs about 10 GB of RAM. Applies the next time the model starts.</source>
+        <translation>The GPU is several times faster and uses less memory, but on an integrated GPU it can make the desktop stutter. The CPU needs about 10 GB of RAM. Applies the next time the model starts.</translation>
+    </message>
+    <message>
+        <source>Acceleration</source>
+        <translation>Acceleration</translation>
+    </message>
+    <message>
         <source>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</source>
         <translation>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</translation>
     </message>

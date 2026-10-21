@@ -3,6 +3,7 @@
 #include <QWidget>
 
 class QCheckBox;
+class QComboBox;
 class QDoubleSpinBox;
 class QSpinBox;
 class QLabel;
@@ -15,6 +16,7 @@ public:
   void setEnabledState(bool enabled);
   void setAutoStartState(bool transcription, bool prompter);
   void setPrompterModel(const QString &model);
+  void setPrompterAcceleration(const QString &mode);
   void setModelInfo(const QString &modelId, bool installed);
   void setTranscriptCount(int count);
   void setDeleteAllAllowed(bool allowed, const QString &reason);
@@ -25,6 +27,7 @@ signals:
   void autoStartToggled(bool enabled);
   void prompterAutoStartToggled(bool enabled);
   void prompterModelChanged(QString model);
+  void prompterAccelerationChanged(QString mode);
   void deleteAllRequested();
   // Emitted when the user edits a speech parameter or resets them to the defaults.
   void tuningChanged(const pcm::transcription::TranscriptionTuning &tuning);
@@ -33,6 +36,7 @@ private:
   QCheckBox *mAutoStart;
   QCheckBox *mPrompterAutoStart;
   QLineEdit *mPrompterModel;
+  QComboBox *mPrompterAcceleration;
   QLabel *mModel;
   QLabel *mCount;
   QPushButton *mDelete;

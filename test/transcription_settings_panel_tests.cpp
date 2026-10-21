@@ -4,6 +4,7 @@
 #include <QSettings>
 #include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QLabel>
@@ -65,6 +66,23 @@ TEST(TranscriptionSettingsPanelTest, AutomaticStartControlsAreSeparateAndInitial
   panel.findChild<QCheckBox *>("transcriptionEnabled")->click();
   EXPECT_FALSE(transcription->isChecked());
   EXPECT_FALSE(prompter->isChecked());
+}
+TEST(TranscriptionSettingsPanelTest, AccelerationChoiceIsShownAndPersisted) {
+  using namespace pcm::app_settings;
+  EXPECT_EQ(prompterAcceleration(), "auto");
+  setPrompterAcceleration("bogus");
+  EXPECT_EQ(prompterAcceleration(), "auto");
+  TranscriptionSettingsPanel panel;
+  QSignalSpy spy(&panel, &TranscriptionSettingsPanel::prompterAccelerationChanged);
+  panel.setPrompterAcceleration("cpu");
+  EXPECT_EQ(spy.count(), 0);
+  auto *combo = panel.findChild<QComboBox *>("prompterAcceleration");
+  ASSERT_NE(combo, nullptr);
+  EXPECT_EQ(combo->currentData().toString(), "cpu");
+  combo->setCurrentIndex(combo->findData("gpu"));
+  ASSERT_EQ(spy.count(), 1);
+  setPrompterAcceleration(spy.front().front().toString());
+  EXPECT_EQ(prompterAcceleration(), "gpu");
 }
 int main(int argc, char **argv) {
   QApplication app(argc, argv);

@@ -13,6 +13,7 @@
 
 #include "prompter_pipeline.h"
 #include "call_notes_pipeline.h"
+#include "app_settings.h"
 
 Q_LOGGING_CATEGORY(logPrompterWorker, "pcm.prompter.worker")
 
@@ -66,7 +67,13 @@ struct PrompterWorker::Shared {
 PrompterWorker::PrompterWorker(QObject *parent)
     : PrompterWorker([](const QString &model) {
         const auto cache = QDir(QStandardPaths::writableLocation(QStandardPaths::CacheLocation)).filePath("prompter");
-        return pcm::prompter::createGemmaEngine(model, cache);
+        // Read at every load, so a changed setting applies when the model next starts.
+        const auto mode = pcm::app_settings::prompterAcceleration();
+        pcm::prompter::GemmaOptions options;
+        options.acceleration = mode == "gpu" ? pcm::prompter::GemmaOptions::Acceleration::Gpu
+                             : mode == "cpu" ? pcm::prompter::GemmaOptions::Acceleration::Cpu
+                                             : pcm::prompter::GemmaOptions::Acceleration::Auto;
+        return pcm::prompter::createGemmaEngine(model, cache, options);
       }, parent) {}
 
 PrompterWorker::PrompterWorker(pcm::prompter::PrompterEngineFactory factory, QObject *parent)

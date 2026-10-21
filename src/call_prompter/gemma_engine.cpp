@@ -60,6 +60,9 @@ std::unique_ptr<PrompterEngine> createGemmaEngine(const QString &modelPath, cons
   sessio::litert::ModelOptions options;
   options.cacheDir = cacheDir.toStdString();
   options.speculativeDecoding = !gemma.reusePrefix;
+  options.backend = gemma.acceleration == GemmaOptions::Acceleration::Cpu ? sessio::litert::Backend::CPU
+                                                                           : sessio::litert::Backend::GPU;
+  options.allowCpuFallback = gemma.acceleration == GemmaOptions::Acceleration::Auto;
   auto model = sessio::litert::loadModel(modelPath.toStdString(), options, nullptr);
   if (!model) return nullptr;
   return std::make_unique<GemmaEngine>(std::move(model), gemma.reusePrefix);

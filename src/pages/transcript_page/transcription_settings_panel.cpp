@@ -1,5 +1,6 @@
 #include "transcription_settings_panel.h"
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -47,6 +48,15 @@ TranscriptionSettingsPanel::TranscriptionSettingsPanel(QWidget *parent) : QWidge
   connect(browse, &QPushButton::clicked, this, [this] {
     const auto path = QFileDialog::getOpenFileName(this, tr("Select a local file"), mPrompterModel->text());
     if (!path.isEmpty()) { mPrompterModel->setText(path); emit prompterModelChanged(path); }
+  });
+  mPrompterAcceleration = new QComboBox(runtime); mPrompterAcceleration->setObjectName("prompterAcceleration");
+  mPrompterAcceleration->addItem(tr("Automatic (GPU, otherwise CPU)"), QStringLiteral("auto"));
+  mPrompterAcceleration->addItem(tr("GPU only"), QStringLiteral("gpu"));
+  mPrompterAcceleration->addItem(tr("CPU only"), QStringLiteral("cpu"));
+  mPrompterAcceleration->setToolTip(tr("The GPU is several times faster and uses less memory, but on an integrated GPU it can make the desktop stutter. The CPU needs about 10 GB of RAM. Applies the next time the model starts."));
+  runtimeForm->addRow(tr("Acceleration"), mPrompterAcceleration);
+  connect(mPrompterAcceleration, &QComboBox::currentIndexChanged, this, [this] {
+    emit prompterAccelerationChanged(mPrompterAcceleration->currentData().toString());
   });
   auto *runtimeNote = new QLabel(tr("Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review."), runtime);
   runtimeNote->setWordWrap(true);
@@ -150,6 +160,10 @@ void TranscriptionSettingsPanel::setAutoStartState(bool transcription, bool prom
   mPrompterAutoStart->setChecked(prompter && transcription);
 }
 void TranscriptionSettingsPanel::setPrompterModel(const QString &model) { mPrompterModel->setText(model); }
+void TranscriptionSettingsPanel::setPrompterAcceleration(const QString &mode) {
+  const QSignalBlocker blocker(mPrompterAcceleration);
+  mPrompterAcceleration->setCurrentIndex(std::max(0, mPrompterAcceleration->findData(mode)));
+}
 void TranscriptionSettingsPanel::setModelInfo(const QString &id, bool installed) {
   mModel->setText(tr("Model: %1 — %2").arg(id, installed ? tr("installed") : tr("not installed")));
 }

@@ -139,6 +139,11 @@ void setPrompterModel(const QString &model) {
   settings.remove("prompter/python");
   settings.remove("prompter/template");
 }
+QString prompterAcceleration() {
+  const auto mode = QSettings().value("prompter/acceleration").toString();
+  return mode == "gpu" || mode == "cpu" ? mode : QStringLiteral("auto");
+}
+void setPrompterAcceleration(const QString &mode) { QSettings().setValue("prompter/acceleration", mode); }
 
 pcm::transcription::TranscriptionTuning transcriptionTuning() {
   using pcm::transcription::TranscriptionTuning;

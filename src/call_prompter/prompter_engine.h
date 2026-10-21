@@ -24,6 +24,9 @@ using PrompterEngineFactory = std::function<std::unique_ptr<PrompterEngine>(cons
 struct GemmaOptions {
   // Process each fixed system prompt once and reuse its KV cache.
   bool reusePrefix = true;
+  // Auto: hardware Vulkan GPU, CPU when it cannot be initialized. An
+  // integrated GPU shares memory with the desktop, so the user can opt out.
+  enum class Acceleration { Auto, Gpu, Cpu } acceleration = Acceleration::Auto;
 };
 
 // Gemma 4 E4B through LiteRT-LM on CPU with the settings validated in spike
