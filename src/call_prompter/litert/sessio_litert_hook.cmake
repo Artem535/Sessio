@@ -17,6 +17,31 @@ set(LITERTLM_TOOLCHAIN_ARGS "${LITERTLM_TOOLCHAIN_ARGS}" CACHE STRING
 # patched dependency sources and needlessly invalidate all compiled objects.
 set_property(DIRECTORY PROPERTY EP_UPDATE_DISCONNECTED TRUE)
 
+# v0.18.0 clones stb and zlib from their default branches. Pin both to the
+# revisions this runtime was verified with: stb master dropped
+# stb_image_resize2.h on 2026-10-19, which LiteRT-LM's stb_impl still includes.
+# Upstream's own FetchContent calls then use these sources instead of cloning.
+include(FetchContent)
+FetchContent_Declare(sessio_stb
+  URL https://codeload.github.com/nothings/stb/tar.gz/2c980bb59875b0d32144a71867fbdebb2f77cd20
+  URL_HASH SHA256=9a955b1b49a4410088a2e0ee2a9c057c3c907d0c1d75454144cb980aca0ba515
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  SOURCE_SUBDIR sessio-header-only)
+FetchContent_Declare(sessio_zlib
+  URL https://codeload.github.com/madler/zlib/tar.gz/da607da739fa6047df13e66a2af6b8bec7c2a498
+  URL_HASH SHA256=b9258cf6254e7f7c37f1cd61dba943a1c5ea3cff5718c789834dac359094f5f7
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  # Upstream adds zlib's own CMake project; only download it here.
+  SOURCE_SUBDIR sessio-download-only)
+FetchContent_MakeAvailable(sessio_stb sessio_zlib)
+if(NOT EXISTS "${sessio_stb_SOURCE_DIR}/stb_image_resize2.h")
+  message(FATAL_ERROR "[Sessio] pinned stb does not provide stb_image_resize2.h")
+endif()
+set(LITERTLM_STB_SRC_DIR "${sessio_stb_SOURCE_DIR}" CACHE PATH "Pinned stb headers" FORCE)
+set(FETCHCONTENT_SOURCE_DIR_STB_LIB "${sessio_stb_SOURCE_DIR}" CACHE PATH "Pinned stb" FORCE)
+set(LITERTLM_ZLIB_SRC_DIR "${sessio_zlib_SOURCE_DIR}" CACHE PATH "Pinned zlib sources" FORCE)
+set(FETCHCONTENT_SOURCE_DIR_ZLIB_LIB "${sessio_zlib_SOURCE_DIR}" CACHE PATH "Pinned zlib" FORCE)
+
 function(_sessio_litert_add_library)
   if(NOT TARGET litert_lm_main)
     message(FATAL_ERROR "[Sessio] LiteRT-LM did not define litert_lm_main; cannot mirror its link line")
