@@ -39,7 +39,6 @@ public:
                         const QString &entryId = {});
   bool removeNoteEntry(const QString &entryId);
   QString noteAttachmentPath(const QString &entryId, const QString &attachmentId) const;
-  bool acceptDraft(const QString &editedText = {});
   bool dismissDraft();
   bool editDraft(const QString &text);
   bool appendAgreement(const QString &id, const QString &text);

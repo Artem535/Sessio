@@ -33,16 +33,16 @@ protected:
   }
 };
 
-TEST_F(CallNotesTest, ManualNotesPersistWithoutAClientAndAcceptIsIdempotent) {
-  EXPECT_EQ(c->finalStatus(), "idle");
+TEST_F(CallNotesTest, AiSummaryIsStoredWithCallWithoutAcceptStep) {
   ASSERT_TRUE(c->setManualText("My own text"));
   const auto p = phrase(); c->setGenerationEnabled(true);
   QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
   ASSERT_EQ(requests.count(), 1); c->handleResult(reply(requests[0][0].toJsonObject(), p));
-  ASSERT_TRUE(c->acceptDraft()); EXPECT_TRUE(c->acceptDraft());
-  EXPECT_EQ(c->manualText(), "My own text\n\nRehearsal discussed");
+  EXPECT_EQ(c->manualText(), "My own text");
+  EXPECT_FALSE(c->draft().contains("accepted"));
   CallNotesController reopened(db); reopened.openTranscript(transcript);
-  EXPECT_EQ(reopened.manualText(), c->manualText());
+  EXPECT_EQ(reopened.draft()["text"].toString(), "Rehearsal discussed");
+  EXPECT_EQ(reopened.manualText(), "My own text");
 }
 TEST_F(CallNotesTest, SeparateMarkdownEntriesAndAttachmentsSurviveReopeningWithoutAClient) {
   const auto root = dir.path() + "/attachments";
@@ -145,12 +145,13 @@ TEST_F(CallNotesTest, ReplyAfterCancelCannotReplaceDraftOrManualText) {
   c->cancel(); c->handleResult(out);
   EXPECT_TRUE(c->draft().isEmpty()); EXPECT_EQ(c->manualText(), "Keep me");
 }
-TEST_F(CallNotesTest, EditingEvidenceMakesDraftStaleAndPreventsAcceptance) {
+TEST_F(CallNotesTest, EditingEvidenceMakesSummaryStale) {
   const auto p = phrase(); c->setGenerationEnabled(true);
   QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
   c->handleResult(reply(requests[0][0].toJsonObject(), p));
   ASSERT_TRUE(db->update_transcript_phrase_text(p.id, "Corrected source"));
-  EXPECT_FALSE(c->sourcesCurrent()); EXPECT_FALSE(c->acceptDraft());
+  EXPECT_FALSE(c->sourcesCurrent());
+  EXPECT_EQ(c->finalStatus(), "idle"); EXPECT_FALSE(c->editDraft("Changed"));
 }
 TEST_F(CallNotesTest, FinalStatusIsIndependentAndFinishesOnlyForMatchingRequest) {
   const auto p = phrase(); c->setGenerationEnabled(true); c->finishCall();
@@ -184,10 +185,18 @@ TEST_F(CallNotesTest, FinalCanBeRetriedAfterEditingAnExistingSourceWithoutReopen
   c->requestFinal(); ASSERT_EQ(requests.count(), 2); EXPECT_TRUE(c->busy());
   EXPECT_EQ(requests[1][0].toJsonObject()["utterances"].toArray()[0].toObject()["text"].toString(), "Corrected source");
 }
-TEST_F(CallNotesTest, AgreementCanBeSavedWithoutAClientOnlyOnce) {
+TEST_F(CallNotesTest, AcceptedAgreementDoesNotChangeMyNotes) {
+  ASSERT_TRUE(c->setManualText("Mine"));
   ASSERT_TRUE(c->appendAgreement("a1", "Send documents"));
   ASSERT_TRUE(c->appendAgreement("a1", "Send documents"));
-  EXPECT_EQ(c->manualText(), "Send documents");
+  EXPECT_EQ(c->manualText(), "Mine");
+}
+TEST_F(CallNotesTest, FinalSummaryStartsAutomaticallyWhenCallEnds) {
+  phrase(); c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady);
+  c->finishCall(); c->flush();
+  ASSERT_EQ(requests.count(), 1);
+  EXPECT_TRUE(requests[0][0].toJsonObject()["final"].toBool());
 }
 TEST_F(CallNotesTest, BackgroundFinalCanWaitForAnActiveCallAndBeCancelled) {
   phrase(); c->finishCall();

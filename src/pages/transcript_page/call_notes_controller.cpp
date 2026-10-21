@@ -444,7 +444,6 @@ QJsonObject CallNotesController::draft() const {
   const auto packet = mState[key].toObject();
   if (packet["dismissed"].toBool()) return {};
   auto note = packet["note"].toObject();
-  if (!note.isEmpty()) note["accepted"] = packet["accepted"].toBool();
   return note;
 }
 QJsonArray CallNotesController::keyPoints() const {
@@ -481,26 +480,11 @@ bool CallNotesController::setManualText(const QString &text) {
   }
   emit changed(); return true;
 }
-bool CallNotesController::acceptDraft(const QString &edited) {
-  if (!sourcesCurrent()) return false;
-  const auto key = mState["final"].isObject() ? "final" : "live";
-  auto packet = mState[key].toObject();
-  if (packet["accepted"].toBool()) return true;
-  if (packet["dismissed"].toBool()) return false;
-  const auto text = edited.isEmpty() ? draft()["text"].toString() : edited;
-  if (text.trimmed().isEmpty() || text.size() > 6000) return false;
-  const auto before = mState;
-  const auto old = manualText();
-  if (old != text && !old.endsWith(QStringLiteral("\n\n") + text))
-    mState["manual_text"] = old.isEmpty() ? text : old + QStringLiteral("\n\n") + text;
-  packet["accepted"] = true; mState[key] = packet;
-  if (!persist()) { mState = before; return false; } emit changed(); return true;
-}
 bool CallNotesController::editDraft(const QString &text) {
   if (!sourcesCurrent() || text.trimmed().isEmpty() || text.size() > 6000) return false;
   const auto before = mState; const auto key = mState["final"].isObject() ? "final" : "live";
   auto packet = mState[key].toObject(); auto note = packet["note"].toObject(); note["text"] = text;
-  packet["note"] = note; packet["accepted"] = false; mState[key] = packet;
+  packet["note"] = note; mState[key] = packet;
   if (!persist()) { mState = before; return false; } emit changed(); return true;
 }
 bool CallNotesController::dismissDraft() {
@@ -508,14 +492,14 @@ bool CallNotesController::dismissDraft() {
   auto packet = mState[key].toObject(); packet["dismissed"] = true; mState[key] = packet;
   if (!persist()) { mState = before; return false; } emit changed(); return true;
 }
+// Agreements live in the prompter state and are shown by their own widget;
+// only remember which were saved so the prompter does not offer them twice.
 bool CallNotesController::appendAgreement(const QString &id, const QString &text) {
   if (id.isEmpty() || text.trimmed().isEmpty() || text.size() > 16000) return false;
   auto saved = mState["agreement_notes"].toObject();
   if (saved.contains(id)) return true;
   const auto before = mState;
   saved[id] = true; mState["agreement_notes"] = saved;
-  const auto old = manualText();
-  mState["manual_text"] = old.isEmpty() ? text : old + QStringLiteral("\n\n") + text;
   if (!persist()) { mState = before; return false; }
   emit changed(); return true;
 }

@@ -259,11 +259,7 @@ CallNotesPanel::CallNotesPanel(CallNotesController *controller, QWidget *parent)
     if (mController) mController->cancel();
   });
   connect(mAccept, &QPushButton::clicked, this, [this] {
-    if (!mController || mController->draft()["accepted"].toBool()) return;
-    if (mController->acceptDraft(mEditing ? mEditor->toPlainText() : QString{})) {
-      mEditing = false; refresh();
-      if (mInlineMode) emit editorRequested(); else emit noteSaved();
-    }
+    return;  // Removed with CallNotesPanel in Task 10.
   });
   connect(mEdit, &QPushButton::clicked, this, [this] {
     if (!mController) return;
@@ -495,8 +491,8 @@ void CallNotesPanel::refresh() {
   mPointCount->setVisible(mPoints->count() > 0);
   mPointsTitle->setVisible(mPoints->count() > 0);
   const bool editable = hasDraft && current && !busy && (!mEditing || draft == mEditOrigin);
-  mAccept->setEnabled(editable && !draft["accepted"].toBool());
-  mAccept->setText(draft["accepted"].toBool() && hasDraft ?
+  mAccept->setEnabled(editable && !false);
+  mAccept->setText(false && hasDraft ?
       (mInlineMode ? tr("Added to editor") : tr("Added to my notes")) :
       (mInlineMode ? tr("To editor") : tr("To my notes")));
   mUsePoints->setVisible(mInlineMode && !points.isEmpty());
