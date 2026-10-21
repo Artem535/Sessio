@@ -136,6 +136,14 @@ void ClientNotesPage::setCallNoteActions(qint64 materialId, CallNoteActions acti
   refresh();
 }
 
+void ClientNotesPage::setEmbedded(bool embedded) {
+  mEmbedded = embedded;
+  mHeaderSurface->setVisible(!embedded);
+  mScrollArea->setVerticalScrollBarPolicy(embedded ? Qt::ScrollBarAlwaysOff : Qt::ScrollBarAsNeeded);
+  mJumpToTodayButton->setVisible(false); mJumpToLatestButton->setVisible(false);
+  if (mMaterialId > 0) { mEntriesRendered = false; refresh(); }
+}
+
 void ClientNotesPage::setAiPanelWidget(QWidget *panel) {
   if (mAiPanel == panel) return;
   if (mAiPanel) {
@@ -362,6 +370,7 @@ void ClientNotesPage::buildUi() {
   // proxy and falls back to flat QPalette colors. Paint the background via
   // an event filter instead (see analytics_page.cpp for the same pattern).
   auto *headerSurface = new QFrame(this);
+  mHeaderSurface = headerSurface;
   headerSurface->installEventFilter(new pcm::widgets::SurfacePaintFilter(headerSurface));
   auto *headerLayout = new QGridLayout(headerSurface);
   mHeaderLayout = headerLayout;
@@ -877,6 +886,11 @@ void ClientNotesPage::arrangeCompactUi() {
     view->document()->setTextWidth(available);
     view->setFixedHeight(static_cast<int>(std::ceil(view->document()->size().height())) + 12);
   }
+  if (mEmbedded) {
+    mFeedWidget->adjustSize();
+    mScrollArea->setMinimumHeight(mFeedWidget->sizeHint().height());
+    setMinimumHeight(sizeHint().height());
+  }
 }
 
 void ClientNotesPage::reloadCallEntries() {
@@ -884,7 +898,7 @@ void ClientNotesPage::reloadCallEntries() {
   if (mEntriesRendered && entries == mRenderedEntries) return;
   mRenderedEntries = entries; mEntriesRendered = true;
   const bool hasClient = mCurrentClient.has_value() && mCurrentClient->id > 0;
-  if (hasClient) {
+  if (hasClient && !mEmbedded) {
     // Reuse the existing client timeline, including Markdown previews, session
     // links and attachments. Call entries remain in their own storage.
     reloadNotes();
@@ -897,10 +911,12 @@ void ClientNotesPage::reloadCallEntries() {
   mComposer->setEnabled(true); mAttachFilesButton->setEnabled(bool(mCallActions.save));
   mAddNoteButton->setEnabled(bool(mCallActions.save));
   mLinkSessionButton->hide(); mFeedFilterControl->hide();
-  mEmptyLabel->setText(tr("No notes yet")); mEmptyLabel->setVisible(entries.isEmpty() && !hasClient);
-  auto *heading = new QLabel(tr("This meeting"), mFeedWidget);
-  auto font = heading->font(); font.setBold(true); heading->setFont(font);
-  mFeedLayout->insertWidget(mFeedLayout->indexOf(mAiHost), heading);
+  mEmptyLabel->setText(tr("No notes yet")); mEmptyLabel->setVisible(entries.isEmpty() && (mEmbedded || !hasClient));
+  if (!mEmbedded) {
+    auto *heading = new QLabel(tr("This meeting"), mFeedWidget);
+    auto font = heading->font(); font.setBold(true); heading->setFont(font);
+    mFeedLayout->insertWidget(mFeedLayout->indexOf(mAiHost), heading);
+  }
   for (const auto &entry : entries) addCallEntry(entry.toObject());
   arrangeCompactUi();
 }

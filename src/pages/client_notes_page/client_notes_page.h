@@ -48,6 +48,8 @@ public:
   ~ClientNotesPage() override = default;
   void setCallNoteActions(qint64 materialId, CallNoteActions actions);
   void setAiPanelWidget(QWidget *panel);
+  // Shows only this meeting's composer and entries; an outer scroll area scrolls the page.
+  void setEmbedded(bool embedded);
   void focusComposer();
   void addPendingAttachments(const QStringList &paths);
 
@@ -122,6 +124,8 @@ private:
   bool mAttachmentSaveFailed = false;
   QPointer<QWidget> mAiPanel;
   QWidget *mAiHost = nullptr;
+  bool mEmbedded = false;
+  QWidget *mHeaderSurface = nullptr;
   QGridLayout *mHeaderLayout = nullptr;
   QGridLayout *mComposerActions = nullptr;
   QTextBrowser *mPreview = nullptr;

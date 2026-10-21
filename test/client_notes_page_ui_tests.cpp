@@ -260,6 +260,25 @@ TEST_F(ClientNotesUiTest, CallComposerPrecedesTheAiAndHistoryFeed) {
   auto *feed = page.findChild<QScrollArea *>(); ASSERT_NE(feed, nullptr);
   EXPECT_LT(page.layout()->indexOf(editor()->parentWidget()), page.layout()->indexOf(feed->parentWidget()));
 }
+
+TEST_F(ClientNotesUiTest, EmbeddedPageShowsOnlyThisMeetingWithoutOwnScroll) {
+  page.setEmbedded(true);
+  entries.append(QJsonObject{{"id", "e1"}, {"body_markdown", "First"}, {"created_at", 1}});
+  bind();
+  DuckClient client; client.id = 1;
+  page.setClientInfo(client);
+  page.resize(360, 600); page.show(); QCoreApplication::processEvents();
+  for (auto *label : page.findChildren<QLabel *>()) {
+    EXPECT_NE(label->text(), "Client history");
+    EXPECT_NE(label->text(), "This meeting");
+  }
+  auto *scroll = page.findChild<QScrollArea *>();
+  ASSERT_NE(scroll, nullptr);
+  EXPECT_EQ(scroll->verticalScrollBarPolicy(), Qt::ScrollBarAlwaysOff);
+  auto *body = page.findChild<QTextBrowser *>("notesEntryBody");
+  ASSERT_NE(body, nullptr);
+  EXPECT_GE(page.minimumHeight(), body->height());
+}
 } // namespace
 
 int main(int argc, char **argv) {
