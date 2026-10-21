@@ -1192,7 +1192,28 @@ void Application::connectSignals() {
     connect(notes, &CallNotesController::cancelRequested, worker, [notes, worker](const QString &token) { worker->cancelNotes(notes->materialId(), token); });
     auto notesWanted = std::make_shared<bool>(false);
     auto meetingDetails = std::make_shared<QString>();
-    notesPage->setControllerFactory([this, finals](qint64 materialId, QObject *parent) {
+    // «Meeting» card text: client display name and start time, nothing else.
+    const auto describeMeeting = [this](const std::optional<int64_t> &eventId,
+                                        const std::optional<DuckClient> &client, int64_t fallbackMs) {
+      QStringList parts;
+      if (client) {
+        const QString name = QString::fromStdString(client->name.value_or("")) + ' ' +
+                             QString::fromStdString(client->last_name.value_or(""));
+        if (!name.trimmed().isEmpty()) parts << name.trimmed();
+      }
+      std::optional<int64_t> start;
+      if (eventId) {
+        try {
+          const auto event = mDb->get_event(*eventId);
+          if (event) start = event->start_date;
+        } catch (...) {}
+      }
+      if (!start && fallbackMs > 0) start = fallbackMs;
+      if (start)
+        parts << QDateTime::fromMSecsSinceEpoch(*start, QTimeZone::UTC).toLocalTime().toString("dd.MM HH:mm");
+      return parts.join(QString::fromUtf8(" \u00b7 "));
+    };
+    const MeetingControllerFactory meetingControllers = [this, finals](qint64 materialId, QObject *parent) {
       auto *saved = new CallNotesController(mDb, parent);
       saved->openMaterial(materialId);
       connect(finals, &CallNotesFinalizer::materialChanged, saved, [saved](qint64 id) {
@@ -1202,7 +1223,8 @@ void Application::connectSignals() {
         saved->deferFinal(); finals->enqueue(saved->materialId());
       });
       return saved;
-    });
+    };
+    notesPage->setControllerFactory(meetingControllers);
     connect(finals, &CallNotesFinalizer::requestReady, worker, &PrompterWorker::send);
     connect(worker, &PrompterWorker::resultReady, finals, &CallNotesFinalizer::handleResult);
     connect(worker, &PrompterWorker::failed, finals, &CallNotesFinalizer::workerFailed);
@@ -1306,7 +1328,7 @@ void Application::connectSignals() {
     connect(callsPage, &CallsPage::eventKnownForCurrentCall, this,
             [this](int64_t id) { mCurrentCallEventId = id; });
     connect(callsPage, &CallsPage::callSessionStarted, this,
-            [this, controller, refreshButton, prompter, worker, notes, finals, notesWanted, notesPage, meetingDetails](pcm::video::VideoSession *session) {
+            [this, controller, refreshButton, prompter, worker, notes, finals, notesWanted, notesPage, meetingDetails, describeMeeting](pcm::video::VideoSession *session) {
               finals->setCallActive(true);
               worker->stop();
               *notesWanted = false;
@@ -1315,22 +1337,7 @@ void Application::connectSignals() {
               if (mCurrentCallEventId) {
                 try { callClient = mDb->get_client_by_event(*mCurrentCallEventId); } catch (...) {}
               }
-              *meetingDetails = {};
-              if (mCurrentCallEventId) {
-                QStringList parts;
-                if (callClient) {
-                  const QString name = QString::fromStdString(callClient->name.value_or("")) + ' ' +
-                                       QString::fromStdString(callClient->last_name.value_or(""));
-                  if (!name.trimmed().isEmpty()) parts << name.trimmed();
-                }
-                try {
-                  const auto event = mDb->get_event(*mCurrentCallEventId);
-                  if (event && event->start_date)
-                    parts << QDateTime::fromMSecsSinceEpoch(*event->start_date, QTimeZone::UTC)
-                                 .toLocalTime().toString("dd.MM HH:mm");
-                } catch (...) {}
-                *meetingDetails = parts.join(QString::fromUtf8(" \u00b7 "));
-              }
+              *meetingDetails = describeMeeting(mCurrentCallEventId, callClient, 0);
               notesPage->setClient(callClient);
               notesPage->setMeeting(*meetingDetails, tr("live"));
               prompter->beginTranscript(0);
@@ -1385,7 +1392,7 @@ void Application::connectSignals() {
         phrase->setFocus();
       }
     });
-    auto openMaterials = [this, notes, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor](qint64 materialId, qint64 transcriptId) {
+    auto openMaterials = [this, notes, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting](qint64 materialId, qint64 transcriptId) {
       auto *dialog = new QDialog(mMainWindow.get());
       dialog->setAttribute(Qt::WA_DeleteOnClose);
       dialog->setWindowTitle(tr("Call materials")); dialog->resize(500, 740);
@@ -1410,8 +1417,14 @@ void Application::connectSignals() {
       bindNotesEditor(page->editor(), saved);
       try {
         const auto material = mDb->get_call_material(saved->materialId());
-        if (material.event_id) page->setClient(mDb->get_client_by_event(*material.event_id));
+        std::optional<DuckClient> client;
+        if (material.event_id) {
+          client = mDb->get_client_by_event(*material.event_id);
+          page->setClient(client);
+        }
+        page->setMeeting(describeMeeting(material.event_id, client, material.created_at), tr("ended"));
       } catch (...) {}
+      page->setControllerFactory(meetingControllers);
       connect(page->editor(), &ClientNotesPage::openEventRequested, mMainWindow.get(), &MainWindow::returnToEvent);
       if (saved == notes)
         connect(page, &CallNotesPage::retryRequested, prompterPanel, &PrompterPanel::startRequested);

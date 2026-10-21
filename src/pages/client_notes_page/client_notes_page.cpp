@@ -878,26 +878,11 @@ void ClientNotesPage::reloadCallEntries() {
   const auto entries = mCallActions.entries ? mCallActions.entries() : QJsonArray{};
   if (mEntriesRendered && entries == mRenderedEntries) return;
   mRenderedEntries = entries; mEntriesRendered = true;
-  const bool hasClient = mCurrentClient.has_value() && mCurrentClient->id > 0;
-  if (hasClient && !mEmbedded) {
-    // Reuse the existing client timeline, including Markdown previews, session
-    // links and attachments. Call entries remain in their own storage.
-    reloadNotes();
-    auto *history = new QLabel(tr("Client history"), mFeedWidget);
-    auto font = history->font(); font.setBold(true); history->setFont(font);
-    mFeedLayout->insertWidget(mFeedLayout->count() - 1, history);
-  } else {
-    clearNotes();
-  }
+  clearNotes();
   mComposer->setEnabled(true); mAttachFilesButton->setEnabled(bool(mCallActions.save));
   mAddNoteButton->setEnabled(bool(mCallActions.save));
   mLinkSessionButton->hide(); mFeedFilterControl->hide();
-  mEmptyLabel->setText(tr("No notes yet")); mEmptyLabel->setVisible(entries.isEmpty() && (mEmbedded || !hasClient));
-  if (!mEmbedded) {
-    auto *heading = new QLabel(tr("This meeting"), mFeedWidget);
-    auto font = heading->font(); font.setBold(true); heading->setFont(font);
-    mFeedLayout->insertWidget(mFeedLayout->count() - 1, heading);
-  }
+  mEmptyLabel->setText(tr("No notes yet")); mEmptyLabel->setVisible(entries.isEmpty());
   for (const auto &entry : entries) addCallEntry(entry.toObject());
   arrangeCompactUi();
 }
