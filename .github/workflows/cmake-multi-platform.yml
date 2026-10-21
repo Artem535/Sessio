@@ -61,8 +61,10 @@ jobs:
             python3-dev zlib1g-dev libssl-dev libcurl4-openssl-dev
           # LiteRT-LM's shim prepares its Python build tools through uv.
           pipx install uv
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          gcc --version | head -1; cmake --version | head -1; java -version; cargo --version; python3 --version; "$HOME/.local/bin/uv" --version
+          # pipx's bin dir differs between runner images; ask pipx itself.
+          uv_bin="$(pipx environment --value PIPX_BIN_DIR)"
+          echo "$uv_bin" >> "$GITHUB_PATH"
+          gcc --version | head -1; cmake --version | head -1; java -version; cargo --version; python3 --version; "$uv_bin/uv" --version
 
       - name: Build CPU runtime
         if: steps.cache-litert.outputs.cache-hit != 'true'
