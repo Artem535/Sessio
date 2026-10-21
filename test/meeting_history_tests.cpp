@@ -6,7 +6,6 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSignalSpy>
-#include <QToolButton>
 #include <QApplication>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -98,7 +97,7 @@ TEST_F(MeetingHistoryTest, ExpandingAMeetingShowsItsWidgetsAndCollapsesOthers) {
     ++created; auto *c = new CallNotesController(db, parent); c->openMaterial(id); return c;
   });
   list.setMeetings(loadMeetingHistory(*db, client, 0), {"Loose"});
-  EXPECT_EQ(list.findChildren<QToolButton *>(QRegularExpression("^historyRow_")).size(), 2);
+  EXPECT_EQ(list.findChildren<QPushButton *>(QRegularExpression("^historyRow_")).size(), 2);
   EXPECT_EQ(list.findChild<QLabel *>("historyLooseNote")->text(), "Loose");
   list.expand(first);
   auto *firstBody = list.findChild<QWidget *>(QStringLiteral("historyBody_%1").arg(first));
@@ -107,6 +106,35 @@ TEST_F(MeetingHistoryTest, ExpandingAMeetingShowsItsWidgetsAndCollapsesOthers) {
   list.expand(second);
   EXPECT_TRUE(firstBody->isHidden());
   EXPECT_EQ(created, 2);
+}
+
+TEST_F(MeetingHistoryTest, CardShowsCountersAndSwapsPreviewForBodyWhenExpanded) {
+  const auto id = meeting({{"final", QJsonObject{{"note", QJsonObject{{"text", "Sum"}}}}},
+                           {"manual_entries", QJsonArray{QJsonObject{{"body_markdown", "Own note"}}}}});
+  MeetingHistoryList list;
+  list.setControllerFactory([&](qint64 mid, QObject *parent) {
+    auto *c = new CallNotesController(db, parent); c->openMaterial(mid); return c;
+  });
+  list.setMeetings(loadMeetingHistory(*db, client, 0), {});
+  list.show();
+  auto *toggle = list.findChild<QPushButton *>(QStringLiteral("historyRow_%1").arg(id));
+  ASSERT_NE(toggle, nullptr);
+  auto *card = qobject_cast<NotesWidgetFrame *>(toggle->parentWidget()->parentWidget());
+  ASSERT_NE(card, nullptr);
+  bool chip = false;
+  for (auto *l : card->findChildren<QLabel *>())
+    if (l->text().startsWith("AI summary") && l->text().contains("1")) chip = true;
+  EXPECT_TRUE(chip);
+  auto *preview = list.findChild<QLabel *>(QStringLiteral("historyPreview_%1").arg(id));
+  ASSERT_NE(preview, nullptr);
+  EXPECT_TRUE(preview->isVisible());
+  toggle->click();
+  EXPECT_FALSE(preview->isVisible());
+  auto *note = list.findChild<QLabel *>("historyNote");
+  ASSERT_NE(note, nullptr);
+  EXPECT_EQ(note->text(), "Own note");
+  toggle->click();
+  EXPECT_TRUE(preview->isVisible());
 }
 
 int main(int argc, char **argv) {
