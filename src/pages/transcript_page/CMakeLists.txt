@@ -10,6 +10,7 @@ qt_add_library(${TARGET_NAME} STATIC
     call_notes_controller.h call_notes_controller.cpp
     call_notes_finalizer.h call_notes_finalizer.cpp
     call_notes_panel.h call_notes_panel.cpp
+    call_notes_page.h call_notes_page.cpp
     meeting_history.h meeting_history.cpp
     meeting_history_widgets.h meeting_history_widgets.cpp
     notes_widget_frame.h notes_widget_frame.cpp
