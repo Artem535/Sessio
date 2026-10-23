@@ -2,6 +2,7 @@ set(TARGET_NAME ${PROJECT_NAME}_transcription_ui)
 qt_add_library(${TARGET_NAME} STATIC
     transcription_settings_panel.h transcription_settings_panel.cpp
     transcript_page.h transcript_page.cpp
+    transcript_export.h transcript_export.cpp
     transcript_list_page.h transcript_list_page.cpp
     transcript_client_dialog.h transcript_client_dialog.cpp
     call_transcription_controller.h call_transcription_controller.cpp

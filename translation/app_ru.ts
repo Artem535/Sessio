@@ -3146,14 +3146,6 @@ They appear here after a call with transcription turned on.</source>
         <translation>Экспорт текста</translation>
     </message>
     <message>
-        <source>Export transcript</source>
-        <translation>Экспорт транскрипта</translation>
-    </message>
-    <message>
-        <source>Text files (*.txt)</source>
-        <translation>Текстовые файлы (*.txt)</translation>
-    </message>
-    <message>
         <source>More actions</source>
         <translation>Другие действия</translation>
     </message>
@@ -3299,6 +3291,10 @@ They appear here after a call with transcription turned on.</source>
     <message>
         <source>Revoke consent</source>
         <translation>Отозвать согласие</translation>
+    </message>
+    <message>
+        <source>Export text</source>
+        <translation>Экспорт текста</translation>
     </message>
     <message>
         <source>Transcription is off</source>
@@ -3612,6 +3608,14 @@ Your previous data was kept.</source>
     <message>
         <source>Quit</source>
         <translation>Выйти</translation>
+    </message>
+    <message>
+        <source>Export transcript</source>
+        <translation>Экспорт транскрипта</translation>
+    </message>
+    <message>
+        <source>Could not save the transcript file.</source>
+        <translation>Не удалось сохранить файл транскрипта.</translation>
     </message>
     <message>
         <source>Consent withdrawn</source>

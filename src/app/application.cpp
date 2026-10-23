@@ -15,6 +15,7 @@
 #include "call_notes_finalizer.h"
 #include "call_notes_page.h"
 #include "meeting_history.h"
+#include "transcript_export.h"
 #include "prompter_panel.h"
 #include "prompter_worker.h"
 #include "transcript_panel.h"
@@ -34,6 +35,7 @@
 #include <QLocale>
 #include <QStandardPaths>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QLibraryInfo>
 #include <QMenu>
 #include <QStringList>
@@ -1168,6 +1170,11 @@ void Application::connectSignals() {
             &MainWindow::returnToEvent);
     auto *sidePanel = new CallSidePanel(notesPage, panel, callsPage);
     auto *prompter = new CallPrompterController(mDb, this);
+    connect(panel, &TranscriptPanel::exportRequested, panel, [this, panel, prompter] {
+      const auto id = prompter->transcriptId();
+      if (id > 0 && !pcm::transcriptionui::exportTranscriptWithDialog(panel, *mDb, {id}))
+        QMessageBox::warning(panel, tr("Export transcript"), tr("Could not save the transcript file."));
+    });
     connect(prompter, &CallPrompterController::cardsChanged, notesPage, [notesPage, prompter] {
       notesPage->setAgreements(prompter->records());
     });
@@ -1435,6 +1442,15 @@ void Application::connectSignals() {
       if (saved == notes)
         connect(page, &CallNotesPage::retryRequested, prompterPanel, &PrompterPanel::startRequested);
       auto *body = new QVBoxLayout(dialog); body->addWidget(page);
+      if (auto ids = mDb->get_call_material_transcript_ids(saved->materialId()); !ids.empty()) {
+        auto *exportButton = new QPushButton(tr("Export transcript"), dialog);
+        exportButton->setObjectName("callMaterialsExport");
+        body->addWidget(exportButton, 0, Qt::AlignRight);
+        connect(exportButton, &QPushButton::clicked, dialog, [this, dialog, ids] {
+          if (!pcm::transcriptionui::exportTranscriptWithDialog(dialog, *mDb, {ids.begin(), ids.end()}))
+            QMessageBox::warning(dialog, tr("Export transcript"), tr("Could not save the transcript file."));
+        });
+      }
       connect(page, &CallNotesPage::sourceRequested, dialog, [this, saved, notes, panel, sidePanel, reviewPage, dialog, selectedEvent](qint64 phraseId) {
         const auto source = saved->source(QString::number(phraseId));
         if (saved == notes && panel->focusPhrase(phraseId)) { sidePanel->showTranscript(); dialog->close(); return; }

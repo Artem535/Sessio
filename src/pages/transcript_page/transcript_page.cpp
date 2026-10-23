@@ -1,10 +1,9 @@
 #include "transcript_page.h"
+#include "transcript_export.h"
 #include "prompter_panel.h"
 #include "call_notes_controller.h"
 #include "phrase_card_paint.h"
 #include "transcript_client_dialog.h"
-#include <QFileDialog>
-#include <QSaveFile>
 #include <QComboBox>
 #include <QApplication>
 #include <QFrame>
@@ -185,14 +184,10 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes;
   };
   connect(exportButton, &QPushButton::clicked, this, [this] {
+    if (mSelector->currentIndex() < 0) return;
     QPointer<TranscriptPage> guard(this);
-    try {
-      const auto bytes = exportText().toUtf8();
-      const auto path = QFileDialog::getSaveFileName(this, tr("Export transcript"), {}, tr("Text files (*.txt)"));
-      if (!guard || path.isEmpty()) return;
-      QSaveFile file(path);
-      if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) reportFailure();
-    } catch (...) { if (guard) reportFailure(); }
+    const bool saved = pcm::transcriptionui::exportTranscriptWithDialog(this, *mDb, {mSelector->currentData().toLongLong()});
+    if (guard && !saved) reportFailure();
   });
   connect(mAttach, &QPushButton::clicked, this, [this] {
     const auto id = mSelector->currentData().toLongLong();
@@ -296,14 +291,8 @@ void TranscriptPage::reloadTranscript(int64_t transcriptId, const QString &title
   showTranscript();
 }
 QString TranscriptPage::exportText() const {
-  QStringList lines;
   if (mSelector->currentIndex() < 0) return {};
-  for (const auto &phrase : mDb->get_transcript_phrases(mSelector->currentData().toLongLong())) {
-    const auto speaker = phrase.speaker_name ? QString::fromStdString(*phrase.speaker_name) :
-        phrase.track_role == "practitioner" ? tr("Practitioner") : tr("Participant");
-    lines << timestamp(phrase.start_ms) + " " + speaker + ": " + QString::fromStdString(phrase.text);
-  }
-  return lines.join("\n") + "\n";
+  return pcm::transcriptionui::transcriptExportText(*mDb, mSelector->currentData().toLongLong());
 }
 void TranscriptPage::showTranscript() {
   mEditing = false;

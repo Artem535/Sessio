@@ -65,10 +65,12 @@ TranscriptPanel::TranscriptPanel(QWidget *parent) : QWidget(parent) {
     auto *result = new QPushButton(text, this); result->setObjectName(name); result->setAccessibleName(text); buttons->addWidget(result); return result;
   };
   mStart = button(tr("Start"), "transcriptStart"); mStop = button(tr("Stop"), "transcriptStop"); mRevoke = button(tr("Revoke consent"), "transcriptRevoke");
+  mExport = button(tr("Export text"), "transcriptExport"); mExport->setEnabled(false);
   layout->addLayout(buttons);
   connect(mStart, &QPushButton::clicked, this, &TranscriptPanel::startRequested);
   connect(mStop, &QPushButton::clicked, this, &TranscriptPanel::stopRequested);
   connect(mRevoke, &QPushButton::clicked, this, &TranscriptPanel::revokeRequested);
+  connect(mExport, &QPushButton::clicked, this, &TranscriptPanel::exportRequested);
   setStartAvailable(false, {}); setState(pcm::calltranscription::SessionState::Idle);
 }
 void TranscriptPanel::setState(pcm::calltranscription::SessionState state) {
@@ -121,6 +123,7 @@ void TranscriptPanel::addPhrase(const DuckTranscriptPhrase &phrase) {
   auto *text = label(QString::fromStdString(phrase.text), "phraseText", row);
   text->setTextInteractionFlags(Qt::TextSelectableByMouse); layout->addWidget(text);
   mRows->insertWidget(mRows->count() - 1, row); ++mPhraseCount;
+  mExport->setEnabled(true);
 }
 void TranscriptPanel::setDelayed(bool delayed) { mDelayed->setVisible(delayed); }
 void TranscriptPanel::setNotice(const QString &text) { message(mNotice, text); }
@@ -129,6 +132,7 @@ void TranscriptPanel::setError(const QString &text) { message(mError, text); }
 void TranscriptPanel::clearPhrases() {
   while (mRows->count() > 1) { auto *item = mRows->takeAt(0); delete item->widget(); delete item; }
   mPhraseCount = 0; mFollowing = true;
+  mExport->setEnabled(false);
 }
 int TranscriptPanel::phraseCount() const { return mPhraseCount; }
 bool TranscriptPanel::focusPhrase(qint64 phraseId) {

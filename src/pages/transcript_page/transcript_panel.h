@@ -25,6 +25,7 @@ signals:
   void startRequested();
   void stopRequested();
   void revokeRequested();
+  void exportRequested();
 private:
   QLabel *mStatus;
   QLabel *mReason;
@@ -36,6 +37,7 @@ private:
   QPushButton *mStart;
   QPushButton *mStop;
   QPushButton *mRevoke;
+  QPushButton *mExport;
   QScrollArea *mScroll;
   QVBoxLayout *mRows;
   int mPhraseCount = 0;
