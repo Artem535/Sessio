@@ -40,6 +40,12 @@ jobs:
         shell: bash
     env:
       GIT_LFS_SKIP_SMUDGE: 1
+      # Runner images preinstall an Android NDK, which LiteRT-LM's workspace
+      # would otherwise try to load (upstream CI clears it the same way).
+      ANDROID_NDK_HOME: ''
+      ANDROID_NDK_ROOT: ''
+      ANDROID_NDK: ''
+      ANDROID_NDK_LATEST_HOME: ''
       LITERT_PREFIX: ${{ matrix.prefix }}
       BAZEL_OUTPUT_USER_ROOT: ${{ matrix.output_root }}
       BAZEL_DISK_CACHE: ${{ matrix.disk_cache }}
