@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Added a current-time line to the day timeline.
 - Added transcript export to the call's Transcript tab and to the call
   materials window.
+- The client's notes feed now shows the AI summary of each finished call.
 - Moved the prompter from its own tab into a card on the Notes page; the count
   of new suggestions is shown on the card and on the Notes tab.
 - Added "Last time" and a History view with the client's earlier meetings.

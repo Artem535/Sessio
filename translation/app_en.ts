@@ -953,6 +953,10 @@
         <translation>Unknown time</translation>
     </message>
     <message>
+        <source>✦ AI summary</source>
+        <translation>✦ AI summary</translation>
+    </message>
+    <message>
         <source>Image: %1</source>
         <translation>Image: %1</translation>
     </message>

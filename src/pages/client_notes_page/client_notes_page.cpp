@@ -16,6 +16,7 @@
 #include <QFileInfo>
 #include <QFrame>
 #include <QGridLayout>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QResizeEvent>
 #include <QSignalBlocker>
@@ -55,6 +56,70 @@ QFrame *makeSurface(QWidget *parent = nullptr) {
                                   .arg(pcm::widgets::constants::kCardCornerRadius);
   frame->setStyleSheet(styleSheet);
   return frame;
+}
+
+// Read-only Markdown body of a feed bubble, sized to its text.
+QTextBrowser *makeMarkdownBody(QWidget *bubble, const QString &markdown) {
+  auto *bodyView = new QTextBrowser(bubble);
+  bodyView->setObjectName("notesEntryBody");
+  bodyView->setFrameShape(QFrame::NoFrame);
+  bodyView->setOpenExternalLinks(true);
+  bodyView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  bodyView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  bodyView->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+  bodyView->setContentsMargins(0, 0, 0, 0);
+  bodyView->document()->setDocumentMargin(0);
+  bodyView->document()->setDefaultStyleSheet(
+      "body { margin: 0px; padding: 0px; }"
+      "p, ul, ol { margin-top: 0px; margin-bottom: 0px; padding-top: 0px; padding-bottom: 0px; }"
+      "li { margin-top: 0px; margin-bottom: 0px; }");
+  auto textOption = bodyView->document()->defaultTextOption();
+  textOption.setWrapMode(QTextOption::WrapAnywhere);
+  bodyView->document()->setDefaultTextOption(textOption);
+  bodyView->setStyleSheet(
+      "QTextBrowser {"
+      " background: transparent;"
+      " color: palette(text);"
+      " border: none;"
+      " padding: 0px;"
+      " margin: 0px;"
+      "}");
+
+  bodyView->setMarkdown(markdown);
+  bodyView->document()->setTextWidth(
+      bubble->maximumWidth() - pcm::widgets::constants::kNotesDocumentWidthInset);
+  bodyView->document()->adjustSize();
+  bodyView->setMinimumHeight(qRound(bodyView->document()->size().height()) + 6);
+  bodyView->setMaximumHeight(
+      qRound(bodyView->document()->size().height()) +
+      pcm::widgets::constants::kNotesBodyHeightExtra);
+  return bodyView;
+}
+
+// Whole-meeting summary of a finished call, shown among the client's notes.
+struct AiSummaryFeedItem {
+  qint64 timestampMs = 0;
+  std::optional<int64_t> eventId;
+  QString markdown;
+};
+
+// Final (whole-meeting) AI summaries of the client's finished calls.
+std::vector<AiSummaryFeedItem> loadAiSummaries(pcm::database::Database &db, int64_t clientId) {
+  std::vector<AiSummaryFeedItem> result;
+  try {
+    for (const auto &material : db.get_call_materials_for_client(clientId)) {
+      const auto state = QJsonDocument::fromJson(QByteArray::fromStdString(material.json)).object();
+      const auto final = state["final"].toObject();
+      const auto text = final["note"].toObject()["text"].toString().trimmed();
+      if (!state["ended"].toBool(true) || final["dismissed"].toBool() || text.isEmpty()) continue;
+      AiSummaryFeedItem item{material.created_at, material.event_id, text};
+      if (material.event_id)
+        if (const auto event = db.get_event(*material.event_id); event && event->end_date)
+          item.timestampMs = *event->end_date;
+      result.push_back(std::move(item));
+    }
+  } catch (...) {}
+  return result;
 }
 
 } // namespace
@@ -617,12 +682,15 @@ void ClientNotesPage::reloadNotes() {
   }
   updateLinkButtonText();
 
-  using FeedItem = std::variant<DuckClientNote, DuckEvent, DuckEventChangeLog>;
+  using FeedItem = std::variant<DuckClientNote, DuckEvent, DuckEventChangeLog, AiSummaryFeedItem>;
   std::vector<FeedItem> items;
   if (mFeedFilter != FeedFilter::Sessions) {
     for (const auto &note : notes) {
       items.emplace_back(note);
     }
+    if (mDb)
+      for (auto &summary : loadAiSummaries(*mDb, mCurrentClient->id))
+        items.emplace_back(std::move(summary));
   }
   if (mFeedFilter != FeedFilter::Notes) {
     for (const auto &event : events) {
@@ -649,6 +717,8 @@ void ClientNotesPage::reloadNotes() {
             return value.created_at.value_or(0);
           } else if constexpr (std::is_same_v<T, DuckEventChangeLog>) {
             return value.occurred_at;
+          } else if constexpr (std::is_same_v<T, AiSummaryFeedItem>) {
+            return value.timestampMs;
           } else {
             return value.start_date.value_or(0);
           }
@@ -686,6 +756,8 @@ void ClientNotesPage::reloadNotes() {
             addNoteBubble(value);
           } else if constexpr (std::is_same_v<T, DuckEventChangeLog>) {
             addChangeLogEntry(value);
+          } else if constexpr (std::is_same_v<T, AiSummaryFeedItem>) {
+            addAiSummaryEntry(value.timestampMs, value.eventId, value.markdown);
           } else {
             addSessionEntry(value);
           }
@@ -985,64 +1057,14 @@ void ClientNotesPage::addNoteBubble(const DuckClientNote &note) {
                               : tr("Unknown time"));
   timestampLabel->setForegroundRole(QPalette::PlaceholderText);
 
-  auto *bodyView = new QTextBrowser(bubble);
-  bodyView->setObjectName("notesEntryBody");
-  bodyView->setFrameShape(QFrame::NoFrame);
-  bodyView->setOpenExternalLinks(true);
-  bodyView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  bodyView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  bodyView->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-  bodyView->setContentsMargins(0, 0, 0, 0);
-  bodyView->document()->setDocumentMargin(0);
-  bodyView->document()->setDefaultStyleSheet(
-      "body { margin: 0px; padding: 0px; }"
-      "p, ul, ol { margin-top: 0px; margin-bottom: 0px; padding-top: 0px; padding-bottom: 0px; }"
-      "li { margin-top: 0px; margin-bottom: 0px; }");
-  auto textOption = bodyView->document()->defaultTextOption();
-  textOption.setWrapMode(QTextOption::WrapAnywhere);
-  bodyView->document()->setDefaultTextOption(textOption);
-  bodyView->setStyleSheet(
-      "QTextBrowser {"
-      " background: transparent;"
-      " color: palette(text);"
-      " border: none;"
-      " padding: 0px;"
-      " margin: 0px;"
-      "}");
-
   const auto markdown = QString::fromStdString(note.body_markdown.value_or(""));
-  bodyView->setMarkdown(markdown);
-  bodyView->document()->setTextWidth(
-      bubble->maximumWidth() - pcm::widgets::constants::kNotesDocumentWidthInset);
-  bodyView->document()->adjustSize();
-  bodyView->setMinimumHeight(qRound(bodyView->document()->size().height()) + 6);
-  bodyView->setMaximumHeight(
-      qRound(bodyView->document()->size().height()) +
-      pcm::widgets::constants::kNotesBodyHeightExtra);
+  auto *bodyView = makeMarkdownBody(bubble, markdown);
 
   layout->addWidget(timestampLabel);
 
   if (mDb) {
     const auto linkedEvent = pcm::recurrence::resolveNoteLink(*mDb, note);
-    if (linkedEvent.has_value() && linkedEvent->start_date.has_value()) {
-      auto *linkLabel = new QPushButton(bubble);
-      linkLabel->setFlat(true);
-      linkLabel->setCursor(Qt::PointingHandCursor);
-      const auto startAt = QDateTime::fromMSecsSinceEpoch(*linkedEvent->start_date,
-                                                           QTimeZone(QTimeZone::LocalTime));
-      linkLabel->setText(QStringLiteral("🔗 %1").arg(startAt.toString("dd.MM.yyyy HH:mm")));
-      linkLabel->setStyleSheet(
-          QStringLiteral("QPushButton { text-align: left; color: %1; "
-                         "background: transparent; border: none; padding: 0px; }")
-              .arg(pcm::widgets::cssRgba(pcm::widgets::accentColor(), 0.9)));
-      const auto linkedId = linkedEvent->id;
-      const auto dayStartMs =
-          QDateTime(startAt.date(), QTime(0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
-      connect(linkLabel, &QPushButton::clicked, this, [this, linkedId, dayStartMs]() {
-        emit openEventRequested(linkedId, dayStartMs);
-      });
-      layout->addWidget(linkLabel);
-    }
+    if (linkedEvent.has_value()) addEventLink(layout, bubble, *linkedEvent);
   }
 
   if (!markdown.trimmed().isEmpty()) {
@@ -1054,6 +1076,72 @@ void ClientNotesPage::addNoteBubble(const DuckClientNote &note) {
   if (mDb) {
     addAttachmentWidgets(layout, mDb->get_note_attachments(note.id));
   }
+
+  mFeedLayout->insertWidget(mFeedLayout->count() - 1, bubble, 0, Qt::AlignLeft);
+}
+
+void ClientNotesPage::addEventLink(QVBoxLayout *layout, QWidget *bubble, const DuckEvent &event) {
+  if (!event.start_date.has_value()) return;
+  auto *linkLabel = new QPushButton(bubble);
+  linkLabel->setFlat(true);
+  linkLabel->setCursor(Qt::PointingHandCursor);
+  const auto startAt = QDateTime::fromMSecsSinceEpoch(*event.start_date,
+                                                       QTimeZone(QTimeZone::LocalTime));
+  linkLabel->setText(QStringLiteral("🔗 %1").arg(startAt.toString("dd.MM.yyyy HH:mm")));
+  linkLabel->setStyleSheet(
+      QStringLiteral("QPushButton { text-align: left; color: %1; "
+                     "background: transparent; border: none; padding: 0px; }")
+          .arg(pcm::widgets::cssRgba(pcm::widgets::accentColor(), 0.9)));
+  const auto linkedId = event.id;
+  const auto dayStartMs =
+      QDateTime(startAt.date(), QTime(0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
+  connect(linkLabel, &QPushButton::clicked, this, [this, linkedId, dayStartMs]() {
+    emit openEventRequested(linkedId, dayStartMs);
+  });
+  layout->addWidget(linkLabel);
+}
+
+void ClientNotesPage::addAiSummaryEntry(qint64 timestampMs, std::optional<int64_t> eventId,
+                                        const QString &markdown) {
+  auto *bubble = new QFrame(mFeedWidget);
+  bubble->setObjectName("aiSummaryBubble");
+  bubble->setMaximumWidth(pcm::widgets::constants::kNotesBubbleMaxWidth);
+  bubble->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Maximum);
+  bubble->setStyleSheet(
+      QStringLiteral("#aiSummaryBubble {"
+                     " background: palette(base);"
+                     " border: 1px solid %1;"
+                     " border-radius: 12px;"
+                     "}")
+          .arg(pcm::widgets::cssRgba(pcm::widgets::accentColor(), 0.55)));
+
+  auto *layout = new QVBoxLayout(bubble);
+  layout->setContentsMargins(
+      pcm::widgets::constants::kNotesBubbleHorizontalPadding,
+      pcm::widgets::constants::kNotesBubbleVerticalPadding,
+      pcm::widgets::constants::kNotesBubbleHorizontalPadding,
+      pcm::widgets::constants::kNotesBubbleVerticalPadding);
+  layout->setSpacing(8);
+
+  auto *header = new QHBoxLayout;
+  auto *title = new QLabel(tr("✦ AI summary"), bubble);
+  title->setObjectName("aiSummaryTitle");
+  auto titleFont = title->font();
+  titleFont.setWeight(QFont::DemiBold);
+  title->setFont(titleFont);
+  header->addWidget(title);
+  header->addStretch();
+  auto *timestampLabel = new QLabel(
+      QDateTime::fromMSecsSinceEpoch(timestampMs, QTimeZone(QTimeZone::LocalTime))
+          .toString("dd.MM.yyyy HH:mm"),
+      bubble);
+  timestampLabel->setForegroundRole(QPalette::PlaceholderText);
+  header->addWidget(timestampLabel);
+  layout->addLayout(header);
+
+  if (mDb && eventId)
+    if (const auto event = mDb->get_event(*eventId)) addEventLink(layout, bubble, *event);
+  layout->addWidget(makeMarkdownBody(bubble, markdown));
 
   mFeedLayout->insertWidget(mFeedLayout->count() - 1, bubble, 0, Qt::AlignLeft);
 }

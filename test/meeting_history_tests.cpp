@@ -1,3 +1,7 @@
+#include <QTest>
+#include <QFrame>
+#include <QTextBrowser>
+#include "client_notes_page.h"
 #include "meeting_history.h"
 #include "meeting_history_widgets.h"
 #include "call_notes_controller.h"
@@ -38,6 +42,20 @@ protected:
     return id;
   }
 };
+
+TEST_F(MeetingHistoryTest, ClientNotesFeedShowsFinalAiSummaries) {
+  meeting({{"final", QJsonObject{{"note", QJsonObject{{"text", "Whole meeting summary"}}}}}});
+  meeting({{"live", QJsonObject{{"note", QJsonObject{{"text", "Live draft only"}}}}}});
+  meeting({{"final", QJsonObject{{"dismissed", true}, {"note", QJsonObject{{"text", "Deleted"}}}}}});
+  meeting({{"final", QJsonObject{{"note", QJsonObject{{"text", "Call still running"}}}}}}, false);
+  ClientNotesPage page(db);
+  page.setClientInfo(*db->get_client(client));
+  const auto bubbles = page.findChildren<QFrame *>("aiSummaryBubble");
+  ASSERT_EQ(bubbles.size(), 1);
+  const auto *body = bubbles.front()->findChild<QTextBrowser *>("notesEntryBody");
+  ASSERT_NE(body, nullptr);
+  EXPECT_EQ(body->toPlainText().trimmed(), QStringLiteral("Whole meeting summary"));
+}
 
 TEST_F(MeetingHistoryTest, HistoryListsClientMeetingsNewestFirst) {
   const auto older = meeting({{"final", QJsonObject{{"note", QJsonObject{{"text", "Older summary"}}}}}});

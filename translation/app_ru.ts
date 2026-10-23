@@ -959,6 +959,10 @@
         <translation>Время неизвестно</translation>
     </message>
     <message>
+        <source>✦ AI summary</source>
+        <translation>✦ Итог ИИ</translation>
+    </message>
+    <message>
         <source>Image: %1</source>
         <translation>Изображение: %1</translation>
     </message>

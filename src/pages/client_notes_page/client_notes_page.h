@@ -95,6 +95,9 @@ private:
   void addNoteBubble(const DuckClientNote &note);
   void addSessionEntry(const DuckEvent &event);
   void addChangeLogEntry(const DuckEventChangeLog &entry);
+  void addEventLink(QVBoxLayout *layout, QWidget *bubble, const DuckEvent &event);
+  // Read-only whole-meeting AI summary of a call; edited from the call itself.
+  void addAiSummaryEntry(qint64 timestampMs, std::optional<int64_t> eventId, const QString &markdown);
   QLabel *addDateDivider(const QDate &date);
   void addAttachmentWidgets(QVBoxLayout *layout,
                             const std::vector<DuckClientNoteAttachment> &attachments);
