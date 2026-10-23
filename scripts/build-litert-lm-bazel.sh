@@ -98,8 +98,8 @@ args=(-c opt --deleted_packages=swift)
 cd "$prefix/src"
 # Git Bash would rewrite //labels and /flags as Windows paths.
 export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
-bazelisk "${startup[@]}" build "${args[@]}" "//sessio:$target"
-bin="$(bazelisk "${startup[@]}" info "${args[@]}" bazel-bin)/sessio"
+bazelisk ${startup[@]+"${startup[@]}"} build "${args[@]}" "//sessio:$target"
+bin="$(bazelisk ${startup[@]+"${startup[@]}"} info "${args[@]}" bazel-bin)/sessio"
 
 rm -rf "$prefix/install"
 mkdir -p "$prefix/install/lib"
