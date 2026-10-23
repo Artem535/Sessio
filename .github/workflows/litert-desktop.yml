@@ -24,19 +24,25 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Short roots keep Windows paths under MAX_PATH.
           - os: windows-2022
             artifact: sessio-litert-runtime-windows
+            prefix: C:/sl
+            output_root: C:/bz
+            disk_cache: C:/bc
           - os: macos-latest
             artifact: sessio-litert-runtime-macos
+            prefix: /Users/runner/sessio-litert
+            output_root: ''
+            disk_cache: /Users/runner/bazel-cache
     defaults:
       run:
         shell: bash
     env:
       GIT_LFS_SKIP_SMUDGE: 1
-      LITERT_PREFIX: ${{ runner.os == 'Windows' && 'C:/sl' || format('{0}/sessio-litert', runner.temp) }}
-      # Short roots keep Windows paths under MAX_PATH.
-      BAZEL_OUTPUT_USER_ROOT: ${{ runner.os == 'Windows' && 'C:/bz' || '' }}
-      BAZEL_DISK_CACHE: ${{ runner.os == 'Windows' && 'C:/bc' || format('{0}/bazel-cache', runner.temp) }}
+      LITERT_PREFIX: ${{ matrix.prefix }}
+      BAZEL_OUTPUT_USER_ROOT: ${{ matrix.output_root }}
+      BAZEL_DISK_CACHE: ${{ matrix.disk_cache }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
