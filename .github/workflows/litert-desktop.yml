@@ -1,0 +1,107 @@
+name: LiteRT runtime (Windows, macOS)
+
+# Experimental: builds the CPU prompter runtime with LiteRT-LM's Bazel build,
+# the only build upstream supports on Windows and macOS. Runs only when the
+# runtime sources or this build change; packages do not use it yet.
+on:
+  push:
+    paths:
+      - .github/workflows/litert-desktop.yml
+      - scripts/build-litert-lm-bazel.sh
+      - src/call_prompter/litert/**
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            artifact: sessio-litert-runtime-windows
+          - os: macos-latest
+            artifact: sessio-litert-runtime-macos
+    defaults:
+      run:
+        shell: bash
+    env:
+      GIT_LFS_SKIP_SMUDGE: 1
+      LITERT_PREFIX: ${{ runner.os == 'Windows' && 'C:/sl' || format('{0}/sessio-litert', runner.temp) }}
+      # Short roots keep Windows paths under MAX_PATH.
+      BAZEL_OUTPUT_USER_ROOT: ${{ runner.os == 'Windows' && 'C:/bz' || '' }}
+      BAZEL_DISK_CACHE: ${{ runner.os == 'Windows' && 'C:/bc' || format('{0}/bazel-cache', runner.temp) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore Bazel cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.BAZEL_DISK_CACHE }}
+          key: litert-bazel-${{ runner.os }}-v0.18.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}
+          restore-keys: litert-bazel-${{ runner.os }}-v0.18.0-
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install build tools (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          git config --system core.longpaths true
+          choco install bazelisk --no-progress -y
+          # Let MSVC's linker open the long paths Bazel produces.
+          $link = (Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Tools\MSVC\*\bin\HostX64\x64\link.exe" | Select-Object -First 1).FullName
+          $mt = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\mt.exe" | Select-Object -First 1).FullName
+          $manifest = "$env:RUNNER_TEMP\longpath.manifest"
+          Set-Content -Path $manifest -Encoding UTF8 -Value @"
+          <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+            <application xmlns="urn:schemas-microsoft-com:asm.v3">
+              <windowsSettings>
+                <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+              </windowsSettings>
+            </application>
+          </assembly>
+          "@
+          & $mt -nologo -manifest $manifest -outputresource:"$link;1"
+          if ($LASTEXITCODE -ne 0) { throw "mt.exe failed to patch link.exe" }
+
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bazelisk
+
+      - name: Build runtime
+        run: bash scripts/build-litert-lm-bazel.sh "$LITERT_PREFIX"
+
+      - name: Save Bazel cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.BAZEL_DISK_CACHE }}
+          key: litert-bazel-${{ runner.os }}-v0.18.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}-${{ github.run_id }}
+
+      - name: Verify runtime
+        run: |
+          ls -lR "$LITERT_PREFIX/install"
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            nm -gU "$LITERT_PREFIX/install/lib/libsessio_litert.dylib" | c++filt | grep -c 'sessio::litert'
+            otool -L "$LITERT_PREFIX/install/lib/libsessio_litert.dylib"
+          fi
+
+      - name: Upload runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ env.LITERT_PREFIX }}/install
+          if-no-files-found: error
