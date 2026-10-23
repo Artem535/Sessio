@@ -1,4 +1,5 @@
 #include "event_info.h"
+#include "event_view.h"
 #include "month_calendar_widget.h"
 #include "app_settings.h"
 #include <oclero/qlementine/widgets/Switch.hpp>
@@ -866,6 +867,18 @@ TEST_F(CalendarLayoutTest, EditDialogTurnsAPersonalEventIntoAWorkEvent) {
   ASSERT_TRUE(stored);
   EXPECT_TRUE(stored->is_work_event);
   EXPECT_EQ(db->get_client_by_event(id).id, clientId);
+}
+TEST_F(CalendarLayoutTest, CurrentTimeLineFollowsTheClockOnlyOnTheDisplayedDay) {
+  QEventView view;
+  view.setModel(model.get());
+  model->loadEventsForDay(QDate::currentDate());
+  const auto today = QDate::currentDate();
+  const auto morning = view.currentTimeLineY(QDateTime(today, QTime(9, 0)));
+  const auto noon = view.currentTimeLineY(QDateTime(today, QTime(12, 30, 30)));
+  ASSERT_TRUE(morning && noon);
+  EXPECT_GT(*noon, *morning);
+  EXPECT_DOUBLE_EQ(*noon / *morning, 750.5 / 540.0);
+  EXPECT_FALSE(view.currentTimeLineY(QDateTime(today.addDays(1), QTime(9, 0))));
 }
 int main(int argc, char **argv) {
   QTemporaryDir home;
