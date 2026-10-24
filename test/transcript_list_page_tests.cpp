@@ -24,6 +24,18 @@ protected:
   std::shared_ptr<pcm::database::Database> db;
 };
 
+TEST_F(TranscriptListTest, ManualOnlyCallCanBeReopenedWithoutTranscriptClientOrCalendarEvent) {
+  const auto id = db->create_call_material(std::nullopt);
+  ASSERT_TRUE(db->save_call_material(id, 0, R"({"manual_text":"Notes without speech recognition"})"));
+  db.reset(); db = std::make_shared<pcm::database::Database>(conf);
+  TranscriptListPage page(db);
+  EXPECT_EQ(page.transcriptCount(), 0);
+  auto *open = page.findChild<QPushButton *>("openCallMaterial_" + QString::number(id));
+  ASSERT_NE(open, nullptr);
+  QSignalSpy requested(&page, &TranscriptListPage::openCallMaterialRequested); open->click();
+  ASSERT_EQ(requested.count(), 1); EXPECT_EQ(requested[0][0].toLongLong(), id);
+}
+
 TEST_F(TranscriptListTest, StandaloneSurvivesRestartOpenEditExportBindUnbindAndDelete) {
   DuckClient client; client.name = "Existing client";
   const auto clientId = db->add_client(client);

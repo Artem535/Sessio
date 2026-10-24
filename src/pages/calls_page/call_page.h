@@ -88,6 +88,8 @@ public:
   void setTranscribeButtonVisible(bool visible);
   void setTranscribeButtonState(bool active, const QString &tooltip);
   void openSidePanel();
+  void setNotesFocused(bool focused);
+  bool hasSidePanelWidget() const { return mSidePanel != nullptr; }
 
 signals:
   void transcribeRequested();
@@ -97,6 +99,7 @@ signals:
   void leaveRequested();
   void deviceCheckCanceled();
   void callEnded();
+  void backToCallsRequested();
   // Emitted when the user confirms their camera/mic/speaker choices on the
   // device-check screen and clicks its own Join button. CallPage has no
   // token client and no url/token of its own — it only relays "the user
@@ -111,6 +114,9 @@ signals:
 public slots:
   void onSessionStateChanged(pcm::video::VideoSessionState state);
 
+protected:
+  void resizeEvent(QResizeEvent *event) override;
+
 private:
   void buildDeviceCheckScreen(pcm::video::DeviceManager *deviceManager);
   // Passes the device-check screen's camera/microphone/speaker choice to the provider.
@@ -121,6 +127,7 @@ private:
   // Shows/hides the notes panel; the first time it opens it gets a sensible default width,
   // afterwards it keeps whatever width the user dragged it to.
   void setSidePanelOpen(bool open);
+  void arrangeNotesLayout();
   void buildConnectedScreen();
   void syncParticipants();
   void clearParticipants();
@@ -166,8 +173,13 @@ private:
   // by onMediaError() and auto-hidden a few seconds later by a QTimer.
   QLabel *mMediaErrorBanner{nullptr};
   QWidget *mEndedScreen{nullptr};
+  QWidget *mEndedSidePanelHost{nullptr};
   QLabel *mEndedReasonLabel{nullptr};
   QWidget *mSidePanelHost{nullptr};
+  QWidget *mNotesTools{nullptr};
+  QToolButton *mNotesFocusButton{nullptr};
+  bool mNotesFocused{false};
+  bool mCallEnded{false};
   QToolButton *mNotesToggleButton{nullptr};
   QToolButton *mMicrophoneToggleButton{nullptr};
   QToolButton *mCameraToggleButton{nullptr};

@@ -4,6 +4,8 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLocale>
 #include <QMessageBox>
 #include <QMouseEvent>
@@ -60,7 +62,7 @@ TranscriptListPage::TranscriptListPage(std::shared_ptr<pcm::database::Database> 
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(10);
   auto *header = new QHBoxLayout;
-  auto *title = new QLabel(tr("Transcripts"), content);
+  auto *title = new QLabel(tr("Call materials"), content);
   title->setObjectName("transcriptsTitle");
   auto font = title->font(); font.setPointSize(22); font.setBold(true); title->setFont(font);
   header->addWidget(title); header->addStretch();
@@ -184,14 +186,31 @@ void TranscriptListPage::addCard(const DuckTranscript &row) {
 void TranscriptListPage::reload() {
   while (auto *item = mRows->takeAt(0)) { delete item->widget(); delete item; }
   mNotice->clear(); mCount = 0;
+  int standaloneCalls = 0;
   try {
     for (const auto &row : mDb->get_transcripts()) { addCard(row); ++mCount; }
+    for (const auto &material : mDb->get_call_materials()) {
+      if (!mDb->get_call_material_transcript_ids(material.id).empty()) continue;
+      const auto json = QJsonDocument::fromJson(QByteArray::fromStdString(material.json)).object();
+      if (json["manual_text"].toString().trimmed().isEmpty()) continue;
+      auto *card = new Card([this, id = material.id] { emit openCallMaterialRequested(id); }, mList);
+      card->setObjectName("callMaterial_" + QString::number(material.id));
+      auto *body = new QVBoxLayout(card); body->setContentsMargins(18, 14, 18, 14);
+      auto *heading = new QLabel(tr("Call notes · %1").arg(QLocale().toString(
+          QDateTime::fromMSecsSinceEpoch(material.created_at), QLocale::ShortFormat)), card);
+      heading->setTextFormat(Qt::PlainText); heading->setWordWrap(true); body->addWidget(heading);
+      auto *text = new QLabel(json["manual_text"].toString().left(180), card);
+      text->setTextFormat(Qt::PlainText); text->setWordWrap(true); body->addWidget(text);
+      auto *open = new QPushButton(tr("Open"), card); open->setObjectName("openCallMaterial_" + QString::number(material.id)); body->addWidget(open);
+      connect(open, &QPushButton::clicked, this, [this, id = material.id] { emit openCallMaterialRequested(id); });
+      mRows->addWidget(card); ++standaloneCalls;
+    }
   } catch (...) {
     while (auto *item = mRows->takeAt(0)) { delete item->widget(); delete item; }
     mCount = 0;
     mNotice->setText(tr("Could not load transcripts. Please try again."));
   }
-  mEmpty->setVisible(mCount == 0 && mNotice->text().isEmpty());
+  mEmpty->setVisible(mCount == 0 && standaloneCalls == 0 && mNotice->text().isEmpty());
   mSummary->setText(tr("%n transcripts", nullptr, mCount));
   mSummary->setVisible(mCount > 0);
 }

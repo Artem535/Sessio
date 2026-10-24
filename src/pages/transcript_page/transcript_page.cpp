@@ -1,8 +1,9 @@
 #include "transcript_page.h"
+#include "transcript_export.h"
+#include "prompter_panel.h"
+#include "call_notes_controller.h"
 #include "phrase_card_paint.h"
 #include "transcript_client_dialog.h"
-#include <QFileDialog>
-#include <QSaveFile>
 #include <QComboBox>
 #include <QApplication>
 #include <QFrame>
@@ -112,6 +113,37 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
   navigation->addWidget(back); navigation->addStretch();
   mAttach = button(tr("Attach clients"), "transcriptAttachClients", this);
   navigation->addWidget(mAttach);
+  auto *notes = button(tr("Call notes"), "transcriptCallNotes", this);
+  navigation->addWidget(notes);
+  connect(notes, &QPushButton::clicked, this, [this] {
+    const auto id = mSelector->currentData().toLongLong();
+    if (id > 0) emit openCallNotesRequested(id);
+  });
+  mAgreements = button(tr("Review agreements"), "transcriptAgreements", this);
+  navigation->addWidget(mAgreements);
+  connect(mAgreements, &QPushButton::clicked, this, [this] {
+    const auto id = mSelector->currentData().toLongLong();
+    if (!mayMutate(id)) return;
+    auto *dialog = new QDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(tr("Call agreements")); dialog->resize(460, 650);
+    auto *controller = new CallPrompterController(mDb, dialog); controller->beginTranscript(id);
+    auto *panel = new PrompterPanel(controller, mDb, dialog);
+    auto *notes = new CallNotesController(mDb, dialog); notes->openTranscript(id);
+    panel->setCallNoteSaver([notes](const QString &cardId, const QString &text) { return notes->appendAgreement(cardId, text); });
+    panel->findChild<QPushButton *>("prompterStart")->hide();
+    panel->findChild<QPushButton *>("prompterPause")->hide();
+    auto *layout = new QVBoxLayout(dialog);
+    layout->addWidget(panel->sharedHintWidget());
+    layout->addWidget(panel);
+    connect(panel, &PrompterPanel::sourceRequested, this, [this, dialog](qint64 phraseId) {
+      dialog->close();
+      auto *widget = findChild<QWidget *>("phraseCard_" + QString::number(phraseId));
+      if (widget) { findChild<QScrollArea *>()->ensureWidgetVisible(widget); widget->setFocus(); }
+    });
+    connect(panel, &PrompterPanel::noteSaved, this, &TranscriptPage::transcriptsChanged);
+    dialog->open();
+  });
   auto *exportButton = button(tr("Export text"), "transcriptExport", this);
   navigation->addWidget(exportButton);
   auto *more = new QToolButton(this);
@@ -152,14 +184,10 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes;
   };
   connect(exportButton, &QPushButton::clicked, this, [this] {
+    if (mSelector->currentIndex() < 0) return;
     QPointer<TranscriptPage> guard(this);
-    try {
-      const auto bytes = exportText().toUtf8();
-      const auto path = QFileDialog::getSaveFileName(this, tr("Export transcript"), {}, tr("Text files (*.txt)"));
-      if (!guard || path.isEmpty()) return;
-      QSaveFile file(path);
-      if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) reportFailure();
-    } catch (...) { if (guard) reportFailure(); }
+    const bool saved = pcm::transcriptionui::exportTranscriptWithDialog(this, *mDb, {mSelector->currentData().toLongLong()});
+    if (guard && !saved) reportFailure();
   });
   connect(mAttach, &QPushButton::clicked, this, [this] {
     const auto id = mSelector->currentData().toLongLong();
@@ -263,14 +291,8 @@ void TranscriptPage::reloadTranscript(int64_t transcriptId, const QString &title
   showTranscript();
 }
 QString TranscriptPage::exportText() const {
-  QStringList lines;
   if (mSelector->currentIndex() < 0) return {};
-  for (const auto &phrase : mDb->get_transcript_phrases(mSelector->currentData().toLongLong())) {
-    const auto speaker = phrase.speaker_name ? QString::fromStdString(*phrase.speaker_name) :
-        phrase.track_role == "practitioner" ? tr("Practitioner") : tr("Participant");
-    lines << timestamp(phrase.start_ms) + " " + speaker + ": " + QString::fromStdString(phrase.text);
-  }
-  return lines.join("\n") + "\n";
+  return pcm::transcriptionui::transcriptExportText(*mDb, mSelector->currentData().toLongLong());
 }
 void TranscriptPage::showTranscript() {
   mEditing = false;
@@ -291,6 +313,7 @@ void TranscriptPage::showTranscript() {
     if (!row) { mNotice->setText(tr("Transcript unavailable.")); return; }
     const auto phrases = mDb->get_transcript_phrases(row->id);
     const bool recording = row->status == "recording";
+    mAgreements->setEnabled(!recording);
     QStringList names;
     for (const auto id : mDb->get_transcript_client_ids(row->id)) {
       if (const auto client = mDb->get_client(id))

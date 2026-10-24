@@ -93,6 +93,7 @@ public:
   void openTranscriptListPage();
   void openTranscriptPage();
   void returnToEvent(int64_t eventId, qint64 dayMs);
+  void openClientCard(const std::optional<DuckClient> &client);
   void setTranscriptionActiveProvider(std::function<bool()> provider) {
     mTranscriptionActive = std::move(provider);
   }

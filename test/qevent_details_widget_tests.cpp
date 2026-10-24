@@ -44,7 +44,7 @@ constexpr auto kCreateResponse = R"({
 })";
 
 QDateTime at(const int hour, const int minute) {
-  return QDateTime(QDate(2026, 10, 1), QTime(hour, minute), QTimeZone::systemTimeZone());
+  return QDateTime(QDate(2026, 10, 1), QTime(hour, minute), QTimeZone(QTimeZone::LocalTime));
 }
 
 // QEventDetailsWidget reports errors through modal QMessageBoxes, which would

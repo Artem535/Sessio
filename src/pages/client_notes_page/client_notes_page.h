@@ -13,8 +13,17 @@
 #include <QVariant>
 #include <QVector>
 #include <QWidget>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QPointer>
+#include <QStringList>
+#include <functional>
 #include <memory>
 #include <optional>
+
+class QGridLayout;
+class QTextBrowser;
+class QResizeEvent;
 
 namespace oclero::qlementine {
 class SegmentedControl;
@@ -24,13 +33,29 @@ class ClientNotesPage final : public QWidget {
   Q_OBJECT
 
 public:
+  // Call-owned storage is supplied by the host; this page never invents client IDs.
+  struct CallNoteActions {
+    std::function<QJsonArray()> entries;
+    std::function<QString(const QString &, const QStringList &, const QString &)> save;
+    std::function<QString(const QString &, const QString &)> attachmentPath;
+    std::function<QString()> manualText;
+    std::function<bool(const QString &)> setManualText;
+    std::function<QStringList()> draftAttachmentPaths;
+    std::function<bool(const QStringList &)> setDraftAttachmentPaths;
+  };
   explicit ClientNotesPage(std::shared_ptr<pcm::database::Database> db,
                            QWidget *parent = nullptr);
   ~ClientNotesPage() override = default;
+  void setCallNoteActions(qint64 materialId, CallNoteActions actions);
+  // Shows only this meeting's composer and entries; an outer scroll area scrolls the page.
+  void setEmbedded(bool embedded);
+  void focusComposer();
+  void addPendingAttachments(const QStringList &paths);
 
 signals:
   void openClientCardRequested(const std::optional<DuckClient> &client);
   void openEventRequested(int64_t eventId, qint64 dayMs);
+  void noteEntrySaved(QString entryId);
 
 public slots:
   void setClientInfo(const std::optional<DuckClient> &client);
@@ -45,6 +70,7 @@ private slots:
 
 protected:
   bool eventFilter(QObject *watched, QEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
 
 private:
   enum class FeedFilter { All, Sessions, Notes };
@@ -57,11 +83,21 @@ private:
   };
 
   void buildUi();
+  void arrangeCompactUi();
+  void reloadCallEntries();
+  void addCallEntry(const QJsonObject &entry);
+  void updatePreview();
+  void restoreCallDraft();
+  void loadPendingAttachmentPaths(const QStringList &paths);
+  bool saveDraftAttachmentPaths();
   void reloadNotes();
   void clearNotes();
   void addNoteBubble(const DuckClientNote &note);
   void addSessionEntry(const DuckEvent &event);
   void addChangeLogEntry(const DuckEventChangeLog &entry);
+  void addEventLink(QVBoxLayout *layout, QWidget *bubble, const DuckEvent &event);
+  // Read-only whole-meeting AI summary of a call; edited from the call itself.
+  void addAiSummaryEntry(qint64 timestampMs, std::optional<int64_t> eventId, const QString &markdown);
   QLabel *addDateDivider(const QDate &date);
   void addAttachmentWidgets(QVBoxLayout *layout,
                             const std::vector<DuckClientNoteAttachment> &attachments);
@@ -78,8 +114,27 @@ private:
   [[nodiscard]] QString currentClientTitle() const;
 
   std::shared_ptr<pcm::database::Database> mDb;
+  CallNoteActions mCallActions;
+  QJsonArray mRenderedEntries;
+  bool mEntriesRendered = false;
+  qint64 mMaterialId = 0;
+  QString mEditingEntryId;
+  QString mSavedEditorText;
+  bool mSavingCallEntry = false;
+  bool mManualSaveFailed = false;
+  bool mSavingDraftAttachments = false;
+  bool mAttachmentSaveFailed = false;
+  bool mEmbedded = false;
+  QWidget *mHeaderSurface = nullptr;
+  QGridLayout *mHeaderLayout = nullptr;
+  QGridLayout *mComposerActions = nullptr;
+  QTextBrowser *mPreview = nullptr;
+  QPushButton *mPreviewButton = nullptr;
+  QPushButton *mCancelEditButton = nullptr;
+  QWidget *mComposerSurface = nullptr;
   std::optional<DuckClient> mCurrentClient;
   QList<PendingAttachment> mPendingAttachments;
+  QList<PendingAttachment> mSavedPendingAttachments;
   FeedFilter mFeedFilter = FeedFilter::All;
   QVector<DuckEvent> mCachedFeedEvents;
   std::optional<DuckEvent> mPendingLinkedEvent;

@@ -1,0 +1,137 @@
+name: LiteRT runtime (Windows, macOS)
+
+# The CPU prompter runtime for Windows and macOS, built with LiteRT-LM's Bazel
+# build (the only build upstream supports there). Called by CI before the app
+# builds; install/ is cached and rebuilt only when the build script or the shim
+# change, since the shim has no stable ABI.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  runtime:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Short roots keep Windows paths under MAX_PATH.
+          - os: windows-2022
+            artifact: sessio-litert-runtime-windows
+            prefix: C:/sl
+            output_root: C:/bz
+            disk_cache: C:/bc
+          - os: macos-latest
+            artifact: sessio-litert-runtime-macos
+            prefix: /Users/runner/sessio-litert
+            output_root: ''
+            disk_cache: /Users/runner/bazel-cache
+    defaults:
+      run:
+        shell: bash
+    env:
+      GIT_LFS_SKIP_SMUDGE: 1
+      # Runner images preinstall an Android NDK, which LiteRT-LM's workspace
+      # would otherwise try to load (upstream CI clears it the same way).
+      ANDROID_NDK_HOME: ''
+      ANDROID_NDK_ROOT: ''
+      ANDROID_NDK: ''
+      ANDROID_NDK_LATEST_HOME: ''
+      LITERT_PREFIX: ${{ matrix.prefix }}
+      BAZEL_OUTPUT_USER_ROOT: ${{ matrix.output_root }}
+      BAZEL_DISK_CACHE: ${{ matrix.disk_cache }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore runtime cache
+        id: cache-runtime
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.LITERT_PREFIX }}/install
+          key: litert-runtime-${{ runner.os }}-v0.18.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}
+
+      - name: Restore Bazel cache
+        if: steps.cache-runtime.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.BAZEL_DISK_CACHE }}
+          key: litert-bazel-${{ runner.os }}-v0.18.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}
+          restore-keys: litert-bazel-${{ runner.os }}-v0.18.0-
+
+      - name: Set up Java 17
+        if: steps.cache-runtime.outputs.cache-hit != 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install build tools (Windows)
+        if: runner.os == 'Windows' && steps.cache-runtime.outputs.cache-hit != 'true'
+        shell: powershell
+        run: |
+          git config --system core.longpaths true
+          choco install bazelisk --no-progress -y
+          # Let MSVC's linker open the long paths Bazel produces.
+          $link = (Get-ChildItem "C:\Program Files\Microsoft Visual Studio\2022\*\VC\Tools\MSVC\*\bin\HostX64\x64\link.exe" | Select-Object -First 1).FullName
+          $mt = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\mt.exe" | Select-Object -First 1).FullName
+          $manifest = "$env:RUNNER_TEMP\longpath.manifest"
+          Set-Content -Path $manifest -Encoding UTF8 -Value @"
+          <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+          <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+            <application xmlns="urn:schemas-microsoft-com:asm.v3">
+              <windowsSettings>
+                <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+              </windowsSettings>
+            </application>
+          </assembly>
+          "@
+          & $mt -nologo -manifest $manifest -outputresource:"$link;1"
+          if ($LASTEXITCODE -ne 0) { throw "mt.exe failed to patch link.exe" }
+
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS' && steps.cache-runtime.outputs.cache-hit != 'true'
+        run: brew install bazelisk
+
+      - name: Build runtime
+        if: steps.cache-runtime.outputs.cache-hit != 'true'
+        run: bash scripts/build-litert-lm-bazel.sh "$LITERT_PREFIX"
+
+      - name: Save runtime cache
+        if: steps.cache-runtime.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.LITERT_PREFIX }}/install
+          key: ${{ steps.cache-runtime.outputs.cache-primary-key }}
+
+      - name: Save Bazel cache
+        if: always() && steps.cache-runtime.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.BAZEL_DISK_CACHE }}
+          key: litert-bazel-${{ runner.os }}-v0.18.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}-${{ github.run_id }}
+
+      - name: Verify runtime
+        run: |
+          ls -lR "$LITERT_PREFIX/install"
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            dir="$LITERT_PREFIX/install/lib"
+            for f in libsessio_litert.dylib libLiteRt.dylib libLiteRtWebGpuAccelerator.dylib libLiteRtTopKWebGpuSampler.dylib libwebgpu_dawn.dylib; do
+              test -f "$dir/$f" || { echo "::error::$f missing from the runtime"; exit 1; }
+            done
+            nm -gU "$dir/libsessio_litert.dylib" | c++filt | grep -q 'sessio::litert::loadModel' || { echo "::error::loadModel is not exported"; exit 1; }
+            otool -L "$dir/libsessio_litert.dylib" | tee /dev/stderr | grep -q '@rpath/libLiteRt.dylib'
+          else
+            for f in bin/sessio_litert.dll bin/libLiteRt.dll bin/libLiteRtWebGpuAccelerator.dll bin/libLiteRtTopKWebGpuSampler.dll bin/libwebgpu_dawn.dll bin/dxcompiler.dll bin/dxil.dll lib/sessio_litert.lib; do
+              test -f "$LITERT_PREFIX/install/$f" || { echo "::error::$f missing from the runtime"; exit 1; }
+            done
+          fi
+
+      - name: Upload runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ env.LITERT_PREFIX }}/install
+          if-no-files-found: error

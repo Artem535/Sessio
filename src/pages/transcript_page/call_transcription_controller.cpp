@@ -2,6 +2,7 @@
 #include "call_side_panel.h"
 #include "failure_text.h"
 #include "transcript_panel.h"
+#include <QTimer>
 
 namespace pcm::transcriptionui {
 using pcm::calltranscription::SessionState;
@@ -14,10 +15,14 @@ CallTranscriptionController::CallTranscriptionController(
   connect(panel, &TranscriptPanel::startRequested, this,
           &CallTranscriptionController::onTranscribeRequested);
   connect(panel, &TranscriptPanel::stopRequested, this, [this] {
+    mAutoStartAttempted = true;
+    emit transcriptionStopped();
     if (mSession)
       mSession->stop();
   });
   connect(panel, &TranscriptPanel::revokeRequested, this, [this] {
+    mAutoStartAttempted = true;
+    emit consentRevoked();
     if (mSession)
       mSession->revoke();
   });
@@ -26,15 +31,20 @@ CallTranscriptionController::CallTranscriptionController(
 CallTranscriptionController::~CallTranscriptionController() { shutdown(); }
 void CallTranscriptionController::attachCall(pcm::video::VideoSession *call,
                                              std::optional<int64_t> event) {
+  const bool alreadyAttempted = call && call == mCall && event == mCallEvent && mAutoStartAttempted;
   detachCall();
   if (mShutdown)
     return;
   mCall = call;
   mCallEvent = event;
+  mAutoStartAttempted = alreadyAttempted;
   if (call) {
     mCallStateConnection =
         connect(call, &pcm::video::VideoSession::stateChanged, this,
                 [this](pcm::video::VideoSessionState state) {
+                  if (state == pcm::video::VideoSessionState::Connected ||
+                      state == pcm::video::VideoSessionState::WaitingForParticipants)
+                    tryAutoStart();
                   if (state == pcm::video::VideoSessionState::Leaving ||
                       state == pcm::video::VideoSessionState::Ended ||
                       state == pcm::video::VideoSessionState::Failed)
@@ -44,8 +54,25 @@ void CallTranscriptionController::attachCall(pcm::video::VideoSession *call,
         connect(call, &QObject::destroyed, this, [this] { detachCall(); });
   }
   refreshAvailability();
+  if (call && (call->state() == pcm::video::VideoSessionState::Connected ||
+               call->state() == pcm::video::VideoSessionState::WaitingForParticipants)) {
+    const auto generation = mAttachmentGeneration;
+    QTimer::singleShot(0, this, [this, generation] {
+      if (generation == mAttachmentGeneration) tryAutoStart();
+    });
+  }
+}
+void CallTranscriptionController::tryAutoStart() {
+  if (mAutoStartAttempted || !mCall || mShutdown ||
+      !mHooks.autoStartEnabled || !mHooks.autoStartEnabled()) return;
+  mAutoStartAttempted = true;
+  mStartingAutomatically = true;
+  QPointer<CallTranscriptionController> guard(this);
+  onTranscribeRequested();
+  if (guard) mStartingAutomatically = false;
 }
 void CallTranscriptionController::detachCall() {
+  emit transcriptionStopped();
   ++mAttachmentGeneration;
   disconnect(mCallStateConnection);
   disconnect(mCallDestroyedConnection);
@@ -92,6 +119,7 @@ void CallTranscriptionController::releaseSession(
   emit transcribeButtonState(false, tr("Transcribe call"));
 }
 void CallTranscriptionController::onTranscribeRequested() {
+  mAutoStartAttempted = true;
   if (mSession) {
     if (mPanel)
       mPanel->setNotice(tr("Wait for the current transcription to finish"));
@@ -151,8 +179,10 @@ void CallTranscriptionController::onTranscribeRequested() {
           });
   connect(session, &TranscriptionSession::phraseAdded, this,
           [this, session](DuckTranscriptPhrase phrase) {
-            if (mSession == session && mPanel)
-              mPanel->addPhrase(phrase);
+            if (mSession == session) {
+              if (mPanel) mPanel->addPhrase(phrase);
+              emit phraseAdded(phrase);
+            }
           });
   connect(session, &TranscriptionSession::delayedChanged, this,
           [this, session](bool delayed) {
@@ -175,6 +205,7 @@ void CallTranscriptionController::onTranscribeRequested() {
             if (mSession != session)
               return;
             mSessionHadFailure = true;
+            emit transcriptionStopped();
             if (mPanel) {
               mPanel->setError(userFacingFailure(raw));
               mPanel->setDelayed(false);
@@ -228,6 +259,10 @@ void CallTranscriptionController::onTranscribeRequested() {
               }
               if (deleted && mPanel)
                 mPanel->clearPhrases();
+              if (deleted) {
+                emit transcriptDeleted(id);
+                if (!self) return;
+              }
               if (!deleted && mPanel) {
                 mPanel->setError(tr("Unable to delete the transcript"));
                 mPanel->setState(SessionState::Failed);
@@ -247,7 +282,9 @@ void CallTranscriptionController::onTranscribeRequested() {
     return;
   }
   refreshAvailability();
-  emit requestOpenTranscriptTab();
+  // The session owns the exact persisted identity; never infer it from list order.
+  emit transcriptStarted(session->transcriptId());
+  if (!mStartingAutomatically) emit requestOpenTranscriptTab();
   emit transcribeButtonState(true, tr("Transcription running"));
 }
 void CallTranscriptionController::shutdown() {

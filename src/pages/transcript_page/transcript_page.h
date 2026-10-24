@@ -23,6 +23,7 @@ public:
 signals:
   void backRequested();
   void transcriptsChanged();
+  void openCallNotesRequested(qint64 transcriptId);
 private:
   void showTranscript();
   bool mayMutate(int64_t transcriptId);
@@ -40,6 +41,7 @@ private:
   QPushButton *mReview;
   QPushButton *mDelete;
   QPushButton *mAttach;
+  QPushButton *mAgreements;
   QVBoxLayout *mRows;
   std::function<bool(const QString &)> mConfirm;
 };

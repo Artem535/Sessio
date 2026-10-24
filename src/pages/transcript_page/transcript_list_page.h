@@ -16,6 +16,7 @@ public:
 signals:
   void openTranscriptRequested(qint64 transcriptId);
   void transcriptsChanged();
+  void openCallMaterialRequested(qint64 materialId);
 protected:
   void showEvent(QShowEvent *event) override;
 private:

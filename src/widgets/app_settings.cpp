@@ -114,7 +114,36 @@ bool transcriptionEnabled() {
 
 void setTranscriptionEnabled(bool enabled) {
   QSettings().setValue("transcription/enabled", enabled);
+  if (!enabled) {
+    QSettings().setValue("transcription/autoStart", false);
+    QSettings().setValue("prompter/autoStart", false);
+  }
 }
+
+bool transcriptionAutoStart() { return transcriptionEnabled() && QSettings().value("transcription/autoStart", false).toBool(); }
+void setTranscriptionAutoStart(bool enabled) {
+  if (enabled) setTranscriptionEnabled(true);
+  QSettings().setValue("transcription/autoStart", enabled);
+  if (!enabled) QSettings().setValue("prompter/autoStart", false);
+}
+bool prompterAutoStart() { return transcriptionAutoStart() && QSettings().value("prompter/autoStart", false).toBool(); }
+void setPrompterAutoStart(bool enabled) {
+  if (enabled) setTranscriptionAutoStart(true);
+  QSettings().setValue("prompter/autoStart", enabled);
+}
+QString prompterModel() { return QSettings().value("prompter/model").toString(); }
+void setPrompterModel(const QString &model) {
+  QSettings settings;
+  settings.setValue("prompter/model", model);
+  // Keys of the former Python runtime.
+  settings.remove("prompter/python");
+  settings.remove("prompter/template");
+}
+QString prompterAcceleration() {
+  const auto mode = QSettings().value("prompter/acceleration").toString();
+  return mode == "gpu" || mode == "cpu" ? mode : QStringLiteral("auto");
+}
+void setPrompterAcceleration(const QString &mode) { QSettings().setValue("prompter/acceleration", mode); }
 
 pcm::transcription::TranscriptionTuning transcriptionTuning() {
   using pcm::transcription::TranscriptionTuning;

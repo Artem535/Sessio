@@ -103,7 +103,7 @@ protected:
 
   std::optional<DuckEvent> occurrenceAt(int64_t startMs) {
     mTimeline->loadEventsForDay(
-        QDateTime::fromMSecsSinceEpoch(startMs, QTimeZone::systemTimeZone()).date());
+        QDateTime::fromMSecsSinceEpoch(startMs, QTimeZone(QTimeZone::LocalTime)).date());
     for (const auto &event : mTimeline->events()) {
       if (event.start_date == startMs) {
         return event;
@@ -116,7 +116,7 @@ protected:
   // series look a day up instead of assuming an exact instant.
   std::optional<DuckEvent> firstEventOnDayOf(int64_t startMs) {
     mTimeline->loadEventsForDay(
-        QDateTime::fromMSecsSinceEpoch(startMs, QTimeZone::systemTimeZone()).date());
+        QDateTime::fromMSecsSinceEpoch(startMs, QTimeZone(QTimeZone::LocalTime)).date());
     if (mTimeline->events().isEmpty()) {
       return std::nullopt;
     }

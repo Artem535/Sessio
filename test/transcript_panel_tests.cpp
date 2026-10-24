@@ -1,4 +1,15 @@
 #include "transcript_panel.h"
+#include <gtest/gtest.h>
+TEST(TranscriptPanelPrompterTest, SourceFocusFindsOnlyAnExistingPhrase) {
+  TranscriptPanel panel;
+  DuckTranscriptPhrase phrase; phrase.id = 123; phrase.text = "Source";
+  phrase.track_role = "participant";
+  panel.addPhrase(phrase);
+  EXPECT_TRUE(panel.focusPhrase(123));
+  EXPECT_FALSE(panel.focusPhrase(456));
+  panel.clearPhrases();
+  EXPECT_FALSE(panel.focusPhrase(123));
+}
 #include <QApplication>
 #include <QLabel>
 #include <QPushButton>
@@ -41,6 +52,20 @@ TEST(TranscriptPanelTest, AddPhraseShowsTimeSpeakerAndText) {
   EXPECT_EQ(times[0]->text(), "01:05"); EXPECT_EQ(times[1]->text(), "1:02:05");
   EXPECT_EQ(panel.findChild<QLabel *>("phraseSpeaker")->text(), "Alex");
   EXPECT_EQ(panel.findChild<QLabel *>("phraseText")->text(), "A sample sentence.");
+}
+TEST(TranscriptPanelTest, ExportIsOfferedOnceThereArePhrases) {
+  TranscriptPanel panel;
+  auto *exportButton = panel.findChild<QPushButton *>("transcriptExport");
+  ASSERT_NE(exportButton, nullptr);
+  EXPECT_FALSE(exportButton->isEnabled());
+  DuckTranscriptPhrase phrase; phrase.text = "Hello"; phrase.track_role = "participant";
+  panel.addPhrase(phrase);
+  EXPECT_TRUE(exportButton->isEnabled());
+  QSignalSpy requests(&panel, &TranscriptPanel::exportRequested);
+  exportButton->click();
+  EXPECT_EQ(requests.count(), 1);
+  panel.clearPhrases();
+  EXPECT_FALSE(exportButton->isEnabled());
 }
 TEST(TranscriptPanelTest, SpeakerFallbackByRole) {
   TranscriptPanel panel; DuckTranscriptPhrase phrase;

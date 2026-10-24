@@ -745,6 +745,9 @@ void SettingsDialog::setupTranscriptionSection() {
   auto *panel = new TranscriptionSettingsPanel(mSettingsStack);
   mTranscriptionPanel = panel;
   panel->setEnabledState(pcm::app_settings::transcriptionEnabled());
+  panel->setAutoStartState(pcm::app_settings::transcriptionAutoStart(), pcm::app_settings::prompterAutoStart());
+  panel->setPrompterModel(pcm::app_settings::prompterModel());
+  panel->setPrompterAcceleration(pcm::app_settings::prompterAcceleration());
   panel->setTuning(pcm::app_settings::transcriptionTuning());
   panel->setModelInfo(QStringLiteral("gigaam-v3-rnnt"),
       pcm::calltranscription::transcriptionModelsAvailable(
@@ -755,6 +758,10 @@ void SettingsDialog::setupTranscriptionSection() {
   mSettingsStack->addWidget(makeScrollPage(panel, mSettingsStack));
   connect(panel, &TranscriptionSettingsPanel::enabledToggled, this,
           &pcm::app_settings::setTranscriptionEnabled);
+  connect(panel, &TranscriptionSettingsPanel::autoStartToggled, this, &pcm::app_settings::setTranscriptionAutoStart);
+  connect(panel, &TranscriptionSettingsPanel::prompterAutoStartToggled, this, &pcm::app_settings::setPrompterAutoStart);
+  connect(panel, &TranscriptionSettingsPanel::prompterModelChanged, this, &pcm::app_settings::setPrompterModel);
+  connect(panel, &TranscriptionSettingsPanel::prompterAccelerationChanged, this, &pcm::app_settings::setPrompterAcceleration);
   connect(panel, &TranscriptionSettingsPanel::tuningChanged, this,
           &pcm::app_settings::setTranscriptionTuning);
   connect(panel, &TranscriptionSettingsPanel::deleteAllRequested, this, [this, panel] {

@@ -2,6 +2,68 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.33] - 2026-10-21
+
+- Added native call notes with source-linked key points and a separate
+  final-note generation status after the call.
+- Saved call materials independently of clients and calendar events, including
+  calls without speech recognition; upgraded the local/backup schema to 4.
+- Reworked the call Notes tab into a page of cards: meeting, my notes, AI
+  summary, key points and agreements, each with its own status and labelled
+  actions; the AI summary is kept with the call without an accept step.
+- Added a current-time line to the day timeline.
+- Added transcript export to the call's Transcript tab and to the call
+  materials window.
+- The client's notes feed now shows the AI summary of each finished call.
+- Moved the prompter from its own tab into a card on the Notes page; the count
+  of new suggestions is shown on the card and on the Notes tab.
+- Added "Last time" and a History view with the client's earlier meetings.
+- Preserved full note composition during calls: Markdown preview, separate
+  saved entries, editing and file attachments, with AI drafts inside the feed.
+- Added a larger notes view while keeping the call video visible.
+- Ran the local Gemma model on a hardware Vulkan GPU by default, with automatic
+  CPU fallback at load time; on a Radeon 780M decoding is about 3.5x faster and
+  peak memory drops from about 10 GiB to about 1-2.5 GiB.
+- The prompter now also proposes an accepted promise that has no deadline yet.
+- Linux packages built by CI now include the local prompter runtime (Vulkan
+  with CPU fallback), so the prompter and call notes work after installing
+  the RPM; the Gemma model is still configured separately.
+- The Windows installer and the macOS DMG now include the prompter runtime
+  built with LiteRT-LM's Bazel build, with GPU acceleration through WebGPU
+  (Direct3D 12 on Windows, Metal on macOS) and CPU fallback; loading a model
+  there is not verified yet.
+- Fixed a crash of the sharing app when the screen-sharing portal reported an
+  error (for example, on Wayland when the share could not be started).
+- Fixed calendar and recurring-meeting times shifted by the UTC offset on systems
+  where Qt cannot name the local timezone (for example, containers).
+
+## [0.2.32] - 2026-10-13
+
+### Added
+
+- Antora documentation site with the technical reference, local LLM research,
+  prompter setup and verification reports.
+
+- Optional automatic transcription when joining a call, preserving consent and
+  manual-stop behavior. Automatic prompter startup is configured separately.
+- Experimental local CPU Gemma prompter in the Notes / Transcript call panel:
+  agreement cards, source links, clarification suggestions and explicit review
+  of changes or cancellations. Accepted agreements can be added to client notes.
+- Transcript-owned prompter drafts and accepted agreements survive reopening and
+  backups; saved client notes remain when their source transcript is deleted.
+- The prompter model runs inside Sessio on its own thread through the LiteRT-LM
+  C++ API; no Python or external worker. Only the Gemma model file is chosen in
+  Settings, and nothing is downloaded automatically. The runtime library is
+  built once with `scripts/build-litert-lm.sh`.
+- The prompter processes each fixed instruction prompt once and reuses it, so a
+  conversation window is analysed roughly two to four times faster after the
+  first one, with about 1 GB less memory.
+- A reschedule is shown as one "Proposed change" card instead of a cancellation
+  plus a new agreement, already processed phrases no longer produce repeated
+  cards, and times are written in digits.
+  Closing while the model loads does not block the GUI; cancellation covers
+  both queued and active native inference tasks.
+
 ## [0.2.31] - 2026-10-13
 
 ### Added

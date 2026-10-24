@@ -8,7 +8,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Define the project
-project(Sessio VERSION 0.2.31 LANGUAGES CXX)
+project(Sessio VERSION 0.2.33 LANGUAGES CXX)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets Svg PrintSupport LinguistTools Multimedia MultimediaWidgets OpenGLWidgets)
 include(GNUInstallDirs)
 include(FetchContent)
@@ -55,6 +55,7 @@ livekit_sdk_setup(
 find_package(LiveKit CONFIG REQUIRED)
 option(PCM_BUILD_TESTS "Build project tests" OFF)
 include(cmake/Transcription.cmake)
+include(cmake/LiteRtLm.cmake)
 
 if(Qt6_VERSION VERSION_LESS 6.8.0)
   message(FATAL_ERROR "Qlementine requires Qt 6.8.0 or newer. Detected Qt ${Qt6_VERSION}.")
@@ -178,6 +179,7 @@ add_subdirectory(src/video)
 if(SESSIO_TRANSCRIPTION_ENABLED)
   add_subdirectory(src/transcription)
   add_subdirectory(src/call_transcription)
+  add_subdirectory(src/call_prompter)
   add_subdirectory(src/pages/transcript_page)
 endif()
 add_subdirectory(src/backup)
@@ -239,6 +241,9 @@ if(APPLE)
   # key/substitution behaves exactly as before this template was introduced.
   set_target_properties(Sessio PROPERTIES
       MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in"
+      # Libraries with an @rpath install name (the call prompter runtime) are
+      # installed into Contents/Frameworks.
+      INSTALL_RPATH "@executable_path/../Frameworks"
   )
 endif()
 
@@ -303,6 +308,14 @@ if(SESSIO_TRANSCRIPTION_ENABLED)
       $<TARGET_FILE:sherpa-onnx-cxx-api>
       DESTINATION ${_sessio_ml_libs_dest})
   install(FILES ${SESSIO_ONNXRUNTIME_LIBS} DESTINATION ${_sessio_ml_libs_dest})
+  if(SESSIO_LITERTLM_FOUND)
+    install(IMPORTED_RUNTIME_ARTIFACTS sessio::litert_lm DESTINATION ${_sessio_ml_libs_dest})
+    if(SESSIO_LITERT_EXTRA_LIBS)
+      install(FILES ${SESSIO_LITERT_EXTRA_LIBS} DESTINATION ${_sessio_ml_libs_dest})
+    endif()
+    install(FILES ${SESSIO_LITERT_DIR}/LICENSE.litert-lm DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/sessio OPTIONAL)
+    install(FILES ${SESSIO_LITERT_DIR}/LICENSE.kissfft DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/sessio OPTIONAL)
+  endif()
   if(UNIX AND NOT APPLE)
     # The sherpa libs are linked in the build tree with an absolute RUNPATH into
     # the build dir; give the installed copies a clean $ORIGIN (they sit next to
@@ -403,7 +416,7 @@ elseif(UNIX AND NOT APPLE)
   set(CPACK_RPM_SPEC_MORE_DEFINE
 "%global __provides_exclude_from ^/usr/lib(64)?/sessio/.*$
 %global __requires_exclude_from ^/usr/lib(64)?/sessio/.*$
-%global __requires_exclude ^(liblivekit(_ffi)?\\.so|libsherpa-onnx-.*\\.so|libonnxruntime\\.so.*)")
+%global __requires_exclude ^(liblivekit(_ffi)?\\.so|libsherpa-onnx-.*\\.so|libonnxruntime\\.so.*|libsessio_litert\\.so)")
   # Registers Sessio.desktop (via its MimeType=x-scheme-handler/sessio entry)
   # as the sessio:// URL handler and refreshes the desktop database on
   # install; see packaging/linux/register-sessio-scheme.sh. Uninstall uses a

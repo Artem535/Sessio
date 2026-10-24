@@ -377,6 +377,20 @@ target_link_libraries(Sessio_video_capture_adapter_smoke_test PRIVATE
 add_test(NAME VideoCaptureAdapterSmokeTest COMMAND Sessio_video_capture_adapter_smoke_test)
 set_tests_properties(VideoCaptureAdapterSmokeTest PROPERTIES TIMEOUT 30)
 
+# Screen capture adapter: failure delivery must let the caller destroy the
+# capture safely (crash in libQt6Core when sharing via the Wayland portal).
+add_executable(Sessio_screen_capture_adapter_tests
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_worker.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/frame_convert.cpp
+    screen_capture_adapter_tests.cpp
+)
+target_include_directories(Sessio_screen_capture_adapter_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_screen_capture_adapter_tests PRIVATE
+    Qt6::Gui Qt6::Multimedia Qt6::Test GTest::gtest LiveKit::livekit)
+set_target_properties(Sessio_screen_capture_adapter_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_screen_capture_adapter_tests)
+
 # Audio capture adapter smoke test (own main(), not GoogleTest — mirrors the
 # video capture adapter smoke test above). Proves repeated start/destroy
 # cycles on the GUI thread never hang, per this plan's Task 9 lifecycle-stress
@@ -403,6 +417,52 @@ target_link_libraries(Sessio_audio_capture_lifecycle_tests PRIVATE
 add_test(NAME AudioCaptureLifecycleTests COMMAND Sessio_audio_capture_lifecycle_tests)
 set_tests_properties(AudioCaptureLifecycleTests PROPERTIES TIMEOUT 15)
 if(SESSIO_TRANSCRIPTION_ENABLED)
+add_executable(Sessio_call_prompter_controller_tests call_prompter_controller_tests.cpp)
+add_executable(Sessio_call_notes_controller_tests call_notes_controller_tests.cpp)
+target_link_libraries(Sessio_call_notes_controller_tests PRIVATE GTest::gtest Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_call_notes_controller_tests)
+add_executable(Sessio_call_notes_pipeline_tests call_notes_pipeline_tests.cpp)
+target_link_libraries(Sessio_call_notes_pipeline_tests PRIVATE GTest::gtest_main Sessio_call_prompter)
+gtest_discover_tests(Sessio_call_notes_pipeline_tests)
+add_executable(Sessio_notes_widgets_tests notes_widgets_tests.cpp)
+target_link_libraries(Sessio_notes_widgets_tests PRIVATE GTest::gtest Qt6::Test Sessio_transcription_ui)
+target_include_directories(Sessio_notes_widgets_tests PRIVATE ${qlementine_SOURCE_DIR}/lib/include)
+gtest_discover_tests(Sessio_notes_widgets_tests)
+add_executable(Sessio_meeting_history_tests meeting_history_tests.cpp)
+target_link_libraries(Sessio_meeting_history_tests PRIVATE GTest::gtest Qt6::Test Sessio_transcription_ui)
+target_include_directories(Sessio_meeting_history_tests PRIVATE ${qlementine_SOURCE_DIR}/lib/include)
+gtest_discover_tests(Sessio_meeting_history_tests)
+add_executable(Sessio_call_notes_page_tests call_notes_page_tests.cpp)
+target_link_libraries(Sessio_call_notes_page_tests PRIVATE GTest::gtest Qt6::Test Sessio_transcription_ui)
+target_include_directories(Sessio_call_notes_page_tests PRIVATE ${qlementine_SOURCE_DIR}/lib/include)
+gtest_discover_tests(Sessio_call_notes_page_tests)
+
+add_executable(Sessio_client_notes_page_ui_tests client_notes_page_ui_tests.cpp)
+target_link_libraries(Sessio_client_notes_page_ui_tests PRIVATE GTest::gtest Qt6::Test Sessio_client_notes_page)
+gtest_discover_tests(Sessio_client_notes_page_ui_tests)
+add_executable(Sessio_call_prompter_pipeline_tests call_prompter_pipeline_tests.cpp)
+add_executable(Sessio_prompter_task_gate_tests prompter_task_gate_tests.cpp)
+target_include_directories(Sessio_prompter_task_gate_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/call_prompter/litert)
+target_link_libraries(Sessio_prompter_task_gate_tests PRIVATE GTest::gtest_main)
+gtest_discover_tests(Sessio_prompter_task_gate_tests)
+target_link_libraries(Sessio_call_prompter_pipeline_tests PRIVATE GTest::gtest_main Sessio_call_prompter)
+gtest_discover_tests(Sessio_call_prompter_pipeline_tests)
+if(SESSIO_LITERTLM_FOUND)
+  # Real Gemma smoke; skips itself unless SESSIO_PROMPTER_MODEL is set.
+  add_executable(Sessio_call_prompter_model_smoke_tests call_prompter_model_smoke_tests.cpp)
+  target_link_libraries(Sessio_call_prompter_model_smoke_tests PRIVATE GTest::gtest Sessio_call_prompter_engine)
+  gtest_discover_tests(Sessio_call_prompter_model_smoke_tests DISCOVERY_TIMEOUT 30)
+endif()
+add_executable(Sessio_prompter_worker_tests prompter_worker_tests.cpp)
+add_executable(Sessio_prompter_panel_tests prompter_panel_tests.cpp)
+target_link_libraries(Sessio_prompter_panel_tests PRIVATE GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui)
+target_include_directories(Sessio_prompter_panel_tests PRIVATE ${qlementine_SOURCE_DIR}/lib/include)
+target_compile_definitions(Sessio_prompter_panel_tests PRIVATE SESSIO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+gtest_discover_tests(Sessio_prompter_panel_tests)
+target_link_libraries(Sessio_prompter_worker_tests PRIVATE GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_prompter_worker_tests)
+target_link_libraries(Sessio_call_prompter_controller_tests PRIVATE GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_call_prompter_controller_tests)
   add_executable(Sessio_microphone_switch_runtime_smoke microphone_switch_runtime_smoke.cpp)
   target_include_directories(Sessio_microphone_switch_runtime_smoke PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/transcription)

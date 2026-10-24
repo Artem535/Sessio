@@ -1,4 +1,5 @@
 #include "event_info.h"
+#include "event_view.h"
 #include "month_calendar_widget.h"
 #include "app_settings.h"
 #include <oclero/qlementine/widgets/Switch.hpp>
@@ -17,6 +18,7 @@
 #include <QTimeZone>
 #include <QTimer>
 #include <QDialog>
+#include <QComboBox>
 #include <QScrollBar>
 #include <QScrollArea>
 #include <QStackedWidget>
@@ -33,7 +35,7 @@ namespace {
 DuckEvent appointment(QDate date) {
   DuckEvent event;
   event.name = "Appointment";
-  event.start_date = QDateTime(date, QTime(10, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+  event.start_date = QDateTime(date, QTime(10, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   event.end_date = *event.start_date + 3600000;
   event.duration = 3600;
   event.event_stat_id = 1;
@@ -699,7 +701,7 @@ TEST_F(CalendarLayoutTest, InspectorShowsLabelledFieldsAndFullWidthButtons) {
 }
 TEST_F(CalendarLayoutTest, FirstMeetingOfTheDayIsScrolledIntoView) {
   auto event = appointment(QDate::currentDate());
-  event.start_date = QDateTime(QDate::currentDate(), QTime(16, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+  event.start_date = QDateTime(QDate::currentDate(), QTime(16, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   event.end_date = *event.start_date + 3600000;
   model->addEvent(event);
   QEventInfoPage page(model.get(), nullptr, nullptr);
@@ -810,7 +812,7 @@ TEST_F(CalendarLayoutTest, DialogFormKeepsTheBaseInsetAndButtonOrder) {
 }
 TEST_F(CalendarLayoutTest, TimelineScrollsOnlyWhenTheDisplayedDateChanges) {
   auto event = appointment(QDate::currentDate());
-  event.start_date = QDateTime(QDate::currentDate(), QTime(16, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+  event.start_date = QDateTime(QDate::currentDate(), QTime(16, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   event.end_date = *event.start_date + 3600000;
   model->addEvent(event);
   QEventInfoPage page(model.get(), nullptr, nullptr);
@@ -830,6 +832,54 @@ TEST_F(CalendarLayoutTest, TimelineScrollsOnlyWhenTheDisplayedDateChanges) {
   EXPECT_GT(bar->value(), 0);
 }
 } // namespace
+TEST_F(CalendarLayoutTest, EditDialogTurnsAPersonalEventIntoAWorkEvent) {
+  auto personal = appointment(QDate::currentDate());
+  personal.payment_stat_id = 5;  // skipped, as saved for personal events
+  const auto id = model->addEvent(personal);
+  ASSERT_GT(id, 0);
+  ASSERT_FALSE(db->get_event(id)->is_work_event);
+  DuckClient client; client.name = "Client"; client.client_active = true;
+  const auto clientId = db->add_client(client);
+  QEventInfoPage page(model.get(), nullptr, nullptr);
+  QObject::connect(&page, &QEventInfoPage::provideFillClientComboBox, [clientId](QComboBox *box) {
+    box->clear(); box->addItem("Client", QVariant::fromValue<qint64>(clientId));
+  });
+  QObject::connect(&page, &QEventInfoPage::provideClientEventPairSave, [this](int64_t client, int64_t event) {
+    db->add_event_client(event, client);
+  });
+  page.reloadSelectedDay();
+  bool applied = false;
+  QTimer::singleShot(0, [&applied] {
+    auto *modal = QApplication::activeModalWidget();
+    ASSERT_NE(modal, nullptr);
+    auto *details = modal->findChild<QEventDetailsWidget *>();
+    ASSERT_NE(details, nullptr);
+    auto *type = details->findChild<oclero::qlementine::Switch *>();
+    ASSERT_NE(type, nullptr);
+    EXPECT_TRUE(type->isEnabled());
+    type->setChecked(true);
+    applied = QMetaObject::invokeMethod(details, "onApplyClicked");
+    if (QApplication::activeModalWidget() == modal) modal->close();
+  });
+  page.openEventOnDay(id, QDateTime(QDate::currentDate(), QTime(0, 0)).toMSecsSinceEpoch());
+  EXPECT_TRUE(applied);
+  const auto stored = db->get_event(id);
+  ASSERT_TRUE(stored);
+  EXPECT_TRUE(stored->is_work_event);
+  EXPECT_EQ(db->get_client_by_event(id).id, clientId);
+}
+TEST_F(CalendarLayoutTest, CurrentTimeLineFollowsTheClockOnlyOnTheDisplayedDay) {
+  QEventView view;
+  view.setModel(model.get());
+  model->loadEventsForDay(QDate::currentDate());
+  const auto today = QDate::currentDate();
+  const auto morning = view.currentTimeLineY(QDateTime(today, QTime(9, 0)));
+  const auto noon = view.currentTimeLineY(QDateTime(today, QTime(12, 30, 30)));
+  ASSERT_TRUE(morning && noon);
+  EXPECT_GT(*noon, *morning);
+  EXPECT_DOUBLE_EQ(*noon / *morning, 750.5 / 540.0);
+  EXPECT_FALSE(view.currentTimeLineY(QDateTime(today.addDays(1), QTime(9, 0))));
+}
 int main(int argc, char **argv) {
   QTemporaryDir home;
   qputenv("XDG_CONFIG_HOME", home.path().toUtf8());
