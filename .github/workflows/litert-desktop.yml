@@ -1,19 +1,12 @@
 name: LiteRT runtime (Windows, macOS)
 
-# Experimental: builds the CPU prompter runtime with LiteRT-LM's Bazel build,
-# the only build upstream supports on Windows and macOS. Runs only when the
-# runtime sources or this build change; packages do not use it yet.
+# The CPU prompter runtime for Windows and macOS, built with LiteRT-LM's Bazel
+# build (the only build upstream supports there). Called by CI before the app
+# builds; install/ is cached and rebuilt only when the build script or the shim
+# change, since the shim has no stable ABI.
 on:
-  push:
-    paths:
-      - .github/workflows/litert-desktop.yml
-      - scripts/build-litert-lm-bazel.sh
-      - src/call_prompter/litert/**
+  workflow_call:
   workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   runtime:
@@ -53,7 +46,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Restore runtime cache
+        id: cache-runtime
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.LITERT_PREFIX }}/install
+          key: litert-runtime-${{ runner.os }}-v0.18.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}
+
       - name: Restore Bazel cache
+        if: steps.cache-runtime.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BAZEL_DISK_CACHE }}
@@ -61,13 +62,14 @@ jobs:
           restore-keys: litert-bazel-${{ runner.os }}-v0.18.0-
 
       - name: Set up Java 17
+        if: steps.cache-runtime.outputs.cache-hit != 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Install build tools (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.cache-runtime.outputs.cache-hit != 'true'
         shell: powershell
         run: |
           git config --system core.longpaths true
@@ -90,14 +92,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "mt.exe failed to patch link.exe" }
 
       - name: Install build tools (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && steps.cache-runtime.outputs.cache-hit != 'true'
         run: brew install bazelisk
 
       - name: Build runtime
+        if: steps.cache-runtime.outputs.cache-hit != 'true'
         run: bash scripts/build-litert-lm-bazel.sh "$LITERT_PREFIX"
 
+      - name: Save runtime cache
+        if: steps.cache-runtime.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.LITERT_PREFIX }}/install
+          key: ${{ steps.cache-runtime.outputs.cache-primary-key }}
+
       - name: Save Bazel cache
-        if: always()
+        if: always() && steps.cache-runtime.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ${{ env.BAZEL_DISK_CACHE }}
@@ -107,8 +117,12 @@ jobs:
         run: |
           ls -lR "$LITERT_PREFIX/install"
           if [[ "$RUNNER_OS" == macOS ]]; then
-            nm -gU "$LITERT_PREFIX/install/lib/libsessio_litert.dylib" | c++filt | grep -c 'sessio::litert'
-            otool -L "$LITERT_PREFIX/install/lib/libsessio_litert.dylib"
+            lib="$LITERT_PREFIX/install/lib/libsessio_litert.dylib"
+            nm -gU "$lib" | c++filt | grep -q 'sessio::litert::loadModel' || { echo "::error::loadModel is not exported"; exit 1; }
+            otool -L "$lib"
+          else
+            test -f "$LITERT_PREFIX/install/bin/sessio_litert.dll"
+            test -f "$LITERT_PREFIX/install/lib/sessio_litert.lib"
           fi
 
       - name: Upload runtime

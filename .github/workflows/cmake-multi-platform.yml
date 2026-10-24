@@ -106,9 +106,14 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
+  # The same runtime for Windows and macOS (CPU only), from LiteRT-LM's Bazel build.
+  litert-desktop:
+    name: LiteRT runtime
+    uses: ./.github/workflows/litert-desktop.yml
+
   build:
     name: Build ${{ matrix.os }}
-    needs: litert-runtime
+    needs: [litert-runtime, litert-desktop]
     runs-on: ${{ matrix.os }}
     env:
       QT_QPA_PLATFORM: offscreen
@@ -125,12 +130,14 @@ jobs:
             qt_version: 6.10.2
             qt_arch: clang_64
             artifact_name: Sessio-macos-dmg
+            litert_artifact: sessio-litert-runtime-macos
             qt_host: mac
             qt_target: desktop
           - os: windows-2022
             qt_version: 6.10.2
             qt_arch: win64_msvc2022_64
             artifact_name: Sessio-windows-installer
+            litert_artifact: sessio-litert-runtime-windows
             qt_host: windows
             qt_target: desktop
 
@@ -312,9 +319,16 @@ jobs:
           & "${{ github.workspace }}/vcpkg/bootstrap-vcpkg.bat" -disableMetrics
           "VCPKG_ROOT=${{ github.workspace }}/vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Download call prompter runtime (Windows, macOS)
+        if: runner.os != 'Linux'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.litert_artifact }}
+          path: ${{ runner.temp }}/sessio-litert
+
       - name: Configure
         if: runner.os != 'Linux'
-        run: cmake --preset vcpkg-release
+        run: cmake --preset vcpkg-release "-DSESSIO_LITERT_DIR=${{ runner.temp }}/sessio-litert"
 
       - name: Download call prompter runtime
         if: runner.os == 'Linux'
@@ -488,7 +502,11 @@ jobs:
           }
           $ort | ForEach-Object { Copy-Item $_.FullName $dest -Force }
 
-          foreach ($required in "Sessio.exe", "models/silero_vad.onnx", "models/gigaam-v3-rnnt/encoder.int8.onnx", "models/gigaam-v3-rnnt/decoder.onnx", "models/gigaam-v3-rnnt/joiner.onnx", "models/gigaam-v3-rnnt/tokens.txt", "onnxruntime.dll", "sherpa-onnx-c-api.dll", "sherpa-onnx-cxx-api.dll") {
+          # Call prompter runtime, built by the litert-desktop job.
+          Copy-Item "$env:RUNNER_TEMP/sessio-litert/bin/sessio_litert.dll" $dest -Force
+          Copy-Item "$env:RUNNER_TEMP/sessio-litert/LICENSE.litert-lm" $dest -Force
+
+          foreach ($required in "Sessio.exe", "models/silero_vad.onnx", "models/gigaam-v3-rnnt/encoder.int8.onnx", "models/gigaam-v3-rnnt/decoder.onnx", "models/gigaam-v3-rnnt/joiner.onnx", "models/gigaam-v3-rnnt/tokens.txt", "onnxruntime.dll", "sherpa-onnx-c-api.dll", "sherpa-onnx-cxx-api.dll", "sessio_litert.dll") {
             if (-not (Test-Path "$dest/$required")) { throw "$required missing from $dest" }
           }
 
@@ -612,6 +630,9 @@ jobs:
           test -d "$APP_BUNDLE/Contents/Frameworks/QtWidgets.framework"
           test -d "$APP_BUNDLE/Contents/PlugIns/platforms"
           test -f "$APP_BUNDLE/Contents/PlugIns/platforms/libqcocoa.dylib"
+          test -f "$APP_BUNDLE/Contents/Frameworks/libsessio_litert.dylib"
+          otool -L "$APP_BUNDLE/Contents/MacOS/Sessio" | grep -q '@rpath/libsessio_litert.dylib'
+          otool -l "$APP_BUNDLE/Contents/MacOS/Sessio" | grep -A2 LC_RPATH | grep -q '@executable_path/../Frameworks'
 
           du -sh "$APP_BUNDLE"
           du -sh "$APP_BUNDLE/Contents/Frameworks"

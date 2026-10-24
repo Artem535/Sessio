@@ -241,6 +241,9 @@ if(APPLE)
   # key/substitution behaves exactly as before this template was introduced.
   set_target_properties(Sessio PROPERTIES
       MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in"
+      # Libraries with an @rpath install name (the call prompter runtime) are
+      # installed into Contents/Frameworks.
+      INSTALL_RPATH "@executable_path/../Frameworks"
   )
 endif()
 

@@ -154,7 +154,18 @@ cmake -S . -B build -DSESSIO_LITERT_DIR=$HOME/.cache/sessio-litert-lm-gpu/instal
 (сборка и запуск описаны в начале файла).
 
 Без `SESSIO_LITERT_DIR` Sessio собирается с заглушкой: суфлёр сообщает, что runtime недоступен.
-Windows и macOS пока не проверены.
+
+На Windows и macOS LiteRT-LM поддерживает только сборку Bazel, поэтому runtime
+собирает `scripts/build-litert-lm-bazel.sh` (только CPU). Нужны bazelisk, Java 17, Rust
+и Python 3; на Windows ещё Visual Studio 2022 и Git Bash, из которого запускается скрипт.
+Результат: `install/bin/sessio_litert.dll` и `install/lib/sessio_litert.lib` на Windows,
+`install/lib/libsessio_litert.dylib` на macOS. Загрузку модели на этих системах пока не проверяли.
+
+[source,bash]
+----
+scripts/build-litert-lm-bazel.sh ~/.cache/sessio-litert-lm-bazel
+cmake -S . -B build -DSESSIO_LITERT_DIR=$HOME/.cache/sessio-litert-lm-bazel/install
+----
 
 В CI Linux-пакеты собираются с Vulkan-runtime: job `litert-runtime` запускает оба скрипта
 на `ubuntu-latest` и кэширует `install/`. Ключ кэша зависит от версии LiteRT-LM, обоих скриптов,
@@ -163,6 +174,9 @@ Windows и macOS пока не проверены.
 RPM кладёт все библиотеки runtime в `/usr/lib*/sessio` и не объявляет их системными зависимостями.
 Модель в пакет не входит; Vulkan нужен только для GPU-режима (на Fedora пакет `vulkan-loader`),
 без него суфлёр работает на CPU.
+Установщик Windows и DMG для macOS получают CPU-runtime из переиспользуемого workflow
+`litert-desktop.yml`: DLL лежит рядом с `Sessio.exe`, dylib — в `Contents/Frameworks`.
+Его `install/` кэшируется так же и пересобирается только после изменения скрипта или шима.
 
 Скрипт закрепляет ревизии TensorFlow, LiteRT, RE2 и SafeInt, включает PIC для
 разделяемой библиотеки и исключает Samsung NPU-плагин из CPU-сборки.
