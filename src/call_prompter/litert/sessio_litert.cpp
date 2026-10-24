@@ -13,6 +13,11 @@
 #include <dlfcn.h>
 #include <vulkan/vulkan.h>
 #endif
+#ifdef SESSIO_LITERT_DXGI
+#define NOMINMAX
+#include <windows.h>
+#include <dxgi.h>
+#endif
 
 #include "absl/time/time.h"
 #include "runtime/engine/engine.h"
@@ -31,10 +36,40 @@ using ::litert::lm::Engine;
 using ::litert::lm::EngineSettings;
 using detail::TaskGate;
 
-// Pin WebGPU to an enumerated hardware Vulkan adapter. In particular, a
-// machine exposing only llvmpipe must take the explicit CPU fallback path.
-std::string vulkanDevice() {
-#ifdef SESSIO_LITERT_VULKAN
+// Pin WebGPU to an enumerated hardware adapter. In particular, a machine
+// exposing only a software adapter (llvmpipe, Microsoft Basic Render Driver)
+// must take the explicit CPU fallback path. The result is matched as a
+// substring of the WebGPU adapter name.
+std::string gpuDevice() {
+#if defined(SESSIO_LITERT_DXGI)
+  IDXGIFactory1 *factory = nullptr;
+  if (FAILED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void **>(&factory)))) return {};
+  struct FactoryScope { IDXGIFactory1 *factory; ~FactoryScope() { factory->Release(); } } factoryScope{factory};
+  std::wstring best;
+  SIZE_T bestMemory = 0;
+  IDXGIAdapter1 *adapter = nullptr;
+  for (UINT i = 0; factory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+    DXGI_ADAPTER_DESC1 desc{};
+    const bool described = SUCCEEDED(adapter->GetDesc1(&desc));
+    adapter->Release();
+    constexpr UINT kMicrosoftVendor = 0x1414; // Basic Render Driver / WARP
+    if (!described || (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) || desc.VendorId == kMicrosoftVendor) continue;
+    // Discrete adapters have the most dedicated memory.
+    if (best.empty() || desc.DedicatedVideoMemory > bestMemory) {
+      best = desc.Description;
+      bestMemory = desc.DedicatedVideoMemory;
+    }
+  }
+  if (best.empty()) return {};
+  const int size = WideCharToMultiByte(CP_UTF8, 0, best.c_str(), -1, nullptr, 0, nullptr, nullptr);
+  if (size <= 1) return {};
+  std::string name(static_cast<size_t>(size - 1), '\0');
+  WideCharToMultiByte(CP_UTF8, 0, best.c_str(), -1, name.data(), size, nullptr, nullptr);
+  return name;
+#elif defined(SESSIO_LITERT_APPLE_GPU)
+  // Apple silicon always has its GPU; Metal adapters are named "Apple M…".
+  return "Apple";
+#elif defined(SESSIO_LITERT_VULKAN)
   void *library = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
   if (!library) return {};
   struct LibraryScope { void *handle; ~LibraryScope() { dlclose(handle); } } scope{library};
@@ -281,8 +316,8 @@ std::unique_ptr<Model> loadModel(const std::string &path, const ModelOptions &op
     info.cpuFallback = !fallbackReason.empty();
     info.fallbackReason = fallbackReason;
     if (backend == Backend::GPU) {
-      info.device = vulkanDevice();
-      if (info.device.empty()) return fail("hardware Vulkan device unavailable");
+      info.device = gpuDevice();
+      if (info.device.empty()) return fail("hardware GPU device unavailable");
     }
     auto assets = ::litert::lm::ModelAssets::Create(path);
     if (!assets.ok()) return fail("model file cannot be opened");
@@ -310,11 +345,11 @@ std::unique_ptr<Model> loadModel(const std::string &path, const ModelOptions &op
     main.SetAdvancedSettings(advanced);
     settings->GetMutableBenchmarkParams();
     auto engine = ::litert::lm::EngineFactory::CreateDefault(std::move(*settings));
-    if (!engine.ok()) return fail(backend == Backend::GPU ? "Vulkan engine initialization failed" : "CPU engine initialization failed");
+    if (!engine.ok()) return fail(backend == Backend::GPU ? "GPU engine initialization failed" : "CPU engine initialization failed");
     if ((*engine)->GetEngineSettings().GetMainExecutorSettings().GetBackend() != requested)
       return fail("runtime backend does not match request");
     std::fprintf(stderr, "Sessio LiteRT: requested=%s actual=%s device=%s fallback=%s\n",
-                 options.backend == Backend::GPU ? "Vulkan" : "CPU", backend == Backend::GPU ? "Vulkan" : "CPU",
+                 options.backend == Backend::GPU ? "GPU" : "CPU", backend == Backend::GPU ? "GPU" : "CPU",
                  info.device.c_str(), fallbackReason.empty() ? "none" : fallbackReason.c_str());
     return std::make_unique<LiteRtModel>(std::move(*engine), options.contextTokens, options.speculativeDecoding, std::move(info));
   };

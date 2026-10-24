@@ -156,10 +156,14 @@ cmake -S . -B build -DSESSIO_LITERT_DIR=$HOME/.cache/sessio-litert-lm-gpu/instal
 Без `SESSIO_LITERT_DIR` Sessio собирается с заглушкой: суфлёр сообщает, что runtime недоступен.
 
 На Windows и macOS LiteRT-LM поддерживает только сборку Bazel, поэтому runtime
-собирает `scripts/build-litert-lm-bazel.sh` (только CPU). Нужны bazelisk, Java 17, Rust
-и Python 3; на Windows ещё Visual Studio 2022 и Git Bash, из которого запускается скрипт.
-Результат: `install/bin/sessio_litert.dll` и `install/lib/sessio_litert.lib` на Windows,
-`install/lib/libsessio_litert.dylib` на macOS. Загрузку модели на этих системах пока не проверяли.
+собирает `scripts/build-litert-lm-bazel.sh`. Как и на Linux, GPU-режим использует официальные
+prebuilt-библиотеки LiteRt и ускоритель WebGPU (Dawn): на Windows он работает через Direct3D 12
+и требует DirectX Shader Compiler (`dxcompiler.dll`, `dxil.dll`), на macOS — через Metal.
+Без аппаратного GPU модель загружается на CPU. Нужны bazelisk, Java 17, Rust, Python 3 и curl;
+на Windows ещё Visual Studio 2022 и Git Bash, из которого запускается скрипт.
+Результат: `install/bin/*.dll` и `install/lib/sessio_litert.lib` на Windows,
+`install/lib/*.dylib` на macOS; все библиотеки поставляются вместе.
+Загрузку модели на этих системах пока не проверяли.
 
 [source,bash]
 ----
@@ -174,7 +178,7 @@ cmake -S . -B build -DSESSIO_LITERT_DIR=$HOME/.cache/sessio-litert-lm-bazel/inst
 RPM кладёт все библиотеки runtime в `/usr/lib*/sessio` и не объявляет их системными зависимостями.
 Модель в пакет не входит; Vulkan нужен только для GPU-режима (на Fedora пакет `vulkan-loader`),
 без него суфлёр работает на CPU.
-Установщик Windows и DMG для macOS получают CPU-runtime из переиспользуемого workflow
+Установщик Windows и DMG для macOS получают runtime из переиспользуемого workflow
 `litert-desktop.yml`: DLL лежит рядом с `Sessio.exe`, dylib — в `Contents/Frameworks`.
 Его `install/` кэшируется так же и пересобирается только после изменения скрипта или шима.
 

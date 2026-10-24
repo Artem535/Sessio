@@ -20,7 +20,9 @@
 
 namespace sessio::litert {
 
-enum class Backend { CPU, GPU }; // GPU is hardware Vulkan, never a software adapter.
+// GPU is a hardware adapter through WebGPU (Vulkan on Linux, Direct3D on
+// Windows, Metal on macOS), never a software adapter.
+enum class Backend { CPU, GPU };
 
 struct RuntimeInfo {
   Backend backend = Backend::CPU;

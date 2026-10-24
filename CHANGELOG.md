@@ -28,9 +28,10 @@ All notable changes to this project will be documented in this file.
 - Linux packages built by CI now include the local prompter runtime (Vulkan
   with CPU fallback), so the prompter and call notes work after installing
   the RPM; the Gemma model is still configured separately.
-- The Windows installer and the macOS DMG now include a CPU-only prompter
-  runtime built with LiteRT-LM's Bazel build; loading a model there is not
-  verified yet.
+- The Windows installer and the macOS DMG now include the prompter runtime
+  built with LiteRT-LM's Bazel build, with GPU acceleration through WebGPU
+  (Direct3D 12 on Windows, Metal on macOS) and CPU fallback; loading a model
+  there is not verified yet.
 - Fixed a crash of the sharing app when the screen-sharing portal reported an
   error (for example, on Wayland when the share could not be started).
 - Fixed calendar and recurring-meeting times shifted by the UTC offset on systems

@@ -502,11 +502,12 @@ jobs:
           }
           $ort | ForEach-Object { Copy-Item $_.FullName $dest -Force }
 
-          # Call prompter runtime, built by the litert-desktop job.
-          Copy-Item "$env:RUNNER_TEMP/sessio-litert/bin/sessio_litert.dll" $dest -Force
-          Copy-Item "$env:RUNNER_TEMP/sessio-litert/LICENSE.litert-lm" $dest -Force
+          # Call prompter runtime, built by the litert-desktop job: our DLL, the
+          # prebuilt LiteRt/WebGPU/Dawn libraries and the DirectX shader compiler.
+          Copy-Item "$env:RUNNER_TEMP/sessio-litert/bin/*.dll" $dest -Force
+          Copy-Item "$env:RUNNER_TEMP/sessio-litert/LICENSE*" $dest -Force
 
-          foreach ($required in "Sessio.exe", "models/silero_vad.onnx", "models/gigaam-v3-rnnt/encoder.int8.onnx", "models/gigaam-v3-rnnt/decoder.onnx", "models/gigaam-v3-rnnt/joiner.onnx", "models/gigaam-v3-rnnt/tokens.txt", "onnxruntime.dll", "sherpa-onnx-c-api.dll", "sherpa-onnx-cxx-api.dll", "sessio_litert.dll") {
+          foreach ($required in "Sessio.exe", "models/silero_vad.onnx", "models/gigaam-v3-rnnt/encoder.int8.onnx", "models/gigaam-v3-rnnt/decoder.onnx", "models/gigaam-v3-rnnt/joiner.onnx", "models/gigaam-v3-rnnt/tokens.txt", "onnxruntime.dll", "sherpa-onnx-c-api.dll", "sherpa-onnx-cxx-api.dll", "sessio_litert.dll", "libLiteRt.dll", "libLiteRtWebGpuAccelerator.dll", "dxcompiler.dll") {
             if (-not (Test-Path "$dest/$required")) { throw "$required missing from $dest" }
           }
 
@@ -631,6 +632,8 @@ jobs:
           test -d "$APP_BUNDLE/Contents/PlugIns/platforms"
           test -f "$APP_BUNDLE/Contents/PlugIns/platforms/libqcocoa.dylib"
           test -f "$APP_BUNDLE/Contents/Frameworks/libsessio_litert.dylib"
+          test -f "$APP_BUNDLE/Contents/Frameworks/libLiteRt.dylib"
+          test -f "$APP_BUNDLE/Contents/Frameworks/libLiteRtWebGpuAccelerator.dylib"
           otool -L "$APP_BUNDLE/Contents/MacOS/Sessio" | grep -q '@rpath/libsessio_litert.dylib'
           otool -l "$APP_BUNDLE/Contents/MacOS/Sessio" | grep -A2 LC_RPATH | grep -q '@executable_path/../Frameworks'
 
