@@ -73,14 +73,22 @@ Rectangle {
     property string selectedId: ""
     property bool upcoming: true
     property string query: ""
-    readonly property var records: upcoming ? meetingsBridge.meetings : meetingsBridge.materials
+    readonly property var records: meetingsBridge ? (upcoming ? meetingsBridge.meetings : meetingsBridge.materials) : []
     readonly property var selected: records.find(r => r.id === selectedId) || records[0] || ({})
+    readonly property string callerName: meetingsBridge ? meetingsBridge.name : ""
+    readonly property string errorText: meetingsBridge ? meetingsBridge.error : ""
+    readonly property string inviteCode: meetingsBridge ? meetingsBridge.code : ""
+    readonly property string invitePasscode: meetingsBridge ? meetingsBridge.passcode : ""
     readonly property color muted: Qt.tint(theme.base, Qt.rgba(theme.text.r, theme.text.g, theme.text.b, 0.65))
     component Copy: Text { color: theme.text; textFormat: Text.PlainText; wrapMode: Text.Wrap; font.pixelSize: 14 }
     Connections {
         target: meetingsBridge
         function onMeetingPreselected(ref) { modeSelector.currentIndex = 0; root.upcoming = true; root.selectedId = ref }
-        function onInvitationPrefilled() { joinDialog.open() }
+        function onInvitationPrefilled() {
+            code.text = root.inviteCode
+            passcode.text = root.invitePasscode
+            joinDialog.open()
+        }
     }
     component Action: Button {
         id: control
@@ -166,16 +174,17 @@ Rectangle {
                         Copy { text: root.selected.date || (root.upcoming ? qsTr("Scheduled online meetings appear here.") : qsTr("Materials appear here after a call.")); color: root.muted; Layout.fillWidth: true }
                         Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: theme.mid }
                         Copy { visible: root.upcoming && !!root.selected.id; text: qsTr("Before joining, check your name. Camera and microphone settings are shown on the next screen."); color: root.muted; Layout.fillWidth: true }
-                        TextField { id: displayName; visible: root.upcoming; Layout.fillWidth: true; Layout.maximumWidth: 420; text: meetingsBridge.name; placeholderText: qsTr("Name in calls"); color: theme.text; onTextEdited: meetingsBridge.name = text; background: Rectangle { radius: 8; color: theme.window; border.color: theme.mid } }
-                        Action { visible: root.upcoming && !!root.selected.id; text: qsTr("Check devices and join"); primary: true; enabled: root.selected.enabled === true; onClicked: meetingsBridge.joinOwn(root.selected.id) }
-                        Copy { text: meetingsBridge.error; visible: text.length > 0; color: "#ef7777"; Layout.fillWidth: true }
+                        TextField { id: displayName; visible: root.upcoming; Layout.fillWidth: true; Layout.maximumWidth: 420; text: root.callerName; placeholderText: qsTr("Name in calls"); placeholderTextColor: root.muted; color: theme.text; onTextEdited: if (meetingsBridge) meetingsBridge.name = text; background: Rectangle { radius: 8; color: theme.window; border.color: theme.mid } }
+                        Action { visible: root.upcoming && !!root.selected.id; text: qsTr("Check devices and join"); primary: true; enabled: root.selected.enabled === true; onClicked: if (meetingsBridge) meetingsBridge.joinOwn(root.selected.id) }
+                        Action { visible: root.upcoming && !root.selected.id; text: qsTr("Join a meeting"); primary: true; onClicked: joinDialog.open() }
+                        Copy { text: root.errorText; visible: text.length > 0; color: "#ef7777"; Layout.fillWidth: true }
                         Copy { visible: !root.upcoming && !!root.selected.summary; text: qsTr("Meeting summary"); font.pixelSize: 18; font.weight: Font.DemiBold; Layout.fillWidth: true }
                         Copy { visible: !root.upcoming; text: root.selected.summary || ""; font.pixelSize: 17; lineHeight: 1.7; Layout.fillWidth: true }
-                        Action { visible: !root.upcoming && !!root.selected.id; text: qsTr("Open notes and materials"); primary: true; onClicked: meetingsBridge.openMaterial(root.selected.id) }
+                        Action { visible: !root.upcoming && !!root.selected.id; text: qsTr("Open notes and materials"); primary: true; onClicked: if (meetingsBridge) meetingsBridge.openMaterial(root.selected.id) }
                         Copy { text: qsTr("Transcripts"); visible: !root.upcoming && (root.selected.transcripts || []).length > 0; font.pixelSize: 18; font.weight: Font.DemiBold }
                         Repeater {
                             model: root.upcoming ? [] : (root.selected.transcripts || [])
-                            Action { required property var modelData; text: modelData.title; onClicked: meetingsBridge.openTranscript(modelData.id) }
+                            Action { required property var modelData; text: modelData.title; onClicked: if (meetingsBridge) meetingsBridge.openTranscript(modelData.id) }
                         }
                     }
                 }
@@ -189,16 +198,61 @@ Rectangle {
         width: Math.min(root.width - 40, 600)
         modal: true
         title: qsTr("Join a meeting")
-        standardButtons: Dialog.Cancel
+        padding: 20
+        header: Rectangle {
+            color: theme.base
+            radius: 12
+            implicitHeight: 52
+            Copy {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: 20
+                text: joinDialog.title
+                font.pixelSize: 18
+                font.weight: Font.DemiBold
+            }
+        }
         background: Rectangle { radius: 12; color: theme.base; border.color: theme.mid }
         contentItem: ColumnLayout {
             spacing: 16
             Copy { text: qsTr("Use a Sessio invitation code or invitation link."); Layout.fillWidth: true }
-            TextField { Layout.fillWidth: true; text: meetingsBridge.name; placeholderText: qsTr("Name in calls"); onTextEdited: meetingsBridge.name = text }
-            TextField { id: code; objectName: "qmlMeetingCode"; Layout.fillWidth: true; text: meetingsBridge.code; placeholderText: qsTr("Invitation code or link") }
-            TextField { id: passcode; Layout.fillWidth: true; text: meetingsBridge.passcode; placeholderText: qsTr("Passcode"); echoMode: TextInput.Password }
-            Copy { text: meetingsBridge.error; color: "#ef7777"; visible: text.length > 0; Layout.fillWidth: true }
-            Action { text: qsTr("Continue"); primary: true; enabled: code.text.trim().length > 0; onClicked: { meetingsBridge.joinInvitation(code.text, passcode.text); joinDialog.close() } }
+            TextField {
+                Layout.fillWidth: true
+                text: root.callerName
+                placeholderText: qsTr("Name in calls")
+                placeholderTextColor: root.muted
+                color: theme.text
+                onTextEdited: if (meetingsBridge) meetingsBridge.name = text
+                background: Rectangle { radius: 8; color: theme.window; border.color: theme.mid }
+            }
+            TextField {
+                id: code
+                objectName: "qmlMeetingCode"
+                Layout.fillWidth: true
+                text: root.inviteCode
+                placeholderText: qsTr("Invitation code or link")
+                placeholderTextColor: root.muted
+                color: theme.text
+                background: Rectangle { radius: 8; color: theme.window; border.color: theme.mid }
+            }
+            TextField {
+                id: passcode
+                Layout.fillWidth: true
+                text: root.invitePasscode
+                placeholderText: qsTr("Passcode")
+                placeholderTextColor: root.muted
+                color: theme.text
+                echoMode: TextInput.Password
+                background: Rectangle { radius: 8; color: theme.window; border.color: theme.mid }
+            }
+            Copy { text: root.errorText; color: "#ef7777"; visible: text.length > 0; Layout.fillWidth: true }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+                Item { Layout.fillWidth: true }
+                Action { text: qsTr("Cancel"); onClicked: joinDialog.reject() }
+                Action { text: qsTr("Continue"); primary: true; enabled: code.text.trim().length > 0; onClicked: { if (meetingsBridge) meetingsBridge.joinInvitation(code.text, passcode.text); joinDialog.close() } }
+            }
         }
     }
 }

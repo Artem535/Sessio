@@ -12,6 +12,8 @@
 #include <QTest>
 #include <QToolButton>
 #include <QPushButton>
+#include <QQuickWidget>
+#include <QQuickItem>
 #include <QTemporaryDir>
 #include <gtest/gtest.h>
 #include <oclero/qlementine/style/QlementineStyle.hpp>
@@ -63,6 +65,16 @@ TEST(PrompterPanelTest, RealPanelKeepsReviewActionsAndSourceLinksAtNarrowWidth) 
   for (auto *label : panel->findChildren<QLabel *>())
     if (label->text() == PrompterPanel::tr("Accepted agreements")) EXPECT_FALSE(label->isVisibleTo(panel));
   EXPECT_TRUE(panel->isAncestorOf(panel->sharedHintWidget()));
+  auto *quick = side.findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_NE(quick, nullptr);
+  ASSERT_NE(quick->rootObject(), nullptr);
+  auto *qmlPrompter = quick->rootObject()->findChild<QQuickItem *>("qmlPrompterSection");
+  ASSERT_NE(qmlPrompter, nullptr);
+  EXPECT_TRUE(qmlPrompter->isVisible());
+  const auto info = quick->rootObject()->property("info").toMap();
+  EXPECT_TRUE(info.value("prompterVisible").toBool());
+  EXPECT_EQ(info.value("prompterHint").toString(), QStringLiteral("К какому дню будут готовы документы?"));
+  EXPECT_EQ(info.value("prompterCards").toList().size(), 1);
   QSignalSpy sources(panel, &PrompterPanel::sourceRequested);
   const auto buttons = panel->findChildren<QPushButton *>();
   bool found = false;

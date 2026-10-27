@@ -282,6 +282,7 @@ void CallNotesPage::setControllerFactory(MeetingControllerFactory factory) {
 
 void CallNotesPage::setPrompterPanel(PrompterPanel *panel) {
   if (mPrompter || !panel) return;
+  if (mWorkspace) mWorkspace->setPrompterPanel(panel);
   mPrompter = new NotesWidgetFrame(tr("Prompter"), mCurrent);
   mPrompter->setObjectName("prompterNotesCard");
   panel->setEmbedded(true);

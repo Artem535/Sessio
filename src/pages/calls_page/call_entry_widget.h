@@ -28,6 +28,7 @@ class CallEntryWidget final : public QWidget {
 
 public:
   explicit CallEntryWidget(bool showOwnMeetings, QWidget *parent = nullptr);
+  ~CallEntryWidget() override;
 
   void setUpcomingMeetings(const QList<UpcomingMeeting> &meetings);
   void preselectOwnMeeting(const QString &meetingRef);

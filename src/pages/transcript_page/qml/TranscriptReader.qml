@@ -70,22 +70,38 @@ Rectangle {
         }
     }
     color: theme.window
-    readonly property var info: readerBridge.reader
+    readonly property var info: readerBridge ? readerBridge.reader : ({})
+    readonly property var historyModel: readerBridge ? readerBridge.readerHistory : []
+    readonly property var rawPhrases: readerBridge ? readerBridge.readerPhrases : []
     property string query: ""
     property string speaker: ""
     property int textSize: 17
     property string focusedPhrase: ""
-    property bool historyVisible: width >= 950
-    readonly property var phrases: readerBridge.readerPhrases.filter(p => (!speaker || p.speaker === speaker) && (!query || p.text.toLowerCase().includes(query.toLowerCase())))
+    property bool historyVisible: width >= 950 && !root.info.notesVisible
+    readonly property var phrases: rawPhrases.filter(p => (!speaker || p.speaker === speaker) && (!query || p.text.toLowerCase().includes(query.toLowerCase())))
     readonly property color muted: Qt.tint(theme.base, Qt.rgba(theme.text.r, theme.text.g, theme.text.b, 0.65))
+    readonly property color soft: Qt.tint(theme.base, Qt.rgba(theme.highlight.r, theme.highlight.g, theme.highlight.b, 0.14))
     component Copy: Text { color: theme.text; textFormat: Text.PlainText; wrapMode: Text.Wrap; font.pixelSize: 14 }
     component Action: Button {
         id: control
+        property bool primary: false
         implicitHeight: 40
         padding: 10
         horizontalPadding: 14
-        background: Rectangle { radius: 8; color: control.hovered ? theme.mid : theme.window; border.color: control.activeFocus ? theme.highlight : theme.mid; opacity: control.enabled ? 1 : 0.4 }
-        contentItem: Text { text: control.text; color: theme.text; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; opacity: control.enabled ? 1 : 0.4 }
+        background: Rectangle { radius: 8; color: control.primary ? theme.highlight : control.hovered ? theme.mid : theme.window; border.color: control.activeFocus ? theme.highlight : theme.mid; opacity: control.enabled ? 1 : 0.4 }
+        contentItem: Text { text: control.text; color: control.primary ? theme.highlightedText : theme.text; font.pixelSize: 14; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; opacity: control.enabled ? 1 : 0.4 }
+    }
+    component ThemedMenuItem: MenuItem {
+        id: menuItem
+        contentItem: Copy {
+            text: menuItem.text
+            font.pixelSize: 14
+            opacity: menuItem.enabled ? 1 : 0.4
+        }
+        background: Rectangle {
+            radius: 6
+            color: menuItem.highlighted ? root.soft : "transparent"
+        }
     }
     Connections {
         target: readerBridge
@@ -94,6 +110,10 @@ Rectangle {
             root.focusedPhrase = id
             const index = root.phrases.findIndex(p => p.id === id)
             if (index >= 0) rows.positionViewAtIndex(index, ListView.Center)
+            Qt.callLater(function() {
+                const idx = root.phrases.findIndex(p => p.id === id)
+                if (idx >= 0) rows.positionViewAtIndex(idx, ListView.Center)
+            })
         }
     }
     onInfoChanged: { query = ""; speaker = ""; if (search) search.text = ""; if (speakers) speakers.currentIndex = 0 }
@@ -109,14 +129,14 @@ Rectangle {
                 anchors.fill: parent
                 anchors.margins: 16
                 spacing: 16
-                Action { visible: !root.externalHeader; text: qsTr("Back to transcripts"); Layout.fillWidth: true; onClicked: readerBridge.readerAction("back") }
+                Action { visible: !root.externalHeader; text: qsTr("Back to transcripts"); Layout.fillWidth: true; onClicked: if (readerBridge) readerBridge.readerAction("back") }
                 Copy { text: qsTr("Recordings"); font.weight: Font.DemiBold }
                 TextField { id: historySearch; Layout.fillWidth: true; color: theme.text; placeholderText: qsTr("Find a recording"); placeholderTextColor: root.muted; background: Rectangle { color: theme.base; border.color: theme.mid; radius: 8 } }
                 ListView {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    model: readerBridge.readerHistory.filter(r => (r.title + " " + r.date).toLowerCase().includes(historySearch.text.toLowerCase()))
+                    model: root.historyModel.filter(r => (r.title + " " + r.date).toLowerCase().includes(historySearch.text.toLowerCase()))
                     spacing: 8
                     ScrollBar.vertical: ScrollBar {}
                     delegate: ItemDelegate {
@@ -124,7 +144,7 @@ Rectangle {
                         required property var modelData
                         width: ListView.view.width
                         padding: 14
-                        onClicked: readerBridge.selectReaderTranscript(modelData.id)
+                        onClicked: if (readerBridge) readerBridge.selectReaderTranscript(modelData.id)
                         background: Rectangle { radius: 8; color: record.modelData.id === root.info.id ? theme.base : record.hovered ? theme.mid : "transparent" }
                         contentItem: ColumnLayout {
                             spacing: 9
@@ -148,19 +168,20 @@ Rectangle {
                     visible: !root.externalHeader
                     Layout.fillWidth: true
                     Copy { text: qsTr("Transcript"); font.pixelSize: 24; font.weight: Font.DemiBold; Layout.fillWidth: true }
-                    Action { text: qsTr("History"); visible: root.width < 950; onClicked: root.historyVisible = !root.historyVisible }
-                    Action { text: qsTr("Call notes"); visible: root.info.hasNotes === true; onClicked: readerBridge.readerAction("notes") }
+                    Action { text: qsTr("History"); visible: root.width < 950 || root.info.notesVisible === true; onClicked: root.historyVisible = !root.historyVisible }
+                    Action { text: qsTr("Call notes"); primary: root.info.notesVisible === true; visible: root.info.hasNotes === true; onClicked: if (readerBridge) readerBridge.readerAction("notes") }
                     Action {
                         text: "⋯"
                         Accessible.name: qsTr("More actions")
                         onClicked: more.open()
                         Menu {
                             id: more
-                            MenuItem { text: qsTr("Export text"); enabled: !!root.info.id; onTriggered: readerBridge.readerAction("export") }
-                            MenuItem { text: qsTr("Attach clients"); enabled: root.info.canAttach; onTriggered: readerBridge.readerAction("attach") }
-                            MenuItem { text: qsTr("Mark reviewed"); enabled: root.info.canReview; onTriggered: readerBridge.readerAction("review") }
-                            MenuItem { text: qsTr("Edit transcript"); enabled: root.info.canDelete; onTriggered: readerBridge.readerAction("advanced") }
-                            MenuItem { text: qsTr("Delete transcript"); enabled: root.info.canDelete; onTriggered: readerBridge.readerAction("delete") }
+                            background: Rectangle { implicitWidth: 190; color: theme.base; border.color: theme.mid; radius: 8 }
+                            ThemedMenuItem { text: qsTr("Export text"); enabled: !!root.info.id; onTriggered: if (readerBridge) readerBridge.readerAction("export") }
+                            ThemedMenuItem { text: qsTr("Attach clients"); enabled: root.info.canAttach === true; onTriggered: if (readerBridge) readerBridge.readerAction("attach") }
+                            ThemedMenuItem { text: qsTr("Mark reviewed"); enabled: root.info.canReview === true; onTriggered: if (readerBridge) readerBridge.readerAction("review") }
+                            ThemedMenuItem { text: qsTr("Edit transcript"); enabled: root.info.canDelete === true; onTriggered: if (readerBridge) readerBridge.readerAction("advanced") }
+                            ThemedMenuItem { text: qsTr("Delete transcript"); enabled: root.info.canDelete === true; onTriggered: if (readerBridge) readerBridge.readerAction("delete") }
                         }
                     }
                 }
@@ -176,7 +197,7 @@ Rectangle {
                 TextField { id: search; objectName: "qmlTranscriptSearch"; width: Math.max(150, Math.min(360, root.width - 380)); placeholderText: qsTr("Search transcript…"); color: theme.text; placeholderTextColor: root.muted; onTextChanged: root.query = text; background: Rectangle { color: theme.window; radius: 8; border.color: theme.mid } }
                 ThemedSelect {
                     id: speakers
-                    model: [qsTr("All speakers")].concat([...new Set(readerBridge.readerPhrases.map(p => p.speaker))])
+                    model: [qsTr("All speakers")].concat([...new Set(root.rawPhrases.map(p => p.speaker))])
                     onActivated: root.speaker = currentIndex === 0 ? "" : currentText
                     palette.button: theme.window
                     palette.buttonText: theme.text

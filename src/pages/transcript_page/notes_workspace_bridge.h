@@ -12,6 +12,7 @@
 #include <map>
 
 class CallNotesController;
+class PrompterPanel;
 class QQuickTextDocument;
 class QTextDocument;
 class QWidget;
@@ -48,6 +49,7 @@ public:
   void setClient(const std::optional<DuckClient> &client);
   void setMeeting(const QString &details, const QString &status);
   void setAgreements(const QJsonArray &agreements);
+  void setPrompterPanel(PrompterPanel *panel);
   void setControllerFactory(std::function<CallNotesController *(qint64, QObject *)> factory) { mFactory = std::move(factory); }
   Q_INVOKABLE void attachDocument(QQuickTextDocument *document);
   Q_INVOKABLE void selectMaterial(const QString &id);
@@ -62,6 +64,11 @@ public:
   Q_INVOKABLE void showSource(const QString &id);
   Q_INVOKABLE void retrySummary();
   Q_INVOKABLE void exportDocument();
+  Q_INVOKABLE void startPrompter();
+  Q_INVOKABLE void pausePrompter();
+  Q_INVOKABLE void dismissPrompterHint();
+  Q_INVOKABLE void prompterCardAction(const QString &cardId, const QString &action);
+  Q_INVOKABLE void showPrompterSource(const QString &id);
 signals:
   void stateChanged();
   void editorStatusChanged();
@@ -78,6 +85,7 @@ private:
   void documentEdited(Context *context);
   std::shared_ptr<pcm::database::Database> mDb;
   QPointer<CallNotesController> mLive;
+  QPointer<PrompterPanel> mPrompter;
   QPointer<QWidget> mDialogParent;
   QPointer<QQuickTextDocument> mQuickDocument;
   std::map<qint64, std::unique_ptr<Context>> mContexts;

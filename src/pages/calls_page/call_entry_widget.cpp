@@ -12,6 +12,7 @@
 #include <QQuickWidget>
 #include <QQmlContext>
 #include <QQuickItem>
+#include <QQuickWindow>
 
 namespace {
 // Group card: a softly tinted, bordered panel (alpha washes, so it works on the app's themes).
@@ -148,6 +149,11 @@ CallEntryWidget::CallEntryWidget(const bool showOwnMeetings, QWidget *parent)
   });
 }
 
+CallEntryWidget::~CallEntryWidget() {
+  delete mQuick;
+  mQuick = nullptr;
+}
+
 void CallEntryWidget::setUpcomingMeetings(const QList<UpcomingMeeting> &meetings) {
   mMeetings.clear();
   for (const auto &meeting : meetings)
@@ -230,6 +236,8 @@ void CallEntryWidget::showEvent(QShowEvent *event) {
 void CallEntryWidget::enableQuickWorkspace() {
   if (mQuick || !mShowOwnMeetings) return;
   Q_INIT_RESOURCE(meetings_qml);
+  if (qEnvironmentVariableIsEmpty("QT_QUICK_BACKEND"))
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
   for (auto *child : findChildren<QWidget *>(QString{}, Qt::FindDirectChildrenOnly)) child->hide();
   mQuick = new QQuickWidget(this);
   mQuick->setObjectName("meetingsQuickWorkspace");

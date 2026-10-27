@@ -7,7 +7,9 @@ Rectangle {
     objectName: "qmlNotesEditorDialog"
     property bool dark: false
     property bool preview: false
-    readonly property var info: workspaceBridge.state
+    readonly property var info: workspaceBridge ? workspaceBridge.state : ({})
+    readonly property var notesModel: workspaceBridge ? workspaceBridge.notes : []
+    readonly property string activeEditorNoteId: workspaceBridge ? workspaceBridge.editorNoteId : ""
     SystemPalette { id: theme; colorGroup: SystemPalette.Active }
     readonly property color paper: theme.base
     readonly property color ink: theme.text
@@ -15,6 +17,7 @@ Rectangle {
     readonly property color line: theme.mid
     readonly property color panel: theme.window
     readonly property color accent: theme.highlight
+    readonly property color soft: Qt.tint(paper, Qt.rgba(accent.r, accent.g, accent.b, 0.12))
     color: paper
     signal closeRequested()
     signal saved()
@@ -78,17 +81,64 @@ Rectangle {
                 ComboBox {
                     id: noteSelector
                     objectName: "qmlEditorNoteSelector"
-                    visible: workspaceBridge.notes.length > 0
+                    visible: root.notesModel.length > 0
                     Layout.fillWidth: true
                     textRole: "label"
                     valueRole: "id"
-                    model: [{id: "", label: qsTr("New note")}].concat(workspaceBridge.notes.map((n, i) => ({
+                    model: [{id: "", label: qsTr("New note")}].concat(root.notesModel.map((n, i) => ({
                         id: n.id, label: qsTr("Note") + " " + (i + 1) + " · " + String(n.body_markdown || "").replace(/\s+/g, " ").slice(0, 60)
                     })))
-                    currentIndex: Math.max(0, model.findIndex(n => n.id === workspaceBridge.editorNoteId))
+                    currentIndex: Math.max(0, model.findIndex(n => n.id === root.activeEditorNoteId))
                     onActivated: {
-                        workspaceBridge.selectEditorNote(currentValue)
-                        currentIndex = Qt.binding(() => Math.max(0, model.findIndex(n => n.id === workspaceBridge.editorNoteId)))
+                        if (workspaceBridge)
+                            workspaceBridge.selectEditorNote(currentValue)
+                        currentIndex = Qt.binding(() => Math.max(0, model.findIndex(n => n.id === root.activeEditorNoteId)))
+                    }
+                    background: Rectangle {
+                        radius: 8
+                        color: root.panel
+                        border.color: noteSelector.activeFocus ? root.accent : root.line
+                        border.width: 1
+                    }
+                    contentItem: Copy {
+                        leftPadding: 12
+                        rightPadding: 28
+                        text: noteSelector.displayText
+                        verticalAlignment: Text.AlignVCenter
+                        elide: Text.ElideRight
+                    }
+                    delegate: ItemDelegate {
+                        id: selectorDelegate
+                        required property var modelData
+                        required property int index
+                        width: noteSelector.width
+                        contentItem: Copy {
+                            text: selectorDelegate.modelData.label
+                            elide: Text.ElideRight
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        background: Rectangle {
+                            color: selectorDelegate.highlighted ? root.soft : root.paper
+                        }
+                        highlighted: noteSelector.highlightedIndex === selectorDelegate.index
+                    }
+                    popup: Popup {
+                        y: noteSelector.height + 4
+                        width: noteSelector.width
+                        implicitHeight: contentItem.implicitHeight + 8
+                        padding: 4
+                        contentItem: ListView {
+                            clip: true
+                            implicitHeight: contentHeight
+                            model: noteSelector.popup.visible ? noteSelector.delegateModel : null
+                            currentIndex: noteSelector.highlightedIndex
+                            ScrollIndicator.vertical: ScrollIndicator {}
+                        }
+                        background: Rectangle {
+                            color: root.paper
+                            border.color: root.line
+                            radius: 8
+                        }
                     }
                     palette.button: root.panel
                     palette.buttonText: root.ink
@@ -99,9 +149,9 @@ Rectangle {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 3
-                    Action { text: "B"; font.bold: true; quiet: true; enabled: !root.preview && editor.selectionStart !== editor.selectionEnd; implicitWidth: 36; onClicked: workspaceBridge.format(editor.selectionStart, editor.selectionEnd, "bold") }
-                    Action { text: "I"; font.italic: true; quiet: true; enabled: !root.preview && editor.selectionStart !== editor.selectionEnd; implicitWidth: 36; onClicked: workspaceBridge.format(editor.selectionStart, editor.selectionEnd, "italic") }
-                    Action { text: "☷"; quiet: true; enabled: !root.preview; implicitWidth: 36; onClicked: workspaceBridge.format(editor.selectionStart, editor.selectionEnd, "list") }
+                    Action { text: "B"; font.bold: true; quiet: true; enabled: !root.preview && editor.selectionStart !== editor.selectionEnd; implicitWidth: 36; onClicked: if (workspaceBridge) workspaceBridge.format(editor.selectionStart, editor.selectionEnd, "bold") }
+                    Action { text: "I"; font.italic: true; quiet: true; enabled: !root.preview && editor.selectionStart !== editor.selectionEnd; implicitWidth: 36; onClicked: if (workspaceBridge) workspaceBridge.format(editor.selectionStart, editor.selectionEnd, "italic") }
+                    Action { text: "☷"; quiet: true; enabled: !root.preview; implicitWidth: 36; onClicked: if (workspaceBridge) workspaceBridge.format(editor.selectionStart, editor.selectionEnd, "list") }
                     Item { Layout.fillWidth: true }
                     Action { text: root.preview ? qsTr("Editor") : qsTr("Preview"); quiet: true; onClicked: root.preview = !root.preview }
                 }
@@ -132,7 +182,7 @@ Rectangle {
                         padding: 4
                         topPadding: 12
                         background: null
-                        Component.onCompleted: { workspaceBridge.attachDocument(textDocument); forceActiveFocus() }
+                        Component.onCompleted: { if (workspaceBridge) workspaceBridge.attachDocument(textDocument); forceActiveFocus() }
                     }
                 }
                 Repeater {
@@ -141,7 +191,7 @@ Rectangle {
                         required property var modelData
                         text: "↗ " + modelData.file_name
                         quiet: true
-                        onClicked: workspaceBridge.openAttachment(workspaceBridge.editorNoteId, modelData.id)
+                        onClicked: if (workspaceBridge) workspaceBridge.openAttachment(root.activeEditorNoteId, modelData.id)
                     }
                 }
                 Repeater {
@@ -151,11 +201,11 @@ Rectangle {
                         required property int index
                         Layout.fillWidth: true
                         Copy { text: modelData.name; color: root.muted; Layout.fillWidth: true }
-                        Action { text: "×"; quiet: true; onClicked: workspaceBridge.removeAttachment(index) }
+                        Action { text: "×"; quiet: true; onClicked: if (workspaceBridge) workspaceBridge.removeAttachment(index) }
                     }
                 }
                 Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: root.line }
-                Action { text: "+ " + qsTr("Attach files"); quiet: true; onClicked: workspaceBridge.attachFiles() }
+                Action { text: "+ " + qsTr("Attach files"); quiet: true; onClicked: if (workspaceBridge) workspaceBridge.attachFiles() }
             }
             Rectangle {
                 objectName: "qmlEditorContext"
@@ -177,7 +227,7 @@ Rectangle {
                         Copy { text: qsTr("Meeting context"); color: root.accent; font.pixelSize: 12; Layout.fillWidth: true }
                         Copy { text: "✧ " + qsTr("Meeting summary"); font.weight: Font.DemiBold; Layout.fillWidth: true }
                         Copy { text: root.info.summary || qsTr("No summary yet"); color: root.muted; Layout.fillWidth: true }
-                        Action { text: "+ " + qsTr("Add to my notes"); enabled: (root.info.summary || "").length > 0; onClicked: workspaceBridge.appendSummary() }
+                        Action { text: "+ " + qsTr("Add to my notes"); enabled: (root.info.summary || "").length > 0; onClicked: if (workspaceBridge) workspaceBridge.appendSummary() }
                         Copy { text: qsTr("For the next meeting"); font.weight: Font.DemiBold; Layout.topMargin: 14; Layout.fillWidth: true; visible: (root.info.agreements || []).length > 0 }
                         Repeater {
                             model: root.info.agreements || []
@@ -202,7 +252,7 @@ Rectangle {
             rowSpacing: 12
             Copy {
                 objectName: "qmlEditorSaveStatus"
-                text: workspaceBridge.saveStatus || (workspaceBridge.editorDirty ? qsTr("Unsaved changes") : qsTr("No unsaved changes"))
+                text: workspaceBridge ? (workspaceBridge.saveStatus || (workspaceBridge.editorDirty ? qsTr("Unsaved changes") : qsTr("No unsaved changes"))) : ""
                 color: root.muted
                 font.pixelSize: 12
                 Layout.fillWidth: true
@@ -216,7 +266,7 @@ Rectangle {
                     text: qsTr("Save note")
                     primary: true
                     enabled: editor.length > 0 || (root.info.attachments || []).length > 0 || (root.info.savedAttachments || []).length > 0
-                    onClicked: { if (workspaceBridge.saveEditorSession()) root.saved() }
+                    onClicked: { if (workspaceBridge && workspaceBridge.saveEditorSession()) root.saved() }
                 }
             }
         }

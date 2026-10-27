@@ -19,6 +19,7 @@
 #include <QQmlContext>
 #include <QScopeGuard>
 #include <QQuickItem>
+#include <QQuickWindow>
 #include <QLineEdit>
 
 namespace {
@@ -98,6 +99,12 @@ TranscriptListPage::TranscriptListPage(std::shared_ptr<pcm::database::Database> 
   };
   reload();
 }
+
+TranscriptListPage::~TranscriptListPage() {
+  delete mQuick;
+  mQuick = nullptr;
+}
+
 void TranscriptListPage::setConfirmHook(std::function<bool(const QString &)> hook) {
   if (hook) mConfirm = std::move(hook);
 }
@@ -225,6 +232,8 @@ void TranscriptListPage::reload() {
 void TranscriptListPage::enableQuickWorkspace() {
   if (mQuick) return;
   Q_INIT_RESOURCE(notes_workspace_qml);
+  if (qEnvironmentVariableIsEmpty("QT_QUICK_BACKEND"))
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
   for (auto *child : findChildren<QWidget *>(QString{}, Qt::FindDirectChildrenOnly)) child->hide();
   auto *outer = qobject_cast<QHBoxLayout *>(layout());
   while (auto *item = outer->takeAt(0)) delete item;

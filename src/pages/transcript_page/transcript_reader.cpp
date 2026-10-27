@@ -8,6 +8,7 @@
 #include <QPointer>
 #include <QQmlContext>
 #include <QQuickWidget>
+#include <QQuickWindow>
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -15,9 +16,21 @@
 #include <QToolButton>
 #include <QQuickItem>
 
+TranscriptPage::~TranscriptPage() {
+  if (mExternalHeader) {
+    for (auto *menu : mExternalHeader->findChildren<QMenu *>()) delete menu;
+    delete mExternalHeader;
+    mExternalHeader = nullptr;
+  }
+  delete mQuickReader;
+  mQuickReader = nullptr;
+}
+
 void TranscriptPage::enableQuickReader() {
   if (mQuickReader) return;
   Q_INIT_RESOURCE(notes_workspace_qml);
+  if (qEnvironmentVariableIsEmpty("QT_QUICK_BACKEND"))
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
   mQuickReader = new QQuickWidget(mTranscriptHost);
   mQuickReader->setObjectName("transcriptQuickReader");
   mQuickReader->setResizeMode(QQuickWidget::SizeRootObjectToView);

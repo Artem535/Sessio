@@ -43,7 +43,7 @@ PrompterPanel::PrompterPanel(CallPrompterController *controller, std::shared_ptr
   hintLayout->setContentsMargins(14, fontMetrics().height() + 20, 14, 12);
   mHintText = plainLabel({}, mHint); hintLayout->addWidget(mHintText);
   auto *hide = new QPushButton(tr("Hide"), mHint); hintLayout->addWidget(hide);
-  connect(hide, &QPushButton::clicked, this, [this] { mDismissedHint = mHintText->text(); mHint->hide(); });
+  connect(hide, &QPushButton::clicked, this, &PrompterPanel::dismissHint);
   mHint->hide();
   auto *scroll = mScroll = new QScrollArea(this); scroll->setWidgetResizable(true); scroll->setFrameShape(QFrame::NoFrame);
   auto *content = new QWidget(scroll); auto *body = new QVBoxLayout(content);
@@ -66,8 +66,33 @@ PrompterPanel::PrompterPanel(CallPrompterController *controller, std::shared_ptr
   connect(controller, &CallPrompterController::statusChanged, this, [this](const QString &status) {
     mStatus->setText(status); mPause->setEnabled(mController && mController->running());
     mStart->setEnabled(mController && !mController->running());
+    emit stateChanged();
   });
   refresh();
+}
+bool PrompterPanel::controlsVisible() const { return mStart && !mStart->isHidden(); }
+QString PrompterPanel::activeHint() const {
+  if (!mController || mController->suggestions().isEmpty()) return {};
+  const auto text = mController->suggestions().first().toObject()["text"].toString();
+  return text == mDismissedHint ? QString{} : text;
+}
+void PrompterPanel::dismissHint() {
+  mDismissedHint = mHintText->text();
+  mHint->hide();
+  emit stateChanged();
+}
+void PrompterPanel::triggerStart() {
+  if (mStart && mStart->isEnabled()) mStart->click();
+  else if (!mController || !mController->running()) emit startRequested();
+}
+void PrompterPanel::triggerPause() {
+  if (mPause && mPause->isEnabled()) mPause->click();
+  else if (mController && mController->running()) emit pauseRequested();
+}
+void PrompterPanel::triggerCardAction(const QString &cardId, const QString &action) {
+  if (auto *widget = mCardWidgets.value(cardId))
+    if (auto *button = widget->findChild<QPushButton *>(action); button && button->isEnabled())
+      button->click();
 }
 void PrompterPanel::setEmbedded(bool embedded) {
   if (!embedded || mScroll->isHidden()) return;
@@ -140,7 +165,7 @@ void PrompterPanel::refresh() {
         if (texts.isEmpty()) return;
         for (int i = 0; i < texts.size(); ++i) texts[i] = QString::number(i + 1) + QStringLiteral(" · ") + texts[i];
         bool ok = false; QPointer<PrompterPanel> guard(this);
-        const auto text = QInputDialog::getItem(this, tr("Review the target"), tr("Agreement to change or cancel"), texts, 0, false, &ok);
+        const auto text = QInputDialog::getItem(window(), tr("Review the target"), tr("Agreement to change or cancel"), texts, 0, false, &ok);
         if (guard && ok && mController) mController->resolveCard(id, ids[texts.indexOf(text)]);
       });
       connect(accept, &QPushButton::clicked, this, [this, id] { if (mController) mController->acceptCard(id); });
@@ -150,7 +175,7 @@ void PrompterPanel::refresh() {
         QString text;
         for (const auto &c : mController->cards()) if (c.toObject()["id"].toString() == id) text = c.toObject()["action"].toString();
         QPointer<PrompterPanel> guard(this); bool ok = false;
-        const auto edited = QInputDialog::getMultiLineText(this, tr("Review agreement"), tr("Agreement"), text, &ok);
+        const auto edited = QInputDialog::getMultiLineText(window(), tr("Review agreement"), tr("Agreement"), text, &ok);
         if (guard && ok && mController) mController->acceptCard(id, edited);
       });
       connect(save, &QPushButton::clicked, this, [this, id] { saveNote(id); });
@@ -172,8 +197,8 @@ void PrompterPanel::refresh() {
     widget->findChild<QPushButton *>("edit")->setEnabled(editable);
     widget->findChild<QPushButton *>("reject")->setEnabled(decision == "pending");
     auto *save = widget->findChild<QPushButton *>("save");
-    save->setEnabled((editable || decision == "accepted") && sourceValid && card["note_id"].toInteger() <= 0);
-    save->setText(card["note_id"].toInteger() > 0 ? tr("Saved to notes") : tr("To notes"));
+    save->setEnabled((editable || decision == "accepted") && sourceValid && card["note_id"].toInteger() <= 0 && !mSavedCallNotes.contains(id));
+    save->setText(card["note_id"].toInteger() > 0 || mSavedCallNotes.contains(id) ? tr("Saved to notes") : tr("To notes"));
     widget->setVisible(decision != "rejected" && decision != "superseded");
   }
   for (auto it = mCardWidgets.begin(); it != mCardWidgets.end();) {
@@ -187,6 +212,7 @@ void PrompterPanel::refresh() {
   mRecords->setText(records.join("\n\n"));
   if (mScroll->isHidden()) mRecords->hide(); mEmpty->setVisible(pending == 0);
   emit pendingCountChanged(pending);
+  emit stateChanged();
 }
 void PrompterPanel::saveNote(const QString &cardId) {
   if (!mController) return;
@@ -202,12 +228,13 @@ void PrompterPanel::saveNote(const QString &cardId) {
       mSavedCallNotes.insert(cardId); emit noteSaved();
       auto *widget = mCardWidgets.value(cardId);
       if (widget) { auto *save = widget->findChild<QPushButton *>("save"); save->setEnabled(false); save->setText(tr("Saved to notes")); }
+      emit stateChanged();
     }
     return;
   }
   const auto clients = mController->clientIds();
   if (clients.empty()) {
-    QMessageBox::information(this, tr("Agreement kept as a draft"),
+    QMessageBox::information(window(), tr("Agreement kept as a draft"),
         tr("Attach a client to this transcript to save the agreement in client notes."));
     return;
   }
@@ -219,9 +246,12 @@ void PrompterPanel::saveNote(const QString &cardId) {
       names << tr("%1 · #%2").arg(client ? QString::fromStdString(client->name.value_or("")) : QString()).arg(id);
     }
     bool ok = false; QPointer<PrompterPanel> guard(this);
-    const auto name = QInputDialog::getItem(this, tr("Save to client notes"), tr("Client"), names, 0, false, &ok);
+    const auto name = QInputDialog::getItem(window(), tr("Save to client notes"), tr("Client"), names, 0, false, &ok);
     if (!guard || !ok) return;
     selected = clients[names.indexOf(name)];
   }
-  if (mController->saveNote(cardId, selected)) emit noteSaved();
+  if (mController->saveNote(cardId, selected)) {
+    emit noteSaved();
+    emit stateChanged();
+  }
 }

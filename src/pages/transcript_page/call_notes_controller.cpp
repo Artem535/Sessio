@@ -152,6 +152,7 @@ void CallNotesController::addPhrase(const DuckTranscriptPhrase &p) {
   if (p.transcript_id != mTranscriptId) return;
   mDirty = true;
   if (mEnabled && !mInFlight && !mEnded) mBatch.start();
+  emit changed();
 }
 void CallNotesController::setGenerationEnabled(bool enabled) {
   mEnabled = enabled;

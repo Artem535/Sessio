@@ -9,7 +9,9 @@ Rectangle {
     SystemPalette { id: theme }
     color: theme.window
     property string query: ""
-    readonly property var visibleRecords: libraryBridge.records.filter(r => (r.title + " " + r.date).toLowerCase().includes(query.toLowerCase()))
+    readonly property var recordsModel: libraryBridge ? libraryBridge.records : []
+    readonly property string noticeText: libraryBridge ? libraryBridge.notice : ""
+    readonly property var visibleRecords: recordsModel.filter(r => (r.title + " " + r.date).toLowerCase().includes(query.toLowerCase()))
     readonly property color muted: Qt.tint(theme.base, Qt.rgba(theme.text.r, theme.text.g, theme.text.b, 0.65))
     component Action: Button {
         id: control
@@ -48,7 +50,7 @@ Rectangle {
             onTextChanged: root.query = text
             background: Rectangle { color: theme.base; border.color: theme.mid; radius: 8 }
         }
-        Text { text: libraryBridge.notice; visible: text.length > 0; color: root.muted; wrapMode: Text.Wrap; Layout.fillWidth: true }
+        Text { text: root.noticeText; visible: text.length > 0; color: root.muted; wrapMode: Text.Wrap; Layout.fillWidth: true }
         ListView {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -60,7 +62,7 @@ Rectangle {
                 required property var modelData
                 width: ListView.view.width
                 padding: 20
-                onClicked: libraryBridge.openRecord(modelData.id, modelData.material)
+                onClicked: if (libraryBridge) libraryBridge.openRecord(modelData.id, modelData.material)
                 background: Rectangle {
                     radius: 8
                     color: record.hovered ? theme.base : "transparent"
@@ -76,7 +78,7 @@ Rectangle {
                     }
                     Action {
                         text: qsTr("Open")
-                        onClicked: libraryBridge.openRecord(record.modelData.id, record.modelData.material)
+                        onClicked: if (libraryBridge) libraryBridge.openRecord(record.modelData.id, record.modelData.material)
                     }
                     Action {
                         text: "⋯"
@@ -96,7 +98,7 @@ Rectangle {
                             MenuItem {
                                 id: remove
                                 text: qsTr("Delete transcript")
-                                onTriggered: libraryBridge.removeRecord(record.modelData.id)
+                                onTriggered: if (libraryBridge) libraryBridge.removeRecord(record.modelData.id)
                                 contentItem: Text { text: remove.text; color: remove.highlighted ? theme.highlightedText : theme.text; font.pixelSize: 14; verticalAlignment: Text.AlignVCenter }
                                 background: Rectangle { radius: 5; color: remove.highlighted ? theme.highlight : "transparent" }
                             }

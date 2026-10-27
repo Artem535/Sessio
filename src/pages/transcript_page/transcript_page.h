@@ -21,6 +21,7 @@ class TranscriptPage final : public QWidget {
 public:
   TranscriptPage(std::shared_ptr<pcm::database::Database> db, int64_t eventId,
                  const QString &title, QWidget *parent = nullptr);
+  ~TranscriptPage() override;
   void reload(int64_t eventId, const QString &title);
   void reloadTranscript(int64_t transcriptId, const QString &title);
   QString exportText() const;

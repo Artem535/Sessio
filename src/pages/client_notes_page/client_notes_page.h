@@ -56,7 +56,7 @@ public:
   };
   explicit ClientNotesPage(std::shared_ptr<pcm::database::Database> db,
                            QWidget *parent = nullptr);
-  ~ClientNotesPage() override = default;
+  ~ClientNotesPage() override;
   void setCallNoteActions(qint64 materialId, CallNoteActions actions);
   // Shows only this meeting's composer and entries; an outer scroll area scrolls the page.
   void setEmbedded(bool embedded);

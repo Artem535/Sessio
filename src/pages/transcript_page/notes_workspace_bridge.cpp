@@ -1,6 +1,8 @@
 #include "notes_workspace_bridge.h"
 #include "call_notes_controller.h"
+#include "call_notes_page.h"
 #include "meeting_history.h"
+#include "prompter_panel.h"
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QFileDialog>
@@ -183,12 +185,101 @@ void NotesWorkspaceBridge::setMeeting(const QString &details, const QString &sta
   mMeeting = details; mMeetingStatus = status; emit stateChanged();
 }
 void NotesWorkspaceBridge::setAgreements(const QJsonArray &agreements) { mAgreements = agreements; emit stateChanged(); }
+void NotesWorkspaceBridge::setPrompterPanel(PrompterPanel *panel) {
+  if (mPrompter == panel) return;
+  mPrompter = panel;
+  if (!panel) { emit stateChanged(); return; }
+  connect(panel, &PrompterPanel::stateChanged, this, &NotesWorkspaceBridge::stateChanged);
+  if (auto *ctrl = panel->controller()) {
+    connect(ctrl, &CallPrompterController::cardsChanged, this, &NotesWorkspaceBridge::stateChanged);
+    connect(ctrl, &CallPrompterController::statusChanged, this, &NotesWorkspaceBridge::stateChanged);
+  }
+  emit stateChanged();
+}
 
 QVariantMap NotesWorkspaceBridge::state() const {
+  const bool current = !mLive || mSelected == mLive->materialId();
   QVariantMap result{{"client", mClient ? QString::fromStdString(mClient->name.value_or("")) + " " +
       QString::fromStdString(mClient->last_name.value_or("")) : tr("Meeting notes")},
       {"meeting", mMeeting}, {"materialId", QString::number(mSelected)}, {"current", mLive && mSelected == mLive->materialId()}};
-  auto *item = context(); if (!item || !item->storage) return result;
+  auto *item = context();
+  const bool ended = item && item->storage ? item->storage->ended() : (mLive ? mLive->ended() : false);
+  if (current && mPrompter && mPrompter->controller()) {
+    auto *ctrl = mPrompter->controller();
+    const bool controls = mPrompter->controlsVisible() && !ended;
+    const QString hint = mPrompter->activeHint();
+    QVariantList cards;
+    int pending = 0;
+    for (const auto &value : ctrl->cards()) {
+      const auto card = value.toObject();
+      const auto id = card["id"].toString();
+      const auto decision = card["decision"].toString();
+      if (decision == "pending") ++pending;
+      if (decision == "rejected" || decision == "superseded") continue;
+      const bool unresolved = card["unresolved"].toBool();
+      const QString title = unresolved ? PrompterPanel::tr("Needs clarification")
+          : card["kind"].toString() == "cancel" ? PrompterPanel::tr("Proposed cancellation")
+          : !card["target_id"].toString().isEmpty() ? PrompterPanel::tr("Proposed change")
+          : PrompterPanel::tr("Agreement");
+      QString previous = card["previous_action"].toString();
+      if (previous.isEmpty())
+        for (const auto &r : ctrl->records())
+          if (r.toObject()["id"] == card["target_id"]) previous = r.toObject()["text"].toString();
+      if (previous.isEmpty())
+        for (const auto &c : ctrl->cards())
+          if (c.toObject()["id"] == card["target_id"]) previous = c.toObject()["action"].toString();
+      const bool sourceValid = ctrl->evidenceAvailable(id);
+      const bool editable = decision == "pending" && !unresolved && sourceValid;
+      const bool savedToNotes = card["note_id"].toInteger() > 0 || mPrompter->isCallNoteSaved(id);
+      QVariantList sources;
+      for (const auto &evidence : card["evidence_ids"].toArray()) {
+        const auto evidenceId = evidence.toString();
+        QJsonObject source = ctrl->source(evidenceId);
+        for (const auto &snapshot : card["evidence_snapshot"].toArray())
+          if (snapshot.toObject()["id"].toString() == evidenceId) source = snapshot.toObject();
+        const auto ms = source["start_ms"].toInteger();
+        sources.append(QVariantMap{
+          {"id", evidenceId},
+          {"quote", source["speaker"].toString() + QStringLiteral(": «") + source["text"].toString() + QStringLiteral("»")},
+          {"label", PrompterPanel::tr("Source · %1:%2").arg(ms / 60000).arg((ms / 1000) % 60, 2, 10, QLatin1Char('0'))},
+          {"tooltip", source["text"].toString()}
+        });
+      }
+      cards.append(QVariantMap{
+        {"id", id},
+        {"decision", decision},
+        {"unresolved", unresolved},
+        {"title", title},
+        {"action", card["action"].toString()},
+        {"previous", previous.isEmpty() ? QString{} : PrompterPanel::tr("Previous agreement: %1").arg(previous)},
+        {"sourceValid", sourceValid},
+        {"sourceWarning", PrompterPanel::tr("The source was changed or deleted. Review the transcript.")},
+        {"sources", sources},
+        {"canAccept", editable},
+        {"canEdit", editable},
+        {"canReject", decision == "pending"},
+        {"canResolve", decision == "pending" && unresolved},
+        {"savedToNotes", savedToNotes},
+        {"canSaveToNotes", (editable || decision == "accepted") && sourceValid && !savedToNotes}
+      });
+    }
+    result["prompterVisible"] = controls || !cards.isEmpty() || !hint.isEmpty();
+    result["prompterControls"] = controls;
+    result["prompterRunning"] = ctrl->running();
+    result["prompterStatus"] = ctrl->status();
+    result["prompterBadge"] = pending > 0 ? CallNotesPage::tr("%n new", nullptr, pending) : QString{};
+    result["prompterHint"] = hint;
+    result["prompterCards"] = cards;
+  } else {
+    result["prompterVisible"] = false;
+    result["prompterControls"] = false;
+    result["prompterRunning"] = false;
+    result["prompterStatus"] = QString{};
+    result["prompterBadge"] = QString{};
+    result["prompterHint"] = QString{};
+    result["prompterCards"] = QVariantList{};
+  }
+  if (!item || !item->storage) return result;
   auto *storage = item->storage.data();
   const auto material = mDb->get_call_material(storage->materialId());
   result["date"] = QDateTime::fromMSecsSinceEpoch(material.created_at).toLocalTime().toString("dd MMMM yyyy · HH:mm");
@@ -227,8 +318,10 @@ QVariantList NotesWorkspaceBridge::notes() const {
 }
 QVariantList NotesWorkspaceBridge::phrases() const {
   QVariantList result;
-  if (!context() || !context()->storage) return result;
-  for (const auto transcript : mDb->get_call_material_transcript_ids(context()->storage->materialId()))
+  auto ids = context() && context()->storage ? mDb->get_call_material_transcript_ids(context()->storage->materialId()) : std::vector<int64_t>{};
+  if (ids.empty() && mPrompter && mPrompter->controller() && mPrompter->controller()->transcriptId() > 0)
+    ids.push_back(mPrompter->controller()->transcriptId());
+  for (const auto transcript : ids)
     for (const auto &phrase : mDb->get_transcript_phrases(transcript))
       result.append(QVariantMap{{"id", QString::number(phrase.id)}, {"text", QString::fromStdString(phrase.text)},
           {"speaker", QString::fromStdString(phrase.speaker_name.value_or(phrase.track_role))},
@@ -363,4 +456,22 @@ void NotesWorkspaceBridge::exportDocument() {
   if (!file.open(QIODevice::WriteOnly) || file.write(data) != data.size() || !file.commit()) {
     mSaveStatus = tr("Could not save — keep this page open"); emit stateChanged();
   }
+}
+void NotesWorkspaceBridge::startPrompter() {
+  if (mPrompter) mPrompter->triggerStart();
+}
+void NotesWorkspaceBridge::pausePrompter() {
+  if (mPrompter) mPrompter->triggerPause();
+}
+void NotesWorkspaceBridge::dismissPrompterHint() {
+  if (mPrompter) mPrompter->dismissHint();
+}
+void NotesWorkspaceBridge::prompterCardAction(const QString &cardId, const QString &action) {
+  if (mPrompter) mPrompter->triggerCardAction(cardId, action);
+}
+void NotesWorkspaceBridge::showPrompterSource(const QString &id) {
+  bool ok = false; const auto phrase = id.toLongLong(&ok);
+  if (!ok || phrase <= 0) return;
+  if (mPrompter) emit mPrompter->sourceRequested(phrase);
+  else emit sourceRequested(phrase);
 }

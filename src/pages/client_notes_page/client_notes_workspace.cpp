@@ -10,15 +10,28 @@
 #include <QQmlContext>
 #include <QQuickWidget>
 #include <QQuickItem>
+#include <QQuickWindow>
 #include <QHBoxLayout>
 #include <QSignalBlocker>
 #include <QToolButton>
 #include <QMenu>
 #include <QSplitter>
 
+ClientNotesPage::~ClientNotesPage() {
+  if (mExternalHeader) {
+    for (auto *menu : mExternalHeader->findChildren<QMenu *>()) delete menu;
+    delete mExternalHeader;
+    mExternalHeader = nullptr;
+  }
+  delete mQuickWorkspace;
+  mQuickWorkspace = nullptr;
+}
+
 void ClientNotesPage::enableQuickWorkspace() {
   if (mQuickWorkspace) return;
   Q_INIT_RESOURCE(client_notes_qml);
+  if (qEnvironmentVariableIsEmpty("QT_QUICK_BACKEND"))
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
   auto *root = qobject_cast<QVBoxLayout *>(layout());
   mHeaderSurface->hide();
   mJournal->hide();

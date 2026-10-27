@@ -261,6 +261,7 @@ void TranscriptPage::setNotesView(QWidget *view) {
     mSplitter->setSizes({760, 440});
     mSplitInitialized = true;
   }
+  emit readerChanged();
 }
 
 bool TranscriptPage::eventFilter(QObject *object, QEvent *event) {
@@ -289,6 +290,7 @@ void TranscriptPage::setNotesVisible(bool visible) {
   mStatus->setVisible(!mNotesVisible);
   mNotesToggle->setChecked(mNotesVisible);
   mTranscriptHost->setVisible(!mNotesVisible || mSourceToggle->isChecked());
+  emit readerChanged();
 }
 
 void TranscriptPage::activateTranscript(qint64 id) {
@@ -306,8 +308,9 @@ bool TranscriptPage::focusPhrase(qint64 phraseId) {
   }
   mSearch->clear();
   if (mQuickReader) {
+    if (mNotesVisible) mSourceToggle->setChecked(true);
     setReaderMode(true);
-    setNotesVisible(false);
+    mTranscriptHost->setVisible(true);
     emit readerPhraseFocused(QString::number(phraseId));
     return true;
   }

@@ -13,6 +13,7 @@ class TranscriptListPage final : public QWidget {
   Q_PROPERTY(QString notice READ notice NOTIFY recordsChanged)
 public:
   explicit TranscriptListPage(std::shared_ptr<pcm::database::Database> db, QWidget *parent = nullptr);
+  ~TranscriptListPage() override;
   void reload();
   void setConfirmHook(std::function<bool(const QString &)> hook);
   [[nodiscard]] int transcriptCount() const { return mCount; }
