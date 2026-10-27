@@ -11,6 +11,9 @@
 #include <QFrame>
 #include <QLabel>
 #include <QTemporaryDir>
+#include <QQuickWidget>
+#include <QQuickItem>
+#include <QLineEdit>
 #include <gtest/gtest.h>
 
 class TranscriptListTest : public ::testing::Test {
@@ -23,6 +26,27 @@ protected:
   pcm::config::Config conf;
   std::shared_ptr<pcm::database::Database> db;
 };
+
+TEST_F(TranscriptListTest, QuickLibraryLoadsAndOpensPersistedRecording) {
+  const auto id = db->add_transcript(std::nullopt, "live_local_v1");
+  TranscriptListPage page(db);
+  page.enableQuickWorkspace();
+  auto *quick = page.findChild<QQuickWidget *>("transcriptLibraryQuickWorkspace");
+  ASSERT_NE(quick, nullptr);
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *header = page.headerControls();
+  EXPECT_EQ(header, page.headerControls());
+  EXPECT_TRUE(quick->rootObject()->property("externalHeader").toBool());
+  auto *search = header->findChild<QLineEdit *>("transcriptsHeaderSearch");
+  ASSERT_NE(search, nullptr);
+  search->setText("synthetic search");
+  EXPECT_EQ(quick->rootObject()->property("query").toString(), "synthetic search");
+  ASSERT_EQ(page.records().size(), 1);
+  QSignalSpy open(&page, &TranscriptListPage::openTranscriptRequested);
+  page.openRecord(QString::number(id), false);
+  ASSERT_EQ(open.count(), 1);
+  EXPECT_EQ(open.first().first().toLongLong(), id);
+}
 
 TEST_F(TranscriptListTest, ManualOnlyCallCanBeReopenedWithoutTranscriptClientOrCalendarEvent) {
   const auto id = db->create_call_material(std::nullopt);

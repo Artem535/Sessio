@@ -9,6 +9,9 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QQuickWidget>
+#include <QQmlContext>
+#include <QQuickItem>
 
 namespace {
 // Group card: a softly tinted, bordered panel (alpha washes, so it works on the app's themes).
@@ -146,6 +149,11 @@ CallEntryWidget::CallEntryWidget(const bool showOwnMeetings, QWidget *parent)
 }
 
 void CallEntryWidget::setUpcomingMeetings(const QList<UpcomingMeeting> &meetings) {
+  mMeetings.clear();
+  for (const auto &meeting : meetings)
+    mMeetings.append(QVariantMap{{"id", meeting.meetingRef}, {"title", meeting.title},
+      {"date", meeting.startTime.toLocalTime().toString("dd.MM.yyyy · HH:mm")}, {"enabled", meeting.joinEnabled}});
+  emit workspaceChanged();
   if (!mShowOwnMeetings) {
     return;
   }
@@ -183,6 +191,7 @@ void CallEntryWidget::preselectOwnMeeting(const QString &meetingRef) {
   if (!mShowOwnMeetings) {
     return;
   }
+  emit meetingPreselected(meetingRef);
   if (auto *button = findChild<QPushButton *>("joinOwnMeetingButton_" + meetingRef)) {
     button->setFocus();
   }
@@ -191,16 +200,20 @@ void CallEntryWidget::preselectOwnMeeting(const QString &meetingRef) {
 void CallEntryWidget::prefillJoinCode(const QString &code, const QString &passcode) {
   mCodeEdit->setText(code);
   mPasscodeEdit->setText(passcode);
+  emit workspaceChanged();
+  emit invitationPrefilled();
 }
 
 void CallEntryWidget::showError(const QString &message) {
   mErrorLabel->setText(message);
   mErrorLabel->setVisible(true);
+  emit workspaceChanged();
 }
 
 void CallEntryWidget::clearError() {
   mErrorLabel->clear();
   mErrorLabel->setVisible(false);
+  emit workspaceChanged();
 }
 
 QString CallEntryWidget::displayName() const {
@@ -210,5 +223,69 @@ QString CallEntryWidget::displayName() const {
 void CallEntryWidget::showEvent(QShowEvent *event) {
   QWidget::showEvent(event);
   mDisplayNameEdit->setText(pcm::app_settings::callDisplayName());
+  emit workspaceChanged();
   emit shown();
+}
+
+void CallEntryWidget::enableQuickWorkspace() {
+  if (mQuick || !mShowOwnMeetings) return;
+  Q_INIT_RESOURCE(meetings_qml);
+  for (auto *child : findChildren<QWidget *>(QString{}, Qt::FindDirectChildrenOnly)) child->hide();
+  mQuick = new QQuickWidget(this);
+  mQuick->setObjectName("meetingsQuickWorkspace");
+  mQuick->setResizeMode(QQuickWidget::SizeRootObjectToView);
+  mQuick->setClearColor(palette().color(QPalette::Base));
+  mQuick->rootContext()->setContextProperty("meetingsBridge", this);
+  auto *root = qobject_cast<QVBoxLayout *>(layout());
+  // The former form is retained as the authoritative join state, not layout space.
+  while (auto *item = root->takeAt(0)) delete item;
+  root->setContentsMargins(0, 0, 0, 0);
+  root->addWidget(mQuick, 1);
+  mQuick->setSource(QUrl("qrc:/sessio/meetings/MeetingsWorkspace.qml"));
+}
+void CallEntryWidget::setMaterialHistory(const QVariantList &history) { mMaterials = history; emit workspaceChanged(); }
+QWidget *CallEntryWidget::headerControls() {
+  if (mExternalHeader) return mExternalHeader;
+  enableQuickWorkspace();
+  mExternalHeader = new QWidget(this);
+  mExternalHeader->setObjectName("meetingsHeaderControls");
+  auto *row = new QHBoxLayout(mExternalHeader);
+  row->setContentsMargins(0, 0, 0, 0);
+  auto *title = new QLabel(tr("Meetings"), mExternalHeader);
+  auto heading = title->font(); heading.setPointSize(16); heading.setBold(true); title->setFont(heading);
+  row->addWidget(title);
+  row->addStretch();
+  auto *join = new QPushButton(tr("Join a meeting"), mExternalHeader);
+  row->addWidget(join);
+  connect(join, &QPushButton::clicked, this, &CallEntryWidget::invitationPrefilled);
+  if (mQuick && mQuick->rootObject()) mQuick->rootObject()->setProperty("externalHeader", true);
+  return mExternalHeader;
+}
+QString CallEntryWidget::error() const { return mErrorLabel->text(); }
+QString CallEntryWidget::code() const { return mCodeEdit->text(); }
+QString CallEntryWidget::passcode() const { return mPasscodeEdit->text(); }
+void CallEntryWidget::setDisplayName(const QString &name) {
+  if (mDisplayNameEdit->text() == name.left(64)) return;
+  mDisplayNameEdit->setText(name.left(64));
+  mDisplayNameEdit->setModified(true);
+  emit workspaceChanged();
+}
+void CallEntryWidget::joinOwn(const QString &ref) {
+  for (const auto &item : mMeetings)
+    if (item.toMap().value("id").toString() == ref && item.toMap().value("enabled").toBool()) {
+      emit ownMeetingJoinRequested(ref); return;
+    }
+}
+void CallEntryWidget::joinInvitation(const QString &code, const QString &passcode) {
+  prefillJoinCode(code, passcode);
+  emit joinByCodeRequested(code, passcode);
+}
+void CallEntryWidget::openMaterial(const QString &id) {
+  for (const auto &item : mMaterials)
+    if (item.toMap().value("id").toString() == id) { emit materialRequested(id.toLongLong()); return; }
+}
+void CallEntryWidget::openTranscript(const QString &id) {
+  for (const auto &item : mMaterials)
+    for (const auto &value : item.toMap().value("transcripts").toList())
+      if (value.toMap().value("id").toString() == id) { emit transcriptRequested(id.toLongLong()); return; }
 }

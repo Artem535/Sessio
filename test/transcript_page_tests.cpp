@@ -14,6 +14,8 @@
 #include <QPointer>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QQuickWidget>
+#include <QQuickItem>
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 #include <gtest/gtest.h>
 
@@ -58,6 +60,40 @@ TEST_F(TranscriptPageTest, NotesPaneCanBeHiddenAndReopenedWithoutLosingItsEditor
   EXPECT_TRUE(page->notesVisible());
   EXPECT_EQ(notes->toPlainText(), "Unsent clinical note");
   EXPECT_EQ(page->findChild<QSplitter *>("transcriptNotesSplitter")->count(), 2);
+}
+
+TEST_F(TranscriptPageTest, QuickReaderLoadsPersistedPhrasesAndRetainsMutationActions) {
+  page->enableQuickReader();
+  page->resize(1400, 900); page->show();
+  auto *quick = page->findChild<QQuickWidget *>("transcriptQuickReader");
+  ASSERT_NE(quick, nullptr);
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *header = page->headerControls();
+  EXPECT_EQ(header, page->headerControls());
+  EXPECT_TRUE(quick->rootObject()->property("externalHeader").toBool());
+  auto *history = header->findChild<QPushButton *>("readerHeaderHistory");
+  ASSERT_NE(history, nullptr);
+  const bool wasVisible = quick->rootObject()->property("historyVisible").toBool();
+  history->click();
+  EXPECT_EQ(quick->rootObject()->property("historyVisible").toBool(), !wasVisible);
+  ASSERT_EQ(page->readerPhrases().size(), 2);
+  EXPECT_EQ(page->readerPhrases().first().toMap().value("text").toString(), "First");
+  auto *search = quick->rootObject()->findChild<QQuickItem *>("qmlTranscriptSearch");
+  ASSERT_NE(search, nullptr);
+  search->setProperty("text", "First");
+  QApplication::processEvents();
+  auto *phrases = quick->rootObject()->findChild<QQuickItem *>("qmlTranscriptPhrases");
+  ASSERT_NE(phrases, nullptr);
+  EXPECT_EQ(phrases->property("count").toInt(), 1);
+  EXPECT_TRUE(page->focusPhrase(second));
+  QApplication::processEvents();
+  EXPECT_TRUE(search->property("text").toString().isEmpty());
+  page->readerAction("review");
+  EXPECT_EQ(db->get_transcript(id)->status, "reviewed");
+  if (qEnvironmentVariableIsSet("SESSIO_READER_SCREENSHOT")) {
+    QTest::qWait(100);
+    page->grab().save(qEnvironmentVariable("SESSIO_READER_SCREENSHOT"));
+  }
 }
 
 TEST_F(TranscriptPageTest, WrappedPhraseFitsAfterResizingTheSplitView) {

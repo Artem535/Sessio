@@ -242,6 +242,10 @@
         <source>Join</source>
         <translation>Войти</translation>
     </message>
+    <message>
+        <source>Meetings</source>
+        <translation>Встречи</translation>
+    </message>
 </context>
 <context>
     <name>CallNotesController</name>
@@ -915,6 +919,14 @@
         <translation>Прикрепить файлы</translation>
     </message>
     <message>
+        <source>Unsaved changes</source>
+        <translation>Есть несохранённые изменения</translation>
+    </message>
+    <message>
+        <source>Discard the unsaved note and change participant?</source>
+        <translation>Отменить несохранённую заметку и сменить участника?</translation>
+    </message>
+    <message>
         <source>Add note</source>
         <translation>Добавить заметку</translation>
     </message>
@@ -1118,6 +1130,129 @@
         <source>Key points</source>
         <translation>Ключевые моменты</translation>
     </message>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+    <message>
+        <source>Client card</source>
+        <translation>Карточка клиента</translation>
+    </message>
+    <message>
+        <source>Select participant</source>
+        <translation>Выберите участника</translation>
+    </message>
+</context>
+<context>
+    <name>ClientNotesWorkspace</name>
+    <message>
+        <source>Notes</source>
+        <translation>Заметки</translation>
+    </message>
+    <message>
+        <source>Select participant</source>
+        <translation>Выберите участника</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+    <message>
+        <source>Client card</source>
+        <translation>Карточка клиента</translation>
+    </message>
+    <message>
+        <source>New note</source>
+        <translation>Новая заметка</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Экспорт</translation>
+    </message>
+    <message>
+        <source>Search notes and summaries…</source>
+        <translation>Поиск по заметкам и итогам…</translation>
+    </message>
+    <message>
+        <source>All materials</source>
+        <translation>Все материалы</translation>
+    </message>
+    <message>
+        <source>Sessions and protocols</source>
+        <translation>Сессии и протоколы</translation>
+    </message>
+    <message>
+        <source>Free notes</source>
+        <translation>Свободные заметки</translation>
+    </message>
+    <message>
+        <source>Agreements</source>
+        <translation>Договорённости</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation>Сеанс</translation>
+    </message>
+    <message>
+        <source>Free note</source>
+        <translation>Свободная заметка</translation>
+    </message>
+    <message>
+        <source>No notes found</source>
+        <translation>Заметки не найдены</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>История</translation>
+    </message>
+    <message>
+        <source>Read</source>
+        <translation>Читать</translation>
+    </message>
+    <message>
+        <source>Open meeting</source>
+        <translation>Открыть встречу</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Открыть расшифровку</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Расшифровка</translation>
+    </message>
+    <message>
+        <source>Select a note or create a new one.</source>
+        <translation>Выберите заметку или создайте новую.</translation>
+    </message>
+    <message>
+        <source>Select a participant to view their notes.</source>
+        <translation>Выберите участника, чтобы открыть его заметки.</translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation>Редактор</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Просмотр</translation>
+    </message>
+    <message>
+        <source>Write a note in Markdown…</source>
+        <translation>Напишите заметку в Markdown…</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Прикрепить файлы</translation>
+    </message>
+    <message>
+        <source>Link to a session</source>
+        <translation>Привязать к сеансу</translation>
+    </message>
+    <message>
+        <source>Add note</source>
+        <translation>Добавить заметку</translation>
+    </message>
 </context>
 <context>
     <name>DaySummaryWidget</name>
@@ -1282,6 +1417,10 @@
         <translation>Детали</translation>
     </message>
     <message>
+        <source>Meetings</source>
+        <translation>Встречи</translation>
+    </message>
+    <message>
         <source>Search clients</source>
         <translation>Поиск клиентов</translation>
     </message>
@@ -1296,10 +1435,6 @@
     <message>
         <source>Notes</source>
         <translation>Заметки</translation>
-    </message>
-    <message>
-        <source>Calls</source>
-        <translation>Звонки</translation>
     </message>
     <message>
         <source>Transcripts</source>
@@ -1386,6 +1521,89 @@
     <message>
         <source>Hide</source>
         <translation>Скрыть</translation>
+    </message>
+</context>
+<context>
+    <name>MeetingsWorkspace</name>
+    <message>
+        <source>Meetings</source>
+        <translation>Встречи</translation>
+    </message>
+    <message>
+        <source>Join a meeting</source>
+        <translation>Подключиться к встрече</translation>
+    </message>
+    <message>
+        <source>Meeting history</source>
+        <translation>История встреч</translation>
+    </message>
+    <message>
+        <source>Your calls today</source>
+        <translation>Ваши звонки сегодня</translation>
+    </message>
+    <message>
+        <source>Search meetings…</source>
+        <translation>Поиск по встречам…</translation>
+    </message>
+    <message>
+        <source>Scheduled</source>
+        <translation>Запланирована</translation>
+    </message>
+    <message>
+        <source>Call materials</source>
+        <translation>Материалы встречи</translation>
+    </message>
+    <message>
+        <source>No meetings to show</source>
+        <translation>Нет встреч для отображения</translation>
+    </message>
+    <message>
+        <source>Scheduled online meetings appear here.</source>
+        <translation>Здесь появятся запланированные онлайн-встречи.</translation>
+    </message>
+    <message>
+        <source>Materials appear here after a call.</source>
+        <translation>После звонка здесь появятся его материалы.</translation>
+    </message>
+    <message>
+        <source>Before joining, check your name. Camera and microphone settings are shown on the next screen.</source>
+        <translation>Перед подключением проверьте своё имя. На следующем экране можно проверить камеру и микрофон.</translation>
+    </message>
+    <message>
+        <source>Name in calls</source>
+        <translation>Имя в звонках</translation>
+    </message>
+    <message>
+        <source>Check devices and join</source>
+        <translation>Проверить устройства и подключиться</translation>
+    </message>
+    <message>
+        <source>Meeting summary</source>
+        <translation>Итог встречи</translation>
+    </message>
+    <message>
+        <source>Open notes and materials</source>
+        <translation>Открыть заметки и материалы</translation>
+    </message>
+    <message>
+        <source>Transcripts</source>
+        <translation>Расшифровки</translation>
+    </message>
+    <message>
+        <source>Use a Sessio invitation code or invitation link.</source>
+        <translation>Введите код приглашения Sessio или ссылку-приглашение.</translation>
+    </message>
+    <message>
+        <source>Invitation code or link</source>
+        <translation>Код приглашения или ссылка</translation>
+    </message>
+    <message>
+        <source>Passcode</source>
+        <translation>Код доступа</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Продолжить</translation>
     </message>
 </context>
 <context>
@@ -3379,6 +3597,33 @@ See you!</source>
     </message>
 </context>
 <context>
+    <name>TranscriptLibrary</name>
+    <message>
+        <source>Transcripts</source>
+        <translation>Расшифровки</translation>
+    </message>
+    <message>
+        <source>Search recordings and participants…</source>
+        <translation>Поиск записей и участников…</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>Открыть</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>Другие действия</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Удалить расшифровку</translation>
+    </message>
+    <message>
+        <source>No recordings found</source>
+        <translation>Записи не найдены</translation>
+    </message>
+</context>
+<context>
     <name>TranscriptListPage</name>
     <message>
         <source>Call materials</source>
@@ -3449,6 +3694,18 @@ They appear here after a call with transcription turned on.</source>
             <numerusform>%n транскрипта</numerusform>
             <numerusform>%n транскриптов</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Transcripts</source>
+        <translation>Расшифровки</translation>
+    </message>
+    <message>
+        <source>Search recordings and participants…</source>
+        <translation>Поиск записей и участников…</translation>
+    </message>
+    <message>
+        <source>Call notes</source>
+        <translation>Заметки встречи</translation>
     </message>
     <message>
         <source>Could not load transcripts. Please try again.</source>
@@ -3585,6 +3842,18 @@ They appear here after a call with transcription turned on.</source>
         <source>Phrase text cannot be empty.</source>
         <translation>Текст реплики не может быть пустым.</translation>
     </message>
+    <message>
+        <source>Read transcript</source>
+        <translation>Читать расшифровку</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>История</translation>
+    </message>
+    <message>
+        <source>Edit transcript</source>
+        <translation>Редактировать расшифровку</translation>
+    </message>
 </context>
 <context>
     <name>TranscriptPanel</name>
@@ -3659,6 +3928,69 @@ They appear here after a call with transcription turned on.</source>
     <message>
         <source>Participant</source>
         <translation>Участник</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptReader</name>
+    <message>
+        <source>Back to transcripts</source>
+        <translation>К расшифровкам</translation>
+    </message>
+    <message>
+        <source>Recordings</source>
+        <translation>Записи встреч</translation>
+    </message>
+    <message>
+        <source>Find a recording</source>
+        <translation>Найти запись</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Расшифровка</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>История</translation>
+    </message>
+    <message>
+        <source>Call notes</source>
+        <translation>Заметки встречи</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>Другие действия</translation>
+    </message>
+    <message>
+        <source>Export text</source>
+        <translation>Экспорт текста</translation>
+    </message>
+    <message>
+        <source>Attach clients</source>
+        <translation>Привязать клиентов</translation>
+    </message>
+    <message>
+        <source>Mark reviewed</source>
+        <translation>Отметить как проверенную</translation>
+    </message>
+    <message>
+        <source>Edit transcript</source>
+        <translation>Редактировать расшифровку</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Удалить расшифровку</translation>
+    </message>
+    <message>
+        <source>Search transcript…</source>
+        <translation>Поиск по расшифровке…</translation>
+    </message>
+    <message>
+        <source>All speakers</source>
+        <translation>Все говорящие</translation>
+    </message>
+    <message>
+        <source>No matching phrases</source>
+        <translation>Подходящие фразы не найдены</translation>
     </message>
 </context>
 <context>
@@ -3879,6 +4211,10 @@ They appear here after a call with transcription turned on.</source>
 </context>
 <context>
     <name>pcm::Application</name>
+    <message>
+        <source>Call materials</source>
+        <translation>Материалы встречи</translation>
+    </message>
     <message>
         <source>Encrypted Backup</source>
         <translation>Зашифрованная резервная копия</translation>

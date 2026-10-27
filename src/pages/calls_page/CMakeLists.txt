@@ -3,7 +3,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CXX_STANDARD 20)
 
 set(TARGET_NAME ${PROJECT_NAME}_calls_page)
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia MultimediaWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Multimedia MultimediaWidgets QuickWidgets Qml)
 
 qt_add_library(${TARGET_NAME} STATIC
         call_entry_widget.h
@@ -21,9 +21,12 @@ qt_add_library(${TARGET_NAME} STATIC
         calls_page.h
         calls_page.cpp
 )
+qt_add_resources(${TARGET_NAME} meetings_qml PREFIX "/sessio/meetings" BASE "qml" FILES qml/MeetingsWorkspace.qml)
 
 target_link_libraries(${TARGET_NAME} PUBLIC
         Qt6::Core
+        Qt6::QuickWidgets
+        Qt6::Qml
         Qt6::Widgets
         Qt6::Multimedia
         Qt6::MultimediaWidgets

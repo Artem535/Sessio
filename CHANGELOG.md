@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.35] - 2026-10-27
+
+- Moved Notes, Meetings and transcript controls into the shared application
+  header alongside the existing Clients and Calendar controls.
+- Added QML meeting entry/history and a full-width transcript library and reader,
+  with speaker filtering, font controls and links to notes and original phrases.
+- Kept device confirmation and existing transcript mutation/export tools available.
+- Made Notes a permanent QML workspace with participant selection, searchable
+  history, a full-size composer, saved attachments and meeting/transcript links.
+- Guarded participant changes while a note or its attachments are unsaved.
+- Unified dark-theme controls and replaced the clipped participant dropdown
+  with a stable menu in the shared application header.
+
 ## [0.2.34] - 2026-10-26
 
 - Replaced the narrow call-material modal with a dedicated QML note editor,

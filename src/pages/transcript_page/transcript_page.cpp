@@ -23,6 +23,7 @@
 #include <QVBoxLayout>
 #include <QToolButton>
 #include <QTimer>
+#include <QScopeGuard>
 #include <QWidgetAction>
 #include <algorithm>
 
@@ -255,7 +256,7 @@ void TranscriptPage::setNotesView(QWidget *view) {
   if (view) mNotesHost->layout()->addWidget(view);
   mNotesToggle->setEnabled(view != nullptr);
   mSourceToggle->setVisible(view != nullptr);
-  setNotesVisible(view != nullptr);
+  setNotesVisible(view != nullptr && !mQuickReader);
   if (view && !mSplitInitialized) {
     mSplitter->setSizes({760, 440});
     mSplitInitialized = true;
@@ -304,6 +305,12 @@ bool TranscriptPage::focusPhrase(qint64 phraseId) {
     reloadTranscript(*transcript, tr("Transcript"));
   }
   mSearch->clear();
+  if (mQuickReader) {
+    setReaderMode(true);
+    setNotesVisible(false);
+    emit readerPhraseFocused(QString::number(phraseId));
+    return true;
+  }
   if (mNotesVisible) mSourceToggle->setChecked(true);
   auto *phrase = findChild<QWidget *>("phraseCard_" + QString::number(phraseId));
   if (!phrase) return false;
@@ -381,6 +388,7 @@ QString TranscriptPage::exportText() const {
   return pcm::transcriptionui::transcriptExportText(*mDb, mSelector->currentData().toLongLong());
 }
 void TranscriptPage::showTranscript() {
+  const auto notify = qScopeGuard([this] { emit readerChanged(); });
   mEditing = false;
   mSelector->setEnabled(true);
   findChild<QPushButton *>("backToEvent")->setEnabled(true);
@@ -467,6 +475,7 @@ void TranscriptPage::showTranscript() {
         try { if (!mayMutate(phrase.transcript_id)) return; }
         catch (...) { reportFailure(); return; }
         mEditing = true;
+        emit readerChanged();
         mSelector->setEnabled(false);
         for (auto *action : findChild<QScrollArea *>()->findChildren<QPushButton *>()) action->setEnabled(false);
         for (auto *action : {mReview, mAttach, mDelete}) action->setEnabled(false);

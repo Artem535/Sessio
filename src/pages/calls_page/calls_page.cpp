@@ -52,6 +52,8 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
   layout->addWidget(mStack);
 
   mEntryWidget = new CallEntryWidget(specialistMode, this);
+  connect(mEntryWidget, &CallEntryWidget::materialRequested, this, &CallsPage::materialRequested);
+  connect(mEntryWidget, &CallEntryWidget::transcriptRequested, this, &CallsPage::transcriptRequested);
   mCallPage = new CallPage(mDeviceManager, this);
   connect(mCallPage, &CallPage::fullscreenChanged, this, &CallsPage::fullscreenChanged);
   mCallPage->setSidePanelToggleVisible(specialistMode);
@@ -170,6 +172,14 @@ void CallsPage::setBearerCredentialProvider(std::function<QString()> provider) {
   mBearerCredentialProvider = std::move(provider);
 }
 
+void CallsPage::enableQuickWorkspace() { mEntryWidget->enableQuickWorkspace(); layout()->setContentsMargins(0, 0, 0, 0); }
+QWidget *CallsPage::headerControls() {
+  auto *header = mEntryWidget->headerControls();
+  header->setEnabled(mStack->currentWidget() == mEntryWidget);
+  connect(mStack, &QStackedWidget::currentChanged, header, [this, header] { header->setEnabled(mStack->currentWidget() == mEntryWidget); });
+  return header;
+}
+void CallsPage::setMaterialHistory(const QVariantList &history) { mEntryWidget->setMaterialHistory(history); }
 void CallsPage::setUpcomingMeetings(const QList<UpcomingMeeting> &meetings) {
   mUpcomingMeetings = meetings;
   mEntryWidget->setUpcomingMeetings(meetings);

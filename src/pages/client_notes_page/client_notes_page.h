@@ -27,6 +27,7 @@ class QResizeEvent;
 class QSplitter;
 class QLineEdit;
 class QComboBox;
+class QQuickWidget;
 
 namespace oclero::qlementine {
 class SegmentedControl;
@@ -34,6 +35,13 @@ class SegmentedControl;
 
 class ClientNotesPage final : public QWidget {
   Q_OBJECT
+  Q_PROPERTY(QVariantList participants READ participants NOTIFY workspaceChanged)
+  Q_PROPERTY(QVariantList journal READ journal NOTIFY workspaceChanged)
+  Q_PROPERTY(QVariantMap document READ workspaceDocument NOTIFY workspaceChanged)
+  Q_PROPERTY(QString participantId READ participantId NOTIFY workspaceChanged)
+  Q_PROPERTY(QString draft READ draft WRITE setDraft NOTIFY draftChanged)
+  Q_PROPERTY(QStringList pendingFiles READ pendingFiles NOTIFY draftChanged)
+  Q_PROPERTY(QString status READ workspaceStatus NOTIFY draftChanged)
 
 public:
   // Call-owned storage is supplied by the host; this page never invents client IDs.
@@ -56,8 +64,32 @@ public:
   void addPendingAttachments(const QStringList &paths);
   QString journalMarkdown() const;
   void setMaterialAttachmentResolver(std::function<QString(qint64, const QString &, const QString &)> resolver);
+  void enableQuickWorkspace();
+  QWidget *headerControls();
+  QVariantList participants() const;
+  QVariantList journal() const;
+  QVariantMap workspaceDocument() const;
+  QString participantId() const;
+  QString draft() const;
+  QStringList pendingFiles() const;
+  QString workspaceStatus() const;
+  Q_INVOKABLE void selectParticipant(const QString &id);
+  Q_INVOKABLE void selectJournalEntry(const QString &key);
+  Q_INVOKABLE void searchJournal(const QString &query, int filter);
+  Q_INVOKABLE void setDraft(const QString &text);
+  Q_INVOKABLE void saveWorkspaceNote();
+  Q_INVOKABLE void attachWorkspaceFiles();
+  Q_INVOKABLE void linkWorkspaceSession();
+  Q_INVOKABLE void openWorkspaceMeeting(const QString &id = {});
+  Q_INVOKABLE void openWorkspaceTranscript(const QString &id = {});
+  Q_INVOKABLE void openWorkspaceClient();
+  Q_INVOKABLE void openWorkspaceAttachment(int index);
+  Q_INVOKABLE void removeWorkspaceAttachment(int index);
+  Q_INVOKABLE void exportWorkspaceJournal();
 
 signals:
+  void workspaceChanged();
+  void draftChanged();
   void openClientCardRequested(const std::optional<DuckClient> &client);
   void openEventRequested(int64_t eventId, qint64 dayMs);
   void noteEntrySaved(QString entryId);
@@ -152,6 +184,8 @@ private:
   std::vector<JournalEntry> mJournalEntries;
   std::function<QString(qint64, const QString &, const QString &)> mMaterialAttachmentResolver;
   bool mJournalMode = false;
+  QQuickWidget *mQuickWorkspace = nullptr;
+  QWidget *mExternalHeader = nullptr;
   QWidget *mFeedSurface = nullptr;
   QWidget *mJournalTools = nullptr;
   QSplitter *mJournal = nullptr;

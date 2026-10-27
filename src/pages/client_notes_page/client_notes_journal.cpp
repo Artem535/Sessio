@@ -351,6 +351,7 @@ void ClientNotesPage::filterJournal() {
   const int current = mJournalList->currentRow();
   if (current < 0 || mJournalList->item(current)->isHidden()) mJournalList->setCurrentRow(first);
   showJournalEntry();
+  emit workspaceChanged();
 }
 
 void ClientNotesPage::showJournalEntry() {

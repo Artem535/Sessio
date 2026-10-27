@@ -1,6 +1,8 @@
 #include "main_window.h"
 #include "../widgets/app_settings.h"
 #include "ui/app/ui_mainwindow.h"
+#include "transcript_page.h"
+#include "transcript_list_page.h"
 
 #include <oclero/qlementine/widgets/AboutDialog.hpp>
 #include <oclero/qlementine/widgets/Switch.hpp>
@@ -57,7 +59,7 @@ MainWindow::MainWindow(QWidget *parent)
   mBtnNotes =
       new TabButton(QIcon(":/icons/notes.svg"), tr("Notes"), this);
   mBtnCalls =
-      new TabButton(QIcon(":/icons/video-solid-full.svg"), tr("Calls"), this);
+      new TabButton(QIcon(":/icons/video-solid-full.svg"), tr("Meetings"), this);
   mBtnTranscripts = new TabButton(QIcon(":/icons/notes.svg"), tr("Transcripts"), this);
   mBtnTranscripts->hide();
 
@@ -70,7 +72,7 @@ MainWindow::MainWindow(QWidget *parent)
   mUi->verticalLayout->addWidget(mBtnCalls);
   mUi->verticalLayout->addWidget(mBtnTranscripts);
   mBtnProfile->hide();
-  mBtnNotes->hide();
+  mBtnNotes->show();
 
   mBtnBackToClients = new QPushButton(tr("Back to clients"), this);
   mBtnBackToClients->setFlat(true);
@@ -155,17 +157,20 @@ void MainWindow::addClientCardPage(std::shared_ptr<pcm::database::Database> db) 
 
 void MainWindow::addClientNotesPage(std::shared_ptr<pcm::database::Database> db) {
   const auto page = new ClientNotesPage(std::move(db), this);
+  page->enableQuickWorkspace();
+  setPageCustomWidget(Pages::clientNotes, page->headerControls());
   mPages.insertOrAssign(Pages::clientNotes, page);
 
   const int index = mUi->stackedWidget->addWidget(page);
   mPagesIndex.insertOrAssign(Pages::clientNotes, index);
-  setPageCustomWidget(Pages::clientNotes, mBtnBackToClients);
 }
 
 void MainWindow::addCallsPage(pcm::video::DeviceManager *deviceManager,
                               pcm::tokenclient::TokenBackendClient *tokenClient,
                               std::function<QString()> bearerCredentialProvider) {
   const auto page = new CallsPage(/*specialistMode=*/true, deviceManager, tokenClient, this);
+  page->enableQuickWorkspace();
+  setPageCustomWidget(Pages::calls, page->headerControls());
   page->setBearerCredentialProvider(std::move(bearerCredentialProvider));
   mPages.insertOrAssign(Pages::calls, page);
   connect(page, &CallsPage::fullscreenChanged, this, &MainWindow::setCallFullscreen);
@@ -207,12 +212,14 @@ void MainWindow::registerTranscriptPage(QWidget *page) {
   if (mPages.contains(Pages::transcript)) return;
   mPages.insertOrAssign(Pages::transcript, page);
   mPagesIndex.insertOrAssign(Pages::transcript, mUi->stackedWidget->addWidget(page));
+  if (auto *transcript = qobject_cast<TranscriptPage *>(page)) setPageCustomWidget(Pages::transcript, transcript->headerControls());
 }
 void MainWindow::openTranscriptPage() { showPage(Pages::transcript, mBtnCalendar); }
 void MainWindow::registerTranscriptListPage(QWidget *page) {
   if (mPages.contains(Pages::transcriptList)) return;
   mPages.insertOrAssign(Pages::transcriptList, page);
   mPagesIndex.insertOrAssign(Pages::transcriptList, mUi->stackedWidget->addWidget(page));
+  if (auto *library = qobject_cast<TranscriptListPage *>(page)) setPageCustomWidget(Pages::transcriptList, library->headerControls());
   mBtnTranscripts->show();
   connect(mBtnTranscripts, &QPushButton::clicked, this, &MainWindow::openTranscriptListPage);
 }
@@ -402,7 +409,7 @@ void MainWindow::setClientNavigationVisible(const Pages page,
       break;
     case Pages::clientNotes:
       if (mBtnNotes) {
-        mBtnNotes->setVisible(visible);
+        mBtnNotes->show();
       }
       break;
     default:
@@ -483,7 +490,7 @@ QString MainWindow::pageTitle(const Pages page) const {
     case Pages::clientNotes:
       return tr("Notes");
     case Pages::calls:
-      return tr("Calls");
+      return tr("Meetings");
     case Pages::transcript:
       return tr("Transcript");
     case Pages::transcriptList:

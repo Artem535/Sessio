@@ -2,6 +2,7 @@ set(TARGET_NAME ${PROJECT_NAME}_transcription_ui)
 qt_add_library(${TARGET_NAME} STATIC
     transcription_settings_panel.h transcription_settings_panel.cpp
     transcript_page.h transcript_page.cpp
+    transcript_reader.cpp
     transcript_export.h transcript_export.cpp
     transcript_list_page.h transcript_list_page.cpp
     transcript_client_dialog.h transcript_client_dialog.cpp
@@ -30,7 +31,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES AUTOMOC ON)
 qt_add_resources(${TARGET_NAME} notes_workspace_qml
   PREFIX "/sessio/notes"
   BASE "qml"
-  FILES qml/NotesWorkspace.qml qml/NotesEditor.qml)
+  FILES qml/NotesWorkspace.qml qml/NotesEditor.qml qml/TranscriptReader.qml qml/TranscriptLibrary.qml)
 target_include_directories(${TARGET_NAME} PRIVATE ${qlementine_SOURCE_DIR}/lib/include)
 target_include_directories(${TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Widgets Qt6::Quick Qt6::QuickWidgets Qt6::Qml qlementine

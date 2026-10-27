@@ -29,6 +29,7 @@
 #include <QListWidgetItem>
 #include <QLocale>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMimeDatabase>
 #include <QPixmap>
 #include <QScrollBar>
@@ -137,6 +138,15 @@ ClientNotesPage::ClientNotesPage(std::shared_ptr<pcm::database::Database> db,
 
 void ClientNotesPage::setClientInfo(const std::optional<DuckClient> &client) {
   const bool changed = (mCurrentClient ? mCurrentClient->id : 0) != (client ? client->id : 0);
+  if (mQuickWorkspace && !changed) { refresh(); return; }
+  if (mQuickWorkspace && changed && (!mComposer->toPlainText().isEmpty() || !mPendingAttachments.isEmpty())) {
+    if (QMessageBox::question(this, tr("Unsaved changes"), tr("Discard the unsaved note and change participant?"),
+        QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Discard) {
+      emit workspaceChanged();
+      return;
+    }
+  }
+  if (mQuickWorkspace && changed) mComposer->clear();
   mCurrentClient = client;
   if (mMaterialId > 0) {
     mEntriesRendered = false;
@@ -145,7 +155,7 @@ void ClientNotesPage::setClientInfo(const std::optional<DuckClient> &client) {
   }
   if (changed) {
     mPendingLinkedEvent.reset();
-    mLinkManuallySet = false;
+    mLinkManuallySet = mQuickWorkspace != nullptr;
     if (mJournalSearch) { const QSignalBlocker blocker(mJournalSearch); mJournalSearch->clear(); }
     if (mJournalFilter) { const QSignalBlocker blocker(mJournalFilter); mJournalFilter->setCurrentIndex(0); }
   }
@@ -156,6 +166,8 @@ void ClientNotesPage::setClientInfo(const std::optional<DuckClient> &client) {
                                 : currentClientTitle());
   mOpenClientCardButton->setEnabled(client.has_value());
   reloadNotes();
+  emit workspaceChanged();
+  emit draftChanged();
 }
 
 void ClientNotesPage::refresh() {
@@ -331,6 +343,8 @@ void ClientNotesPage::onAddNoteClicked() {
 
   const auto newNoteId = mDb->add_client_note(note);
   if (newNoteId <= 0) {
+    mSaveStatusLabel->setText(tr("Could not save — keep this page open"));
+    emit draftChanged();
     return;
   }
 
@@ -338,7 +352,7 @@ void ClientNotesPage::onAddNoteClicked() {
   mComposer->clear();
   mPendingAttachments.clear();
   refreshPendingAttachments();
-  mLinkManuallySet = false;
+  mLinkManuallySet = mQuickWorkspace != nullptr;
   reloadNotes();
 
   mSaveStatusLabel->setText(tr("Note saved"));

@@ -11,6 +11,8 @@
 #include <QSignalSpy>
 #include <QTextBrowser>
 #include <QToolButton>
+#include <QQuickWidget>
+#include <QQuickItem>
 #include <QMenu>
 #include <QTemporaryDir>
 #include <QTest>
@@ -18,6 +20,64 @@
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 
 namespace {
+TEST(ClientJournalTest, QuickWorkspaceLoadsAndSavesOnlyForSelectedParticipant) {
+  QTemporaryDir temp;
+  pcm::config::Config config{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(temp.path().toStdString())}};
+  auto db = std::make_shared<pcm::database::Database>(config);
+  DuckClient first; first.name = "First synthetic"; first.id = db->add_client(first);
+  DuckClient second; second.name = "Second synthetic"; second.id = db->add_client(second);
+  ClientNotesPage page(db);
+  page.enableQuickWorkspace();
+  page.resize(1280, 850);
+  page.show();
+  auto *quick = page.findChild<QQuickWidget *>("clientNotesQuickWorkspace");
+  ASSERT_NE(quick, nullptr);
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  ASSERT_NE(quick->rootObject(), nullptr);
+  auto *header = page.headerControls();
+  EXPECT_EQ(header, page.headerControls());
+  EXPECT_TRUE(quick->rootObject()->property("externalHeader").toBool());
+  auto *participant = header->findChild<QToolButton *>("notesHeaderParticipant");
+  ASSERT_NE(participant, nullptr);
+  ASSERT_NE(participant->menu(), nullptr);
+  ASSERT_EQ(participant->menu()->actions().size(), 2);
+  const auto initialActions = participant->menu()->actions();
+  page.refresh();
+  EXPECT_EQ(participant->menu()->actions(), initialActions);
+  EXPECT_EQ(page.participants().size(), 2);
+  page.selectParticipant(QString::number(first.id));
+  EXPECT_EQ(participant->text(), "First synthetic");
+  EXPECT_TRUE(participant->menu()->actions().first()->isChecked());
+  page.setDraft("A persisted note");
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlPersistentNoteEditor");
+  ASSERT_NE(editor, nullptr);
+  EXPECT_EQ(editor->property("text").toString(), "A persisted note");
+  page.saveWorkspaceNote();
+  ASSERT_EQ(db->get_client_notes(first.id).size(), 1);
+  DuckClientNoteAttachment attachment;
+  attachment.note_id = db->get_client_notes(first.id).front().id;
+  attachment.file_name = "saved.txt";
+  attachment.relative_path = "synthetic/saved.txt";
+  ASSERT_GT(db->add_client_note_attachment(attachment), 0);
+  page.refresh();
+  ASSERT_EQ(page.workspaceDocument().value("attachments").toList().size(), 1);
+  EXPECT_EQ(page.workspaceDocument().value("attachments").toList().first().toMap().value("name").toString(), "saved.txt");
+  EXPECT_TRUE(page.draft().isEmpty());
+  EXPECT_TRUE(editor->property("text").toString().isEmpty());
+  EXPECT_EQ(page.journal().size(), 1);
+  page.selectParticipant(QString::number(second.id));
+  EXPECT_TRUE(page.journal().isEmpty());
+  EXPECT_TRUE(db->get_client_notes(second.id).empty());
+  page.setDraft("Second participant draft");
+  page.refresh();
+  EXPECT_EQ(page.draft(), "Second participant draft");
+  EXPECT_EQ(editor->property("text").toString(), "Second participant draft");
+  if (qEnvironmentVariableIsSet("SESSIO_QML_JOURNAL_SCREENSHOT")) {
+    QTest::qWait(150);
+    page.grab().save(qEnvironmentVariable("SESSIO_QML_JOURNAL_SCREENSHOT"));
+  }
+}
+
 TEST(ClientJournalTest, RepeatedCallsDoNotCreateEmptyNoteSectionsOrRepeatedPrimaryActions) {
   QTemporaryDir temp;
   pcm::config::Config config{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(temp.path().toStdString())}};
@@ -47,6 +107,16 @@ TEST(ClientJournalTest, RepeatedCallsDoNotCreateEmptyNoteSectionsOrRepeatedPrima
   QSignalSpy opened(&page, &ClientNotesPage::openCallMaterialRequested);
   for (auto *action : actions) action->trigger();
   EXPECT_EQ(opened.count(), 8);
+  const auto materials = page.workspaceDocument().value("materials").toList();
+  const auto transcripts = page.workspaceDocument().value("transcripts").toList();
+  ASSERT_EQ(materials.size(), 8);
+  ASSERT_EQ(transcripts.size(), 8);
+  opened.clear();
+  QSignalSpy transcriptOpened(&page, &ClientNotesPage::openTranscriptRequested);
+  for (const auto &material : materials) page.openWorkspaceMeeting(material.toMap().value("id").toString());
+  for (const auto &transcript : transcripts) page.openWorkspaceTranscript(transcript.toMap().value("id").toString());
+  EXPECT_EQ(opened.count(), 8);
+  EXPECT_EQ(transcriptOpened.count(), 8);
   if (qEnvironmentVariableIsSet("SESSIO_JOURNAL_SCREENSHOT"))
     page.grab().save(qEnvironmentVariable("SESSIO_JOURNAL_SCREENSHOT") + "-repeated.png");
 }

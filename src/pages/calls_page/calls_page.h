@@ -37,6 +37,9 @@ public:
 
   void setBearerCredentialProvider(std::function<QString()> provider); // specialist mode only
   void setUpcomingMeetings(const QList<UpcomingMeeting> &meetings);
+  void enableQuickWorkspace();
+  QWidget *headerControls();
+  void setMaterialHistory(const QVariantList &history);
   void preselectOwnMeeting(const QString &meetingRef);
   void prefillJoinCode(const QString &code, const QString &passcode);
   void setSidePanelWidget(QWidget *panel);
@@ -55,6 +58,8 @@ public:
   void setVideoProviderFactoryForTesting(std::function<pcm::video::VideoProvider *()> factory);
 
 signals:
+  void materialRequested(qint64 id);
+  void transcriptRequested(qint64 id);
   void transcribeRequested();
   // The Calls tab was opened; the owner refreshes today's meetings so they are never stale.
   void upcomingMeetingsRefreshRequested();

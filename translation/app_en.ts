@@ -242,6 +242,10 @@
         <source>Join</source>
         <translation>Join</translation>
     </message>
+    <message>
+        <source>Meetings</source>
+        <translation>Meetings</translation>
+    </message>
 </context>
 <context>
     <name>CallNotesController</name>
@@ -909,6 +913,14 @@
         <translation>Attach files</translation>
     </message>
     <message>
+        <source>Unsaved changes</source>
+        <translation>Unsaved changes</translation>
+    </message>
+    <message>
+        <source>Discard the unsaved note and change participant?</source>
+        <translation>Discard the unsaved note and change participant?</translation>
+    </message>
+    <message>
         <source>Add note</source>
         <translation>Add note</translation>
     </message>
@@ -1112,6 +1124,129 @@
         <source>Key points</source>
         <translation>Key points</translation>
     </message>
+    <message>
+        <source>Participant</source>
+        <translation>Participant</translation>
+    </message>
+    <message>
+        <source>Client card</source>
+        <translation>Client card</translation>
+    </message>
+    <message>
+        <source>Select participant</source>
+        <translation>Select participant</translation>
+    </message>
+</context>
+<context>
+    <name>ClientNotesWorkspace</name>
+    <message>
+        <source>Notes</source>
+        <translation>Notes</translation>
+    </message>
+    <message>
+        <source>Select participant</source>
+        <translation>Select participant</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Participant</translation>
+    </message>
+    <message>
+        <source>Client card</source>
+        <translation>Client card</translation>
+    </message>
+    <message>
+        <source>New note</source>
+        <translation>New note</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Export</translation>
+    </message>
+    <message>
+        <source>Search notes and summaries…</source>
+        <translation>Search notes and summaries…</translation>
+    </message>
+    <message>
+        <source>All materials</source>
+        <translation>All materials</translation>
+    </message>
+    <message>
+        <source>Sessions and protocols</source>
+        <translation>Sessions and protocols</translation>
+    </message>
+    <message>
+        <source>Free notes</source>
+        <translation>Free notes</translation>
+    </message>
+    <message>
+        <source>Agreements</source>
+        <translation>Agreements</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation>Session</translation>
+    </message>
+    <message>
+        <source>Free note</source>
+        <translation>Free note</translation>
+    </message>
+    <message>
+        <source>No notes found</source>
+        <translation>No notes found</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>History</translation>
+    </message>
+    <message>
+        <source>Read</source>
+        <translation>Read</translation>
+    </message>
+    <message>
+        <source>Open meeting</source>
+        <translation>Open meeting</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Open transcript</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
+    <message>
+        <source>Select a note or create a new one.</source>
+        <translation>Select a note or create a new one.</translation>
+    </message>
+    <message>
+        <source>Select a participant to view their notes.</source>
+        <translation>Select a participant to view their notes.</translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation>Editor</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Preview</translation>
+    </message>
+    <message>
+        <source>Write a note in Markdown…</source>
+        <translation>Write a note in Markdown…</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Attach files</translation>
+    </message>
+    <message>
+        <source>Link to a session</source>
+        <translation>Link to a session</translation>
+    </message>
+    <message>
+        <source>Add note</source>
+        <translation>Add note</translation>
+    </message>
 </context>
 <context>
     <name>DaySummaryWidget</name>
@@ -1279,6 +1414,10 @@
         <translation>Notes</translation>
     </message>
     <message>
+        <source>Meetings</source>
+        <translation>Meetings</translation>
+    </message>
+    <message>
         <source>Search clients</source>
         <translation>Search clients</translation>
     </message>
@@ -1289,10 +1428,6 @@
     <message>
         <source>Show inactive</source>
         <translation>Show inactive</translation>
-    </message>
-    <message>
-        <source>Calls</source>
-        <translation>Calls</translation>
     </message>
     <message>
         <source>Transcripts</source>
@@ -1378,6 +1513,89 @@
     <message>
         <source>Hide</source>
         <translation>Hide</translation>
+    </message>
+</context>
+<context>
+    <name>MeetingsWorkspace</name>
+    <message>
+        <source>Meetings</source>
+        <translation>Meetings</translation>
+    </message>
+    <message>
+        <source>Join a meeting</source>
+        <translation>Join a meeting</translation>
+    </message>
+    <message>
+        <source>Meeting history</source>
+        <translation>Meeting history</translation>
+    </message>
+    <message>
+        <source>Your calls today</source>
+        <translation>Your calls today</translation>
+    </message>
+    <message>
+        <source>Search meetings…</source>
+        <translation>Search meetings…</translation>
+    </message>
+    <message>
+        <source>Scheduled</source>
+        <translation>Scheduled</translation>
+    </message>
+    <message>
+        <source>Call materials</source>
+        <translation>Call materials</translation>
+    </message>
+    <message>
+        <source>No meetings to show</source>
+        <translation>No meetings to show</translation>
+    </message>
+    <message>
+        <source>Scheduled online meetings appear here.</source>
+        <translation>Scheduled online meetings appear here.</translation>
+    </message>
+    <message>
+        <source>Materials appear here after a call.</source>
+        <translation>Materials appear here after a call.</translation>
+    </message>
+    <message>
+        <source>Before joining, check your name. Camera and microphone settings are shown on the next screen.</source>
+        <translation>Before joining, check your name. Camera and microphone settings are shown on the next screen.</translation>
+    </message>
+    <message>
+        <source>Name in calls</source>
+        <translation>Name in calls</translation>
+    </message>
+    <message>
+        <source>Check devices and join</source>
+        <translation>Check devices and join</translation>
+    </message>
+    <message>
+        <source>Meeting summary</source>
+        <translation>Meeting summary</translation>
+    </message>
+    <message>
+        <source>Open notes and materials</source>
+        <translation>Open notes and materials</translation>
+    </message>
+    <message>
+        <source>Transcripts</source>
+        <translation>Transcripts</translation>
+    </message>
+    <message>
+        <source>Use a Sessio invitation code or invitation link.</source>
+        <translation>Use a Sessio invitation code or invitation link.</translation>
+    </message>
+    <message>
+        <source>Invitation code or link</source>
+        <translation>Invitation code or link</translation>
+    </message>
+    <message>
+        <source>Passcode</source>
+        <translation>Passcode</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Continue</translation>
     </message>
 </context>
 <context>
@@ -3370,6 +3588,33 @@ See you!</translation>
     </message>
 </context>
 <context>
+    <name>TranscriptLibrary</name>
+    <message>
+        <source>Transcripts</source>
+        <translation>Transcripts</translation>
+    </message>
+    <message>
+        <source>Search recordings and participants…</source>
+        <translation>Search recordings and participants…</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>More actions</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Delete transcript</translation>
+    </message>
+    <message>
+        <source>No recordings found</source>
+        <translation>No recordings found</translation>
+    </message>
+</context>
+<context>
     <name>TranscriptListPage</name>
     <message>
         <source>Call materials</source>
@@ -3438,6 +3683,18 @@ They appear here after a call with transcription turned on.</translation>
             <numerusform>%n transcript</numerusform>
             <numerusform>%n transcripts</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Transcripts</source>
+        <translation>Transcripts</translation>
+    </message>
+    <message>
+        <source>Search recordings and participants…</source>
+        <translation>Search recordings and participants…</translation>
+    </message>
+    <message>
+        <source>Call notes</source>
+        <translation>Call notes</translation>
     </message>
     <message>
         <source>Could not load transcripts. Please try again.</source>
@@ -3573,6 +3830,18 @@ They appear here after a call with transcription turned on.</translation>
         <source>Phrase text cannot be empty.</source>
         <translation>Phrase text cannot be empty.</translation>
     </message>
+    <message>
+        <source>Read transcript</source>
+        <translation>Read transcript</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>History</translation>
+    </message>
+    <message>
+        <source>Edit transcript</source>
+        <translation>Edit transcript</translation>
+    </message>
 </context>
 <context>
     <name>TranscriptPanel</name>
@@ -3647,6 +3916,69 @@ They appear here after a call with transcription turned on.</translation>
     <message>
         <source>Participant</source>
         <translation>Participant</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptReader</name>
+    <message>
+        <source>Back to transcripts</source>
+        <translation>Back to transcripts</translation>
+    </message>
+    <message>
+        <source>Recordings</source>
+        <translation>Recordings</translation>
+    </message>
+    <message>
+        <source>Find a recording</source>
+        <translation>Find a recording</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>History</translation>
+    </message>
+    <message>
+        <source>Call notes</source>
+        <translation>Call notes</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>More actions</translation>
+    </message>
+    <message>
+        <source>Export text</source>
+        <translation>Export text</translation>
+    </message>
+    <message>
+        <source>Attach clients</source>
+        <translation>Attach clients</translation>
+    </message>
+    <message>
+        <source>Mark reviewed</source>
+        <translation>Mark reviewed</translation>
+    </message>
+    <message>
+        <source>Edit transcript</source>
+        <translation>Edit transcript</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Delete transcript</translation>
+    </message>
+    <message>
+        <source>Search transcript…</source>
+        <translation>Search transcript…</translation>
+    </message>
+    <message>
+        <source>All speakers</source>
+        <translation>All speakers</translation>
+    </message>
+    <message>
+        <source>No matching phrases</source>
+        <translation>No matching phrases</translation>
     </message>
 </context>
 <context>
@@ -3866,6 +4198,10 @@ They appear here after a call with transcription turned on.</translation>
 </context>
 <context>
     <name>pcm::Application</name>
+    <message>
+        <source>Call materials</source>
+        <translation>Call materials</translation>
+    </message>
     <message>
         <source>Encrypted Backup</source>
         <translation>Encrypted Backup</translation>

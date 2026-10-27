@@ -176,7 +176,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  QCoreApplication::setApplicationVersion("0.2.34");
+  QCoreApplication::setApplicationVersion("0.2.35");
   // Before anything that can log: on Windows this file and the crash dump are
   // the only trace a hang or crash leaves.
   const QString logDir =
@@ -577,6 +577,24 @@ void Application::refreshUpcomingMeetings() {
     meetings.append(meeting);
   }
 
+  QVariantList history;
+  try {
+    for (const auto &material : mDb->get_call_materials()) {
+      const auto state = QJsonDocument::fromJson(QByteArray::fromStdString(material.json)).object();
+      const auto packet = state[state["final"].isObject() ? "final" : "live"].toObject();
+      QString title = tr("Call materials");
+      if (material.event_id)
+        if (const auto event = mDb->get_event(*material.event_id)) title = QString::fromStdString(event->name.value_or(""));
+      QVariantList transcripts;
+      for (const auto id : mDb->get_call_material_transcript_ids(material.id))
+        transcripts.append(QVariantMap{{"id", QString::number(id)}, {"title", tr("Transcript") + " " + QString::number(id)}});
+      history.append(QVariantMap{{"id", QString::number(material.id)}, {"title", title},
+        {"date", QDateTime::fromMSecsSinceEpoch(material.created_at).toLocalTime().toString("dd.MM.yyyy · HH:mm")},
+        {"summary", packet["dismissed"].toBool() ? QString{} : packet["note"].toObject()["text"].toString()},
+        {"transcripts", transcripts}});
+    }
+  } catch (...) { history.clear(); }
+  callsPage->setMaterialHistory(history);
   if (sameUpcomingMeetings(meetings, mUpcomingMeetings)) {
     return;
   }
@@ -1389,9 +1407,12 @@ void Application::connectSignals() {
     });
     auto *reviewPage = new TranscriptPage(mDb, 0, {}, mMainWindow.get());
     auto *listPage = new TranscriptListPage(mDb, mMainWindow.get());
+    reviewPage->enableQuickReader();
+    listPage->enableQuickWorkspace();
     mMainWindow->registerTranscriptListPage(listPage);
     mMainWindow->registerTranscriptPage(reviewPage);
     auto selectedEvent = std::make_shared<std::pair<int64_t, qint64>>(0, 0);
+    connect(reviewPage, &TranscriptPage::readerTranscriptSelected, reviewPage, [selectedEvent] { *selectedEvent = {0, 0}; });
     connect(notesPage, &CallNotesPage::sourceRequested, sidePanel,
             [this, notes, sidePanel, panel, reviewPage, selectedEvent](qint64 id) {
       if (panel->focusPhrase(id)) { sidePanel->showTranscript(); return; }
@@ -1399,10 +1420,7 @@ void Application::connectSignals() {
       if (transcript <= 0 || reviewPage->editing()) return;
       *selectedEvent = {0, 0}; reviewPage->reloadTranscript(transcript, tr("Transcript"));
       mMainWindow->openTranscriptPage();
-      if (auto *phrase = reviewPage->findChild<QWidget *>("phraseCard_" + QString::number(id))) {
-        if (auto *scroll = reviewPage->findChild<QScrollArea *>()) scroll->ensureWidgetVisible(phrase);
-        phrase->setFocus();
-      }
+      reviewPage->focusPhrase(id);
     });
     auto openMaterials = [this, notes, prompter, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting](qint64 materialId, qint64 transcriptId) {
       auto *dialog = new NotesEditorDialog(mMainWindow.get());
@@ -1452,12 +1470,7 @@ void Application::connectSignals() {
         if (transcript <= 0 || reviewPage->editing()) return;
         *selectedEvent = {0, 0};
         reviewPage->reloadTranscript(transcript, tr("Transcript")); mMainWindow->openTranscriptPage();
-        auto *phrase = reviewPage->findChild<QWidget *>("phraseCard_" + QString::number(phraseId));
-        if (phrase) {
-          const auto scroll = reviewPage->findChild<QScrollArea *>();
-          if (scroll) scroll->ensureWidgetVisible(phrase);
-          phrase->setFocus();
-        }
+        reviewPage->focusPhrase(phraseId);
         dialog->close();
       });
       dialog->open();
@@ -1559,6 +1572,8 @@ void Application::connectSignals() {
     connect(reviewPage, &TranscriptPage::transcriptActivated, reviewPage, bindReviewNotes);
     connect(listPage, &TranscriptListPage::openCallMaterialRequested, this,
             [openMaterials](qint64 id) { openMaterials(id, 0); });
+    connect(callsPage, &CallsPage::materialRequested, this, [openMaterials](qint64 id) { openMaterials(id, 0); });
+    connect(callsPage, &CallsPage::transcriptRequested, listPage, &TranscriptListPage::openTranscriptRequested);
     if (auto *journal = qobject_cast<ClientNotesPage *>(mMainWindow->getPage(MainWindow::Pages::clientNotes))) {
       journal->setMaterialAttachmentResolver([db = mDb](qint64 material, const QString &entry, const QString &attachment) {
         CallNotesController storage(db);

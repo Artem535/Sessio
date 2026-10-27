@@ -3,6 +3,8 @@
 #include <QWidget>
 #include <functional>
 #include <memory>
+#include <QVariantList>
+#include <QVariantMap>
 
 class QComboBox;
 class QLabel;
@@ -13,6 +15,9 @@ class QLineEdit;
 
 class TranscriptPage final : public QWidget {
   Q_OBJECT
+  Q_PROPERTY(QVariantMap reader READ reader NOTIFY readerChanged)
+  Q_PROPERTY(QVariantList readerHistory READ readerHistory NOTIFY readerChanged)
+  Q_PROPERTY(QVariantList readerPhrases READ readerPhrases NOTIFY readerChanged)
 public:
   TranscriptPage(std::shared_ptr<pcm::database::Database> db, int64_t eventId,
                  const QString &title, QWidget *parent = nullptr);
@@ -30,9 +35,20 @@ public:
   [[nodiscard]] bool notesVisible() const { return mNotesVisible; }
   void setNotesVisible(bool visible);
   bool focusPhrase(qint64 phraseId);
+  void enableQuickReader();
+  QWidget *headerControls();
+  QVariantMap reader() const;
+  QVariantList readerHistory() const;
+  QVariantList readerPhrases() const;
+  Q_INVOKABLE void selectReaderTranscript(const QString &id);
+  Q_INVOKABLE void readerAction(const QString &action);
+  Q_INVOKABLE void setReaderMode(bool reading);
 protected:
   bool eventFilter(QObject *object, QEvent *event) override;
 signals:
+  void readerChanged();
+  void readerPhraseFocused(QString id);
+  void readerTranscriptSelected();
   void backRequested();
   void transcriptsChanged();
   // Emitted when the transcript currently rendered changes (not on every
@@ -46,6 +62,8 @@ private:
   void activateTranscript(qint64 id);
   void updatePhraseSizes();
   bool mEditing = false;
+  class QQuickWidget *mQuickReader = nullptr;
+  QWidget *mExternalHeader = nullptr;
   std::shared_ptr<pcm::database::Database> mDb;
   int64_t mEventId = 0;
   std::optional<int64_t> mTranscriptId;
