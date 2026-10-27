@@ -121,8 +121,8 @@ jobs:
             for f in libsessio_litert.dylib libLiteRt.dylib libLiteRtWebGpuAccelerator.dylib libLiteRtTopKWebGpuSampler.dylib libwebgpu_dawn.dylib; do
               test -f "$dir/$f" || { echo "::error::$f missing from the runtime"; exit 1; }
             done
-            nm -gU "$dir/libsessio_litert.dylib" | c++filt | grep -q 'sessio::litert::loadModel' || { echo "::error::loadModel is not exported"; exit 1; }
-            otool -L "$dir/libsessio_litert.dylib" | tee /dev/stderr | grep -q '@rpath/libLiteRt.dylib'
+            nm -gU "$dir/libsessio_litert.dylib" | c++filt | grep 'sessio::litert::loadModel' >/dev/null || { echo "::error::loadModel is not exported"; exit 1; }
+            otool -L "$dir/libsessio_litert.dylib" | tee /dev/stderr | grep '@rpath/libLiteRt.dylib' >/dev/null
           else
             for f in bin/sessio_litert.dll bin/libLiteRt.dll bin/libLiteRtWebGpuAccelerator.dll bin/libLiteRtTopKWebGpuSampler.dll bin/libwebgpu_dawn.dll bin/dxcompiler.dll bin/dxil.dll lib/sessio_litert.lib; do
               test -f "$LITERT_PREFIX/install/$f" || { echo "::error::$f missing from the runtime"; exit 1; }

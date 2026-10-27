@@ -636,8 +636,8 @@ jobs:
           test -f "$APP_BUNDLE/Contents/Frameworks/libsessio_litert.dylib"
           test -f "$APP_BUNDLE/Contents/Frameworks/libLiteRt.dylib"
           test -f "$APP_BUNDLE/Contents/Frameworks/libLiteRtWebGpuAccelerator.dylib"
-          otool -L "$APP_BUNDLE/Contents/MacOS/Sessio" | grep -q '@rpath/libsessio_litert.dylib'
-          otool -l "$APP_BUNDLE/Contents/MacOS/Sessio" | grep -A2 LC_RPATH | grep -q '@executable_path/../Frameworks'
+          otool -L "$APP_BUNDLE/Contents/MacOS/Sessio" | grep '@rpath/libsessio_litert.dylib' >/dev/null
+          otool -l "$APP_BUNDLE/Contents/MacOS/Sessio" | grep -A2 LC_RPATH | grep '@executable_path/../Frameworks' >/dev/null
 
           du -sh "$APP_BUNDLE"
           du -sh "$APP_BUNDLE/Contents/Frameworks"
