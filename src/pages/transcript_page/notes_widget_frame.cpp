@@ -8,10 +8,9 @@
 #include <QVBoxLayout>
 
 NotesWidgetFrame::NotesWidgetFrame(const QString &title, QWidget *parent) : QFrame(parent) {
-  installEventFilter(new pcm::widgets::SurfacePaintFilter(this));
   auto *outer = new QVBoxLayout(this);
-  outer->setContentsMargins(12, 10, 12, 10);
-  outer->setSpacing(8);
+  outer->setContentsMargins(24, 20, 24, 20);
+  outer->setSpacing(14);
   auto *header = new QHBoxLayout;
   header->setSpacing(6);
   mTitle = new QLabel(title, this);

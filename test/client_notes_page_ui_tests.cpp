@@ -1,16 +1,156 @@
 #include "client_notes_page.h"
 #include <QApplication>
+#include <QAction>
 #include <QJsonObject>
 #include <QFile>
+#include <QLineEdit>
+#include <QComboBox>
+#include <QImage>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QTextBrowser>
+#include <QToolButton>
+#include <QMenu>
 #include <QTemporaryDir>
 #include <QTest>
 #include <gtest/gtest.h>
+#include <oclero/qlementine/style/QlementineStyle.hpp>
 
 namespace {
+TEST(ClientJournalTest, RepeatedCallsDoNotCreateEmptyNoteSectionsOrRepeatedPrimaryActions) {
+  QTemporaryDir temp;
+  pcm::config::Config config{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(temp.path().toStdString())}};
+  auto db = std::make_shared<pcm::database::Database>(config);
+  DuckClient client; client.name = "Synthetic"; client.id = db->add_client(client);
+  DuckEvent event; event.name = "Repeated consultation"; event.start_date = 1730000000000;
+  event.end_date = *event.start_date + 3600000; event.duration = 3600;
+  event.event_stat_id = 1; event.payment_stat_id = 1;
+  event.id = db->add_event(event); db->add_event_client(event.id, client.id);
+  for (int i = 0; i < 8; ++i) {
+    const auto transcript = db->add_transcript(event.id, "live_local_v1");
+    const auto material = db->create_call_material(event.id);
+    ASSERT_TRUE(db->link_call_material_transcript(material, transcript));
+    ASSERT_TRUE(db->save_call_material(material, db->get_call_material(material).revision, R"({"ended":true})"));
+  }
+  ClientNotesPage page(db); page.setClientInfo(client);
+  page.resize(1280, 860); page.show(); QApplication::processEvents();
+  EXPECT_EQ(page.findChildren<QWidget *>("notesJournalOwnNotesSection").size(), 0);
+  EXPECT_EQ(page.findChildren<QPushButton *>("notesJournalEditMeeting").size(), 1);
+  EXPECT_EQ(page.findChildren<QPushButton *>("notesJournalOpenTranscript").size(), 1);
+  auto *more = page.findChild<QToolButton *>("notesJournalMore");
+  ASSERT_NE(more, nullptr); ASSERT_NE(more->menu(), nullptr);
+  EXPECT_EQ(more->menu()->windowFlags() & Qt::WindowType_Mask, Qt::Popup);
+  EXPECT_TRUE(more->menu()->isHidden());
+  const auto actions = page.findChildren<QAction *>("notesJournalMaterialAction");
+  EXPECT_EQ(actions.size(), 8);
+  QSignalSpy opened(&page, &ClientNotesPage::openCallMaterialRequested);
+  for (auto *action : actions) action->trigger();
+  EXPECT_EQ(opened.count(), 8);
+  if (qEnvironmentVariableIsSet("SESSIO_JOURNAL_SCREENSHOT"))
+    page.grab().save(qEnvironmentVariable("SESSIO_JOURNAL_SCREENSHOT") + "-repeated.png");
+}
+
+TEST(ClientJournalTest, GroupsOldSessionNotesAndCallMaterialsAndCombinesCategoryWithSearch) {
+  QTemporaryDir temp;
+  pcm::config::Config config{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(temp.path().toStdString())}};
+  auto db = std::make_shared<pcm::database::Database>(config);
+  DuckClient client; client.name = "Synthetic"; client.id = db->add_client(client);
+  DuckEvent event; event.name = "Older session"; event.start_date = 1000000000000;
+  event.end_date = *event.start_date + 3600000; event.duration = 3600;
+  event.event_stat_id = 1; event.payment_stat_id = 1;
+  event.id = db->add_event(event); ASSERT_GT(db->add_event_client(event.id, client.id), 0);
+  const auto transcript = db->add_transcript(event.id, "live_local_v1");
+  const auto material = db->create_call_material(event.id);
+  ASSERT_TRUE(db->link_call_material_transcript(material, transcript));
+  ASSERT_TRUE(db->save_call_material(material, db->get_call_material(material).revision,
+      R"({"ended":true,"manual_entries":[{"id":"one","body_markdown":"Specialist protocol","attachments":[{"id":"image","file_name":"outline.png","mime_type":"image/png"}]}],"final":{"note":{"text":"Meeting summary"}}})"));
+  DuckClientNote note; note.client_id = client.id; note.linked_event_id = event.id;
+  note.body_markdown = "Linked observation"; ASSERT_GT(db->add_client_note(note), 0);
+  note.linked_event_id.reset(); note.body_markdown = "Free observation"; ASSERT_GT(db->add_client_note(note), 0);
+  ClientNotesPage page(db); page.setClientInfo(client);
+  QImage image(16, 16, QImage::Format_RGB32); image.fill(Qt::blue);
+  const auto path = temp.filePath("outline.png"); ASSERT_TRUE(image.save(path));
+  int attachmentReads = 0;
+  page.setMaterialAttachmentResolver([&](qint64 requestedMaterial, const QString &entry, const QString &attachment) {
+    EXPECT_EQ(requestedMaterial, material); EXPECT_EQ(entry, "one"); EXPECT_EQ(attachment, "image");
+    ++attachmentReads; return path;
+  });
+  auto *history = page.findChild<QListWidget *>("notesJournalList"); ASSERT_NE(history, nullptr);
+  ASSERT_EQ(history->count(), 2);
+  auto *search = page.findChild<QLineEdit *>("notesJournalSearch");
+  auto *filter = page.findChild<QComboBox *>("notesJournalFilter");
+  filter->setCurrentIndex(1); search->setText("Specialist protocol");
+  ASSERT_GE(history->currentRow(), 0);
+  EXPECT_TRUE(history->currentItem()->text().contains("Older session"));
+  QSignalSpy opened(&page, &ClientNotesPage::openTranscriptRequested);
+  auto buttons = page.findChildren<QPushButton *>("notesJournalOpenTranscript");
+  auto found = std::find_if(buttons.begin(), buttons.end(), [](auto *b) { return !b->isHidden(); });
+  ASSERT_NE(found, buttons.end()); (*found)->click();
+  ASSERT_EQ(opened.count(), 1); EXPECT_EQ(opened.first().first().toLongLong(), transcript);
+  auto previews = page.findChildren<QPushButton *>("notesJournalPreviewAttachment");
+  ASSERT_FALSE(previews.isEmpty()); auto *previewButton = previews.last(); previewButton->click();
+  EXPECT_EQ(attachmentReads, 1);
+  auto *preview = previewButton->parentWidget()->findChild<QLabel *>("notesJournalAttachmentPreview");
+  ASSERT_NE(preview, nullptr); EXPECT_FALSE(preview->pixmap().isNull());
+  filter->setCurrentIndex(2);
+  EXPECT_EQ(history->currentRow(), -1);
+  search->clear();
+  ASSERT_GE(history->currentRow(), 0);
+  EXPECT_TRUE(history->currentItem()->text().contains("Free observation"));
+  EXPECT_TRUE(page.journalMarkdown().contains("Linked observation"));
+  EXPECT_TRUE(page.journalMarkdown().contains("Specialist protocol"));
+  EXPECT_TRUE(page.journalMarkdown().contains("Meeting summary"));
+  page.resize(2360, 1400); page.show(); QApplication::processEvents();
+  auto *paper = page.findChild<QWidget *>("notesJournalPaper");
+  ASSERT_NE(paper, nullptr);
+  EXPECT_GT(paper->width(), page.width() - 400);
+  EXPECT_LT(paper->mapTo(&page, QPoint()).x(), 400);
+  page.findChild<QPushButton *>("notesJournalNew")->click();
+  QTest::qWait(80);
+  auto *composer = page.findChild<QPlainTextEdit *>("notesComposer");
+  ASSERT_NE(composer, nullptr);
+  EXPECT_LE(composer->height(), 220);
+  EXPECT_GT(composer->parentWidget()->width(), page.width() - 400);
+  if (qEnvironmentVariableIsSet("SESSIO_JOURNAL_SCREENSHOT")) {
+    search->clear(); filter->setCurrentIndex(1);
+    page.resize(2360, 1400); page.show(); QApplication::processEvents();
+    page.grab().save(qEnvironmentVariable("SESSIO_JOURNAL_SCREENSHOT"));
+    page.resize(560, 860); QTest::qWait(80);
+    page.grab().save(qEnvironmentVariable("SESSIO_JOURNAL_SCREENSHOT") + "-narrow.png");
+  }
+}
+
+TEST(ClientJournalTest, SelectingAndSearchingEntriesPreservesTheUnsentNote) {
+  QTemporaryDir temp;
+  pcm::config::Config config{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(temp.path().toStdString())}};
+  auto db = std::make_shared<pcm::database::Database>(config);
+  DuckClient client; client.name = "Synthetic"; client.id = db->add_client(client);
+  for (const auto &text : {"First outline", "Second observation"}) {
+    DuckClientNote note; note.client_id = client.id; note.body_markdown = text;
+    note.created_at = text[0] == 'F' ? 1000 : 2000;
+    ASSERT_GT(db->add_client_note(note), 0);
+  }
+  ClientNotesPage page(db); page.setClientInfo(client);
+  auto *history = page.findChild<QListWidget *>("notesJournalList");
+  auto *search = page.findChild<QLineEdit *>("notesJournalSearch");
+  ASSERT_NE(history, nullptr); ASSERT_NE(search, nullptr);
+  ASSERT_EQ(history->count(), 2);
+  auto *composer = page.findChild<QPlainTextEdit *>("notesComposer");
+  composer->setPlainText("Unsent note");
+  search->setText("outline");
+  EXPECT_TRUE(history->item(0)->isHidden());
+  EXPECT_FALSE(history->item(1)->isHidden());
+  EXPECT_EQ(history->currentRow(), 1);
+  EXPECT_TRUE(page.journalMarkdown().contains("Second observation"));
+  EXPECT_EQ(composer->toPlainText(), "Unsent note");
+  search->setText("no matching text");
+  EXPECT_EQ(history->currentRow(), -1);
+  search->clear();
+  EXPECT_FALSE(history->item(0)->isHidden());
+  EXPECT_EQ(composer->toPlainText(), "Unsent note");
+}
+
 class ClientNotesUiTest : public ::testing::Test {
 protected:
   ClientNotesPage page{nullptr};
@@ -88,7 +228,7 @@ TEST_F(ClientNotesUiTest, AttachmentPathsSurviveFailureAndAreRetriedOnExplicitSa
   page.addPendingAttachments({path});
   fail = true; save()->click();
   EXPECT_EQ(savedPaths, QStringList{path});
-  auto *pending = page.findChild<QListWidget *>(); ASSERT_NE(pending, nullptr);
+  auto *pending = page.findChild<QListWidget *>("notesPendingAttachments"); ASSERT_NE(pending, nullptr);
   EXPECT_EQ(pending->count(), 1);
   fail = false; save()->click();
   EXPECT_EQ(savedPaths, QStringList{path}); EXPECT_EQ(pending->count(), 0);
@@ -104,13 +244,13 @@ TEST_F(ClientNotesUiTest, DraftAttachmentsUseOwnedPathsAndCanBeReopenedAndRemove
   canonicalizePaths = [owned](const QStringList &paths) { return paths.isEmpty() ? QStringList{} : QStringList{owned}; };
   page.addPendingAttachments({source});
   EXPECT_EQ(draftPaths, QStringList{owned});
-  auto *pending = page.findChild<QListWidget *>();
+  auto *pending = page.findChild<QListWidget *>("notesPendingAttachments");
   ASSERT_EQ(pending->count(), 1);
   EXPECT_TRUE(pending->item(0)->text().contains("owned.md"));
   ClientNotesPage reopened(nullptr);
   reopened.setCallNoteActions(7, {{}, {}, {}, {}, {}, [this] { return draftPaths; }, {}});
-  ASSERT_EQ(reopened.findChild<QListWidget *>()->count(), 1);
-  EXPECT_TRUE(reopened.findChild<QListWidget *>()->item(0)->text().contains("owned.md"));
+  ASSERT_EQ(reopened.findChild<QListWidget *>("notesPendingAttachments")->count(), 1);
+  EXPECT_TRUE(reopened.findChild<QListWidget *>("notesPendingAttachments")->item(0)->text().contains("owned.md"));
   pending->itemDoubleClicked(pending->item(0));
   EXPECT_TRUE(draftPaths.isEmpty()); EXPECT_EQ(pending->count(), 0);
 }
@@ -120,7 +260,7 @@ TEST_F(ClientNotesUiTest, FailedDraftAttachmentPersistenceKeepsSelectionsAndRepo
   const auto source = dir.filePath("outline.md");
   QFile file(source); ASSERT_TRUE(file.open(QIODevice::WriteOnly)); file.write("outline"); file.close();
   failDraftPaths = true; page.addPendingAttachments({source}); page.refresh();
-  auto *pending = page.findChild<QListWidget *>(); ASSERT_EQ(pending->count(), 1);
+  auto *pending = page.findChild<QListWidget *>("notesPendingAttachments"); ASSERT_EQ(pending->count(), 1);
   EXPECT_TRUE(draftPaths.isEmpty());
   auto *status = page.findChild<QLabel *>("notesSaveStatus"); ASSERT_NE(status, nullptr);
   EXPECT_EQ(status->text(), ClientNotesPage::tr("Could not save — keep this page open"));
@@ -144,7 +284,7 @@ TEST_F(ClientNotesUiTest, EntryEditAttachmentsNeverReplaceNewDraftAttachments) {
   manual += "\n\nAccepted AI"; page.refresh();
   page.findChild<QPushButton *>("notesCancelEdit")->click();
   EXPECT_EQ(editor()->toPlainText(), "New draft\n\nAccepted AI");
-  auto *pending = page.findChild<QListWidget *>(); ASSERT_EQ(pending->count(), 1);
+  auto *pending = page.findChild<QListWidget *>("notesPendingAttachments"); ASSERT_EQ(pending->count(), 1);
   EXPECT_TRUE(pending->item(0)->text().contains("draft.md"));
 }
 
@@ -283,6 +423,10 @@ TEST_F(ClientNotesUiTest, EmbeddedPageShowsOnlyThisMeetingWithoutOwnScroll) {
 
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
+  auto *style = new oclero::qlementine::QlementineStyle(&app);
+  if (qEnvironmentVariableIsSet("SESSIO_PREVIEW_THEME"))
+    style->setThemeJsonPath(qEnvironmentVariable("SESSIO_PREVIEW_THEME"));
+  app.setStyle(style);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

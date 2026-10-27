@@ -9,6 +9,8 @@
 #include <oclero/qlementine/widgets/SegmentedControl.hpp>
 
 #include <QDesktopServices>
+#include <QComboBox>
+#include <QLineEdit>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -30,6 +32,7 @@
 #include <QMimeDatabase>
 #include <QPixmap>
 #include <QScrollBar>
+#include <QSplitter>
 #include <QStandardPaths>
 #include <QTextBrowser>
 #include <QTextDocument>
@@ -128,20 +131,28 @@ ClientNotesPage::ClientNotesPage(std::shared_ptr<pcm::database::Database> db,
                                  QWidget *parent)
     : QWidget(parent), mDb(std::move(db)) {
   buildUi();
+  buildJournal();
   reloadNotes();
 }
 
 void ClientNotesPage::setClientInfo(const std::optional<DuckClient> &client) {
+  const bool changed = (mCurrentClient ? mCurrentClient->id : 0) != (client ? client->id : 0);
   mCurrentClient = client;
   if (mMaterialId > 0) {
     mEntriesRendered = false;
     refresh();
     return;
   }
+  if (changed) {
+    mPendingLinkedEvent.reset();
+    mLinkManuallySet = false;
+    if (mJournalSearch) { const QSignalBlocker blocker(mJournalSearch); mJournalSearch->clear(); }
+    if (mJournalFilter) { const QSignalBlocker blocker(mJournalFilter); mJournalFilter->setCurrentIndex(0); }
+  }
   mPendingAttachments.clear();
   refreshPendingAttachments();
   mClientNameLabel->setText(client.has_value()
-                                ? tr("%1 → Notes").arg(currentClientTitle())
+                                ? currentClientTitle()
                                 : currentClientTitle());
   mOpenClientCardButton->setEnabled(client.has_value());
   reloadNotes();
@@ -174,6 +185,7 @@ void ClientNotesPage::refresh() {
 }
 
 void ClientNotesPage::setCallNoteActions(qint64 materialId, CallNoteActions actions) {
+  setJournalMode(false);
   // Host changes context only after flushing the previous call's draft.
   mMaterialId = materialId;
   mEntriesRendered = false;
@@ -202,14 +214,26 @@ void ClientNotesPage::setCallNoteActions(qint64 materialId, CallNoteActions acti
 }
 
 void ClientNotesPage::setEmbedded(bool embedded) {
+  if (embedded) setJournalMode(false);
   mEmbedded = embedded;
   mHeaderSurface->setVisible(!embedded);
+  if (embedded) {
+    layout()->setContentsMargins(0, 0, 0, 0);
+    layout()->setSpacing(8);
+    mComposerSurface->layout()->setContentsMargins(0, 0, 0, 0);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
+  }
+  mComposerSurface->setObjectName(embedded ? "embeddedNoteDocument" : "notesSurface");
+  mComposerSurface->setStyleSheet(embedded
+      ? "#embeddedNoteDocument { background: palette(base); border: none; }"
+      : "#notesSurface { background: palette(base); border: 1px solid palette(mid); border-radius: 12px; }");
   mScrollArea->setVerticalScrollBarPolicy(embedded ? Qt::ScrollBarAlwaysOff : Qt::ScrollBarAsNeeded);
   mJumpToTodayButton->setVisible(false); mJumpToLatestButton->setVisible(false);
   if (mMaterialId > 0) { mEntriesRendered = false; refresh(); }
 }
 
 void ClientNotesPage::focusComposer() {
+  if (mJournalMode) mComposerSurface->show();
   mPreviewButton->setChecked(false);
   mComposer->setFocus();
 }
@@ -396,6 +420,8 @@ void ClientNotesPage::onFeedFilterChanged() {
 }
 
 bool ClientNotesPage::eventFilter(QObject *watched, QEvent *event) {
+  if (watched == mJournalDocument && event->type() == QEvent::Resize)
+    QTimer::singleShot(0, this, &ClientNotesPage::arrangeCompactUi);
   if (watched == mComposer && event->type() == QEvent::KeyPress) {
     auto *keyEvent = static_cast<QKeyEvent *>(event);
     if ((keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) &&
@@ -470,6 +496,7 @@ void ClientNotesPage::buildUi() {
   rootLayout->addWidget(headerSurface);
 
   auto *feedSurface = makeSurface(this);
+  mFeedSurface = feedSurface;
   auto *feedSurfaceLayout = new QVBoxLayout(feedSurface);
   feedSurfaceLayout->setContentsMargins(0, 0, 0, 0);
   feedSurfaceLayout->setSpacing(0);
@@ -522,7 +549,13 @@ void ClientNotesPage::buildUi() {
   mComposer = new QPlainTextEdit(composerSurface);
   mComposer->setObjectName("notesComposer");
   mComposer->setPlaceholderText(tr("Write a note in Markdown..."));
-  mComposer->setMinimumHeight(120);
+  mComposer->setMinimumHeight(220);
+  mComposer->setFrameShape(QFrame::NoFrame);
+  auto documentFont = mComposer->font();
+  documentFont.setPointSize(documentFont.pointSize() + 1);
+  mComposer->setFont(documentFont);
+  mComposer->setTabChangesFocus(true);
+  mComposer->document()->setDocumentMargin(12);
   mComposer->installEventFilter(this);
 
   mSaveStatusLabel = new QLabel(composerSurface);
@@ -531,6 +564,7 @@ void ClientNotesPage::buildUi() {
   mSaveStatusLabel->setVisible(false);
 
   mPendingAttachmentsList = new QListWidget(composerSurface);
+  mPendingAttachmentsList->setObjectName("notesPendingAttachments");
   mPendingAttachmentsList->setVisible(false);
   mPendingAttachmentsList->setAlternatingRowColors(false);
   mPendingAttachmentsList->setSelectionMode(QAbstractItemView::NoSelection);
@@ -548,6 +582,12 @@ void ClientNotesPage::buildUi() {
   mAddNoteButton->setCursor(Qt::PointingHandCursor);
 
   auto *tools = new QHBoxLayout;
+  auto *composerHeading = new QLabel(tr("My notes"), composerSurface);
+  auto composerHeadingFont = composerHeading->font();
+  composerHeadingFont.setBold(true);
+  composerHeading->setFont(composerHeadingFont);
+  tools->addWidget(composerHeading);
+  tools->addStretch();
   for (const auto &format : {QStringLiteral("**"), QStringLiteral("*"), QStringLiteral("- ")}) {
     // Formatting actions are compact tools, not full-width push actions.
     // QPushButton's platform minimum was making this row impose 404 px.
@@ -573,7 +613,7 @@ void ClientNotesPage::buildUi() {
   }
   mPreviewButton = new QPushButton(tr("Preview"), composerSurface);
   mPreviewButton->setObjectName("notesPreviewToggle"); mPreviewButton->setCheckable(true);
-  tools->addStretch(); tools->addWidget(mPreviewButton);
+  tools->addWidget(mPreviewButton);
   composerLayout->addLayout(tools);
   composerLayout->addWidget(mComposer);
   mPreview = new QTextBrowser(composerSurface); mPreview->setObjectName("notesPreview");
@@ -587,7 +627,7 @@ void ClientNotesPage::buildUi() {
   actionsLayout->setSpacing(pcm::widgets::constants::kNotesComposerSpacing);
   actionsLayout->addWidget(mAttachFilesButton, 0, 0);
   actionsLayout->addWidget(mLinkSessionButton, 1, 0);
-  actionsLayout->addWidget(mAddNoteButton, 2, 0);
+  actionsLayout->addWidget(mAddNoteButton, 2, 0, Qt::AlignRight);
   mCancelEditButton = new QPushButton(tr("Cancel edit"), composerSurface);
   mCancelEditButton->setObjectName("notesCancelEdit"); mCancelEditButton->hide();
   composerLayout->addWidget(mCancelEditButton);
@@ -639,6 +679,7 @@ void ClientNotesPage::buildUi() {
 }
 
 void ClientNotesPage::reloadNotes() {
+  if (mJournalMode) { reloadJournal(); return; }
   clearNotes();
 
   if (!mCurrentClient.has_value() || mCurrentClient->id <= 0) {
@@ -817,6 +858,9 @@ std::optional<DuckEvent> ClientNotesPage::nearestPastEvent(const QVector<DuckEve
 }
 
 void ClientNotesPage::updateJumpButtonsVisibility() {
+  if (mJournalMode) {
+    mJumpToTodayButton->hide(); mJumpToLatestButton->hide(); return;
+  }
   if (!mScrollArea || !mJumpToLatestButton || !mJumpToTodayButton) {
     return;
   }
@@ -900,7 +944,8 @@ void ClientNotesPage::clearNotes() {
     auto *item = mFeedLayout->takeAt(0);
     if (item->widget()) {
       item->widget()->hide();
-      for (auto *button : item->widget()->findChildren<QPushButton *>()) button->setObjectName({});
+      item->widget()->setObjectName({});
+      for (auto *child : item->widget()->findChildren<QObject *>()) child->setObjectName({});
       item->widget()->deleteLater();
     }
     delete item;
@@ -919,11 +964,21 @@ void ClientNotesPage::resizeEvent(QResizeEvent *event) {
 }
 
 void ClientNotesPage::arrangeCompactUi() {
+  if (mJournalMode) {
+    mComposerSurface->setMinimumWidth(mJournalDocument->width());
+    mJournalActions->setMinimumWidth(mJournalDocument->width());
+    const bool narrow = width() < 760;
+    mJournalList->setMaximumHeight(narrow ? 200 : QWIDGETSIZE_MAX);
+    mJournalList->setMaximumWidth(narrow ? QWIDGETSIZE_MAX : 340);
+    mJournal->widget(0)->setMaximumWidth(narrow ? QWIDGETSIZE_MAX : 300);
+    mJournal->widget(0)->setMaximumHeight(narrow ? 320 : QWIDGETSIZE_MAX);
+    mJournal->setOrientation(narrow ? Qt::Vertical : Qt::Horizontal);
+  }
   const bool compact = width() < 620;
   mHeaderLayout->removeWidget(mFeedFilterControl);
   mHeaderLayout->removeWidget(mOpenClientCardButton);
   mHeaderLayout->addWidget(mFeedFilterControl, compact ? 1 : 0, compact ? 0 : 1);
-  mHeaderLayout->addWidget(mOpenClientCardButton, compact ? 2 : 0, compact ? 0 : 2);
+  mHeaderLayout->addWidget(mOpenClientCardButton, compact ? 2 : 0, compact ? 0 : 2, 1, 1, Qt::AlignRight);
   QList<QPushButton *> visibleActions;
   int required = 0;
   for (auto *button : {mAttachFilesButton, mLinkSessionButton, mAddNoteButton}) {
@@ -940,17 +995,23 @@ void ClientNotesPage::arrangeCompactUi() {
       composerMargins.left() - composerMargins.right();
   const bool stackActions = required > available;
   for (int i = 0; i < visibleActions.size(); ++i)
-    mComposerActions->addWidget(visibleActions[i], stackActions ? i : 0, stackActions ? 0 : i);
+    mComposerActions->addWidget(visibleActions[i], stackActions ? i : 0, stackActions ? 0 : i,
+        visibleActions[i] == mAddNoteButton ? Qt::AlignRight : Qt::AlignLeft);
   // A document's height depends on the actual viewport width, not the maximum bubble width.
   for (auto *view : mFeedWidget->findChildren<QTextBrowser *>("notesEntryBody")) {
-    const int available = std::max(80, mScrollArea->viewport()->width() - 64);
+    const int readingWidth = mJournalMode
+        ? std::min(mScrollArea->viewport()->width(), mFeedWidget->maximumWidth())
+        : mScrollArea->viewport()->width();
+    const int available = std::max(80, readingWidth - (mJournalMode ? 96 : 64));
     view->document()->setTextWidth(available);
     view->setFixedHeight(static_cast<int>(std::ceil(view->document()->size().height())) + 12);
   }
   if (mEmbedded) {
-    mFeedWidget->adjustSize();
-    mScrollArea->setMinimumHeight(mFeedWidget->sizeHint().height());
-    setMinimumHeight(sizeHint().height());
+    mFeedLayout->activate();
+    const int feedHeight = mFeedLayout->sizeHint().height();
+    mScrollArea->setFixedHeight(feedHeight);
+    setMinimumHeight(0);
+    updateGeometry();
   }
 }
 
@@ -959,10 +1020,11 @@ void ClientNotesPage::reloadCallEntries() {
   if (mEntriesRendered && entries == mRenderedEntries) return;
   mRenderedEntries = entries; mEntriesRendered = true;
   clearNotes();
+  mFeedSurface->setVisible(!mEmbedded || !entries.isEmpty());
   mComposer->setEnabled(true); mAttachFilesButton->setEnabled(bool(mCallActions.save));
   mAddNoteButton->setEnabled(bool(mCallActions.save));
   mLinkSessionButton->hide(); mFeedFilterControl->hide();
-  mEmptyLabel->setText(tr("No notes yet")); mEmptyLabel->setVisible(entries.isEmpty());
+  mEmptyLabel->setText(tr("No notes yet")); mEmptyLabel->setVisible(entries.isEmpty() && !mEmbedded);
   for (const auto &entry : entries) addCallEntry(entry.toObject());
   arrangeCompactUi();
 }

@@ -450,6 +450,7 @@ jobs:
             --release `
             --svg `
             --no-translations `
+            --qmldir src/pages/transcript_page/qml `
             --dir build-release/packages/Sessio `
             build-release/packages/Sessio/Sessio.exe
 
@@ -567,7 +568,7 @@ jobs:
             rpm -qlp build-release/packages/*.rpm | grep -E "^/usr/lib(64)?/sessio/$so\$" ||
               { echo "::error::$so is missing from the RPM"; exit 1; }
           done
-          for dep in 'qt6-qtbase >= 6.8' qt6-qtbase-gui qt6-qtsvg qt6-qtwayland qt6-qtmultimedia qtkeychain-qt6; do
+          for dep in 'qt6-qtbase >= 6.8' qt6-qtbase-gui qt6-qtsvg qt6-qtwayland qt6-qtmultimedia qt6-qtdeclarative qtkeychain-qt6; do
             rpm -qp --requires build-release/packages/*.rpm | grep -Fx "$dep"
           done
 
@@ -598,6 +599,7 @@ jobs:
           QT_PREFIX="${{ github.workspace }}/Qt/${{ matrix.qt_version }}/gcc_64"
           export PATH="$QT_PREFIX/bin:$PATH"
           export LD_LIBRARY_PATH="$QT_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+          export QML_SOURCES_PATHS="${{ github.workspace }}/src/pages/transcript_page/qml"
           mkdir -p build-release/AppDir/usr/plugins/platforms
           cp -av "$QT_PREFIX/plugins/platforms/libqwayland.so" build-release/AppDir/usr/plugins/platforms/ || true
           cp -av "$QT_PREFIX/plugins/platforms/libqxcb.so" build-release/AppDir/usr/plugins/platforms/ || true
@@ -624,7 +626,7 @@ jobs:
         run: |
           mkdir -p build-release/packages
           APP_BUNDLE="${{ github.workspace }}/build-release/install/Sessio.app"
-          macdeployqt "$APP_BUNDLE" -always-overwrite
+          macdeployqt "$APP_BUNDLE" -always-overwrite -qmldir="${{ github.workspace }}/src/pages/transcript_page/qml"
 
           test -d "$APP_BUNDLE/Contents/Frameworks/QtCore.framework"
           test -d "$APP_BUNDLE/Contents/Frameworks/QtGui.framework"

@@ -176,7 +176,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  QCoreApplication::setApplicationVersion("0.2.33");
+  QCoreApplication::setApplicationVersion("0.2.34");
   // Before anything that can log: on Windows this file and the crash dump are
   // the only trace a hang or crash leaves.
   const QString logDir =
@@ -1405,9 +1405,8 @@ void Application::connectSignals() {
       }
     });
     auto openMaterials = [this, notes, prompter, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting](qint64 materialId, qint64 transcriptId) {
-      auto *dialog = new QDialog(mMainWindow.get());
+      auto *dialog = new NotesEditorDialog(mMainWindow.get());
       dialog->setAttribute(Qt::WA_DeleteOnClose);
-      dialog->setWindowTitle(tr("Call materials")); dialog->resize(500, 740);
       CallNotesController *saved = notes;
       if (notes->materialId() != materialId || materialId <= 0) {
         saved = new CallNotesController(mDb, dialog);
@@ -1441,16 +1440,11 @@ void Application::connectSignals() {
       connect(page->editor(), &ClientNotesPage::openEventRequested, mMainWindow.get(), &MainWindow::returnToEvent);
       if (saved == notes)
         connect(page, &CallNotesPage::retryRequested, prompterPanel, &PrompterPanel::startRequested);
-      auto *body = new QVBoxLayout(dialog); body->addWidget(page);
-      if (auto ids = mDb->get_call_material_transcript_ids(saved->materialId()); !ids.empty()) {
-        auto *exportButton = new QPushButton(tr("Export transcript"), dialog);
-        exportButton->setObjectName("callMaterialsExport");
-        body->addWidget(exportButton, 0, Qt::AlignRight);
-        connect(exportButton, &QPushButton::clicked, dialog, [this, dialog, ids] {
-          if (!pcm::transcriptionui::exportTranscriptWithDialog(dialog, *mDb, {ids.begin(), ids.end()}))
-            QMessageBox::warning(dialog, tr("Export transcript"), tr("Could not save the transcript file."));
-        });
-      }
+      dialog->setPage(page);
+      connect(dialog, &QDialog::accepted, this, [this] {
+        if (auto *journal = qobject_cast<ClientNotesPage *>(mMainWindow->getPage(MainWindow::Pages::clientNotes)))
+          journal->refresh();
+      });
       connect(page, &CallNotesPage::sourceRequested, dialog, [this, saved, notes, panel, sidePanel, reviewPage, dialog, selectedEvent](qint64 phraseId) {
         const auto source = saved->source(QString::number(phraseId));
         if (saved == notes && panel->focusPhrase(phraseId)) { sidePanel->showTranscript(); dialog->close(); return; }
@@ -1468,11 +1462,119 @@ void Application::connectSignals() {
       });
       dialog->open();
     };
-    connect(reviewPage, &TranscriptPage::openCallNotesRequested, this, [this, openMaterials](qint64 id) {
-      const auto material = mDb->get_call_material_for_transcript(id); openMaterials(material.id, id);
-    });
+    auto reviewNotesViews = std::make_shared<QHash<qint64, QPointer<QWidget>>>();
+    auto bindReviewNotes = [this, reviewPage, reviewNotesViews, notes, finals, controller,
+                            bindNotesEditor, meetingControllers, describeMeeting](qint64 transcriptId) {
+      reviewPage->setNotesView(nullptr);
+      // Keep buffered saved-entry/AI edits alive across transcript selection.
+      // Hidden hosts stay owned by the page rather than becoming top-level windows.
+      for (const auto &view : *reviewNotesViews)
+        if (view && !view->parentWidget()) view->setParent(reviewPage);
+      if (transcriptId <= 0) return;
+      if (const auto existing = reviewNotesViews->value(transcriptId)) {
+        if (auto *saved = existing->findChild<CallNotesController *>()) {
+          saved->openTranscript(transcriptId);
+          if (finals->contains(saved->materialId())) saved->refreshFromStorage();
+        }
+        if (auto *page = existing->findChild<CallNotesPage *>()) {
+          const auto current = mDb->get_transcript(transcriptId);
+          page->setEnabled(current && current->status != "recording");
+        }
+        reviewPage->setNotesView(existing);
+        existing->show();
+        return;
+      }
+      auto *host = new QWidget(reviewPage);
+      reviewNotesViews->insert(transcriptId, host);
+      auto *layout = new QVBoxLayout(host);
+      layout->setContentsMargins(0, 0, 0, 0);
+      auto *saved = new CallNotesController(mDb, host);
+      saved->openTranscript(transcriptId);
+      connect(finals, &CallNotesFinalizer::materialChanged, saved, [saved](qint64 id) {
+        if (saved->materialId() == id) saved->refreshFromStorage();
+      });
+      connect(saved, &CallNotesController::generationRequested, saved, [saved, finals] {
+        saved->deferFinal(); finals->enqueue(saved->materialId());
+      });
+      connect(saved, &CallNotesController::cancelRequested, saved, [saved, finals](const QString &) {
+        finals->cancel(saved->materialId());
+      });
+      auto *page = new CallNotesPage(mDb, saved, host);
+      const auto transcript = mDb->get_transcript(transcriptId);
+      page->setEnabled(transcript && transcript->status != "recording");
+      connect(notes, &CallNotesController::changed, saved, [this, notes, saved, page, transcriptId] {
+        if (notes->materialId() != saved->materialId()) return;
+        saved->openTranscript(transcriptId);
+        const auto current = mDb->get_transcript(transcriptId);
+        page->setEnabled(current && current->status != "recording");
+      }, Qt::QueuedConnection);
+      connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptReady,
+              saved, [this, saved, page, transcriptId, finals](qint64 completed) {
+        if (completed != transcriptId) return;
+        saved->openTranscript(transcriptId);
+        if (finals->contains(saved->materialId())) saved->refreshFromStorage();
+        const auto current = mDb->get_transcript(transcriptId);
+        page->setEnabled(current && current->status != "recording");
+      });
+      layout->addWidget(page);
+      bindNotesEditor(page->editor(), saved);
+      page->setControllerFactory(meetingControllers);
+      const auto stored = mDb->get_call_material(saved->materialId());
+      std::optional<DuckClient> client;
+      const auto clientIds = mDb->get_transcript_client_ids(transcriptId);
+      if (clientIds.size() == 1)
+        if (const auto storedClient = mDb->get_client(clientIds.front())) client = *storedClient;
+      page->setClient(client);
+      page->setMeeting(describeMeeting(stored.event_id, client, stored.created_at), tr("ended"));
+      page->setAgreements(loadMaterialAgreements(*mDb, saved->materialId()));
+      connect(saved, &CallNotesController::changed, page, [this, page, saved] {
+        page->setAgreements(loadMaterialAgreements(*mDb, saved->materialId()));
+      });
+      connect(reviewPage, &TranscriptPage::transcriptsChanged, page, [this, page, saved, transcriptId] {
+        saved->refreshFromStorage();
+        std::optional<DuckClient> client;
+        const auto ids = mDb->get_transcript_client_ids(transcriptId);
+        if (ids.size() == 1)
+          if (const auto storedClient = mDb->get_client(ids.front())) client = *storedClient;
+        page->setClient(client);
+      });
+      auto focusSource = [reviewPage](qint64 phraseId) { reviewPage->focusPhrase(phraseId); };
+      connect(page, &CallNotesPage::sourceRequested, reviewPage, focusSource, Qt::QueuedConnection);
+      auto *reviewPrompter = new CallPrompterController(mDb, host);
+      reviewPrompter->beginTranscript(transcriptId);
+      auto *reviewSuggestions = new PrompterPanel(reviewPrompter, mDb, page);
+      reviewSuggestions->setCallNoteSaver([saved](const QString &cardId, const QString &text) {
+        return saved->appendAgreement(cardId, text);
+      });
+      reviewSuggestions->findChild<QPushButton *>("prompterStart")->hide();
+      reviewSuggestions->findChild<QPushButton *>("prompterPause")->hide();
+      page->setPrompterPanel(reviewSuggestions);
+      connect(reviewSuggestions, &PrompterPanel::sourceRequested, reviewPage, focusSource, Qt::QueuedConnection);
+      connect(reviewPrompter, &CallPrompterController::cardsChanged, page, [this, page, saved] {
+        page->setAgreements(loadMaterialAgreements(*mDb, saved->materialId()));
+      });
+      connect(page->editor(), &ClientNotesPage::openEventRequested, mMainWindow.get(), &MainWindow::returnToEvent);
+      reviewPage->setNotesView(host);
+    };
+    connect(reviewPage, &TranscriptPage::transcriptActivated, reviewPage, bindReviewNotes);
     connect(listPage, &TranscriptListPage::openCallMaterialRequested, this,
             [openMaterials](qint64 id) { openMaterials(id, 0); });
+    if (auto *journal = qobject_cast<ClientNotesPage *>(mMainWindow->getPage(MainWindow::Pages::clientNotes))) {
+      journal->setMaterialAttachmentResolver([db = mDb](qint64 material, const QString &entry, const QString &attachment) {
+        CallNotesController storage(db);
+        storage.openMaterial(material);
+        return storage.noteAttachmentPath(entry, attachment);
+      });
+      connect(journal, &ClientNotesPage::openCallMaterialRequested, this,
+              [openMaterials](qint64 id) { openMaterials(id, 0); });
+      connect(journal, &ClientNotesPage::openTranscriptRequested, reviewPage,
+              [this, reviewPage, selectedEvent](qint64 id) {
+        if (reviewPage->editing()) return;
+        *selectedEvent = {0, 0};
+        reviewPage->reloadTranscript(id, tr("Transcript"));
+        mMainWindow->openTranscriptPage();
+      });
+    }
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptReady,
             listPage, [this, listPage, eventPage](qint64 id) {
               listPage->reload();

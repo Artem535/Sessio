@@ -8,8 +8,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Define the project
-project(Sessio VERSION 0.2.33 LANGUAGES CXX)
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Svg PrintSupport LinguistTools Multimedia MultimediaWidgets OpenGLWidgets)
+project(Sessio VERSION 0.2.34 LANGUAGES CXX)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Svg PrintSupport LinguistTools Multimedia MultimediaWidgets OpenGLWidgets Qml Quick QuickWidgets QuickControls2)
 include(GNUInstallDirs)
 include(FetchContent)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -409,7 +409,7 @@ elseif(UNIX AND NOT APPLE)
   # bundled (see SESSIO_BUNDLE_QT). Exact sonames/versions are added by rpm's
   # automatic dependency generator on top of these.
   set(CPACK_RPM_PACKAGE_REQUIRES
-      "qt6-qtbase >= 6.8, qt6-qtbase-gui, qt6-qtsvg, qt6-qtwayland, qt6-qtmultimedia, qtkeychain-qt6")
+      "qt6-qtbase >= 6.8, qt6-qtbase-gui, qt6-qtsvg, qt6-qtwayland, qt6-qtmultimedia, qt6-qtdeclarative, qtkeychain-qt6")
   # The private /usr/lib/sessio directory (LiveKit and its curl/OpenSSL/...
   # chain) must neither advertise Provides for those sonames — that would
   # shadow the system packages — nor generate Requires for them.

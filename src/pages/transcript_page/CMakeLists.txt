@@ -11,6 +11,9 @@ qt_add_library(${TARGET_NAME} STATIC
     call_notes_controller.h call_notes_controller.cpp
     call_notes_finalizer.h call_notes_finalizer.cpp
     call_notes_page.h call_notes_page.cpp
+    notes_workspace_bridge.h notes_workspace_bridge.cpp
+    qml/NotesWorkspace.qml
+    qml/NotesEditor.qml
     meeting_history.h meeting_history.cpp
     meeting_history_widgets.h meeting_history_widgets.cpp
     notes_widget_frame.h notes_widget_frame.cpp
@@ -24,9 +27,13 @@ qt_add_library(${TARGET_NAME} STATIC
     transcription_consent_dialog.h transcription_consent_dialog.cpp
     failure_text.h failure_text.cpp)
 set_target_properties(${TARGET_NAME} PROPERTIES AUTOMOC ON)
+qt_add_resources(${TARGET_NAME} notes_workspace_qml
+  PREFIX "/sessio/notes"
+  BASE "qml"
+  FILES qml/NotesWorkspace.qml qml/NotesEditor.qml)
 target_include_directories(${TARGET_NAME} PRIVATE ${qlementine_SOURCE_DIR}/lib/include)
 target_include_directories(${TARGET_NAME} INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Widgets qlementine
+target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Widgets Qt6::Quick Qt6::QuickWidgets Qt6::Qml qlementine
     ${PROJECT_NAME}_database ${PROJECT_NAME}_widgets ${PROJECT_NAME}_call_transcription
     ${PROJECT_NAME}_client_notes_page
     ${PROJECT_NAME}_call_prompter_engine)

@@ -50,11 +50,19 @@ TEST_F(MeetingHistoryTest, ClientNotesFeedShowsFinalAiSummaries) {
   meeting({{"final", QJsonObject{{"note", QJsonObject{{"text", "Call still running"}}}}}}, false);
   ClientNotesPage page(db);
   page.setClientInfo(*db->get_client(client));
-  const auto bubbles = page.findChildren<QFrame *>("aiSummaryBubble");
-  ASSERT_EQ(bubbles.size(), 1);
-  const auto *body = bubbles.front()->findChild<QTextBrowser *>("notesEntryBody");
-  ASSERT_NE(body, nullptr);
-  EXPECT_EQ(body->toPlainText().trimmed(), QStringLiteral("Whole meeting summary"));
+  auto *journal = page.findChild<QListWidget *>("notesJournalList");
+  ASSERT_NE(journal, nullptr);
+  QStringList summaries;
+  for (int i = 0; i < journal->count(); ++i) {
+    journal->setCurrentRow(i);
+    for (const auto *bubble : page.findChildren<QFrame *>("aiSummaryBubble")) {
+      if (bubble->isHidden()) continue;
+      const auto *body = bubble->findChild<QTextBrowser *>("notesEntryBody");
+      ASSERT_NE(body, nullptr);
+      summaries.append(body->toPlainText().trimmed());
+    }
+  }
+  EXPECT_EQ(summaries, QStringList{QStringLiteral("Whole meeting summary")});
 }
 
 TEST_F(MeetingHistoryTest, HistoryListsClientMeetingsNewestFirst) {

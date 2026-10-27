@@ -166,6 +166,7 @@ public:
   // transcript is not in "recording" status or its consent was revoked.
   int64_t add_transcript_phrase(const DuckTranscriptPhrase &phrase);
   std::vector<DuckTranscriptPhrase> get_transcript_phrases(int64_t transcript_id);
+  std::optional<int64_t> get_transcript_id_for_phrase(int64_t phrase_id);
   bool update_transcript_phrase_text(int64_t phrase_id, const std::string &text);
   bool delete_transcript_phrase(int64_t phrase_id);
   // Sets speaker_name on every phrase of the transcript with that track role

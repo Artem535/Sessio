@@ -329,6 +329,10 @@
         <translation>My notes</translation>
     </message>
     <message>
+        <source>Back to document</source>
+        <translation>Back to document</translation>
+    </message>
+    <message>
         <source>Prompter</source>
         <translation>Prompter</translation>
     </message>
@@ -805,10 +809,6 @@
         <translation>No client selected</translation>
     </message>
     <message>
-        <source>%1 → Notes</source>
-        <translation>%1 → Notes</translation>
-    </message>
-    <message>
         <source>Meeting notes</source>
         <translation>Meeting notes</translation>
     </message>
@@ -921,6 +921,10 @@
         <translation>Link to a session</translation>
     </message>
     <message>
+        <source>My notes</source>
+        <translation>My notes</translation>
+    </message>
+    <message>
         <source>Select a client to open notes.</source>
         <translation>Select a client to open notes.</translation>
     </message>
@@ -1019,6 +1023,94 @@
     <message>
         <source>Rescheduled from %1 to %2</source>
         <translation>Rescheduled from %1 to %2</translation>
+    </message>
+    <message>
+        <source>All materials</source>
+        <translation>All materials</translation>
+    </message>
+    <message>
+        <source>Sessions and protocols</source>
+        <translation>Sessions and protocols</translation>
+    </message>
+    <message>
+        <source>Free notes</source>
+        <translation>Free notes</translation>
+    </message>
+    <message>
+        <source>Agreements</source>
+        <translation>Agreements</translation>
+    </message>
+    <message>
+        <source>Search notes and summaries…</source>
+        <translation>Search notes and summaries…</translation>
+    </message>
+    <message>
+        <source>New note</source>
+        <translation>New note</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Export</translation>
+    </message>
+    <message>
+        <source>Export journal</source>
+        <translation>Export journal</translation>
+    </message>
+    <message>
+        <source>Markdown (*.md)</source>
+        <translation>Markdown (*.md)</translation>
+    </message>
+    <message>
+        <source>Could not save the journal file.</source>
+        <translation>Could not save the journal file.</translation>
+    </message>
+    <message>
+        <source>Call materials</source>
+        <translation>Call materials</translation>
+    </message>
+    <message>
+        <source>Note with attachments</source>
+        <translation>Note with attachments</translation>
+    </message>
+    <message>
+        <source>Free note</source>
+        <translation>Free note</translation>
+    </message>
+    <message>
+        <source>No matching materials</source>
+        <translation>No matching materials</translation>
+    </message>
+    <message>
+        <source>Print</source>
+        <translation>Print</translation>
+    </message>
+    <message>
+        <source>Export note</source>
+        <translation>Export note</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Open transcript</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>More actions</translation>
+    </message>
+    <message>
+        <source>AI summary</source>
+        <translation>AI summary</translation>
+    </message>
+    <message>
+        <source>Agreements and homework</source>
+        <translation>Agreements and homework</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Key points</translation>
     </message>
 </context>
 <context>
@@ -1307,10 +1399,250 @@
     </message>
 </context>
 <context>
+    <name>NotesEditor</name>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Meeting notes</translation>
+    </message>
+    <message>
+        <source>Close editor</source>
+        <translation>Close editor</translation>
+    </message>
+    <message>
+        <source>New note</source>
+        <translation>New note</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>Note</translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation>Editor</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Preview</translation>
+    </message>
+    <message>
+        <source>What is important to keep from this meeting?</source>
+        <translation>What is important to keep from this meeting?</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Attach files</translation>
+    </message>
+    <message>
+        <source>Meeting context</source>
+        <translation>Meeting context</translation>
+    </message>
+    <message>
+        <source>Meeting summary</source>
+        <translation>Meeting summary</translation>
+    </message>
+    <message>
+        <source>No summary yet</source>
+        <translation>No summary yet</translation>
+    </message>
+    <message>
+        <source>Add to my notes</source>
+        <translation>Add to my notes</translation>
+    </message>
+    <message>
+        <source>For the next meeting</source>
+        <translation>For the next meeting</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Key points</translation>
+    </message>
+    <message>
+        <source>AI suggestions help recall the meeting. The note on the left is your own text.</source>
+        <translation>AI suggestions help recall the meeting. The note on the left is your own text.</translation>
+    </message>
+    <message>
+        <source>Unsaved changes</source>
+        <translation>Unsaved changes</translation>
+    </message>
+    <message>
+        <source>No unsaved changes</source>
+        <translation>No unsaved changes</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Save note</source>
+        <translation>Save note</translation>
+    </message>
+</context>
+<context>
+    <name>NotesEditorDialog</name>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Meeting notes</translation>
+    </message>
+    <message>
+        <source>Unsaved changes</source>
+        <translation>Unsaved changes</translation>
+    </message>
+    <message>
+        <source>Close without saving your changes?</source>
+        <translation>Close without saving your changes?</translation>
+    </message>
+</context>
+<context>
     <name>NotesWidgetFrame</name>
     <message>
         <source>More actions</source>
         <translation>More actions</translation>
+    </message>
+</context>
+<context>
+    <name>NotesWorkspace</name>
+    <message>
+        <source>View source</source>
+        <translation>View source</translation>
+    </message>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Meeting notes</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>History</translation>
+    </message>
+    <message>
+        <source>More</source>
+        <translation>More</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Export</translation>
+    </message>
+    <message>
+        <source>Advanced view</source>
+        <translation>Advanced view</translation>
+    </message>
+    <message>
+        <source>Search meetings…</source>
+        <translation>Search meetings…</translation>
+    </message>
+    <message>
+        <source>This meeting</source>
+        <translation>This meeting</translation>
+    </message>
+    <message>
+        <source>Meeting materials</source>
+        <translation>Meeting materials</translation>
+    </message>
+    <message>
+        <source>Close transcript</source>
+        <translation>Close transcript</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Open transcript</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Edit</translation>
+    </message>
+    <message>
+        <source>Edit note</source>
+        <translation>Edit note</translation>
+    </message>
+    <message>
+        <source>My notes</source>
+        <translation>My notes</translation>
+    </message>
+    <message>
+        <source>Write a note…</source>
+        <translation>Write a note…</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Attach files</translation>
+    </message>
+    <message>
+        <source>Cancel edit</source>
+        <translation>Cancel edit</translation>
+    </message>
+    <message>
+        <source>Save note</source>
+        <translation>Save note</translation>
+    </message>
+    <message>
+        <source>Meeting summary</source>
+        <translation>Meeting summary</translation>
+    </message>
+    <message>
+        <source>Prepared by AI</source>
+        <translation>Prepared by AI</translation>
+    </message>
+    <message>
+        <source>Add to my notes</source>
+        <translation>Add to my notes</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Retry</translation>
+    </message>
+    <message>
+        <source>For the next meeting</source>
+        <translation>For the next meeting</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
+    <message>
+        <source>Search transcript…</source>
+        <translation>Search transcript…</translation>
+    </message>
+    <message>
+        <source>Edit transcript</source>
+        <translation>Edit transcript</translation>
+    </message>
+</context>
+<context>
+    <name>NotesWorkspaceBridge</name>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Could not save — keep this page open</translation>
+    </message>
+    <message>
+        <source>Draft saved</source>
+        <translation>Draft saved</translation>
+    </message>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Meeting notes</translation>
+    </message>
+    <message>
+        <source>Save or cancel the current edit before opening another note.</source>
+        <translation>Save or cancel the current edit before opening another note.</translation>
+    </message>
+    <message>
+        <source>This note changed in another window. Keep this editor open and copy your changes.</source>
+        <translation>This note changed in another window. Keep this editor open and copy your changes.</translation>
+    </message>
+    <message>
+        <source>Note saved</source>
+        <translation>Note saved</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Attach files</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Export</translation>
+    </message>
+    <message>
+        <source>Markdown (*.md)</source>
+        <translation>Markdown (*.md)</translation>
     </message>
 </context>
 <context>
@@ -3147,14 +3479,6 @@ They appear here after a call with transcription turned on.</translation>
         <translation>Call notes</translation>
     </message>
     <message>
-        <source>Review agreements</source>
-        <translation>Review agreements</translation>
-    </message>
-    <message>
-        <source>Call agreements</source>
-        <translation>Call agreements</translation>
-    </message>
-    <message>
         <source>Delete this transcript and all its phrases?</source>
         <translation>Delete this transcript and all its phrases?</translation>
     </message>
@@ -3228,6 +3552,10 @@ They appear here after a call with transcription turned on.</translation>
     <message>
         <source>Edit</source>
         <translation>Edit</translation>
+    </message>
+    <message>
+        <source>Search transcript…</source>
+        <translation>Search transcript…</translation>
     </message>
     <message>
         <source>Delete</source>
@@ -3631,10 +3959,6 @@ Your previous data was kept.</translation>
     <message>
         <source>ended</source>
         <translation>ended</translation>
-    </message>
-    <message>
-        <source>Call materials</source>
-        <translation>Call materials</translation>
     </message>
     <message>
         <source>Transcript</source>

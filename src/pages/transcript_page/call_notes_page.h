@@ -4,6 +4,7 @@
 #include <QJsonArray>
 #include <QPointer>
 #include <QWidget>
+#include <QDialog>
 #include <memory>
 #include <optional>
 
@@ -18,15 +19,17 @@ class NotesWidgetFrame;
 class QLabel;
 class QVBoxLayout;
 class PrompterPanel;
+class NotesWorkspaceBridge;
+class QQuickWidget;
 
-// Notes page of a call: «This meeting | History» switch over one scroll area
-// with a column of cards (last time, meeting, my notes, summary, key points,
-// agreements) or the client's meeting history.
+// Call document with history navigation on the left and a scrollable column
+// of notes, summary, agreements and supporting meeting details.
 class CallNotesPage final : public QWidget {
   Q_OBJECT
 public:
   CallNotesPage(std::shared_ptr<pcm::database::Database> db, CallNotesController *controller,
                 QWidget *parent = nullptr);
+  ~CallNotesPage() override;
   ClientNotesPage *editor() const;
   void setClient(const std::optional<DuckClient> &client);
   void setMeeting(const QString &details, const QString &status);
@@ -36,9 +39,19 @@ public:
   void setPrompterPanel(PrompterPanel *panel);
   void showHistory(qint64 materialId);
   bool historyMode() const;
+  void setEditorMode();
+  bool editorDirty() const;
 signals:
   void sourceRequested(qint64 phraseId);
   void retryRequested();
+  void editorCloseRequested();
+  void editorSaved();
+
+protected:
+  void changeEvent(QEvent *event) override;
+
+private slots:
+  void showAdvanced();
 
 private:
   void reloadHistory();
@@ -61,4 +74,20 @@ private:
   KeyPointsWidget *mPoints = nullptr;
   AgreementsWidget *mAgreements = nullptr;
   MeetingHistoryList *mHistory = nullptr;
+  NotesWorkspaceBridge *mWorkspace = nullptr;
+  QQuickWidget *mQuick = nullptr;
+};
+
+// One native dialog hosts the QML editor; all dismissal paths share the guard.
+class NotesEditorDialog final : public QDialog {
+  Q_OBJECT
+public:
+  explicit NotesEditorDialog(QWidget *parent = nullptr);
+  void setPage(CallNotesPage *page);
+  void setDiscardConfirmation(std::function<bool()> confirm) { mConfirmDiscard = std::move(confirm); }
+public slots:
+  void reject() override;
+private:
+  QPointer<CallNotesPage> mPage;
+  std::function<bool()> mConfirmDiscard;
 };

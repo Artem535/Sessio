@@ -24,6 +24,9 @@
 class QGridLayout;
 class QTextBrowser;
 class QResizeEvent;
+class QSplitter;
+class QLineEdit;
+class QComboBox;
 
 namespace oclero::qlementine {
 class SegmentedControl;
@@ -51,11 +54,15 @@ public:
   void setEmbedded(bool embedded);
   void focusComposer();
   void addPendingAttachments(const QStringList &paths);
+  QString journalMarkdown() const;
+  void setMaterialAttachmentResolver(std::function<QString(qint64, const QString &, const QString &)> resolver);
 
 signals:
   void openClientCardRequested(const std::optional<DuckClient> &client);
   void openEventRequested(int64_t eventId, qint64 dayMs);
   void noteEntrySaved(QString entryId);
+  void openTranscriptRequested(qint64 transcriptId);
+  void openCallMaterialRequested(qint64 materialId);
 
 public slots:
   void setClientInfo(const std::optional<DuckClient> &client);
@@ -83,6 +90,11 @@ private:
   };
 
   void buildUi();
+  void buildJournal();
+  void setJournalMode(bool enabled);
+  void reloadJournal();
+  void filterJournal();
+  void showJournalEntry();
   void arrangeCompactUi();
   void reloadCallEntries();
   void addCallEntry(const QJsonObject &entry);
@@ -125,6 +137,29 @@ private:
   bool mSavingDraftAttachments = false;
   bool mAttachmentSaveFailed = false;
   bool mEmbedded = false;
+  struct JournalEntry {
+    QString key;
+    QString title;
+    QString preview;
+    qint64 timestamp = 0;
+    bool session = false;
+    bool hasAgreements = false;
+    std::optional<DuckEvent> event;
+    std::vector<DuckClientNote> notes;
+    QJsonArray calls;
+  };
+  QString journalEntryMarkdown(const JournalEntry &entry) const;
+  std::vector<JournalEntry> mJournalEntries;
+  std::function<QString(qint64, const QString &, const QString &)> mMaterialAttachmentResolver;
+  bool mJournalMode = false;
+  QWidget *mFeedSurface = nullptr;
+  QWidget *mJournalTools = nullptr;
+  QSplitter *mJournal = nullptr;
+  QWidget *mJournalDocument = nullptr;
+  QWidget *mJournalActions = nullptr;
+  QListWidget *mJournalList = nullptr;
+  QLineEdit *mJournalSearch = nullptr;
+  QComboBox *mJournalFilter = nullptr;
   QWidget *mHeaderSurface = nullptr;
   QGridLayout *mHeaderLayout = nullptr;
   QGridLayout *mComposerActions = nullptr;

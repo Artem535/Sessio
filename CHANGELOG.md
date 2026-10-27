@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.34] - 2026-10-26
+
+- Replaced the narrow call-material modal with a dedicated QML note editor,
+  meeting context, explicit save/cancel and guarded dismissal. Kept unsaved
+  edits local and protected notes against concurrent changes and new calls.
+- Simplified journal actions to Edit, Transcript and More; moved printing,
+  single-note export and recording selection into the overflow menu.
+- Added a QML meeting document with rich-text Markdown editing, persistent
+  drafts and undo, searchable history, AI summary and an optional transcript
+  source panel. Existing advanced Widgets tools remain available from More.
+- Consolidated repeated call materials into one meeting document with shared
+  actions; removed empty note sections and kept every recording available in
+  the materials menu. History now scrolls independently of the note editor.
+- Reworked notes around the document prototype: a left history rail, spacious
+  note editor, summary and agreements below, and an optional transcript source
+  panel on the right that opens when following a source link.
+- Ported the HTML notes workspace to native Qt Widgets: transcript search and a
+  resizable notes pane with meeting history, summaries, agreements and source links.
+- Added a client journal with a history list, selected meeting materials,
+  combined category/search filters, free-note composition and Markdown export.
+- Grouped linked client notes and call materials by meeting, including older
+  sessions, while keeping embedded call editors and attachment workflows.
+
 ## [0.2.33] - 2026-10-21
 
 - Added native call notes with source-linked key points and a separate

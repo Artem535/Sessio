@@ -2267,6 +2267,18 @@ std::vector<DuckTranscriptPhrase> Database::get_transcript_phrases(const int64_t
   return out;
 }
 
+std::optional<int64_t> Database::get_transcript_id_for_phrase(int64_t phrase_id) {
+  if (phrase_id <= 0) return std::nullopt;
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn,
+      "SELECT p.transcript_id FROM TranscriptPhrase p JOIN Transcript t ON t.id=p.transcript_id WHERE p.id=$1",
+      {duckdb::Value::BIGINT(phrase_id)});
+  if (!result || result->HasError()) return std::nullopt;
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) return std::nullopt;
+  return chunk->GetValue(0, 0).GetValue<int64_t>();
+}
+
 bool Database::update_transcript_phrase_text(const int64_t phrase_id, const std::string &text) {
   if (phrase_id <= 0 || text.empty()) return false;
   std::optional<duckdb::Connection> ownedConn;

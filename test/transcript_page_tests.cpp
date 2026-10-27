@@ -1,13 +1,19 @@
 #include "transcript_page.h"
 #include "config.h"
+#include "call_notes_controller.h"
+#include "call_notes_page.h"
+#include "client_notes_page.h"
 #include <QApplication>
 #include <QComboBox>
 #include <QLabel>
+#include <QLineEdit>
+#include <QSplitter>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QPointer>
 #include <QTemporaryDir>
+#include <QTest>
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 #include <gtest/gtest.h>
 
@@ -37,6 +43,92 @@ protected:
   std::unique_ptr<TranscriptPage> page;
   int64_t event, id, first, second;
 };
+TEST_F(TranscriptPageTest, NotesPaneCanBeHiddenAndReopenedWithoutLosingItsEditor) {
+  auto *notes = new QPlainTextEdit;
+  notes->setPlainText("Unsent clinical note");
+  page->setNotesView(notes);
+  page->show();
+  EXPECT_TRUE(page->notesVisible());
+  EXPECT_TRUE(page->findChild<QLabel *>("transcriptTitle")->isHidden());
+  EXPECT_LT(button("markReviewed")->width(), 220);
+  button("transcriptCallNotes")->click();
+  EXPECT_FALSE(page->notesVisible());
+  EXPECT_FALSE(page->findChild<QLabel *>("transcriptTitle")->isHidden());
+  button("transcriptCallNotes")->click();
+  EXPECT_TRUE(page->notesVisible());
+  EXPECT_EQ(notes->toPlainText(), "Unsent clinical note");
+  EXPECT_EQ(page->findChild<QSplitter *>("transcriptNotesSplitter")->count(), 2);
+}
+
+TEST_F(TranscriptPageTest, WrappedPhraseFitsAfterResizingTheSplitView) {
+  db->update_transcript_phrase_text(first, std::string(30, ' ') +
+      "A long phrase that must remain fully visible when the notes pane changes width. "
+      "Additional observations wrap onto several lines without losing the end of the phrase.");
+  page->reload(event, "Session");
+  auto *notes = new QWidget; notes->setMinimumWidth(320); page->setNotesView(notes);
+  button("transcriptSourceToggle")->click();
+  page->resize(880, 700); page->show(); QTest::qWait(20);
+  auto *card = page->findChild<QWidget *>("phraseCard_" + QString::number(first));
+  auto *text = card->findChild<QLabel *>("phraseText");
+  EXPECT_GE(text->height(), text->heightForWidth(text->width()));
+}
+
+TEST_F(TranscriptPageTest, NotesLeadTheWorkspaceAndSourceNavigationRevealsTranscript) {
+  auto *notes = new QPlainTextEdit;
+  page->setNotesView(notes);
+  page->show();
+  auto *split = page->findChild<QSplitter *>("transcriptNotesSplitter");
+  ASSERT_NE(split, nullptr);
+  EXPECT_TRUE(split->widget(0)->isAncestorOf(notes));
+  EXPECT_TRUE(page->findChild<QWidget *>("transcriptSourcePanel")->isHidden());
+  EXPECT_TRUE(page->focusPhrase(first));
+  EXPECT_FALSE(page->findChild<QWidget *>("transcriptSourcePanel")->isHidden());
+  EXPECT_TRUE(page->notesVisible());
+  button("transcriptSourceToggle")->click();
+  EXPECT_TRUE(page->findChild<QWidget *>("transcriptSourcePanel")->isHidden());
+}
+
+TEST_F(TranscriptPageTest, PhraseSearchFiltersTextAndClearingRestoresAllPhrases) {
+  auto *search = page->findChild<QLineEdit *>("transcriptSearch");
+  ASSERT_NE(search, nullptr);
+  search->setText("second");
+  EXPECT_TRUE(page->findChild<QWidget *>("phraseCard_" + QString::number(first))->isHidden());
+  EXPECT_FALSE(page->findChild<QWidget *>("phraseCard_" + QString::number(second))->isHidden());
+  search->clear();
+  EXPECT_FALSE(page->findChild<QWidget *>("phraseCard_" + QString::number(first))->isHidden());
+}
+
+TEST_F(TranscriptPageTest, SourceNavigationOpensAnotherTranscriptAndClearsSearch) {
+  const auto other = db->add_transcript(std::nullopt, "live_local_v1");
+  DuckTranscriptPhrase phrase; phrase.transcript_id = other;
+  phrase.track_role = "participant"; phrase.text = "Source from an earlier meeting";
+  const auto phraseId = db->add_transcript_phrase(phrase);
+  db->set_transcript_status(other, "draft");
+  button("editPhrase_" + QString::number(first))->click();
+  page->findChild<QPlainTextEdit *>("phraseEditor")->setPlainText("Unsent phrase edit");
+  EXPECT_FALSE(page->focusPhrase(phraseId));
+  EXPECT_EQ(page->findChild<QPlainTextEdit *>("phraseEditor")->toPlainText(), "Unsent phrase edit");
+  button("cancelPhrase")->click();
+  page->findChild<QLineEdit *>("transcriptSearch")->setText("no match");
+  ASSERT_TRUE(page->focusPhrase(phraseId));
+  EXPECT_EQ(page->findChild<QComboBox *>("transcriptSelector")->currentData().toLongLong(), other);
+  EXPECT_TRUE(page->findChild<QLineEdit *>("transcriptSearch")->text().isEmpty());
+  EXPECT_FALSE(page->focusPhrase(-1));
+}
+
+TEST_F(TranscriptPageTest, TranscriptActivationIsNotRepeatedForPhraseEditsAndClearsOnDeletion) {
+  QSignalSpy activated(page.get(), &TranscriptPage::transcriptActivated);
+  page->reloadTranscript(id, "Session");
+  EXPECT_EQ(activated.count(), 0);
+  db->update_transcript_phrase_text(first, "Updated");
+  page->reloadTranscript(id, "Session");
+  EXPECT_EQ(activated.count(), 0);
+  db->delete_transcript(id);
+  page->reloadTranscript(id, "Session");
+  ASSERT_EQ(activated.count(), 1);
+  EXPECT_EQ(activated.first().first().toLongLong(), 0);
+}
+
 TEST_F(TranscriptPageTest, ShowsNewestTranscriptWithPhrasesInOrder) {
   EXPECT_EQ(page->transcriptCount(), 1);
   auto labels = page->findChildren<QLabel *>("phraseText");
@@ -47,7 +139,21 @@ TEST_F(TranscriptPageTest, ShowsNewestTranscriptWithPhrasesInOrder) {
         "На следующей встрече предлагаю вернуться к этому вопросу и обсудить, какие изменения удалось заметить за неделю.");
     db->update_transcript_phrase_text(second, "Хорошо. Я запишу несколько примеров, чтобы мы могли обсудить их подробнее.");
     page->reload(event, QString::fromUtf8("Тестовая сессия"));
-    page->resize(1280, 860); page->show(); QApplication::processEvents();
+    auto *storage = new CallNotesController(db, page.get());
+    storage->openTranscript(id);
+    storage->setManualText(QString::fromUtf8("**Наблюдения:** обсудить изменения за неделю.\n\nВернуться к примерам на следующей встрече."));
+    auto *notes = new CallNotesPage(db, storage);
+    notes->setMeeting(QString::fromUtf8("Тестовая сессия · 60 минут"), "ended");
+    notes->editor()->setCallNoteActions(storage->materialId(), {
+      [storage] { return storage->noteEntries(); },
+      [storage](const QString &text, const QStringList &paths, const QString &entry) { return storage->saveNoteEntry(text, paths, entry); },
+      [storage](const QString &entry, const QString &attachment) { return storage->noteAttachmentPath(entry, attachment); },
+      [storage] { return storage->manualText(); },
+      [storage](const QString &text) { return storage->setManualText(text); }
+    });
+    notes->setAgreements(QJsonArray{QJsonObject{{"text", QString::fromUtf8("Подготовить несколько примеров к следующей встрече")}, {"active", true}}});
+    page->setNotesView(notes);
+    page->resize(1280, 860); page->show(); QTest::qWait(20);
     page->findChild<QWidget *>("phraseCard_" + QString::number(first))->setFocus();
     QApplication::processEvents();
     page->grab().save(qEnvironmentVariable("SESSIO_TRANSCRIPT_SCREENSHOT"));

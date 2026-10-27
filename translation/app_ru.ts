@@ -329,6 +329,10 @@
         <translation>Мои заметки</translation>
     </message>
     <message>
+        <source>Back to document</source>
+        <translation>Вернуться к документу</translation>
+    </message>
+    <message>
         <source>Prompter</source>
         <translation>Суфлёр</translation>
     </message>
@@ -811,10 +815,6 @@
         <translation>Клиент не выбран</translation>
     </message>
     <message>
-        <source>%1 → Notes</source>
-        <translation>%1 → Заметки</translation>
-    </message>
-    <message>
         <source>Meeting notes</source>
         <translation>Заметки встречи</translation>
     </message>
@@ -927,6 +927,10 @@
         <translation>Привязать к сеансу</translation>
     </message>
     <message>
+        <source>My notes</source>
+        <translation>Мои заметки</translation>
+    </message>
+    <message>
         <source>Select a client to open notes.</source>
         <translation>Выберите клиента, чтобы открыть заметки.</translation>
     </message>
@@ -1025,6 +1029,94 @@
     <message>
         <source>Rescheduled from %1 to %2</source>
         <translation>Перенесено с %1 на %2</translation>
+    </message>
+    <message>
+        <source>All materials</source>
+        <translation>Все материалы</translation>
+    </message>
+    <message>
+        <source>Sessions and protocols</source>
+        <translation>Сессии и протоколы</translation>
+    </message>
+    <message>
+        <source>Free notes</source>
+        <translation>Свободные заметки</translation>
+    </message>
+    <message>
+        <source>Agreements</source>
+        <translation>Договорённости</translation>
+    </message>
+    <message>
+        <source>Search notes and summaries…</source>
+        <translation>Поиск по заметкам и итогам…</translation>
+    </message>
+    <message>
+        <source>New note</source>
+        <translation>Новая заметка</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Экспорт</translation>
+    </message>
+    <message>
+        <source>Export journal</source>
+        <translation>Экспорт журнала</translation>
+    </message>
+    <message>
+        <source>Markdown (*.md)</source>
+        <translation>Markdown (*.md)</translation>
+    </message>
+    <message>
+        <source>Could not save the journal file.</source>
+        <translation>Не удалось сохранить файл журнала.</translation>
+    </message>
+    <message>
+        <source>Call materials</source>
+        <translation>Материалы звонка</translation>
+    </message>
+    <message>
+        <source>Note with attachments</source>
+        <translation>Заметка с вложениями</translation>
+    </message>
+    <message>
+        <source>Free note</source>
+        <translation>Свободная заметка</translation>
+    </message>
+    <message>
+        <source>No matching materials</source>
+        <translation>Подходящих материалов нет</translation>
+    </message>
+    <message>
+        <source>Print</source>
+        <translation>Печать</translation>
+    </message>
+    <message>
+        <source>Export note</source>
+        <translation>Экспортировать заметку</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Расшифровка</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Открыть расшифровку</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>Ещё</translation>
+    </message>
+    <message>
+        <source>AI summary</source>
+        <translation>Итог ИИ</translation>
+    </message>
+    <message>
+        <source>Agreements and homework</source>
+        <translation>Договорённости и домашние задания</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Ключевые моменты</translation>
     </message>
 </context>
 <context>
@@ -1315,10 +1407,250 @@
     </message>
 </context>
 <context>
+    <name>NotesEditor</name>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Заметки к встрече</translation>
+    </message>
+    <message>
+        <source>Close editor</source>
+        <translation>Закрыть редактор</translation>
+    </message>
+    <message>
+        <source>New note</source>
+        <translation>Новая заметка</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>Заметка</translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation>Редактор</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Просмотр</translation>
+    </message>
+    <message>
+        <source>What is important to keep from this meeting?</source>
+        <translation>Что важно сохранить об этой встрече?</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Прикрепить файлы</translation>
+    </message>
+    <message>
+        <source>Meeting context</source>
+        <translation>Контекст встречи</translation>
+    </message>
+    <message>
+        <source>Meeting summary</source>
+        <translation>Краткий итог встречи</translation>
+    </message>
+    <message>
+        <source>No summary yet</source>
+        <translation>Итог ещё не подготовлен</translation>
+    </message>
+    <message>
+        <source>Add to my notes</source>
+        <translation>Добавить в заметку</translation>
+    </message>
+    <message>
+        <source>For the next meeting</source>
+        <translation>К следующей встрече</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Ключевые моменты</translation>
+    </message>
+    <message>
+        <source>AI suggestions help recall the meeting. The note on the left is your own text.</source>
+        <translation>Итоги ИИ помогают вспомнить встречу. Текст слева — ваша собственная заметка.</translation>
+    </message>
+    <message>
+        <source>Unsaved changes</source>
+        <translation>Есть несохранённые изменения</translation>
+    </message>
+    <message>
+        <source>No unsaved changes</source>
+        <translation>Нет несохранённых изменений</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <source>Save note</source>
+        <translation>Сохранить заметку</translation>
+    </message>
+</context>
+<context>
+    <name>NotesEditorDialog</name>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Заметки к встрече</translation>
+    </message>
+    <message>
+        <source>Unsaved changes</source>
+        <translation>Есть несохранённые изменения</translation>
+    </message>
+    <message>
+        <source>Close without saving your changes?</source>
+        <translation>Закрыть без сохранения изменений?</translation>
+    </message>
+</context>
+<context>
     <name>NotesWidgetFrame</name>
     <message>
         <source>More actions</source>
         <translation>Ещё действия</translation>
+    </message>
+</context>
+<context>
+    <name>NotesWorkspace</name>
+    <message>
+        <source>View source</source>
+        <translation>Посмотреть источник</translation>
+    </message>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Заметки встречи</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>История</translation>
+    </message>
+    <message>
+        <source>More</source>
+        <translation>Ещё</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Экспорт</translation>
+    </message>
+    <message>
+        <source>Advanced view</source>
+        <translation>Дополнительные действия</translation>
+    </message>
+    <message>
+        <source>Search meetings…</source>
+        <translation>Поиск по встречам…</translation>
+    </message>
+    <message>
+        <source>This meeting</source>
+        <translation>Эта встреча</translation>
+    </message>
+    <message>
+        <source>Meeting materials</source>
+        <translation>Материалы встречи</translation>
+    </message>
+    <message>
+        <source>Close transcript</source>
+        <translation>Закрыть расшифровку</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Открыть расшифровку</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Редактировать</translation>
+    </message>
+    <message>
+        <source>Edit note</source>
+        <translation>Редактирование заметки</translation>
+    </message>
+    <message>
+        <source>My notes</source>
+        <translation>Мои заметки</translation>
+    </message>
+    <message>
+        <source>Write a note…</source>
+        <translation>Напишите заметку…</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Прикрепить файлы</translation>
+    </message>
+    <message>
+        <source>Cancel edit</source>
+        <translation>Отменить правку</translation>
+    </message>
+    <message>
+        <source>Save note</source>
+        <translation>Сохранить заметку</translation>
+    </message>
+    <message>
+        <source>Meeting summary</source>
+        <translation>Кратко о встрече</translation>
+    </message>
+    <message>
+        <source>Prepared by AI</source>
+        <translation>Подготовлено ИИ</translation>
+    </message>
+    <message>
+        <source>Add to my notes</source>
+        <translation>Добавить в мои заметки</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Повторить</translation>
+    </message>
+    <message>
+        <source>For the next meeting</source>
+        <translation>На следующую встречу</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Расшифровка</translation>
+    </message>
+    <message>
+        <source>Search transcript…</source>
+        <translation>Поиск по расшифровке…</translation>
+    </message>
+    <message>
+        <source>Edit transcript</source>
+        <translation>Редактировать расшифровку</translation>
+    </message>
+</context>
+<context>
+    <name>NotesWorkspaceBridge</name>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Не удалось сохранить — не закрывайте страницу</translation>
+    </message>
+    <message>
+        <source>Draft saved</source>
+        <translation>Черновик сохранён</translation>
+    </message>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Заметки встречи</translation>
+    </message>
+    <message>
+        <source>Save or cancel the current edit before opening another note.</source>
+        <translation>Сохраните или отмените текущую правку перед открытием другой заметки.</translation>
+    </message>
+    <message>
+        <source>This note changed in another window. Keep this editor open and copy your changes.</source>
+        <translation>Заметка изменилась в другом окне. Не закрывайте редактор и скопируйте свои изменения.</translation>
+    </message>
+    <message>
+        <source>Note saved</source>
+        <translation>Заметка сохранена</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Прикрепить файлы</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Экспорт</translation>
+    </message>
+    <message>
+        <source>Markdown (*.md)</source>
+        <translation>Markdown (*.md)</translation>
     </message>
 </context>
 <context>
@@ -3158,14 +3490,6 @@ They appear here after a call with transcription turned on.</source>
         <translation>Заметки звонка</translation>
     </message>
     <message>
-        <source>Review agreements</source>
-        <translation>Проверить договорённости</translation>
-    </message>
-    <message>
-        <source>Call agreements</source>
-        <translation>Договорённости звонка</translation>
-    </message>
-    <message>
         <source>Delete this transcript and all its phrases?</source>
         <translation>Удалить эту транскрипцию и все её реплики?</translation>
     </message>
@@ -3240,6 +3564,10 @@ They appear here after a call with transcription turned on.</source>
     <message>
         <source>Edit</source>
         <translation>Редактировать</translation>
+    </message>
+    <message>
+        <source>Search transcript…</source>
+        <translation>Поиск по расшифровке…</translation>
     </message>
     <message>
         <source>Delete</source>
@@ -3644,10 +3972,6 @@ Your previous data was kept.</source>
     <message>
         <source>ended</source>
         <translation>завершена</translation>
-    </message>
-    <message>
-        <source>Call materials</source>
-        <translation>Материалы звонков</translation>
     </message>
     <message>
         <source>Transcript</source>
