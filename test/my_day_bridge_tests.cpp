@@ -168,6 +168,7 @@ TEST_F(MyDayBridgeTest, ModelChangeTriggersReload) {
   auto bridge = makeBridge();
   QSignalSpy spy(bridge.get(), &pcm::my_day::MyDayBridge::changed);
   model->addEvent(workEvent(today, 15));
+  QCoreApplication::processEvents(); // reloads from model signals are coalesced onto the loop
   EXPECT_GE(spy.count(), 1);
   EXPECT_EQ(bridge->tiles()["meetings"].toInt(), 1);
 }
@@ -177,6 +178,29 @@ TEST_F(MyDayBridgeTest, GroupByMeetingPersists) {
   EXPECT_FALSE(bridge->groupByMeeting());
   bridge->setGroupByMeeting(true);
   EXPECT_TRUE(makeBridge()->groupByMeeting());
+}
+
+TEST_F(MyDayBridgeTest, HiddenBridgeDefersReload) {
+  auto bridge = makeBridge();
+  bridge->setActive(false);
+  QSignalSpy changed(bridge.get(), &pcm::my_day::MyDayBridge::changed);
+  model->addEvent(workEvent(today, 14));
+  QCoreApplication::processEvents();
+  EXPECT_EQ(changed.count(), 0);
+  bridge->setActive(true);
+  QCoreApplication::processEvents();
+  EXPECT_EQ(changed.count(), 1);
+  EXPECT_EQ(bridge->timeline().size(), 1);
+}
+
+TEST_F(MyDayBridgeTest, ModelBurstCoalescesIntoOneReload) {
+  auto bridge = makeBridge();
+  QSignalSpy changed(bridge.get(), &pcm::my_day::MyDayBridge::changed);
+  model->addEvent(workEvent(today, 9));
+  model->addEvent(workEvent(today, 10));
+  QCoreApplication::processEvents();
+  EXPECT_EQ(changed.count(), 1);
+  EXPECT_EQ(bridge->timeline().size(), 2);
 }
 
 } // namespace

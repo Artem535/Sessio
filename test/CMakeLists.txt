@@ -1218,6 +1218,17 @@ target_link_libraries(Sessio_my_day_bridge_tests PRIVATE
 )
 gtest_discover_tests(Sessio_my_day_bridge_tests)
 
+# "My day" QML page (offscreen QQuickWidget, fails on QML warnings)
+add_executable(Sessio_my_day_page_tests my_day_page_tests.cpp)
+target_link_libraries(Sessio_my_day_page_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Qt6::Test
+    Qt6::QuickWidgets
+    Sessio_my_day_page
+)
+gtest_discover_tests(Sessio_my_day_page_tests)
+
 # Shared "join meeting" decision (inspector + My Day)
 add_executable(Sessio_meeting_join_tests meeting_join_tests.cpp)
 target_link_libraries(Sessio_meeting_join_tests PRIVATE

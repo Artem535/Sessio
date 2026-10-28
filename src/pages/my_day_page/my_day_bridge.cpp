@@ -82,17 +82,17 @@ MyDayBridge::MyDayBridge(std::shared_ptr<pcm::database::Database> db, QTimelineM
   mGroupByMeeting = QSettings().value(kGroupByMeetingKey, false).toBool();
 
   if (mModel) {
-    connect(mModel, &QTimelineModel::eventsLoaded, this, &MyDayBridge::reload);
-    connect(mModel, &QAbstractItemModel::dataChanged, this, &MyDayBridge::reload);
-    connect(mModel, &QAbstractItemModel::rowsInserted, this, &MyDayBridge::reload);
-    connect(mModel, &QAbstractItemModel::rowsRemoved, this, &MyDayBridge::reload);
-    connect(mModel, &QAbstractItemModel::modelReset, this, &MyDayBridge::reload);
+    connect(mModel, &QTimelineModel::eventsLoaded, this, &MyDayBridge::scheduleReload);
+    connect(mModel, &QAbstractItemModel::dataChanged, this, &MyDayBridge::scheduleReload);
+    connect(mModel, &QAbstractItemModel::rowsInserted, this, &MyDayBridge::scheduleReload);
+    connect(mModel, &QAbstractItemModel::rowsRemoved, this, &MyDayBridge::scheduleReload);
+    connect(mModel, &QAbstractItemModel::modelReset, this, &MyDayBridge::scheduleReload);
   }
 
   // Refreshes "next in N min", dimming and the highlight. An injected (fixed) clock never
   // advances, so the timer only runs with the real clock.
   mMinuteTimer.setInterval(60 * 1000);
-  connect(&mMinuteTimer, &QTimer::timeout, this, &MyDayBridge::reload);
+  connect(&mMinuteTimer, &QTimer::timeout, this, &MyDayBridge::scheduleReload);
   if (realClock) {
     mMinuteTimer.start();
   }
@@ -101,6 +101,37 @@ MyDayBridge::MyDayBridge(std::shared_ptr<pcm::database::Database> db, QTimelineM
 }
 
 QDateTime MyDayBridge::now() const { return mClock(); }
+
+// Model signals arrive in bursts (one per added row, per data change...): collapse them into one
+// reload on the next event-loop turn, and skip the work entirely while the page is hidden.
+void MyDayBridge::scheduleReload() {
+  if (!mActive) {
+    mDirty = true;
+    return;
+  }
+  if (mReloadPending) {
+    return;
+  }
+  mReloadPending = true;
+  QTimer::singleShot(0, this, [this] {
+    mReloadPending = false;
+    if (!mActive) {
+      mDirty = true;
+      return;
+    }
+    reload();
+  });
+}
+
+void MyDayBridge::setActive(const bool active) {
+  if (mActive == active) {
+    return;
+  }
+  mActive = active;
+  if (mActive && mDirty) {
+    reload();
+  }
+}
 
 void MyDayBridge::setDay(const QDate &day) {
   mDay = day;
@@ -174,6 +205,7 @@ QVariantList MyDayBridge::eventRows(const std::vector<DuckEvent> &events) {
 }
 
 void MyDayBridge::reload() {
+  mDirty = false;
   const QDateTime current = now();
   mNoteCache.clear();
   mEventClientCache.clear();

@@ -62,6 +62,9 @@ public:
   void setGroupByMeeting(bool value);
 
   void reload();
+  // While inactive (page hidden) model signals and the minute timer only mark the bridge dirty;
+  // becoming active again reloads once if anything changed meanwhile.
+  void setActive(bool active);
 
   Q_INVOKABLE void previousDay();
   Q_INVOKABLE void nextDay();
@@ -87,6 +90,7 @@ signals:
 
 private:
   QDateTime now() const;
+  void scheduleReload();
   void setDay(const QDate &day);
   std::optional<int64_t> clientIdFor(const DuckEvent &event);
   QString clientNameFor(int64_t clientId) const;
@@ -102,6 +106,9 @@ private:
   QTimer mMinuteTimer;
   QDate mDay;
   bool mGroupByMeeting = false;
+  bool mActive = true;
+  bool mDirty = false;
+  bool mReloadPending = false;
 
   QVector<DuckEvent> mDayEvents;
   QVector<DuckEvent> mRecentEvents;
