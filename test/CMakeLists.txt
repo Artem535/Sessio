@@ -1197,3 +1197,12 @@ target_link_libraries(Sessio_call_event_resolver_tests PRIVATE
     Sessio_database Sessio_config Poco::Foundation)
 gtest_discover_tests(Sessio_call_event_resolver_tests)
 endif()
+
+# "My day" tile and timeline logic tests
+add_executable(Sessio_my_day_logic_tests my_day_logic_tests.cpp)
+target_link_libraries(Sessio_my_day_logic_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_my_day_page
+)
+gtest_discover_tests(Sessio_my_day_logic_tests)
