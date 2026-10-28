@@ -140,10 +140,13 @@ TEST(ScheduleDatabase, ReopenAndRepeatedAdditiveMigrationPreserveLegacyAndSchedu
     )sql");
     AccountsRepository accounts(conn); account = *accounts.findByCredential(accounts.createAccount());
     MeetingsRepository meetings(conn);
-    auto meeting = meetings.create(account, "2026-10-06T15:00:00Z", "2026-10-06T16:00:00Z");
-    meetingRef = meeting.meetingRef;
+    // Raw SQL: the repository now writes the provider column, which this
+    // pre-migration schema deliberately lacks.
+    meetingRef = "mtg_legacy";
+    conn.exec("INSERT INTO meetings(id, meeting_ref, account_id, room_name, scheduled_start, scheduled_end, created_at) VALUES (1, 'mtg_legacy', " +
+              std::to_string(account) + ", 'rm_legacy', '2026-10-06T15:00:00Z', '2026-10-06T16:00:00Z', '2026-10-01T00:00:00Z');");
     InvitationsRepository invitations(conn);
-    invitationCode = invitations.create(meeting.id, account).invitationCode;
+    invitationCode = invitations.create(1, account).invitationCode;
     runMigrations(conn);
     ASSERT_TRUE(meetings.findByRef(meetingRef));
     ASSERT_TRUE(invitations.findByCode(invitationCode));
