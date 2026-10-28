@@ -614,6 +614,12 @@ jobs:
             --icon-file build-release/AppDir/usr/share/icons/hicolor/scalable/apps/Sessio.svg \
             --plugin qt \
             --output appimage
+          # linuxdeploy populates AppDir in place, so this is what the
+          # AppImage was squashed from. Chromium cannot render without it.
+          if [ -z "$(find build-release/AppDir -name QtWebEngineProcess -type f -print -quit)" ]; then
+            echo "::error::QtWebEngineProcess is missing from the AppImage AppDir"
+            exit 1
+          fi
           mkdir -p build-release/packages
           find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' -exec mv {} build-release/packages/ \;
 
