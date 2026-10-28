@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "devel", "devel-qt", "feat/118-call-transcription", "codex/151-call-prompter"]
+    branches: ["main", "devel", "devel-qt", "feat/118-call-transcription", "codex/151-call-prompter", "feat/jitsi-web-calls"]
   pull_request:
     branches: ["main", "devel", "devel-qt"]
 
