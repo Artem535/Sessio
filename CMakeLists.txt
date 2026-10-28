@@ -405,11 +405,11 @@ elseif(UNIX AND NOT APPLE)
   set(CPACK_RPM_PACKAGE_URL "https://github.com/Artem535/Sessio")
   set(CPACK_RPM_PACKAGE_DESCRIPTION
       "Local-first desktop workspace for calendar scheduling, client management, and session tracking.")
-  # Qt and qtkeychain come from the distribution; nothing Qt-related is
+  # Qt, qtkeychain and PipeWire (Wayland screen sharing) come from the distribution; nothing Qt-related is
   # bundled (see SESSIO_BUNDLE_QT). Exact sonames/versions are added by rpm's
   # automatic dependency generator on top of these.
   set(CPACK_RPM_PACKAGE_REQUIRES
-      "qt6-qtbase >= 6.8, qt6-qtbase-gui, qt6-qtsvg, qt6-qtwayland, qt6-qtmultimedia, qt6-qtdeclarative, qtkeychain-qt6")
+      "qt6-qtbase >= 6.8, qt6-qtbase-gui, qt6-qtsvg, qt6-qtwayland, qt6-qtmultimedia, qt6-qtdeclarative, qtkeychain-qt6, pipewire-libs")
   # The private /usr/lib/sessio directory (LiveKit and its curl/OpenSSL/...
   # chain) must neither advertise Provides for those sonames — that would
   # shadow the system packages — nor generate Requires for them.

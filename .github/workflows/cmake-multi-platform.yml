@@ -184,6 +184,7 @@ jobs:
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
             libpulse-dev \
+            libpipewire-0.3-dev \
             libsecret-1-dev \
             libwayland-client0 \
             libwayland-cursor0 \
@@ -603,12 +604,14 @@ jobs:
           mkdir -p build-release/AppDir/usr/plugins/platforms
           cp -av "$QT_PREFIX/plugins/platforms/libqwayland.so" build-release/AppDir/usr/plugins/platforms/ || true
           cp -av "$QT_PREFIX/plugins/platforms/libqxcb.so" build-release/AppDir/usr/plugins/platforms/ || true
+          # libpipewire must match the host's PipeWire daemon and SPA plugins; never bundle it.
           build-release/tools/linuxdeploy-x86_64.AppImage \
             --appdir build-release/AppDir \
             --executable build-release/AppDir/usr/bin/Sessio \
             --desktop-file build-release/AppDir/usr/share/applications/Sessio.desktop \
             --icon-file build-release/AppDir/usr/share/icons/hicolor/scalable/apps/Sessio.svg \
             --plugin qt \
+            --exclude-library 'libpipewire-0.3.so*' \
             --output appimage
           mkdir -p build-release/packages
           find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' -exec mv {} build-release/packages/ \;

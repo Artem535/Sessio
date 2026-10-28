@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 set(TARGET_NAME ${PROJECT_NAME}_video)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Multimedia MultimediaWidgets OpenGLWidgets StateMachine)
+find_package(Qt6 REQUIRED COMPONENTS Core DBus Multimedia MultimediaWidgets OpenGLWidgets StateMachine)
 
 qt_add_library(${TARGET_NAME} STATIC
         video_provider.h
@@ -30,8 +30,11 @@ qt_add_library(${TARGET_NAME} STATIC
         video_capture_adapter.cpp
         screen_capture_worker.h
         screen_capture_worker.cpp
+        screen_capture.h
         screen_capture_adapter.h
         screen_capture_adapter.cpp
+        screen_share_controller.h
+        screen_share_controller.cpp
         audio_capture_adapter.h
         audio_capture_adapter.cpp
         remote_video_renderer.h
@@ -58,6 +61,20 @@ get_filename_component(_lk_lib_dir "${_lk_cmake_dir}" DIRECTORY)
 target_link_directories(${TARGET_NAME} PUBLIC "${_lk_lib_dir}")
 
 if(UNIX AND NOT APPLE)
+  # Wayland screen sharing talks to the ScreenCast portal and reads the
+  # PipeWire stream itself: Qt 6.10's own portal client only worked for the
+  # first share of a process on some desktops (see portal_screen_cast.h).
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
+  target_sources(${TARGET_NAME} PRIVATE
+          portal_screen_cast.h
+          portal_screen_cast.cpp
+          pipewire_screen_stream.h
+          pipewire_screen_stream.cpp
+  )
+  target_link_libraries(${TARGET_NAME} PUBLIC Qt6::DBus PkgConfig::PIPEWIRE)
+  target_compile_definitions(${TARGET_NAME} PRIVATE SESSIO_HAVE_PIPEWIRE)
+
   # The prebuilt Linux LiveKit SDK has a runtime dependency on libcurl, but
   # its exported CMake target omits that dependency. Link it explicitly so
   # GNU ld verifies the curl ABI required by liblivekit at build time.

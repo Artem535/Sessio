@@ -12,7 +12,7 @@ namespace pcm::video::test {
 // explicit method calls on this class rather than a real SDK/network, so
 // VideoSession's state machine can be tested deterministically and without
 // a display, camera, or microphone. Never part of the production library.
-class FakeVideoProvider final : public VideoProvider {
+class FakeVideoProvider : public VideoProvider {
 public:
   using VideoProvider::VideoProvider;
 
