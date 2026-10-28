@@ -125,7 +125,7 @@ jobs:
           - os: ubuntu-latest
             qt_version: 6.10.2
             artifact_name: Sessio-linux-appimage
-            qt_component: "qt.qt6.6102.linux_gcc_64 qt.qt6.6102.addons.qtmultimedia qt.qt6.6102.addons.qtscxml"
+            qt_component: "qt.qt6.6102.linux_gcc_64 qt.qt6.6102.addons.qtmultimedia qt.qt6.6102.addons.qtscxml qt.qt6.6102.addons.qtwebengine qt.qt6.6102.addons.qtwebchannel qt.qt6.6102.addons.qtpositioning"
           - os: macos-latest
             qt_version: 6.10.2
             qt_arch: clang_64
@@ -216,7 +216,7 @@ jobs:
           host: ${{ matrix.qt_host }}
           target: ${{ matrix.qt_target }}
           arch: ${{ matrix.qt_arch }}
-          modules: 'qtmultimedia qtscxml'
+          modules: 'qtmultimedia qtscxml qtwebengine qtwebchannel qtpositioning'
           cache: true
 
       - name: Setup MSVC environment
@@ -453,6 +453,10 @@ jobs:
             --qmldir src/pages/transcript_page/qml `
             --dir build-release/packages/Sessio `
             build-release/packages/Sessio/Sessio.exe
+          if (-not (Test-Path build-release/packages/Sessio/QtWebEngineProcess.exe)) {
+            Write-Error "QtWebEngineProcess.exe missing after windeployqt"
+            exit 1
+          }
 
       - name: Copy vcpkg runtime DLLs
         if: runner.os == 'Windows'
@@ -568,7 +572,7 @@ jobs:
             rpm -qlp build-release/packages/*.rpm | grep -E "^/usr/lib(64)?/sessio/$so\$" ||
               { echo "::error::$so is missing from the RPM"; exit 1; }
           done
-          for dep in 'qt6-qtbase >= 6.8' qt6-qtbase-gui qt6-qtsvg qt6-qtwayland qt6-qtmultimedia qt6-qtdeclarative qtkeychain-qt6; do
+          for dep in 'qt6-qtbase >= 6.8' qt6-qtbase-gui qt6-qtsvg qt6-qtwayland qt6-qtmultimedia qt6-qtdeclarative qt6-qtwebengine qtkeychain-qt6; do
             rpm -qp --requires build-release/packages/*.rpm | grep -Fx "$dep"
           done
 
@@ -631,6 +635,10 @@ jobs:
           test -d "$APP_BUNDLE/Contents/Frameworks/QtCore.framework"
           test -d "$APP_BUNDLE/Contents/Frameworks/QtGui.framework"
           test -d "$APP_BUNDLE/Contents/Frameworks/QtWidgets.framework"
+          test -d "$APP_BUNDLE/Contents/Frameworks/QtWebEngineCore.framework"
+          test -e "$APP_BUNDLE/Contents/Frameworks/QtWebEngineCore.framework/Helpers/QtWebEngineProcess.app/Contents/MacOS/QtWebEngineProcess"
+          plutil -extract NSCameraUsageDescription raw "$APP_BUNDLE/Contents/Info.plist" >/dev/null
+          plutil -extract NSMicrophoneUsageDescription raw "$APP_BUNDLE/Contents/Info.plist" >/dev/null
           test -d "$APP_BUNDLE/Contents/PlugIns/platforms"
           test -f "$APP_BUNDLE/Contents/PlugIns/platforms/libqcocoa.dylib"
           test -f "$APP_BUNDLE/Contents/Frameworks/libsessio_litert.dylib"

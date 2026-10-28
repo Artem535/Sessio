@@ -1186,3 +1186,9 @@ target_link_libraries(Sessio_call_event_resolver_tests PRIVATE
     Sessio_database Sessio_config Poco::Foundation)
 gtest_discover_tests(Sessio_call_event_resolver_tests)
 endif()
+
+# QtWebEngine smoke test (Jitsi web calls)
+add_executable(Sessio_webcall_smoke_tests webcall_smoke_tests.cpp)
+target_link_libraries(Sessio_webcall_smoke_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_webcall)
+gtest_discover_tests(Sessio_webcall_smoke_tests)

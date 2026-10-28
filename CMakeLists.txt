@@ -176,6 +176,7 @@ add_subdirectory(src/config)
 add_subdirectory(src/database)
 add_subdirectory(src/meeting)
 add_subdirectory(src/video)
+add_subdirectory(src/webcall)
 if(SESSIO_TRANSCRIPTION_ENABLED)
   add_subdirectory(src/transcription)
   add_subdirectory(src/call_transcription)
@@ -250,7 +251,7 @@ endif()
 add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_app)
 
 # Link with libs
-target_link_libraries(Sessio PUBLIC ${PROJECT_NAME}_app Qt6::Widgets)
+target_link_libraries(Sessio PUBLIC ${PROJECT_NAME}_app ${PROJECT_NAME}_webcall Qt6::Widgets)
 
 install(TARGETS Sessio
     BUNDLE DESTINATION .
@@ -409,7 +410,7 @@ elseif(UNIX AND NOT APPLE)
   # bundled (see SESSIO_BUNDLE_QT). Exact sonames/versions are added by rpm's
   # automatic dependency generator on top of these.
   set(CPACK_RPM_PACKAGE_REQUIRES
-      "qt6-qtbase >= 6.8, qt6-qtbase-gui, qt6-qtsvg, qt6-qtwayland, qt6-qtmultimedia, qt6-qtdeclarative, qtkeychain-qt6")
+      "qt6-qtbase >= 6.8, qt6-qtbase-gui, qt6-qtsvg, qt6-qtwayland, qt6-qtmultimedia, qt6-qtdeclarative, qt6-qtwebengine, qtkeychain-qt6")
   # The private /usr/lib/sessio directory (LiveKit and its curl/OpenSSL/...
   # chain) must neither advertise Provides for those sonames — that would
   # shadow the system packages — nor generate Requires for them.
