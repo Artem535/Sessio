@@ -557,7 +557,7 @@ void Application::refreshUpcomingMeetings() {
       }
     }
     const auto kind = pcm::meeting::providerKindFromString(event.provider_kind.value_or(""));
-    if (kind != pcm::meeting::ProviderKind::LiveKit) {
+    if (!kind || !pcm::meeting::isBackendHosted(*kind)) {
       continue;
     }
     if (!event.meeting_ref.has_value() || event.meeting_ref->empty() ||

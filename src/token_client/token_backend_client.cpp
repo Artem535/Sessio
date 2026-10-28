@@ -97,10 +97,15 @@ void TokenBackendClient::post(const QString &path, const QByteArray &body,
 
 void TokenBackendClient::requestCreateMeeting(const QString &bearerCredential,
                                               const QString &scheduledStartIso,
-                                              const QString &scheduledEndIso) {
+                                              const QString &scheduledEndIso,
+                                              const QString &provider) {
   QJsonObject bodyObject;
   bodyObject["scheduledStart"] = scheduledStartIso;
   bodyObject["scheduledEnd"] = scheduledEndIso;
+  // Omitted for livekit so requests stay byte-identical for older backends.
+  if (provider != QStringLiteral("livekit")) {
+    bodyObject["provider"] = provider;
+  }
   const QByteArray body = QJsonDocument(bodyObject).toJson(QJsonDocument::Compact);
 
   auto *reply = sendPost(QStringLiteral("/v1/meetings"), body, bearerCredential);

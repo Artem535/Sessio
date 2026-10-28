@@ -2,12 +2,13 @@
 
 namespace pcm::meeting {
 
-MeetingCoordinator::MeetingCoordinator(QString tokenBackendBaseUrl, QString bearerCredential,
+MeetingCoordinator::MeetingCoordinator(const QString &tokenBackendBaseUrl, const QString &bearerCredential,
                                        QObject *parent)
     : QObject(parent),
       mProviders{new ExternalUrlMeetingProvider(this),
-                new LiveKitMeetingProvider(std::move(tokenBackendBaseUrl),
-                                          std::move(bearerCredential), this)} {
+                new LiveKitMeetingProvider(tokenBackendBaseUrl, bearerCredential, this),
+                new LiveKitMeetingProvider(tokenBackendBaseUrl, bearerCredential, this,
+                                          QStringLiteral("jitsi"))} {
   for (auto *provider : mProviders) {
     connect(provider, &MeetingProvider::created, this, &MeetingCoordinator::meetingCreated);
     connect(provider, &MeetingProvider::createFailed, this,

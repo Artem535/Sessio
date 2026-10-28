@@ -108,6 +108,7 @@ public:
   // LiveKit provider (the owner then publishes it and requests the permanent
   // invitation instead of the form creating a single meeting).
   [[nodiscard]] bool wantsNewLiveKitSeries() const;
+  [[nodiscard]] pcm::meeting::ProviderKind selectedProviderKind() const;
   [[nodiscard]] QString recurrenceRule() const;
   [[nodiscard]] std::optional<int64_t> recurrenceUntilMs() const;
   void setRecurrenceRule(const QString &rule,
@@ -301,6 +302,7 @@ private:
   // a failed create or a rejected save never leaves the stored event pointing
   // at an already-invalidated meeting.
   QString mSupersededLiveKitMeetingRef;
+  pcm::meeting::ProviderKind mSupersededMeetingKind = pcm::meeting::ProviderKind::LiveKit;
   // Schedule the current LiveKit meeting was created for; re-applying with an
   // unchanged schedule keeps the meeting (and the client's invitation) as is.
   QDateTime mMeetingScheduledStart;
