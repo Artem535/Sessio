@@ -65,11 +65,23 @@ inline duckdb::Value toDuckTimestamp(const std::optional<std::int64_t>& micros_o
   return duckdb::Value::TIMESTAMP(ts);
 }
 
-// Local calendar date ("YYYY-MM-DD") of an epoch-millisecond instant.
+namespace detail {
+inline bool localTime(const std::time_t secs, std::tm &out) {
+#ifdef _WIN32
+  return localtime_s(&out, &secs) == 0;
+#else
+  return localtime_r(&secs, &out) != nullptr;
+#endif
+}
+} // namespace detail
+
+// Local calendar date ("YYYY-MM-DD") of an epoch-millisecond instant; "" when out of range.
 inline std::string msToLocalDateString(std::int64_t ms) {
-  const std::time_t secs = static_cast<std::time_t>(ms / 1000);
+  // Floor division so pre-epoch instants land on the right second.
+  std::int64_t secs = ms / 1000;
+  if (ms % 1000 < 0) --secs;
   std::tm tm{};
-  localtime_r(&secs, &tm);
+  if (!detail::localTime(static_cast<std::time_t>(secs), tm)) return {};
   char buf[48];
   std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
   return buf;
@@ -84,7 +96,9 @@ inline std::int64_t localDateStringToMidnightMs(const std::string &date) {
   tm.tm_mon = m - 1;
   tm.tm_mday = d;
   tm.tm_isdst = -1;
-  return static_cast<std::int64_t>(std::mktime(&tm)) * 1000;
+  const std::time_t t = std::mktime(&tm);
+  if (t == static_cast<std::time_t>(-1)) return 0;
+  return static_cast<std::int64_t>(t) * 1000;
 }
 
 } // namespace pcm::database::db_utils

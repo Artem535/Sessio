@@ -100,7 +100,8 @@ TEST_F(MyDayPageTest, HeaderShowsBridgeDateTitle) {
 }
 
 TEST_F(MyDayPageTest, PopulatedDayRendersWithoutWarnings) {
-  const QDate today = QDate::currentDate();
+  // The page uses the real clock (no injection point): capture "today" once.
+  const QDate today = QDateTime::currentDateTime().date();
   model->addEvent(workEvent(today, 9));
   model->addEvent(workEvent(today, 14));
   model->addEvent(workEvent(today, 19));
@@ -126,9 +127,6 @@ TEST_F(MyDayPageTest, PopulatedDayRendersWithoutWarnings) {
   QMetaObject::invokeMethod(popup, "openWith", Q_ARG(QVariant, "Unpaid"),
                             Q_ARG(QVariant, page.bridge()->unpaidList()));
   QTest::qWait(50);
-  if (!qEnvironmentVariableIsEmpty("MYDAY_SHOT")) {
-    quick->grab().save(qEnvironmentVariable("MYDAY_SHOT"));
-  }
   EXPECT_TRUE(gWarnings.isEmpty()) << gWarnings.join("\n").toStdString();
 }
 

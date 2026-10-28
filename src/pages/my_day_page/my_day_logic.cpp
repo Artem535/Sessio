@@ -3,6 +3,7 @@
 #include <QTimeZone>
 
 #include <algorithm>
+#include <limits>
 
 #include "provider_kind.h"
 
@@ -259,6 +260,9 @@ groupTodos(const std::vector<DuckDayTodo> &todos, const QVector<DuckEvent> &dayE
     for (TodoGroup &g : groups) {
       const auto it = std::find_if(events.begin(), events.end(),
                                    [&](const DuckEvent &e) { return e.id == g.eventId; });
+      if (it == events.end()) {
+        continue;
+      }
       QString label = it->name ? QString::fromStdString(*it->name) : QString();
       if (g.clientId) {
         const QString cn = clientName(*g.clientId);
@@ -272,7 +276,7 @@ groupTodos(const std::vector<DuckDayTodo> &todos, const QVector<DuckEvent> &dayE
       auto start = [&](const TodoGroup &g) {
         const auto it = std::find_if(events.begin(), events.end(),
                                      [&](const DuckEvent &e) { return e.id == g.eventId; });
-        return it->start_date.value_or(0);
+        return it == events.end() ? std::numeric_limits<int64_t>::max() : it->start_date.value_or(0);
       };
       return start(a) < start(b);
     });

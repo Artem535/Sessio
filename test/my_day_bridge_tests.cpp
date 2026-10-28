@@ -42,7 +42,7 @@ protected:
         .db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir.path().toStdString())}};
     db = std::make_shared<pcm::database::Database>(config);
     model = std::make_unique<QTimelineModel>(db, nullptr);
-    today = QDate::currentDate();
+    today = QDate(2026, 10, 28);
     QSettings().remove("myDay/groupByMeeting");
   }
 
@@ -82,6 +82,29 @@ TEST_F(MyDayBridgeTest, TilesAndTimelineFromModel) {
   EXPECT_EQ(timeline[0].toMap()["section"].toString(), "morning");
   EXPECT_EQ(timeline[1].toMap()["state"].toString(), "next");
   EXPECT_EQ(timeline[1].toMap()["section"].toString(), "afternoon");
+}
+
+TEST_F(MyDayBridgeTest, FollowsTodayAcrossMidnight) {
+  auto clock = std::make_shared<QDateTime>(at(today, 23, 59));
+  pcm::my_day::MyDayBridge bridge(db, model.get(), nullptr, [clock] { return *clock; });
+  ASSERT_TRUE(bridge.isToday());
+  const QString before = bridge.dateTitle();
+  *clock = at(today.addDays(1), 0, 1);
+  bridge.reload();
+  EXPECT_TRUE(bridge.isToday());
+  EXPECT_NE(bridge.dateTitle(), before);
+}
+
+TEST_F(MyDayBridgeTest, StaysOnBrowsedDayAcrossMidnight) {
+  auto clock = std::make_shared<QDateTime>(at(today, 23, 59));
+  pcm::my_day::MyDayBridge bridge(db, model.get(), nullptr, [clock] { return *clock; });
+  bridge.nextDay();
+  ASSERT_FALSE(bridge.isToday());
+  const QString before = bridge.dateTitle();
+  *clock = at(today.addDays(1), 0, 1);
+  bridge.reload();
+  EXPECT_EQ(bridge.dateTitle(), before);
+  EXPECT_TRUE(bridge.isToday()); // the browsed day (tomorrow) is now today
 }
 
 TEST_F(MyDayBridgeTest, EmptyDayHasNoSubtitle) {

@@ -18,11 +18,29 @@ Item {
     implicitHeight: card.implicitHeight
     height: implicitHeight
 
+    // Thin timeline rail between the time column and the card, with a dot per meeting.
+    Rectangle {
+        x: 56
+        width: 2
+        height: root.height + 6
+        color: theme.mid
+        opacity: root.dimmed ? 0.5 : 1
+    }
+    Rectangle {
+        x: 53
+        y: 14
+        width: 8
+        height: 8
+        radius: 4
+        color: root.highlighted ? theme.highlight : theme.mid
+        opacity: root.dimmed ? 0.5 : 1
+    }
+
     Rectangle {
         id: timePill
         x: 0
         y: 6
-        width: 52
+        width: 48
         height: 22
         radius: 11
         color: root.highlighted ? theme.highlight : "transparent"
@@ -38,12 +56,12 @@ Item {
     Rectangle {
         id: card
         anchors.left: parent.left
-        anchors.leftMargin: 62
+        anchors.leftMargin: 66
         anchors.right: parent.right
         implicitHeight: body.implicitHeight + 16
         height: implicitHeight
         radius: 8
-        color: hover.containsMouse ? theme.alternateBase : theme.base
+        color: Qt.tint(theme.window, Qt.rgba(theme.text.r, theme.text.g, theme.text.b, hover.containsMouse ? 0.10 : 0.06))
         border.width: root.highlighted ? 2 : 1
         border.color: root.highlighted ? theme.highlight : theme.mid
         opacity: root.dimmed ? 0.5 : 1

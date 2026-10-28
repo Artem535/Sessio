@@ -79,6 +79,7 @@ MyDayBridge::MyDayBridge(std::shared_ptr<pcm::database::Database> db, QTimelineM
     mClock = [] { return QDateTime::currentDateTime(); };
   }
   mDay = now().date();
+  mLastToday = mDay;
   mGroupByMeeting = QSettings().value(kGroupByMeetingKey, false).toBool();
 
   if (mModel) {
@@ -207,8 +208,23 @@ QVariantList MyDayBridge::eventRows(const std::vector<DuckEvent> &events) {
 }
 
 void MyDayBridge::reload() {
+  try {
+    loadState();
+  } catch (const std::exception &e) {
+    PLOG_ERROR << "My day reload failed: " << e.what();
+  }
+}
+
+void MyDayBridge::loadState() {
   mDirty = false;
   const QDateTime current = now();
+  // Left open past midnight while showing "today": follow the calendar. A browsed day stays.
+  if (current.date() != mLastToday) {
+    if (mDay == mLastToday) {
+      mDay = current.date();
+    }
+    mLastToday = current.date();
+  }
   mNoteCache.clear();
   mEventClientCache.clear();
   mClientNames.clear();
@@ -347,44 +363,62 @@ void MyDayBridge::reload() {
 }
 
 QVariantList MyDayBridge::unpaidList() {
-  return eventRows(unpaidEvents(mRecentEvents, now()));
+  try {
+    return eventRows(unpaidEvents(mRecentEvents, now()));
+  } catch (const std::exception &e) {
+    PLOG_ERROR << "My day unpaid list failed: " << e.what();
+    return {};
+  }
 }
 
 QVariantList MyDayBridge::withoutNotesList() {
-  return eventRows(eventsWithoutNotes(mRecentEvents, now(), [this](const DuckEvent &e) {
-    return mNoteCache.value(noteCacheKey(noteKeyFor(e)), false);
-  }));
+  try {
+    return eventRows(eventsWithoutNotes(mRecentEvents, now(), [this](const DuckEvent &e) {
+      return mNoteCache.value(noteCacheKey(noteKeyFor(e)), false);
+    }));
+  } catch (const std::exception &e) {
+    PLOG_ERROR << "My day notes list failed: " << e.what();
+    return {};
+  }
 }
 
 QVariantList MyDayBridge::clientChoices() {
   QVariantList list;
-  for (const auto &client : mDb->get_clients()) {
-    if (!client->client_active) {
-      continue;
+  try {
+    for (const auto &client : mDb->get_clients()) {
+      if (!client->client_active) {
+        continue;
+      }
+      QVariantMap row;
+      row["id"] = static_cast<qint64>(client->id);
+      row["name"] = pcm::recurrence::fullClientName(*client);
+      list.append(row);
     }
-    QVariantMap row;
-    row["id"] = static_cast<qint64>(client->id);
-    row["name"] = pcm::recurrence::fullClientName(*client);
-    list.append(row);
+  } catch (const std::exception &e) {
+    PLOG_ERROR << "My day client choices failed: " << e.what();
   }
   return list;
 }
 
 QVariantList MyDayBridge::meetingChoices() {
   QVariantList list;
-  for (const TimelineItem &item : buildTimeline(mDayEvents, mDay, now(), [](const DuckEvent &) {
-         return true;
-       })) {
-    if (item.canceled) {
-      continue;
+  try {
+    for (const TimelineItem &item : buildTimeline(mDayEvents, mDay, now(), [](const DuckEvent &) {
+           return true;
+         })) {
+      if (item.canceled) {
+        continue;
+      }
+      QVariantMap row;
+      row["id"] = static_cast<qint64>(item.event.id);
+      row["title"] = titleFor(item.event);
+      row["time"] = toLocal(item.event.start_date.value_or(0)).toString("HH:mm");
+      const auto clientId = clientIdFor(item.event);
+      row["clientId"] = clientId ? static_cast<qint64>(*clientId) : qint64{0};
+      list.append(row);
     }
-    QVariantMap row;
-    row["id"] = static_cast<qint64>(item.event.id);
-    row["title"] = titleFor(item.event);
-    row["time"] = toLocal(item.event.start_date.value_or(0)).toString("HH:mm");
-    const auto clientId = clientIdFor(item.event);
-    row["clientId"] = clientId ? static_cast<qint64>(*clientId) : qint64{0};
-    list.append(row);
+  } catch (const std::exception &e) {
+    PLOG_ERROR << "My day meeting choices failed: " << e.what();
   }
   return list;
 }
@@ -418,29 +452,37 @@ void MyDayBridge::addTodo(const QString &title, const qint64 clientId, const qin
   if (trimmed.isEmpty()) {
     return;
   }
-  DuckDayTodo todo;
-  todo.title = trimmed.toStdString();
-  todo.day_ms = midnightMs(mDay);
-  if (clientId > 0) {
-    todo.client_id = clientId;
-  }
-  if (eventId != 0) {
-    const auto event = resolveEvent(eventId);
-    if (event) {
-      if (eventId < 0) {
-        if (event->series_id && event->original_occurrence_start) {
-          todo.series_id = event->series_id;
-          todo.occurrence_start_ms = event->original_occurrence_start;
+  try {
+    DuckDayTodo todo;
+    todo.title = trimmed.toStdString();
+    todo.day_ms = midnightMs(mDay);
+    if (clientId > 0) {
+      todo.client_id = clientId;
+    }
+    if (eventId != 0) {
+      const auto event = resolveEvent(eventId);
+      if (event) {
+        if (eventId < 0) {
+          if (event->series_id && event->original_occurrence_start) {
+            todo.series_id = event->series_id;
+            todo.occurrence_start_ms = event->original_occurrence_start;
+          }
+        } else {
+          todo.event_id = eventId;
+        }
+        if (!todo.client_id && (todo.event_id || todo.series_id)) {
+          todo.client_id = clientIdFor(*event);
         }
       } else {
-        todo.event_id = eventId;
-      }
-      if (!todo.client_id && (todo.event_id || todo.series_id)) {
-        todo.client_id = clientIdFor(*event);
+        PLOG_WARNING << "My day: meeting " << eventId << " not found, saving to-do unlinked";
       }
     }
+    if (mDb->add_day_todo(todo) <= 0) {
+      PLOG_WARNING << "My day: failed to add to-do";
+    }
+  } catch (const std::exception &e) {
+    PLOG_ERROR << "My day addTodo failed: " << e.what();
   }
-  mDb->add_day_todo(todo);
   reload();
 }
 
@@ -449,18 +491,36 @@ void MyDayBridge::setTodoTitle(const qint64 id, const QString &title) {
   if (trimmed.isEmpty()) {
     return;
   }
-  mDb->update_day_todo_title(id, trimmed.toStdString());
+  try {
+    if (!mDb->update_day_todo_title(id, trimmed.toStdString())) {
+      PLOG_WARNING << "My day: failed to rename to-do " << id;
+    }
+  } catch (const std::exception &e) {
+    PLOG_ERROR << "My day setTodoTitle failed: " << e.what();
+  }
   reload();
 }
 
 void MyDayBridge::setTodoDone(const qint64 id, const bool done) {
-  mDb->set_day_todo_done(id, done ? std::optional<int64_t>(now().toMSecsSinceEpoch())
-                                  : std::nullopt);
+  try {
+    if (!mDb->set_day_todo_done(id, done ? std::optional<int64_t>(now().toMSecsSinceEpoch())
+                                         : std::nullopt)) {
+      PLOG_WARNING << "My day: failed to update to-do " << id;
+    }
+  } catch (const std::exception &e) {
+    PLOG_ERROR << "My day setTodoDone failed: " << e.what();
+  }
   reload();
 }
 
 void MyDayBridge::removeTodo(const qint64 id) {
-  mDb->delete_day_todo(id);
+  try {
+    if (!mDb->delete_day_todo(id)) {
+      PLOG_WARNING << "My day: failed to delete to-do " << id;
+    }
+  } catch (const std::exception &e) {
+    PLOG_ERROR << "My day removeTodo failed: " << e.what();
+  }
   reload();
 }
 
@@ -469,13 +529,19 @@ void MyDayBridge::openEvent(const qint64 eventId, const qint64 dayMs) {
 }
 
 void MyDayBridge::joinEvent(const qint64 eventId) {
-  const auto event = resolveEvent(eventId);
-  if (!event) {
+  pcm::meeting::JoinAction action;
+  try {
+    const auto event = resolveEvent(eventId);
+    if (!event) {
+      return;
+    }
+    const auto seriesTarget =
+        mSeriesCalls ? mSeriesCalls->joinTargetFor(*event) : std::optional<QString>{};
+    action = pcm::meeting::resolveJoinAction(*event, seriesTarget);
+  } catch (const std::exception &e) {
+    PLOG_ERROR << "My day joinEvent failed: " << e.what();
     return;
   }
-  const auto seriesTarget =
-      mSeriesCalls ? mSeriesCalls->joinTargetFor(*event) : std::optional<QString>{};
-  const auto action = pcm::meeting::resolveJoinAction(*event, seriesTarget);
   switch (action.kind) {
   case pcm::meeting::JoinAction::Kind::LiveKit:
     emit openLiveKitMeetingRequested(action.target);

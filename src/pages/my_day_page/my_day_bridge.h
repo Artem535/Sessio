@@ -93,6 +93,7 @@ private:
   QDateTime now() const;
   void scheduleReload();
   void setDay(const QDate &day);
+  void loadState();
   std::optional<int64_t> clientIdFor(const DuckEvent &event);
   QString clientNameFor(int64_t clientId) const;
   QString titleFor(const DuckEvent &event) const;
@@ -106,6 +107,7 @@ private:
   Clock mClock;
   QTimer mMinuteTimer;
   QDate mDay;
+  QDate mLastToday; // calendar date at the last reload, to detect midnight rollover
   bool mGroupByMeeting = false;
   bool mActive = true;
   bool mDirty = false;

@@ -15,7 +15,7 @@ Rectangle {
 
     implicitHeight: 64
     radius: 8
-    color: theme.base
+    color: Qt.tint(theme.window, Qt.rgba(theme.text.r, theme.text.g, theme.text.b, 0.06))
     border.color: mouse.containsMouse && root.clickable ? theme.highlight : theme.mid
 
     ColumnLayout {
