@@ -20,8 +20,13 @@ namespace pcm::prompter {
 // Model outputs: note <=160 units, <=4 points of <=80 units, <=8 source IDs
 // per item, <=1100 serialized UTF-8 bytes total, including all JSON overhead.
 // Each nonempty item must cite sources present in that specific model input.
-// Invalid input/output or budget exhaustion throws PipelineError; no retries,
-// partial success or truncation. Generator exceptions propagate unchanged.
+// Every call passes a JSON schema of this shape (from reflect-cpp) whose
+// evidence_ids may only name that call's sources, for constrained decoding.
+// An output that breaks these rules is never used. A rejected chunk summary is
+// retried once as two halves and a half that fails again is left out; a
+// rejected merge keeps both validated summaries' items, cut to the budget.
+// Throws PipelineError on invalid input, budget exhaustion, or when no chunk
+// produced a usable summary. Other generator exceptions propagate unchanged.
 // The caller checks cancellation/revision/consent at EVERY Generate boundary
 // and before publishing the returned object.
 QJsonObject processNotes(const QJsonArray &utterances, const Generate &generate);

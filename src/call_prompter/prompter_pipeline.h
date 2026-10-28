@@ -28,8 +28,9 @@ QString failureReason(const QString &pipelineError);
 using Payload = std::vector<std::pair<QString, QJsonValue>>;
 
 // One model call: system prompt plus serialised user payload in, parsed JSON
-// value out. Throws PipelineError (or any std::exception) on failure.
-using Generate = std::function<QJsonValue(const QString &system, const QByteArray &payload)>;
+// value out. `schema` is a JSON schema for constrained decoding, or empty for
+// free text. Throws PipelineError (or any std::exception) on failure.
+using Generate = std::function<QJsonValue(const QString &system, const QByteArray &payload, const QByteArray &schema)>;
 
 // Validates a protocol-1 request, extracts agreement events from its
 // utterances, matches them against the candidate records and checks deadlines.

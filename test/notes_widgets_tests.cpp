@@ -107,14 +107,15 @@ TEST_F(AiSummaryTest, AiSummaryErrorShowsReasonAndRetryInsideCard) {
   controller.addPhrase(phrase); controller.flush();
   ASSERT_FALSE(requests.isEmpty());
   auto failed = requests.last().first().toJsonObject();
-  failed["error"] = "x"; failed["reason"] = "invalid_output";
+  // Transient live failures retry by themselves; this one needs the user.
+  failed["error"] = "x"; failed["reason"] = "too_long";
   controller.handleResult(failed);
   AiSummaryWidget widget(&controller);
   widget.show();
   QSignalSpy retry(&widget, &AiSummaryWidget::retryRequested);
   auto *problem = widget.findChild<QLabel *>("aiSummaryProblem");
   EXPECT_FALSE(problem->isHidden());
-  EXPECT_TRUE(problem->text().contains("could not be used"));
+  EXPECT_TRUE(problem->text().contains("too long"));
   widget.findChild<QPushButton *>("aiSummaryRetry")->click();
   EXPECT_EQ(retry.count(), 1);
 }

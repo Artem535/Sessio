@@ -42,6 +42,8 @@ CallNotesController::CallNotesController(std::shared_ptr<pcm::database::Database
       mAttachmentRoot(attachmentRoot.isEmpty() ? pcm::app_settings::attachmentsStorageRoot() : attachmentRoot) {
   mBatch.setSingleShot(true); mBatch.setInterval(1800);
   connect(&mBatch, &QTimer::timeout, this, &CallNotesController::flush);
+  mRetry.setSingleShot(true);
+  connect(&mRetry, &QTimer::timeout, this, [this] { mDirty = true; flush(); });
 }
 bool CallNotesController::persist() {
   if (!mMaterialId) return false;
@@ -67,7 +69,7 @@ bool CallNotesController::syncStored(bool force) {
   } catch (...) { return false; }
 }
 void CallNotesController::load(qint64 id) {
-  mBatch.stop(); ++mGeneration; mInFlight = false; mRequest = {}; mDirty = false;
+  mBatch.stop(); stopRetrying(); ++mGeneration; mInFlight = false; mRequest = {}; mDirty = false;
   mFinalPending = false; mEnabled = false; mMaterialId = 0; mRevision = 0; mState = {};
   mDeferred = false;
   try {
@@ -151,13 +153,14 @@ QJsonArray CallNotesController::phrases() const {
 void CallNotesController::addPhrase(const DuckTranscriptPhrase &p) {
   if (p.transcript_id != mTranscriptId) return;
   mDirty = true;
-  if (mEnabled && !mInFlight && !mEnded) mBatch.start();
+  // A pending retry already covers new phrases; keep its backoff.
+  if (mEnabled && !mInFlight && !mEnded && !mRetry.isActive()) mBatch.start();
   emit changed();
 }
 void CallNotesController::setGenerationEnabled(bool enabled) {
   mEnabled = enabled;
   if (enabled) mDeferred = false;
-  if (!enabled) { mBatch.stop(); return; }
+  if (!enabled) { mBatch.stop(); stopRetrying(); return; }
   if (mDirty && !mInFlight) mBatch.start();
 }
 void CallNotesController::finishCall() {
@@ -176,12 +179,13 @@ void CallNotesController::requestFinal() {
 }
 void CallNotesController::deferFinal() {
   ++mGeneration; mEnabled = false; mDeferred = true; mInFlight = false;
-  mRequest = {}; mFinalPending = true; mBatch.stop(); mState["final_status"] = "queued";
+  mRequest = {}; mFinalPending = true; mBatch.stop(); stopRetrying(); mState["final_status"] = "queued";
   persist(); emit changed();
 }
 void CallNotesController::flush() {
   mBatch.stop();
   if (!mEnabled || mInFlight || !mMaterialId) return;
+  mRetry.stop();
   if (mFinalPending) dispatch(true);
   else if (mDirty && !mEnded) dispatch(false);
 }
@@ -211,7 +215,7 @@ void CallNotesController::cancel() {
   if (mMaterialId > 0) syncStored();
   mEnabled = false;
   mDeferred = false;
-  ++mGeneration; mInFlight = false; mFinalPending = false; mBatch.stop(); mRequest = {};
+  ++mGeneration; mInFlight = false; mFinalPending = false; mBatch.stop(); stopRetrying(); mRequest = {};
   mState[mEnded ? "final_status" : "live_status"] = "cancelled";
   persist(); emit changed(); emit cancelRequested(token);
 }
@@ -232,15 +236,32 @@ void CallNotesController::fail(const QString &reason) {
   if (!mInFlight) return;
   mState[mRequest["final"].toBool() ? "final_status" : "live_status"] = "error";
   mState["error_reason"] = reason;
-  mInFlight = false; mFinalPending = false; mBatch.stop(); mEnabled = false;
+  mInFlight = false; mFinalPending = false; mBatch.stop(); stopRetrying(); mEnabled = false;
   ++mGeneration; mRequest = {}; persist(); emit changed();
 }
+// Live notes rerun on the whole call so far. A failed update must not stop
+// them for the rest of a long call: try again with a growing delay, picking
+// up phrases that arrived meanwhile. The final note stays a manual action.
+void CallNotesController::retryLater() {
+  constexpr int kMaxRetryDelayMs = 5 * 60 * 1000;
+  const int delay = static_cast<int>(std::min<qint64>(kMaxRetryDelayMs, qint64(mRetryDelayMs) << std::min(mRetries, 8)));
+  ++mRetries;
+  mInFlight = false; mRequest = {}; mBatch.stop();
+  mState["live_status"] = "queued";
+  mRetry.start(delay);
+  persist(); emit changed();
+}
+void CallNotesController::stopRetrying() { mRetry.stop(); mRetries = 0; }
 void CallNotesController::handleResult(const QJsonObject &result) {
   if (!mInFlight || result["task"] != "notes" || result["material_id"] != mMaterialId ||
       result["request_id"] != mRequest["request_id"] || result["session_generation"] != mGeneration ||
       result["request_token"] != mRequest["request_token"] || result["ledger_revision"] != mRequest["ledger_revision"]) return;
   if (result.contains("error") || !result["notes"].isObject()) {
-    fail(result["reason"].toString(QStringLiteral("runtime"))); return;
+    const auto reason = result["reason"].toString(QStringLiteral("runtime"));
+    const bool transient = reason == "runtime" || reason == "timeout" || reason == "invalid_output";
+    if (transient && !mRequest["final"].toBool() && !mEnded && mEnabled) retryLater();
+    else fail(reason);
+    return;
   }
   const bool final = mRequest["final"].toBool();
   const auto inputs = mRequest["utterances"].toArray();
@@ -266,7 +287,7 @@ void CallNotesController::handleResult(const QJsonObject &result) {
   mState[final ? "final" : "live"] = notes;
   mState[final ? "final_status" : "live_status"] = "ready";
   mState["processed_ms"] = inputs.last().toObject()["end_ms"];
-  mInFlight = false; mRequest = {}; persist(); emit changed();
+  mInFlight = false; mRequest = {}; mRetries = 0; persist(); emit changed();
   if (mFinalPending || (mDirty && !mEnded)) mBatch.start();
 }
 QString CallNotesController::manualText() const { return mState["manual_text"].toString(); }

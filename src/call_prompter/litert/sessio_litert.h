@@ -47,6 +47,9 @@ struct GenerateOptions {
   // Keep the processed prefix (its KV cache) and reuse it for later calls with
   // the same prefix instead of processing it again.
   bool reusePrefix = true;
+  // JSON schema the reply must follow, enforced while decoding (llguidance).
+  // Empty decodes free text.
+  std::string jsonSchema;
 };
 
 // Work done by one generate() call, for timing diagnostics.
@@ -56,6 +59,7 @@ struct GenerateStats {
   int decodeTokens = 0;
   double decodeSeconds = 0;
   bool prefixReused = false;
+  bool constrained = false; // the schema was applied; false if it could not be compiled
 };
 
 enum class Status { Ok, Cancelled, ContextExceeded, Truncated, Failed };

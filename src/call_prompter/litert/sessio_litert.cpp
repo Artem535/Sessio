@@ -20,6 +20,10 @@
 #endif
 
 #include "absl/time/time.h"
+#include "runtime/components/constrained_decoding/constraint.h"
+#include "runtime/components/constrained_decoding/constraint_provider.h"
+#include "runtime/components/constrained_decoding/constraint_provider_factory.h"
+#include "runtime/components/constrained_decoding/llg_constraint_config.h"
 #include "runtime/engine/engine.h"
 #include "runtime/engine/engine_factory.h"
 #include "runtime/engine/engine_settings.h"
@@ -266,13 +270,20 @@ private:
       bool ok = true, done = false;
     };
     auto output = std::make_shared<Output>();
+    auto decode = ::litert::lm::DecodeConfig::CreateDefault();
+    // DecodeConfig does not own the constraint; the callback keeps it alive
+    // for as long as the decode task can still call it.
+    std::shared_ptr<::litert::lm::Constraint> constraint;
+    if (!options.jsonSchema.empty()) constraint = jsonConstraint(session, options.jsonSchema);
+    stats->constrained = constraint != nullptr;
+    if (constraint) decode.SetConstraint(constraint.get());
     const auto status = mTasks.run([&]() -> std::shared_ptr<TaskGate::Task> {
-      auto task = session.RunDecodeAsync([output](auto response) {
+      auto task = session.RunDecodeAsync([output, constraint](auto response) {
         std::lock_guard lock(output->mutex);
         if (!response.ok() || response->GetTexts().size() > 1) { output->ok = false; return; }
         if (!response->GetTexts().empty()) output->text += response->GetTexts().front();
         if (response->GetTaskState() == ::litert::lm::TaskState::kDone) output->done = true;
-      });
+      }, decode);
       if (!task.ok()) return {};
       return std::make_shared<AsyncTask>(std::move(*task));
     });
@@ -292,7 +303,23 @@ private:
     return Status::Ok;
   }
 
+  // Null when llguidance cannot be set up or rejects the schema: the reply is
+  // then decoded unconstrained and the caller's validation still applies.
+  std::shared_ptr<::litert::lm::Constraint> jsonConstraint(Engine::Session &session, const std::string &schema) {
+    if (!mConstraints) {
+      auto provider = ::litert::lm::CreateConstraintProvider(::litert::lm::LlGuidanceConfig(), mEngine->GetTokenizer(),
+                                                             session.GetSessionConfig().GetStopTokenIds());
+      if (!provider.ok()) return nullptr;
+      mConstraints = std::move(*provider);
+    }
+    auto constraint = mConstraints->CreateConstraint(::litert::lm::LlGuidanceConstraintArg{
+        .constraint_type = ::litert::lm::LlgConstraintType::kJsonSchema, .constraint_string = schema});
+    if (!constraint.ok()) return nullptr;
+    return std::shared_ptr<::litert::lm::Constraint>(std::move(*constraint));
+  }
+
   std::unique_ptr<Engine> mEngine;
+  std::unique_ptr<::litert::lm::ConstraintProvider> mConstraints;
   const int mContextTokens;
   const bool mSpeculative;
   const RuntimeInfo mInfo;
