@@ -31,7 +31,7 @@ TEST(MeetingJoinTest, liveKitUsesMeetingRef) {
 
 TEST(MeetingJoinTest, externalUsesUrl) {
   const auto e = makeEvent("ExternalUrl", "", "https://x.invalid/a");
-  const JoinAction a = resolveJoinAction(e, QString());
+  const JoinAction a = resolveJoinAction(e, std::nullopt);
   EXPECT_EQ(a.kind, JoinAction::Kind::Url);
   EXPECT_EQ(a.target, QStringLiteral("https://x.invalid/a"));
 }
@@ -39,4 +39,9 @@ TEST(MeetingJoinTest, externalUsesUrl) {
 TEST(MeetingJoinTest, offlineIsNone) {
   const auto e = makeEvent("", "", "");
   EXPECT_EQ(resolveJoinAction(e, std::nullopt).kind, JoinAction::Kind::None);
+}
+
+TEST(MeetingJoinTest, emptySeriesTargetIsNoneEvenWithRefAndUrl) {
+  const auto e = makeEvent("LiveKit", "ref-1", "https://x.invalid/a");
+  EXPECT_EQ(resolveJoinAction(e, QString()).kind, JoinAction::Kind::None);
 }

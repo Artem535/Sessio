@@ -5,7 +5,11 @@
 namespace pcm::meeting {
 
 JoinAction resolveJoinAction(const DuckEvent &event, const std::optional<QString> &seriesJoinTarget) {
-  if (seriesJoinTarget && !seriesJoinTarget->isEmpty()) {
+  if (seriesJoinTarget) {
+    // Series-backed: the series target is authoritative; empty means nothing to join.
+    if (seriesJoinTarget->isEmpty()) {
+      return {};
+    }
     return {JoinAction::Kind::LiveKit, *seriesJoinTarget};
   }
   if (event.provider_kind && event.meeting_ref && !event.meeting_ref->empty() &&

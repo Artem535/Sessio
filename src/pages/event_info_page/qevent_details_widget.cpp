@@ -1,6 +1,6 @@
+#include "qevent_details_widget.h"
 #include "meeting_join.h"
 #include "provider_kind.h"
-#include "qevent_details_widget.h"
 #include "../../widgets/accent_color.h"
 #include "../../widgets/app_settings.h"
 #include "../../widgets/meeting_utils.h"
@@ -1298,9 +1298,6 @@ void QEventDetailsWidget::onMeetingUrlChanged(const QString &url) {
 }
 
 void QEventDetailsWidget::onOpenMeetingClicked() {
-  if (mSeriesBacked && mSeriesJoinTarget.isEmpty()) {
-    return; // the button is disabled in this state
-  }
   DuckEvent event;
   event.meeting_url = mMeetingUrlEdit->text().toStdString();
   if (mCurrentEvent) {

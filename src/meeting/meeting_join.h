@@ -16,7 +16,7 @@ struct JoinAction {
 /// Shared by the Calendar inspector and «Мой день».
 /// @param seriesJoinTarget SeriesCallService::joinTargetFor(event) result
 ///        (nullopt if none / no service).
-/// Order: non-empty series target -> LiveKit; provider LiveKit with
+/// Order: engaged series target -> LiveKit(target), or None if it is empty; provider LiveKit with
 /// meeting_ref -> LiveKit; non-empty meeting_url -> Url; else None.
 [[nodiscard]] JoinAction resolveJoinAction(const DuckEvent &event,
                                            const std::optional<QString> &seriesJoinTarget);
