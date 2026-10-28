@@ -1203,3 +1203,19 @@ add_executable(Sessio_audio_bridge_server_tests audio_bridge_server_tests.cpp)
 target_link_libraries(Sessio_audio_bridge_server_tests PRIVATE
     GTest::gtest GTest::gtest_main Sessio_webcall)
 gtest_discover_tests(Sessio_audio_bridge_server_tests)
+
+# Web call bridge (page events -> VideoProvider signals / ParticipantModel)
+find_package(Qt6 REQUIRED COMPONENTS Test)
+add_executable(Sessio_web_call_bridge_tests web_call_bridge_tests.cpp)
+target_link_libraries(Sessio_web_call_bridge_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_webcall Sessio_video Qt6::Test)
+gtest_discover_tests(Sessio_web_call_bridge_tests)
+
+# WebCallProvider integration: real QtWebEngine (offscreen) running the fake adapter.
+# Own main(): the scheme must be registered before QApplication.
+add_executable(Sessio_web_call_provider_tests web_call_provider_tests.cpp)
+target_link_libraries(Sessio_web_call_provider_tests PRIVATE
+    GTest::gtest Sessio_webcall Sessio_video Qt6::Test Qt6::Widgets)
+gtest_discover_tests(Sessio_web_call_provider_tests
+    PROPERTIES LABELS webengine TIMEOUT 120
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
