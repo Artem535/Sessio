@@ -1192,3 +1192,14 @@ add_executable(Sessio_webcall_smoke_tests webcall_smoke_tests.cpp)
 target_link_libraries(Sessio_webcall_smoke_tests PRIVATE
     GTest::gtest GTest::gtest_main Sessio_webcall)
 gtest_discover_tests(Sessio_webcall_smoke_tests)
+
+# Local audio bridge for web calls
+add_executable(Sessio_audio_chunk_tests audio_chunk_tests.cpp)
+target_link_libraries(Sessio_audio_chunk_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_webcall)
+gtest_discover_tests(Sessio_audio_chunk_tests)
+
+add_executable(Sessio_audio_bridge_server_tests audio_bridge_server_tests.cpp)
+target_link_libraries(Sessio_audio_bridge_server_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_webcall)
+gtest_discover_tests(Sessio_audio_bridge_server_tests)

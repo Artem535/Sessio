@@ -10,7 +10,13 @@ find_package(Qt6 REQUIRED COMPONENTS Core Network WebChannel WebEngineCore WebEn
 qt_add_library(${TARGET_NAME} STATIC
         webcall_version.h
         webcall_version.cpp
+        audio_chunk.h
+        audio_chunk.cpp
+        audio_bridge_server.h
+        audio_bridge_server.cpp
 )
+
+set_target_properties(${TARGET_NAME} PROPERTIES AUTOMOC ON)
 
 target_link_libraries(${TARGET_NAME} PUBLIC
         Qt6::Core
