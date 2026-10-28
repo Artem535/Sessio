@@ -155,3 +155,125 @@ TEST_F(MyDayLogicTest, onlineIncludesLiveKitProvider) {
   e.is_online = true;
   EXPECT_TRUE(buildTimeline({e}, kDay, kNow, kNoNotes)[0].online);
 }
+
+TEST_F(MyDayLogicTest, timelineCardTagsHaveNoAgeLimit) {
+  DuckEvent old = endedDaysAgo(1, 100);
+  old.event_stat_id = 1;
+  const QDate oldDay = QDateTime::fromMSecsSinceEpoch(*old.start_date).date();
+  auto item = buildTimeline({old}, oldDay, kNow, kNoNotes)[0];
+  EXPECT_TRUE(item.unpaid);
+  EXPECT_TRUE(item.withoutNote);
+
+  const HasNoteFn hasNote = [](const DuckEvent &) { return true; };
+  item = buildTimeline({old}, oldDay, kNow, hasNote)[0];
+  EXPECT_FALSE(item.withoutNote);
+
+  old.is_work_event = false;
+  item = buildTimeline({old}, oldDay, kNow, kNoNotes)[0];
+  EXPECT_FALSE(item.unpaid);
+  EXPECT_FALSE(item.withoutNote);
+}
+
+namespace {
+
+DuckDayTodo todo(std::int64_t id, std::optional<std::int64_t> client = std::nullopt,
+                 std::optional<std::int64_t> event = std::nullopt) {
+  DuckDayTodo t;
+  t.id = id;
+  t.title = "t" + std::to_string(id);
+  t.client_id = client;
+  t.event_id = event;
+  return t;
+}
+
+const std::function<QString(int64_t)> kClientName = [](int64_t id) {
+  switch (id) {
+  case 10: return QStringLiteral("Борис");
+  case 11: return QStringLiteral("Анна");
+  default: return QString();
+  }
+};
+
+// Event id -> client: 1 -> 10, 2 -> 11, others none.
+const std::function<std::optional<int64_t>(const DuckEvent &)> kClientOf =
+    [](const DuckEvent &e) -> std::optional<int64_t> {
+  if (e.id == 1) return 10;
+  if (e.id == 2) return 11;
+  return std::nullopt;
+};
+
+} // namespace
+
+TEST_F(MyDayLogicTest, byClientGroupsMeetingTodosUnderItsClient) {
+  QVector<DuckEvent> ev{today(1, 10, 0, 10, 50)};
+  std::vector<DuckDayTodo> todos{todo(1, 11), todo(2, std::nullopt, 1), todo(3, 10)};
+  auto g = groupTodos(todos, ev, TodoGrouping::ByClient, kClientName, kClientOf);
+  ASSERT_EQ(g.size(), 2u);
+  EXPECT_EQ(g[0].title, "Анна");
+  EXPECT_EQ(g[0].clientId, 11);
+  ASSERT_EQ(g[0].todos.size(), 1u);
+  EXPECT_EQ(g[0].todos[0].id, 1);
+  EXPECT_EQ(g[1].title, "Борис");
+  ASSERT_EQ(g[1].todos.size(), 2u);
+  EXPECT_EQ(g[1].todos[0].id, 2);
+  EXPECT_EQ(g[1].todos[1].id, 3);
+}
+
+TEST_F(MyDayLogicTest, byMeetingOrdersGroupsByStart) {
+  QVector<DuckEvent> ev{today(2, 9, 0, 9, 50), today(1, 8, 30, 9, 20), today(3, 12, 0, 13, 0)};
+  ev[2].name = "Supervision";
+  std::vector<DuckDayTodo> todos{todo(1, std::nullopt, 3), todo(2, std::nullopt, 2),
+                                 todo(3, std::nullopt, 1), todo(4, std::nullopt, 2)};
+  auto g = groupTodos(todos, ev, TodoGrouping::ByMeeting, kClientName, kClientOf);
+  ASSERT_EQ(g.size(), 3u);
+  EXPECT_EQ(g[0].eventId, 1);
+  EXPECT_EQ(g[0].title, "08:30 Борис");
+  EXPECT_EQ(g[1].eventId, 2);
+  EXPECT_EQ(g[1].title, "09:00 Анна");
+  ASSERT_EQ(g[1].todos.size(), 2u);
+  EXPECT_EQ(g[1].todos[0].id, 2);
+  EXPECT_EQ(g[1].todos[1].id, 4);
+  EXPECT_EQ(g[2].eventId, 3);
+  EXPECT_EQ(g[2].title, "12:00 Supervision");
+}
+
+TEST_F(MyDayLogicTest, unlinkedGoesToGeneralLast) {
+  QVector<DuckEvent> ev{today(1, 10, 0, 10, 50)};
+  std::vector<DuckDayTodo> todos{todo(1), todo(2, 10)};
+  for (auto mode : {TodoGrouping::ByClient, TodoGrouping::ByMeeting}) {
+    auto g = groupTodos(todos, ev, mode, kClientName, kClientOf);
+    ASSERT_FALSE(g.empty());
+    EXPECT_EQ(g.back().title, QObject::tr("General"));
+    EXPECT_FALSE(g.back().clientId);
+    EXPECT_FALSE(g.back().eventId);
+    EXPECT_EQ(g.back().todos.front().id, 1);
+  }
+}
+
+TEST_F(MyDayLogicTest, todoWithMissingMeetingFallsToGeneral) {
+  std::vector<DuckDayTodo> todos{todo(1, std::nullopt, 99)};
+  auto g = groupTodos(todos, {}, TodoGrouping::ByMeeting, kClientName, kClientOf);
+  ASSERT_EQ(g.size(), 1u);
+  EXPECT_EQ(g[0].title, QObject::tr("General"));
+}
+
+TEST_F(MyDayLogicTest, todoWithDeletedClientFallsToGeneral) {
+  std::vector<DuckDayTodo> todos{todo(1, 77)};
+  auto g = groupTodos(todos, {}, TodoGrouping::ByClient, kClientName, kClientOf);
+  ASSERT_EQ(g.size(), 1u);
+  EXPECT_EQ(g[0].title, QObject::tr("General"));
+  EXPECT_FALSE(g[0].clientId);
+}
+
+TEST_F(MyDayLogicTest, virtualOccurrenceTodoMatchesBySeriesAndOccurrence) {
+  DuckEvent v = today(-5, 10, 0, 10, 50);
+  v.series_id = 7;
+  v.original_occurrence_start = 123456;
+  v.is_virtual_occurrence = true;
+  DuckDayTodo t = todo(1);
+  t.series_id = 7;
+  t.occurrence_start_ms = 123456;
+  auto g = groupTodos({t}, {v}, TodoGrouping::ByMeeting, kClientName, kClientOf);
+  ASSERT_EQ(g.size(), 1u);
+  EXPECT_EQ(g[0].eventId, -5);
+}

@@ -2,6 +2,8 @@
 
 #include <QDate>
 #include <QDateTime>
+#include <QObject>
+#include <QString>
 #include <QVector>
 
 #include <cstdint>
@@ -62,5 +64,21 @@ std::vector<DuckEvent> unpaidEvents(const QVector<DuckEvent> &recent, const QDat
 // Active work events ended within 7 days without a linked note, by start.
 std::vector<DuckEvent> eventsWithoutNotes(const QVector<DuckEvent> &recent, const QDateTime &now,
                                           const HasNoteFn &hasNote);
+
+enum class TodoGrouping { ByClient, ByMeeting };
+
+struct TodoGroup {
+  QString title;
+  std::optional<int64_t> clientId;
+  std::optional<int64_t> eventId;
+  std::vector<DuckDayTodo> todos;
+};
+
+// `dayEvents` resolves meeting links (by event id, or series + occurrence start);
+// `clientName(id)` returns empty for an unknown/deleted client. The "General" group is last.
+std::vector<TodoGroup>
+groupTodos(const std::vector<DuckDayTodo> &todos, const QVector<DuckEvent> &dayEvents,
+           TodoGrouping mode, const std::function<QString(int64_t)> &clientName,
+           const std::function<std::optional<int64_t>(const DuckEvent &)> &clientOf);
 
 } // namespace pcm::my_day

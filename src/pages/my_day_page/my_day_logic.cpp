@@ -16,7 +16,7 @@ constexpr std::int64_t kPendingPaymentStat = 1;
 constexpr std::int64_t kCanceledStat = 3;
 
 QDateTime toLocal(const std::int64_t ms) {
-  return QDateTime::fromMSecsSinceEpoch(ms, QTimeZone::systemTimeZone());
+  return QDateTime::fromMSecsSinceEpoch(ms, QTimeZone(QTimeZone::LocalTime));
 }
 
 QDateTime startOf(const DuckEvent &e) { return toLocal(e.start_date.value_or(0)); }
@@ -172,6 +172,116 @@ Tiles buildTiles(const QVector<DuckEvent> &dayEvents, const QVector<DuckEvent> &
   }
   tiles.withoutNotesCount = static_cast<int>(eventsWithoutNotes(recentEvents, now, hasNote).size());
   return tiles;
+}
+
+namespace {
+
+const DuckEvent *findMeeting(const DuckDayTodo &t, const std::vector<DuckEvent> &events) {
+  for (const DuckEvent &e : events) {
+    if (t.event_id && *t.event_id == e.id) {
+      return &e;
+    }
+    if (t.series_id && t.occurrence_start_ms && e.series_id == t.series_id &&
+        e.original_occurrence_start == t.occurrence_start_ms) {
+      return &e;
+    }
+  }
+  return nullptr;
+}
+
+} // namespace
+
+std::vector<TodoGroup>
+groupTodos(const std::vector<DuckDayTodo> &todos, const QVector<DuckEvent> &dayEvents,
+           const TodoGrouping mode, const std::function<QString(int64_t)> &clientName,
+           const std::function<std::optional<int64_t>(const DuckEvent &)> &clientOf) {
+  const std::vector<DuckEvent> events =
+      sortedByStart(std::vector<DuckEvent>(dayEvents.begin(), dayEvents.end()));
+
+  std::vector<TodoGroup> groups;
+  TodoGroup general;
+  general.title = QObject::tr("General");
+
+  for (const DuckDayTodo &t : todos) {
+    const DuckEvent *meeting = findMeeting(t, events);
+    TodoGroup *target = &general;
+    if (mode == TodoGrouping::ByMeeting) {
+      if (meeting) {
+        auto it = std::find_if(groups.begin(), groups.end(), [&](const TodoGroup &g) {
+          return g.eventId == meeting->id;
+        });
+        if (it == groups.end()) {
+          groups.emplace_back();
+          it = groups.end() - 1;
+          it->eventId = meeting->id;
+          it->clientId = clientOf(*meeting);
+        }
+        target = &*it;
+      }
+    } else {
+      std::optional<int64_t> client;
+      QString name;
+      if (t.client_id) {
+        name = clientName(*t.client_id);
+        if (!name.isEmpty()) {
+          client = t.client_id;
+        }
+      }
+      if (!client && meeting) {
+        const auto viaMeeting = clientOf(*meeting);
+        if (viaMeeting) {
+          name = clientName(*viaMeeting);
+          if (!name.isEmpty()) {
+            client = viaMeeting;
+          }
+        }
+      }
+      if (client) {
+        auto it = std::find_if(groups.begin(), groups.end(),
+                               [&](const TodoGroup &g) { return g.clientId == client; });
+        if (it == groups.end()) {
+          groups.emplace_back();
+          it = groups.end() - 1;
+          it->clientId = client;
+          it->title = name;
+        }
+        target = &*it;
+      }
+    }
+    target->todos.push_back(t);
+  }
+
+  if (mode == TodoGrouping::ByClient) {
+    std::stable_sort(groups.begin(), groups.end(), [](const TodoGroup &a, const TodoGroup &b) {
+      return QString::localeAwareCompare(a.title, b.title) < 0;
+    });
+  } else {
+    for (TodoGroup &g : groups) {
+      const auto it = std::find_if(events.begin(), events.end(),
+                                   [&](const DuckEvent &e) { return e.id == g.eventId; });
+      QString label = it->name ? QString::fromStdString(*it->name) : QString();
+      if (g.clientId) {
+        const QString cn = clientName(*g.clientId);
+        if (!cn.isEmpty()) {
+          label = cn;
+        }
+      }
+      g.title = startOf(*it).toString("HH:mm") + " " + label;
+    }
+    std::stable_sort(groups.begin(), groups.end(), [&](const TodoGroup &a, const TodoGroup &b) {
+      auto start = [&](const TodoGroup &g) {
+        const auto it = std::find_if(events.begin(), events.end(),
+                                     [&](const DuckEvent &e) { return e.id == g.eventId; });
+        return it->start_date.value_or(0);
+      };
+      return start(a) < start(b);
+    });
+  }
+
+  if (!general.todos.empty()) {
+    groups.push_back(std::move(general));
+  }
+  return groups;
 }
 
 } // namespace pcm::my_day
