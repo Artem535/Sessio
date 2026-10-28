@@ -263,6 +263,7 @@ void QEventDetailsWidget::initUi() {
   mProviderKindControl->setItemsShouldExpand(true);
   mProviderKindControl->setCurrentIndex(0);
   mRepeatTypeControl = new oclero::qlementine::SegmentedControl(this);
+  mRepeatTypeControl->setObjectName(QStringLiteral("repeatTypeControl"));
   mRepeatTypeControl->addItem(tr("None"), {}, {}, QStringLiteral("none"));
   mRepeatTypeControl->addItem(tr("Day"), {}, {}, QStringLiteral("daily"));
   mRepeatTypeControl->addItem(tr("Week"), {}, {}, QStringLiteral("weekly"));
@@ -964,7 +965,7 @@ QString QEventDetailsWidget::selectedClientName() const {
 
 bool QEventDetailsWidget::wantsNewLiveKitSeries() const {
   return mCreatingNewEvent && isRecurring() && mOnlineSessionSwitch->isChecked() &&
-         selectedProviderKind() != pcm::meeting::ProviderKind::ExternalUrl && !mLegacyMigratable;
+         pcm::meeting::isBackendHosted(selectedProviderKind()) && !mLegacyMigratable;
 }
 
 bool QEventDetailsWidget::isRecurring() const {
@@ -1319,8 +1320,23 @@ void QEventDetailsWidget::onRecurrenceTypeChanged() {
       selectedWeekdayRule().isEmpty()) {
     selectWeekday(mUI->mEventDate->date().dayOfWeek(), true);
   }
+  updateProviderAvailability();
   updateRecurringControls();
   updateButtonState();
+}
+
+void QEventDetailsWidget::updateProviderAvailability() {
+  // Recurring series are LiveKit-only, so Jitsi cannot be chosen once a
+  // repeat rule is set on an event that is not yet series-backed.
+  const bool jitsiBlocked = isRecurring() && !mSeriesBacked;
+  const int jitsiIndex = providerKindIndex(pcm::meeting::ProviderKind::Jitsi);
+  mProviderKindControl->setItemEnabled(jitsiIndex, !jitsiBlocked);
+  mProviderKindControl->setToolTip(jitsiBlocked ? tr("Recurring meetings use LiveKit for now")
+                                                : QString{});
+  if (jitsiBlocked && mProviderKindControl->currentIndex() == jitsiIndex) {
+    mProviderKindControl->setCurrentIndex(
+        providerKindIndex(pcm::meeting::ProviderKind::LiveKit));
+  }
 }
 
 void QEventDetailsWidget::onMeetingUrlChanged(const QString &url) {
@@ -1803,6 +1819,7 @@ void QEventDetailsWidget::setSeriesCall(pcm::meeting::SeriesCallService *service
   mSeriesId = seriesId;
   mSeriesJoinTarget = joinTarget;
   mSeriesBacked = service != nullptr && seriesId > 0;
+  updateProviderAvailability();
   mLegacyMigratable = false;
   if (mSeriesCalls) {
     connect(mSeriesCalls, &pcm::meeting::SeriesCallService::statusChanged, this,

@@ -109,6 +109,7 @@ public:
   // invitation instead of the form creating a single meeting).
   [[nodiscard]] bool wantsNewLiveKitSeries() const;
   [[nodiscard]] pcm::meeting::ProviderKind selectedProviderKind() const;
+  void updateProviderAvailability();
   [[nodiscard]] QString recurrenceRule() const;
   [[nodiscard]] std::optional<int64_t> recurrenceUntilMs() const;
   void setRecurrenceRule(const QString &rule,
