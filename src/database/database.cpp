@@ -1089,6 +1089,59 @@ int64_t Database::add_client_note_attachment(
   return static_cast<int64_t>(chunk->GetValue(0, 0).GetValue<int32_t>());
 }
 
+std::vector<bool> Database::has_linked_notes(const std::vector<NoteLinkKey> &keys) {
+  std::vector<bool> found(keys.size(), false);
+  if (keys.empty()) return found;
+
+  // Keys are integers only, so inlining them into the SQL is injection-safe.
+  std::string eventIds;
+  std::string pairs;
+  for (const auto &key : keys) {
+    if (key.event_id) eventIds += (eventIds.empty() ? "" : ",") + std::to_string(*key.event_id);
+    if (key.series_id && key.occurrence_start_ms)
+      pairs += (pairs.empty() ? "" : ",") + std::string("(") + std::to_string(*key.series_id) +
+               "," + std::to_string(*key.occurrence_start_ms * 1000) + ")";
+  }
+  std::string where;
+  if (!eventIds.empty()) where += "linked_event_id IN (" + eventIds + ")";
+  if (!pairs.empty())
+    where += std::string(where.empty() ? "" : " OR ") +
+             "(linked_series_id, epoch_us(linked_occurrence_start)) IN (" + pairs + ")";
+  if (where.empty()) return found;
+
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(
+      conn,
+      "SELECT DISTINCT linked_event_id, linked_series_id, epoch_us(linked_occurrence_start) "
+      "FROM ClientNote WHERE " + where,
+      {});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to look up linked notes: "
+               << (result ? result->GetError() : "prepare failed");
+    return found;
+  }
+
+  std::set<int64_t> events;
+  std::set<std::pair<int64_t, int64_t>> occurrences;
+  while (auto chunk = result->Fetch()) {
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) {
+      const auto event = chunk->GetValue(0, i);
+      const auto series = chunk->GetValue(1, i);
+      const auto micros = chunk->GetValue(2, i);
+      if (!event.IsNull()) events.insert(db_utils::toInt32AsInt64(event));
+      if (!series.IsNull() && !micros.IsNull())
+        occurrences.emplace(db_utils::toInt32AsInt64(series), micros.GetValue<int64_t>() / 1000);
+    }
+  }
+  for (std::size_t i = 0; i < keys.size(); ++i) {
+    const auto &key = keys[i];
+    found[i] = (key.event_id && events.count(*key.event_id)) ||
+               (key.series_id && key.occurrence_start_ms &&
+                occurrences.count({*key.series_id, *key.occurrence_start_ms}));
+  }
+  return found;
+}
+
 std::vector<DuckClientNoteAttachment>
 Database::get_note_attachments(const int64_t note_id) {
   if (note_id <= 0) {

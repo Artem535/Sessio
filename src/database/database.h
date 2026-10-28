@@ -24,6 +24,12 @@
 
 namespace pcm::database {
 
+struct NoteLinkKey {
+  std::optional<int64_t> event_id;
+  std::optional<int64_t> series_id;
+  std::optional<int64_t> occurrence_start_ms;
+};
+
 struct PrompterState {
   int64_t revision = 0;
   std::string json;
@@ -108,6 +114,9 @@ public:
   std::vector<DuckEventChangeLog> get_event_change_log_for_client(int64_t client_id);
   int64_t add_client_note(const DuckClientNote &note);
   std::vector<DuckClientNote> get_client_notes(int64_t client_id);
+  // Returns, for each key in order, whether a ClientNote is linked to it by
+  // linked_event_id or by linked_series_id + linked_occurrence_start.
+  std::vector<bool> has_linked_notes(const std::vector<NoteLinkKey> &keys);
   int64_t add_client_note_attachment(const DuckClientNoteAttachment &attachment);
   std::vector<DuckClientNoteAttachment> get_note_attachments(int64_t note_id);
 

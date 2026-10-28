@@ -196,3 +196,62 @@ TEST_F(DayTodoDbTest, deletingClientUnlinksTodo) {
   ASSERT_EQ(rows.size(), 1u);
   EXPECT_FALSE(rows[0].client_id.has_value());
 }
+
+TEST_F(DayTodoDbTest, noteLinkedByEventIdFound) {
+  DuckClient client;
+  client.name = std::string{"Anna"};
+  const auto clientId = db_->add_client(client);
+  ASSERT_GT(clientId, 0);
+
+  DuckClientNote note;
+  note.client_id = clientId;
+  note.body_markdown = std::string{"note"};
+  note.linked_event_id = 42;
+  ASSERT_GT(db_->add_client_note(note), 0);
+
+  const auto found = db_->has_linked_notes({{.event_id = 42}, {.event_id = 43}});
+  ASSERT_EQ(found.size(), 2u);
+  EXPECT_TRUE(found[0]);
+  EXPECT_FALSE(found[1]);
+}
+
+TEST_F(DayTodoDbTest, noteLinkedBySeriesOccurrenceFound) {
+  DuckClient client;
+  client.name = std::string{"Anna"};
+  const auto clientId = db_->add_client(client);
+  ASSERT_GT(clientId, 0);
+
+  DuckClientNote note;
+  note.client_id = clientId;
+  note.body_markdown = std::string{"note"};
+  note.linked_series_id = 5;
+  note.linked_occurrence_start_ms = 1730000000000;
+  ASSERT_GT(db_->add_client_note(note), 0);
+
+  const auto found = db_->has_linked_notes(
+      {{.series_id = 5, .occurrence_start_ms = 1730000000000},
+       {.series_id = 5, .occurrence_start_ms = 1730000900000},
+       {.series_id = 6, .occurrence_start_ms = 1730000000000}});
+  ASSERT_EQ(found.size(), 3u);
+  EXPECT_TRUE(found[0]);
+  EXPECT_FALSE(found[1]);
+  EXPECT_FALSE(found[2]);
+}
+
+TEST_F(DayTodoDbTest, unlinkedNoteNotCounted) {
+  DuckClient client;
+  client.name = std::string{"Anna"};
+  const auto clientId = db_->add_client(client);
+  ASSERT_GT(clientId, 0);
+
+  DuckClientNote note;
+  note.client_id = clientId;
+  note.body_markdown = std::string{"free note"};
+  ASSERT_GT(db_->add_client_note(note), 0);
+
+  const auto found = db_->has_linked_notes({{.event_id = 1}, {.series_id = 1, .occurrence_start_ms = 0}});
+  ASSERT_EQ(found.size(), 2u);
+  EXPECT_FALSE(found[0]);
+  EXPECT_FALSE(found[1]);
+  EXPECT_TRUE(db_->has_linked_notes({}).empty());
+}
