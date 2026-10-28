@@ -2216,6 +2216,10 @@
         <translation>LiveKit</translation>
     </message>
     <message>
+        <source>Jitsi</source>
+        <translation>Jitsi</translation>
+    </message>
+    <message>
         <source>Scheduled</source>
         <translation>Scheduled</translation>
     </message>
@@ -2312,6 +2316,10 @@
         <translation>In person</translation>
     </message>
     <message>
+        <source>Online (Jitsi)</source>
+        <translation>Online (Jitsi)</translation>
+    </message>
+    <message>
         <source>Online (LiveKit)</source>
         <translation>Online (LiveKit)</translation>
     </message>
@@ -2354,6 +2362,10 @@
     <message>
         <source>Failed to create the LiveKit meeting: %1</source>
         <translation>Failed to create the LiveKit meeting: %1</translation>
+    </message>
+    <message>
+        <source>Recurring meetings use LiveKit for now</source>
+        <translation>Recurring meetings use LiveKit for now</translation>
     </message>
     <message>
         <source>Overlaps with an existing event, %1.</source>
@@ -4500,6 +4512,25 @@ Your previous data was kept.</translation>
     <message>
         <source>Screen sharing stopped</source>
         <translation>Screen sharing stopped</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::webcall::WebCallProvider</name>
+    <message>
+        <source>The call page stopped unexpectedly</source>
+        <translation>The call page stopped unexpectedly</translation>
+    </message>
+    <message>
+        <source>Invalid call address</source>
+        <translation>Invalid call address</translation>
+    </message>
+    <message>
+        <source>Could not start the local audio bridge</source>
+        <translation>Could not start the local audio bridge</translation>
+    </message>
+    <message>
+        <source>The call page failed to load</source>
+        <translation>The call page failed to load</translation>
     </message>
 </context>
 </TS>
