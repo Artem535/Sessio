@@ -99,6 +99,21 @@ void VideoStage::setFeaturedScreen(const QString &key) {
   layoutChildren();
 }
 
+void VideoStage::setContentWidget(QWidget *widget) {
+  if (mContentWidget == widget)
+    return;
+  if (mContentWidget)
+    mContentWidget->setParent(nullptr);
+  mContentWidget = widget;
+  if (mContentWidget) {
+    mContentWidget->setParent(this);
+    mContentWidget->lower();
+    mContentWidget->show();
+  }
+  mTileHost->setVisible(!mContentWidget);
+  layoutChildren();
+}
+
 void VideoStage::setNotesToggleWidget(QWidget *widget) {
   if (mNotesToggleWidget == widget) {
     return;
@@ -128,6 +143,10 @@ constexpr int kBottomReserved = kControlBarBottomMargin + kControlBarHeight + 8;
 } // namespace
 
 void VideoStage::layoutChildren() {
+  if (mContentWidget) {
+    mContentWidget->setGeometry(rect());
+    mContentWidget->lower();
+  }
   while (auto *item = mTileGrid->takeAt(0))
     delete item;
   for (int column = 0; column < mTileGrid->columnCount(); ++column) {
@@ -142,6 +161,7 @@ void VideoStage::layoutChildren() {
   const int top = sharingStatus ? 104 : (mLayoutControls || (mNotesToggleWidget && !mNotesToggleWidget->isHidden())) ? 64 : 12;
   QVector<ParticipantTile *> tiles;
   for (auto *tile : mTiles) {
+    if (mContentWidget) { tile->hide(); continue; }
     if (mViewLayout != CallViewLayout::Auto && tile->isScreen()) tile->hide();
     else tiles.append(tile);
   }
@@ -614,6 +634,7 @@ void CallPage::buildConnectedScreen() {
   }
   layoutControls->show();
   mVideoStage->setLayoutControls(layoutControls);
+  mLayoutControls = layoutControls;
   mFullscreenToggleButton->setObjectName("fullscreenToggleButton");
   mFullscreenToggleButton->setCheckable(true);
   mFullscreenToggleButton->setIcon(pcm::widgets::fullscreenIcon(false));
@@ -738,9 +759,11 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
     disconnect(mSession.data(), nullptr, this, nullptr);
   }
   clearParticipants();
+  setWebView(nullptr);
   mSession = session;
   if (!session)
     return;
+  setWebView(session->provider()->callView());
   mLastFailureReason.clear();
   refreshEndedReason();
   connect(session, &pcm::video::VideoSession::stateChanged, this, &CallPage::onSessionStateChanged);
@@ -757,6 +780,9 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
   connect(session, &QObject::destroyed, this, [this] {
     mSession = nullptr;
     clearParticipants();
+    // The provider (a child of the session) is about to delete its view; take it out of the
+    // stage first so nothing here points at a dying widget.
+    setWebView(nullptr);
   });
   auto *model = session->provider()->participants();
   mParticipantConnections = {
@@ -770,6 +796,21 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
   syncParticipants();
   refreshMediaButtons();
   onSessionStateChanged(session->state());
+}
+
+void CallPage::setWebView(QWidget *view) {
+  mWebView = view;
+  mVideoStage->setContentWidget(view);
+  const bool native = view == nullptr;
+  // The web page has its own mic/camera/share/device controls (and Jitsi owns the devices).
+  for (QWidget *widget : {static_cast<QWidget *>(mMicrophoneToggleButton), static_cast<QWidget *>(mCameraToggleButton),
+                          static_cast<QWidget *>(mScreenShareButton), static_cast<QWidget *>(mDevicesButton),
+                          mLayoutControls})
+    if (widget)
+      widget->setVisible(native);
+  if (!native)
+    mWaitingBanner->hide();
+  mVideoStage->refreshLayout();
 }
 
 void CallPage::refreshMediaButtons() {
@@ -1127,7 +1168,7 @@ void CallPage::setTranscribeButtonState(bool active, const QString &tooltip) {
 
 void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) {
   using pcm::video::VideoSessionState;
-  mWaitingBanner->setVisible(state == VideoSessionState::WaitingForParticipants);
+  mWaitingBanner->setVisible(state == VideoSessionState::WaitingForParticipants && !mWebView);
   mReconnectingBanner->setVisible(state == VideoSessionState::Reconnecting);
 
   // Fullscreen belongs to the connected call screen only; never leave the app stuck in it
@@ -1135,6 +1176,18 @@ void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) 
   if (state != VideoSessionState::WaitingForParticipants && state != VideoSessionState::Connected &&
       state != VideoSessionState::Reconnecting) {
     leaveFullscreenIfActive();
+  }
+
+  // A web call has no device-check or native connecting screen: the page shows its own
+  // pre-join and connecting UI, so its view must be on screen from the first state.
+  const bool web = mWebView != nullptr;
+  const bool preJoin = state == VideoSessionState::NoMeeting || state == VideoSessionState::Provisioned ||
+                       state == VideoSessionState::PrejoinCheck || state == VideoSessionState::Joining;
+  if (web && preJoin) {
+    mCallEnded = false;
+    mConnectedView->setObjectName("connectedView");
+    mStack->setCurrentWidget(mConnectedView);
+    return;
   }
 
   switch (state) {

@@ -1536,3 +1536,58 @@ TEST(CallPageTest, OwnScreenIsNotFeaturedOverARemoteOne) {
   EXPECT_GT(page.findChild<QWidget *>("participantScreenTile_first")->height(),
             page.findChild<QWidget *>("participantScreenTile_local")->height());
 }
+
+TEST(CallPageTest, WebProviderSkipsDeviceCheck) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  QWidget view;
+  auto *provider = new FakeVideoProvider();
+  provider->mCallView = &view;
+  VideoSession session(provider);
+  page.attachSession(&session);
+  page.show();
+
+  auto *stack = page.findChild<QStackedWidget *>();
+  ASSERT_NE(stack, nullptr);
+  EXPECT_NE(stack->currentWidget(), page.findChild<QWidget *>("deviceCheckWidget"));
+  EXPECT_TRUE(view.isVisible());
+  EXPECT_TRUE(page.isAncestorOf(&view));
+  EXPECT_TRUE(page.findChild<QToolButton *>("microphoneToggleButton")->isHidden());
+  EXPECT_TRUE(page.findChild<QToolButton *>("cameraToggleButton")->isHidden());
+  EXPECT_TRUE(page.findChild<QToolButton *>("screenShareButton")->isHidden());
+  EXPECT_TRUE(page.findChild<QToolButton *>("devicesButton")->isHidden());
+}
+
+TEST(CallPageTest, WebProviderKeepsSidePanelAndLeave) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  page.setSidePanelToggleVisible(true);
+  page.setTranscribeButtonVisible(true);
+  QWidget view;
+  auto *provider = new FakeVideoProvider();
+  provider->mCallView = &view;
+  VideoSession session(provider);
+  page.attachSession(&session);
+  page.show();
+
+  EXPECT_FALSE(page.findChild<QPushButton *>("leaveButton")->isHidden());
+  EXPECT_FALSE(page.findChild<QToolButton *>("transcribeButton")->isHidden());
+  auto *notes = page.findChild<QToolButton *>("notesToggleButton");
+  ASSERT_NE(notes, nullptr);
+  EXPECT_FALSE(notes->isHidden());
+  notes->setChecked(true);
+  EXPECT_TRUE(page.findChild<QWidget *>("sidePanelHost")->isVisible());
+  QSignalSpy leaveSpy(&page, &CallPage::leaveRequested);
+  page.findChild<QPushButton *>("leaveButton")->click();
+  EXPECT_EQ(leaveSpy.count(), 1);
+}
+
+TEST(CallPageTest, NativeProviderStillStartsOnDeviceCheck) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  auto *stack = page.findChild<QStackedWidget *>();
+  EXPECT_EQ(stack->currentWidget(), page.findChild<QWidget *>("deviceCheckWidget"));
+}

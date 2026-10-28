@@ -50,7 +50,7 @@ TEST(CallsPageTest, JoiningByCodeSwitchesToCallPageOnceTokenArrives) {
   // — see RealJoinIsGatedBehindDeviceCheckConfirmation below for why a fake
   // is used instead of the real LiveKitVideoProvider.
   FakeVideoProvider *fakeProvider = nullptr;
-  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+  page.setVideoProviderFactoryForTesting([&fakeProvider](const QString &) -> pcm::video::VideoProvider * {
     fakeProvider = new FakeVideoProvider();
     return fakeProvider;
   });
@@ -110,7 +110,7 @@ TEST(CallsPageTest, RealJoinIsGatedBehindDeviceCheckConfirmation) {
   CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
 
   FakeVideoProvider *fakeProvider = nullptr;
-  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+  page.setVideoProviderFactoryForTesting([&fakeProvider](const QString &) -> pcm::video::VideoProvider * {
     fakeProvider = new FakeVideoProvider();
     return fakeProvider;
   });
@@ -173,7 +173,7 @@ TEST(CallsPageTest, DevicesChosenOnDeviceCheckAreAppliedBeforeJoining) {
   CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
 
   FakeVideoProvider *fakeProvider = nullptr;
-  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+  page.setVideoProviderFactoryForTesting([&fakeProvider](const QString &) -> pcm::video::VideoProvider * {
     fakeProvider = new FakeVideoProvider();
     return fakeProvider;
   });
@@ -216,7 +216,7 @@ TEST(CallsPageTest, BackFromDeviceCheckReturnsToTheJoinFormWithoutJoining) {
   pcm::video::DeviceManager deviceManager;
   CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
   FakeVideoProvider *fakeProvider = nullptr;
-  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+  page.setVideoProviderFactoryForTesting([&fakeProvider](const QString &) -> pcm::video::VideoProvider * {
     fakeProvider = new FakeVideoProvider();
     return fakeProvider;
   });
@@ -319,7 +319,7 @@ TEST(CallsPageTest, LeaveButtonLeavesTheActiveSession) {
   pcm::video::DeviceManager deviceManager;
   CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
   FakeVideoProvider *fakeProvider = nullptr;
-  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+  page.setVideoProviderFactoryForTesting([&fakeProvider](const QString &) -> pcm::video::VideoProvider * {
     fakeProvider = new FakeVideoProvider();
     return fakeProvider;
   });
@@ -352,7 +352,7 @@ TEST(CallsPageTest, RepeatedJoinByCodeSubmissionsStartExactlyOneJoinPerToken) {
   pcm::video::DeviceManager deviceManager;
   CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
   int providersConstructed = 0;
-  page.setVideoProviderFactoryForTesting([&providersConstructed]() -> pcm::video::VideoProvider * {
+  page.setVideoProviderFactoryForTesting([&providersConstructed](const QString &) -> pcm::video::VideoProvider * {
     ++providersConstructed;
     return new FakeVideoProvider();
   });
@@ -375,7 +375,7 @@ TEST(CallsPageTest, RepeatedOwnMeetingJoinsStartExactlyOneJoinPerToken) {
   page.setBearerCredentialProvider([]() { return QStringLiteral("bearer-1"); });
   page.setUpcomingMeetings({{"ref-1", "14:00", QDateTime::currentDateTime(), true, 7}});
   int providersConstructed = 0;
-  page.setVideoProviderFactoryForTesting([&providersConstructed]() -> pcm::video::VideoProvider * {
+  page.setVideoProviderFactoryForTesting([&providersConstructed](const QString &) -> pcm::video::VideoProvider * {
     ++providersConstructed;
     return new FakeVideoProvider();
   });
@@ -402,7 +402,7 @@ TEST(CallsPageTest, SeriesOccurrenceJoinUsesTheOccurrenceTokenRouteWithItsOrigin
   const QString target = "series:11111111-2222-4333-8444-555555555555@2026-10-27T17:00:00Z";
   page.setUpcomingMeetings({{target, "18:00", QDateTime::currentDateTime(), true, 9}});
   int providersConstructed = 0;
-  page.setVideoProviderFactoryForTesting([&providersConstructed]() -> pcm::video::VideoProvider * {
+  page.setVideoProviderFactoryForTesting([&providersConstructed](const QString &) -> pcm::video::VideoProvider * {
     ++providersConstructed;
     return new FakeVideoProvider();
   });
@@ -448,7 +448,7 @@ TEST(CallsPageTest, TokenRequestFailureIsShownOnEntryFormAndClearedOnRetry) {
   pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
   pcm::video::DeviceManager deviceManager;
   CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
-  page.setVideoProviderFactoryForTesting([]() -> pcm::video::VideoProvider * { return new FakeVideoProvider(); });
+  page.setVideoProviderFactoryForTesting([](const QString &) -> pcm::video::VideoProvider * { return new FakeVideoProvider(); });
 
   submitJoinCode(page, "code-1", "000000");
   auto *errorLabel = page.findChild<QLabel *>("joinErrorLabel");
@@ -475,7 +475,7 @@ TEST(CallsPageTest, JoinFailureReasonIsShownOnEntryFormAfterCallEnds) {
   pcm::video::DeviceManager deviceManager;
   CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
   FakeVideoProvider *fakeProvider = nullptr;
-  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+  page.setVideoProviderFactoryForTesting([&fakeProvider](const QString &) -> pcm::video::VideoProvider * {
     fakeProvider = new FakeVideoProvider();
     return fakeProvider;
   });
@@ -507,7 +507,7 @@ TEST(CallsPageTest, PrefillAndPreselectAreIgnoredWhileACallIsActive) {
   pcm::video::DeviceManager deviceManager;
   CallsPage page(/*specialistMode=*/true, &deviceManager, &client);
   FakeVideoProvider *fakeProvider = nullptr;
-  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+  page.setVideoProviderFactoryForTesting([&fakeProvider](const QString &) -> pcm::video::VideoProvider * {
     fakeProvider = new FakeVideoProvider();
     return fakeProvider;
   });
@@ -547,7 +547,7 @@ TEST(CallsPageTest, ConnectionLostReasonIsShownOnEntryFormAfterCallEnds) {
   pcm::video::DeviceManager deviceManager;
   CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
   FakeVideoProvider *fakeProvider = nullptr;
-  page.setVideoProviderFactoryForTesting([&fakeProvider]() -> pcm::video::VideoProvider * {
+  page.setVideoProviderFactoryForTesting([&fakeProvider](const QString &) -> pcm::video::VideoProvider * {
     fakeProvider = new FakeVideoProvider();
     return fakeProvider;
   });
@@ -578,7 +578,7 @@ TEST(CallsPageTest, SecondTokenArrivalWhileCallActiveIsANoOp) {
   CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
   FakeVideoProvider *fakeProvider = nullptr;
   int providersConstructed = 0;
-  page.setVideoProviderFactoryForTesting([&]() -> pcm::video::VideoProvider * {
+  page.setVideoProviderFactoryForTesting([&](const QString &) -> pcm::video::VideoProvider * {
     ++providersConstructed;
     fakeProvider = new FakeVideoProvider();
     return fakeProvider;
@@ -620,7 +620,7 @@ TEST(CallsPageTest, CallSessionStartedEmittedOnJoinAndEndedOnLeave) {
   pcm::video::DeviceManager devices;
   CallsPage page(false, &devices, &client);
   FakeVideoProvider *provider = nullptr;
-  page.setVideoProviderFactoryForTesting([&]() { return provider = new FakeVideoProvider; });
+  page.setVideoProviderFactoryForTesting([&](const QString &) -> pcm::video::VideoProvider * { return provider = new FakeVideoProvider; });
   int starts = 0;
   int ends = 0;
   QObject::connect(&page, &CallsPage::callSessionStarted, &page, [&](pcm::video::VideoSession *session) {
@@ -661,7 +661,7 @@ TEST(CallsPageTest, SpecialistKeepsCallMaterialsAfterEndingAndCanReturnToCalls) 
   pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
   pcm::video::DeviceManager devices;
   CallsPage page(true, &devices, &client);
-  page.setVideoProviderFactoryForTesting([] { return new FakeVideoProvider; });
+  page.setVideoProviderFactoryForTesting([](const QString &) -> pcm::video::VideoProvider * { return new FakeVideoProvider; });
   auto *materials = new QWidget;
   page.setSidePanelWidget(materials);
   submitJoinCode(page, "code", "123456");
@@ -684,7 +684,7 @@ TEST(CallsPageTest, CallSessionEndsExactlyOnceOnCancellationOrJoinFailure) {
     pcm::video::DeviceManager devices;
     CallsPage page(false, &devices, &client);
     FakeVideoProvider *provider = nullptr;
-    page.setVideoProviderFactoryForTesting([&]() { return provider = new FakeVideoProvider; });
+    page.setVideoProviderFactoryForTesting([&](const QString &) -> pcm::video::VideoProvider * { return provider = new FakeVideoProvider; });
     QSignalSpy ended(&page, &CallsPage::callSessionEnded);
     page.prefillJoinCode("code", "123456");
     page.findChild<QPushButton *>("joinByCodeButton")->click();
@@ -707,4 +707,95 @@ int main(int argc, char **argv) {
   QApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+
+namespace {
+
+const char *const kJitsiTokenResponse = R"({
+    "endpointUrl": "https://jitsi.test/", "roomName": "rm_abc",
+    "token": "jwt-j", "expiresAt": 999, "provider": "jitsi"
+  })";
+
+} // namespace
+
+TEST(CallsPageTest, JitsiTokenBuildsWebProvider) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kJitsiTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+  FakeVideoProvider *fakeProvider = nullptr;
+  QString requestedProvider;
+  QWidget fakeView;
+  page.setVideoProviderFactoryForTesting([&](const QString &provider) -> pcm::video::VideoProvider * {
+    requestedProvider = provider;
+    fakeProvider = new FakeVideoProvider();
+    fakeProvider->mCallView = &fakeView;
+    return fakeProvider;
+  });
+
+  submitJoinCode(page, "code-1", "123456");
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider && fakeProvider->mJoinCallCount == 1; }, 2000));
+  EXPECT_EQ(requestedProvider, QStringLiteral("jitsi"));
+  EXPECT_EQ(fakeProvider->mLastJoinUrl, QStringLiteral("https://jitsi.test/rm_abc"));
+}
+
+TEST(CallsPageTest, LiveKitTokenUnchanged) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+  FakeVideoProvider *fakeProvider = nullptr;
+  QString requestedProvider;
+  page.setVideoProviderFactoryForTesting([&](const QString &provider) -> pcm::video::VideoProvider * {
+    requestedProvider = provider;
+    fakeProvider = new FakeVideoProvider();
+    return fakeProvider;
+  });
+
+  submitJoinCode(page, "code-1", "123456");
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider != nullptr; }, 2000));
+  EXPECT_EQ(requestedProvider, QStringLiteral("livekit"));
+  QTest::qWait(100);
+  EXPECT_EQ(fakeProvider->mJoinCallCount, 0); // still behind the device check
+  page.findChild<QPushButton *>("joinButton")->click();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider->mJoinCallCount == 1; }, 2000));
+  EXPECT_EQ(fakeProvider->mLastJoinUrl, QStringLiteral("wss://livekit.example.test"));
+  EXPECT_EQ(fakeProvider->mLastJoinToken, QStringLiteral("jwt-1"));
+}
+
+TEST(CallsPageTest, WebProviderLeaveReachesProviderAndKeepsControls) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kJitsiTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/true, &deviceManager, &client);
+  FakeVideoProvider *fakeProvider = nullptr;
+  QWidget fakeView;
+  page.setVideoProviderFactoryForTesting([&](const QString &) -> pcm::video::VideoProvider * {
+    fakeProvider = new FakeVideoProvider();
+    fakeProvider->mCallView = &fakeView;
+    return fakeProvider;
+  });
+  page.setTranscribeButtonVisible(true);
+
+  submitJoinCode(page, "code-1", "123456");
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider && fakeProvider->mJoinCallCount == 1; }, 2000));
+  auto *session = qobject_cast<pcm::video::VideoSession *>(fakeProvider->parent());
+  ASSERT_NE(session, nullptr);
+  QSignalSpy stateSpy(session, &pcm::video::VideoSession::stateChanged);
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fakeProvider->simulateJoined();
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+
+  EXPECT_NE(page.findChild<QToolButton *>("transcribeButton"), nullptr);
+  EXPECT_NE(page.findChild<QToolButton *>("notesToggleButton"), nullptr);
+  auto *leaveButton = page.findChild<QPushButton *>("leaveButton");
+  ASSERT_NE(leaveButton, nullptr);
+  leaveButton->click();
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Leaving);
+  EXPECT_EQ(fakeProvider->mLeaveCallCount, 1);
+  fakeProvider->simulateLeft();
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Ended);
 }

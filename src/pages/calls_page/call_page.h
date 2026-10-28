@@ -42,6 +42,10 @@ public:
   // While any screen is shared, the featured one fills the stage and every other tile
   // (screens and cameras) sits in a strip underneath. Empty or unknown: the first screen.
   void setFeaturedScreen(const QString &key);
+  // A web-hosted call (provider->callView()) fills the whole stage under the overlays; the
+  // tile grid is bypassed. nullptr restores the native tiles. Not owned: the view is
+  // reparented back to nothing so its provider can delete it.
+  void setContentWidget(QWidget *widget);
   void setViewLayout(CallViewLayout mode) { mViewLayout = mode; layoutChildren(); }
   void setLayoutControls(QWidget *widget) { mLayoutControls = widget; layoutChildren(); }
   void refreshLayout() { layoutChildren(); }
@@ -62,6 +66,7 @@ private:
   QString mFeaturedScreen;
   CallViewLayout mViewLayout{CallViewLayout::Auto};
   QPointer<QWidget> mLayoutControls;
+  QPointer<QWidget> mContentWidget;
 };
 
 } // namespace pcm::video::detail
@@ -132,6 +137,8 @@ private:
   void syncParticipants();
   void clearParticipants();
   void refreshMediaButtons();
+  // Switches the connected screen between native tiles and a provider-hosted web view.
+  void setWebView(QWidget *view);
   void onSessionFailureReason(const QString &reason);
   void refreshEndedReason();
   // Shows mMediaErrorBanner with `reason` and starts its auto-hide timer.
@@ -198,6 +205,8 @@ private:
   QComboBox *mDeviceMicrophoneCombo{nullptr};
   QComboBox *mDeviceSpeakerCombo{nullptr};
   QPointer<QWidget> mSidePanel;
+  QPointer<QWidget> mWebView;
+  QWidget *mLayoutControls{nullptr};
   QPointer<pcm::video::VideoSession> mSession;
   // Not owned; passed into the constructor and outlives this CallPage (see
   // CallsPage, which owns the DeviceManager). Used by showDevicesPopover()
