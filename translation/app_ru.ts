@@ -290,6 +290,10 @@
         <translation>Не удалось сохранить заметки модели. Повторите попытку.</translation>
     </message>
     <message>
+        <source>The local model took too long. Try again.</source>
+        <translation>Локальная модель отвечала слишком долго. Повторите попытку.</translation>
+    </message>
+    <message>
         <source>The local model did not respond. Try again.</source>
         <translation>Локальная модель не ответила. Повторите попытку.</translation>
     </message>
@@ -532,6 +536,14 @@
     <message>
         <source>Local prompter failed. Check its settings and retry.</source>
         <translation>Ошибка локального суфлёра. Проверьте настройки и повторите попытку.</translation>
+    </message>
+    <message>
+        <source>Retrying a smaller part of the conversation</source>
+        <translation>Повторяю обработку меньшего фрагмента разговора</translation>
+    </message>
+    <message>
+        <source>Skipped a phrase the local model could not process</source>
+        <translation>Пропущена фраза, которую локальная модель не смогла обработать</translation>
     </message>
     <message>
         <source>A phrase is too long. Review it in the transcript.</source>
@@ -1602,6 +1614,10 @@
         <translation>Код доступа</translation>
     </message>
     <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
         <source>Continue</source>
         <translation>Продолжить</translation>
     </message>
@@ -1798,6 +1814,62 @@
     <message>
         <source>Save note</source>
         <translation>Сохранить заметку</translation>
+    </message>
+    <message>
+        <source>Prompter</source>
+        <translation>Суфлёр</translation>
+    </message>
+    <message>
+        <source>Private suggestions. Check the source before saving.</source>
+        <translation>Подсказки видны только вам. Проверяйте источник перед сохранением.</translation>
+    </message>
+    <message>
+        <source>Start</source>
+        <translation>Начать</translation>
+    </message>
+    <message>
+        <source>Pause</source>
+        <translation>Пауза</translation>
+    </message>
+    <message>
+        <source>You could clarify</source>
+        <translation>Можно уточнить</translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation>Скрыть</translation>
+    </message>
+    <message>
+        <source>Needs source check</source>
+        <translation>Нужно проверить источник</translation>
+    </message>
+    <message>
+        <source>Earlier: %1</source>
+        <translation>Ранее: %1</translation>
+    </message>
+    <message>
+        <source>Source</source>
+        <translation>Источник</translation>
+    </message>
+    <message>
+        <source>Accept</source>
+        <translation>Принять</translation>
+    </message>
+    <message>
+        <source>Choose the agreement</source>
+        <translation>Выбрать договорённость</translation>
+    </message>
+    <message>
+        <source>Saved to notes</source>
+        <translation>Сохранено в заметки</translation>
+    </message>
+    <message>
+        <source>To notes</source>
+        <translation>В заметки</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>Отклонить</translation>
     </message>
     <message>
         <source>Meeting summary</source>

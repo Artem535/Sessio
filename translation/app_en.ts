@@ -290,6 +290,10 @@
         <translation>Could not save the generated notes. Try again.</translation>
     </message>
     <message>
+        <source>The local model took too long. Try again.</source>
+        <translation>The local model took too long. Try again.</translation>
+    </message>
+    <message>
         <source>The local model did not respond. Try again.</source>
         <translation>The local model did not respond. Try again.</translation>
     </message>
@@ -528,6 +532,14 @@
     <message>
         <source>Local prompter failed. Check its settings and retry.</source>
         <translation>Local prompter failed. Check its settings and retry.</translation>
+    </message>
+    <message>
+        <source>Retrying a smaller part of the conversation</source>
+        <translation>Retrying a smaller part of the conversation</translation>
+    </message>
+    <message>
+        <source>Skipped a phrase the local model could not process</source>
+        <translation>Skipped a phrase the local model could not process</translation>
     </message>
     <message>
         <source>A phrase is too long. Review it in the transcript.</source>
@@ -1594,6 +1606,10 @@
         <translation>Passcode</translation>
     </message>
     <message>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
         <source>Continue</source>
         <translation>Continue</translation>
     </message>
@@ -1790,6 +1806,62 @@
     <message>
         <source>Save note</source>
         <translation>Save note</translation>
+    </message>
+    <message>
+        <source>Prompter</source>
+        <translation>Prompter</translation>
+    </message>
+    <message>
+        <source>Private suggestions. Check the source before saving.</source>
+        <translation>Private suggestions. Check the source before saving.</translation>
+    </message>
+    <message>
+        <source>Start</source>
+        <translation>Start</translation>
+    </message>
+    <message>
+        <source>Pause</source>
+        <translation>Pause</translation>
+    </message>
+    <message>
+        <source>You could clarify</source>
+        <translation>You could clarify</translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation>Hide</translation>
+    </message>
+    <message>
+        <source>Needs source check</source>
+        <translation>Needs source check</translation>
+    </message>
+    <message>
+        <source>Earlier: %1</source>
+        <translation>Earlier: %1</translation>
+    </message>
+    <message>
+        <source>Source</source>
+        <translation>Source</translation>
+    </message>
+    <message>
+        <source>Accept</source>
+        <translation>Accept</translation>
+    </message>
+    <message>
+        <source>Choose the agreement</source>
+        <translation>Choose the agreement</translation>
+    </message>
+    <message>
+        <source>Saved to notes</source>
+        <translation>Saved to notes</translation>
+    </message>
+    <message>
+        <source>To notes</source>
+        <translation>To notes</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>Dismiss</translation>
     </message>
     <message>
         <source>Meeting summary</source>
