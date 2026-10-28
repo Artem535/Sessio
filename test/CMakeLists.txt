@@ -1207,6 +1207,17 @@ target_link_libraries(Sessio_my_day_logic_tests PRIVATE
 )
 gtest_discover_tests(Sessio_my_day_logic_tests)
 
+# "My day" bridge tests (real temp DB + real QTimelineModel)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
+add_executable(Sessio_my_day_bridge_tests my_day_bridge_tests.cpp)
+target_link_libraries(Sessio_my_day_bridge_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Qt6::Test
+    Sessio_my_day_page
+)
+gtest_discover_tests(Sessio_my_day_bridge_tests)
+
 # Shared "join meeting" decision (inspector + My Day)
 add_executable(Sessio_meeting_join_tests meeting_join_tests.cpp)
 target_link_libraries(Sessio_meeting_join_tests PRIVATE
