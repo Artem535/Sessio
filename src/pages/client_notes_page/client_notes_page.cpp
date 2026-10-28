@@ -161,9 +161,7 @@ void ClientNotesPage::setClientInfo(const std::optional<DuckClient> &client) {
   }
   mPendingAttachments.clear();
   refreshPendingAttachments();
-  mClientNameLabel->setText(client.has_value()
-                                ? currentClientTitle()
-                                : currentClientTitle());
+  mClientNameLabel->setText(currentClientTitle());
   mOpenClientCardButton->setEnabled(client.has_value());
   reloadNotes();
   emit workspaceChanged();
