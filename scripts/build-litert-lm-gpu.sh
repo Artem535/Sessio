@@ -28,7 +28,7 @@ for task_lib in libLiteRt.so libLiteRtWebGpuAccelerator.so libLiteRtTopKWebGpuSa
     if test -n "${PREBUILT_DIR:-}"; then
       cp -- "$PREBUILT_DIR/$task_lib" "$task_file"
     else
-      curl --fail --location --retry 1 --connect-timeout 20 --max-time 180 \
+      curl --fail --location --proto '=https' --proto-redir '=https' --retry 1 --connect-timeout 20 --max-time 180 \
         "https://media.githubusercontent.com/media/google-ai-edge/LiteRT-LM/v0.18.0/prebuilt/linux_x86_64/$task_lib" -o "$task_file"
     fi
   fi

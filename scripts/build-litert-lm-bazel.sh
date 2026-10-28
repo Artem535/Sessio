@@ -40,7 +40,7 @@ sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum 
 fetch() {
   local url=$1 expected=$2 file=$3
   if [[ ! -f "$file" || "$(sha256 "$file")" != "$expected" ]]; then
-    curl --fail --location --retry 2 --connect-timeout 20 --max-time 600 "$url" -o "$file"
+    curl --fail --location --proto '=https' --proto-redir '=https' --retry 2 --connect-timeout 20 --max-time 600 "$url" -o "$file"
   fi
   [[ "$(sha256 "$file")" == "$expected" ]] || { echo "SHA-256 mismatch: $file" >&2; exit 1; }
 }

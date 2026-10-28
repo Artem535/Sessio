@@ -167,7 +167,9 @@ function loadScript(src) {
 }
 
 async function runJitsi() {
-  const domain = params.get('domain');
+  const domain = params.get('domain') || '';
+  // Only a host name (and port) may pick the script origin.
+  if (!/^[a-z0-9.-]+(:\d{1,5})?$/i.test(domain)) throw new Error('jitsi mode needs a valid --domain');
   const room = (params.get('room') || '').toLowerCase();
   if (!room) throw new Error('jitsi mode needs --room');
   // The deployment's config.js names its XMPP domains (docker-jitsi-meet uses
