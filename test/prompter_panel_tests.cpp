@@ -16,6 +16,7 @@
 #include <QQuickItem>
 #include <QTemporaryDir>
 #include <gtest/gtest.h>
+#include <memory>
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 
 TEST(PrompterPanelTest, NoTranscriptShowsStartControlWithoutInventedCards) {
@@ -95,7 +96,7 @@ TEST(PrompterPanelTest, RealPanelKeepsReviewActionsAndSourceLinksAtNarrowWidth) 
 }
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
-  app.setStyle(new oclero::qlementine::QlementineStyle(&app));
+  app.setStyle(std::make_unique<oclero::qlementine::QlementineStyle>(&app).release()); // QApplication owns the style
   QTranslator ru;
   if (!qEnvironmentVariable("SESSIO_PROMPTER_SCREENSHOT_DIR").isEmpty() &&
       ru.load(QCoreApplication::applicationDirPath() + "/../app_ru.qm")) app.installTranslator(&ru);

@@ -48,13 +48,15 @@ TEST(PrompterTaskGateTest, CancellationRacingWithSubmissionReachesThePublishedTa
   ASSERT_TRUE(gate.beginGeneration());
   std::binary_semaphore submitting{0}, allowSubmit{0}, cancelling{0};
   auto task = std::make_shared<BlockingTask>();
-  auto result = std::async(std::launch::async, [&] {
+  std::packaged_task<TaskGate::Result()> running([&] {
     return gate.run([&] {
       submitting.release();
       allowSubmit.acquire();
       return task;
     });
   });
+  auto result = running.get_future();
+  std::jthread runner(std::move(running));
   submitting.acquire();
   std::thread cancel([&] { cancelling.release(); gate.cancel(); });
   cancelling.acquire();

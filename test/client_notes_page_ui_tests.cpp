@@ -17,6 +17,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <gtest/gtest.h>
+#include <memory>
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 
 namespace {
@@ -493,10 +494,10 @@ TEST_F(ClientNotesUiTest, EmbeddedPageShowsOnlyThisMeetingWithoutOwnScroll) {
 
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
-  auto *style = new oclero::qlementine::QlementineStyle(&app);
+  auto style = std::make_unique<oclero::qlementine::QlementineStyle>(&app);
   if (qEnvironmentVariableIsSet("SESSIO_PREVIEW_THEME"))
     style->setThemeJsonPath(qEnvironmentVariable("SESSIO_PREVIEW_THEME"));
-  app.setStyle(style);
+  app.setStyle(style.release()); // QApplication owns the style
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

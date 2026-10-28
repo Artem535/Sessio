@@ -15,6 +15,7 @@
 #include <QToolButton>
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 #include <gtest/gtest.h>
+#include <memory>
 
 TEST(NotesWidgetFrameTest, ShowsTitleStatusChipAndLabelledActions) {
   NotesWidgetFrame frame(QStringLiteral("AI summary"));
@@ -180,7 +181,7 @@ TEST(AgreementsWidgetTest, ShowsActiveAgreementsOnly) {
 int main(int argc, char **argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QApplication app(argc, argv);
-  app.setStyle(new oclero::qlementine::QlementineStyle(&app));
+  app.setStyle(std::make_unique<oclero::qlementine::QlementineStyle>(&app).release()); // QApplication owns the style
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

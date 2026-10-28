@@ -113,7 +113,8 @@ void NotesWorkspaceBridge::activateDocument() {
 }
 QTextDocument *NotesWorkspaceBridge::activeDocument() const {
   if (mSessionDocument) return mSessionDocument;
-  return context() ? (editing() ? context()->edit : context()->draft) : nullptr;
+  auto *ctx = context();
+  return ctx ? (editing() ? ctx->edit : ctx->draft) : nullptr;
 }
 bool NotesWorkspaceBridge::editorDirty() const {
   return mSessionDocument && (mSessionDocument->toMarkdown() != mSessionOriginal ||
@@ -435,9 +436,10 @@ void NotesWorkspaceBridge::openAttachment(const QString &entry, const QString &a
   if (!path.isEmpty()) QDesktopServices::openUrl(QUrl::fromLocalFile(path));
 }
 void NotesWorkspaceBridge::appendSummary() {
-  if (!context() || !context()->storage) return;
-  QTextCursor cursor(mSessionDocument ? mSessionDocument : context()->draft); cursor.movePosition(QTextCursor::End);
-  cursor.insertBlock(); cursor.insertText(context()->storage->draft()["text"].toString());
+  auto *ctx = context();
+  if (!ctx || !ctx->storage) return;
+  QTextCursor cursor(mSessionDocument ? mSessionDocument : ctx->draft); cursor.movePosition(QTextCursor::End);
+  cursor.insertBlock(); cursor.insertText(ctx->storage->draft()["text"].toString());
 }
 void NotesWorkspaceBridge::showSource(const QString &id) { bool ok; const auto phrase = id.toLongLong(&ok); if (ok && phrase > 0) emit sourceRequested(phrase); }
 void NotesWorkspaceBridge::retrySummary() {

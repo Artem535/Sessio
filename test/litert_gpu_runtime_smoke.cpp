@@ -51,13 +51,15 @@ int main(int argc, char **argv) try {
   require(nlohmann::json::parse(reply).is_object(), "repeat JSON invalid");
   std::cout << "PREFIX_REPEAT_OK" << std::endl;
 
-  auto cancelled = std::async(std::launch::async, [&] {
+  std::packaged_task<Status()> cancelledTask([&] {
     GenerateOptions longOutput;
     longOutput.maxOutputTokens = 384;
     longOutput.reusePrefix = false;
     std::string text;
     return model->generate("", "<|turn>user\nWrite a very long story about a ship, at least 2000 words.\n<turn|>\n<|turn>model\n", longOutput, &text);
   });
+  auto cancelled = cancelledTask.get_future();
+  std::jthread generation(std::move(cancelledTask));
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
   while (cancelled.wait_for(std::chrono::milliseconds(10)) != std::future_status::ready) {

@@ -24,6 +24,7 @@
 #include <QTemporaryDir>
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 #include <gtest/gtest.h>
+#include <memory>
 
 // Produces a controller with one ready live draft and one key point.
 struct NotesFixture {
@@ -452,10 +453,10 @@ TEST_F(CallNotesPageTest, ManyPastCallsScrollInsideHistoryWithoutStretchingTheDo
 int main(int argc, char **argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QApplication app(argc, argv);
-  auto *style = new oclero::qlementine::QlementineStyle(&app);
+  auto style = std::make_unique<oclero::qlementine::QlementineStyle>(&app);
   if (qEnvironmentVariableIsSet("SESSIO_PREVIEW_THEME"))
     style->setThemeJsonPath(qEnvironmentVariable("SESSIO_PREVIEW_THEME"));
-  app.setStyle(style);
+  app.setStyle(style.release()); // QApplication owns the style
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

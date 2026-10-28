@@ -8,12 +8,12 @@ set -euo pipefail
 task_root=$(realpath -m "${1:-$HOME/.cache/sessio-litert-lm-gpu}")
 task_cpu=$(realpath -m "${2:-$HOME/.cache/sessio-litert-lm}")
 task_repo=$(cd -- "$(dirname -- "$0")/.." && pwd)
-test "$task_root" != "$task_cpu" || { echo 'GPU and CPU roots must differ' >&2; exit 1; }
+[[ "$task_root" != "$task_cpu" ]] || { echo 'GPU and CPU roots must differ' >&2; exit 1; }
 for task_tool in cmake curl sha256sum patchelf; do command -v "$task_tool" >/dev/null; done
-test "$(uname -sm)" = 'Linux x86_64' || { echo 'This prebuilt set is Linux x86_64 only' >&2; exit 1; }
-test "$(git -C "$task_cpu/src" describe --tags --exact-match)" = v0.18.0
+[[ "$(uname -sm)" == 'Linux x86_64' ]] || { echo 'This prebuilt set is Linux x86_64 only' >&2; exit 1; }
+[[ "$(git -C "$task_cpu/src" describe --tags --exact-match)" == 'v0.18.0' ]]
 task_build=$task_cpu/build/litert_lm/build
-test -f "$task_build/CMakeFiles/sessio_litert.dir/link.txt" || {
+[[ -f "$task_build/CMakeFiles/sessio_litert.dir/link.txt" ]] || {
   echo 'A completed CPU archive tree is required; this script never starts a superbuild' >&2; exit 1;
 }
 mkdir -p "$task_root/prebuilt" "$task_root/build" "$task_root/install/lib" "$task_root/install/include"
@@ -24,8 +24,8 @@ for task_lib in libLiteRt.so libLiteRtWebGpuAccelerator.so libLiteRtTopKWebGpuSa
   task_expected=$(printf '%s\n' "$task_pointer" | sed -n 's/oid sha256://p')
   [[ "$task_expected" =~ ^[0-9a-f]{64}$ ]] || { echo "Invalid release pointer: $task_lib" >&2; exit 1; }
   task_file=$task_root/prebuilt/$task_lib
-  if ! test -f "$task_file" || ! printf '%s  %s\n' "$task_expected" "$task_file" | sha256sum -c --status; then
-    if test -n "${PREBUILT_DIR:-}"; then
+  if [[ ! -f "$task_file" ]] || ! printf '%s  %s\n' "$task_expected" "$task_file" | sha256sum -c --status; then
+    if [[ -n "${PREBUILT_DIR:-}" ]]; then
       cp -- "$PREBUILT_DIR/$task_lib" "$task_file"
     else
       curl --fail --location --proto '=https' --proto-redir '=https' --retry 1 --connect-timeout 20 --max-time 180 \

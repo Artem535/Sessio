@@ -134,7 +134,7 @@ TEST_F(ModelSmokeTest, InstructionsInsideASourceAreData) {
 }
 
 TEST_F(ModelSmokeTest, CancellationStopsAnActiveNativeRequest) {
-  auto request = std::async(std::launch::async, [] {
+  std::packaged_task<bool()> task([] {
     try {
       sEngine->generate(QStringLiteral("Верни только JSON с полем ok=true."), QByteArray(6000, 'x'));
       return false;
@@ -142,6 +142,8 @@ TEST_F(ModelSmokeTest, CancellationStopsAnActiveNativeRequest) {
       return std::string(error.what()) == "cancelled";
     }
   });
+  auto request = task.get_future();
+  std::jthread generation(std::move(task));
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   sEngine->cancel();
   ASSERT_EQ(request.wait_for(std::chrono::seconds(10)), std::future_status::ready);
