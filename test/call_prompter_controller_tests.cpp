@@ -202,6 +202,48 @@ TEST_F(PrompterControllerTest, LookbackDoesNotBlockAValidNewPhrase) {
   ASSERT_EQ(requests.count(), 2);
   EXPECT_EQ(requests[1][0].toJsonObject()["utterances"].toArray().last().toObject()["id"].toString(), QString::number(c.id));
 }
+TEST_F(PrompterControllerTest, FailedBatchIsRetriedInHalvesThenSkippedWithoutPausing) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  std::vector<DuckTranscriptPhrase> phrases;
+  for (int i = 0; i < 4; ++i) { phrases.push_back(phrase("Phrase " + std::to_string(i))); controller->addPhrase(phrases.back()); }
+  controller->flush();
+  const auto failWith = [&](int index) {
+    auto failed = requests[index][0].toJsonObject();
+    failed.remove("utterances"); failed.remove("candidates");
+    failed["error"] = "inference_failed"; failed["reason"] = "invalid_output";
+    controller->handleResult(failed);
+    controller->flush();
+  };
+  ASSERT_EQ(requests[0][0].toJsonObject()["utterances"].toArray().size(), 4);
+  failWith(0);
+  ASSERT_EQ(requests.count(), 2);
+  EXPECT_EQ(requests[1][0].toJsonObject()["utterances"].toArray().size(), 2);
+  failWith(1);
+  ASSERT_EQ(requests.count(), 3);
+  EXPECT_EQ(requests[2][0].toJsonObject()["utterances"].toArray().size(), 1);
+  failWith(2); // a lone phrase without lookback is skipped
+  ASSERT_EQ(requests.count(), 4);
+  const auto next = requests[3][0].toJsonObject()["utterances"].toArray();
+  ASSERT_EQ(next.size(), 1);
+  EXPECT_EQ(next[0].toObject()["id"].toString(), QString::number(phrases[1].id));
+  EXPECT_TRUE(controller->running());
+  auto empty = requests[3][0].toJsonObject(); empty["events"] = QJsonArray{}; empty["suggestions"] = QJsonArray{};
+  controller->handleResult(empty);
+  controller->flush();
+  ASSERT_EQ(requests.count(), 5);
+  EXPECT_EQ(requests[4][0].toJsonObject()["utterances"].toArray().size(), 3); // phrase 1 as lookback, then 2 and 3
+}
+TEST_F(PrompterControllerTest, RepeatedFailuresPauseThePrompter) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  for (int i = 0; i < 10; ++i) controller->addPhrase(phrase("Phrase " + std::to_string(i)));
+  for (int i = 0; i < 8 && controller->running(); ++i) {
+    controller->flush();
+    auto failed = requests.last()[0].toJsonObject();
+    failed["error"] = "inference_failed"; failed["reason"] = "runtime";
+    controller->handleResult(failed);
+  }
+  EXPECT_FALSE(controller->running());
+}
 TEST_F(PrompterControllerTest, DeletedTranscriptClearsAllVisibleDerivedData) {
   QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
   const auto p = phrase("Send document Friday"); controller->addPhrase(p); controller->flush();

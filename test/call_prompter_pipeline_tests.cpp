@@ -72,6 +72,27 @@ TEST_F(PipelineTest, ForeignMatchingTargetCannotBeApplied) {
   EXPECT_TRUE(out["events"][0]["unresolved"].toBool());
 }
 
+TEST_F(PipelineTest, FailedMatchingAndHintKeepTheExtractedEvents) {
+  request["candidates"] = json(R"([{"id":"a","text":"Документ","participants":["Анна"]}])");
+  int calls = 0;
+  const auto out = processRequest(request, [&](const QString &, const QByteArray &) -> QJsonValue {
+    if (++calls == 1) return events(event());
+    throw PipelineError("context budget exceeded");
+  });
+  ASSERT_EQ(out["events"].toArray().size(), 1);
+  EXPECT_TRUE(out["events"][0]["unresolved"].toBool());
+  EXPECT_TRUE(out["suggestions"].toArray().isEmpty());
+}
+
+TEST_F(PipelineTest, CancellationDuringMatchingEndsTheRequest) {
+  request["candidates"] = json(R"([{"id":"a","text":"Документ","participants":["Анна"]}])");
+  int calls = 0;
+  EXPECT_THROW(processRequest(request, [&](const QString &, const QByteArray &) -> QJsonValue {
+    if (++calls == 1) return events(event());
+    throw PipelineError("cancelled");
+  }), PipelineError);
+}
+
 TEST_F(PipelineTest, ExactMatchAvoidsSecondModelCall) {
   request["candidates"] = json(R"([{"id":"a","text":"анна отправит документ   в пятницу.","participants":["Анна","Борис"]}])");
   const auto out = run({events(event({{"kind", "cancel"}}))});

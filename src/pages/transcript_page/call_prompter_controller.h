@@ -39,6 +39,7 @@ signals:
   void statusChanged(QString status);
 private:
   bool persist();
+  void batchFailed();
   void setStatus(const QString &status);
   QJsonObject state() const;
   void restore(const QJsonObject &state);
@@ -47,7 +48,8 @@ private:
   std::shared_ptr<pcm::database::Database> mDb;
   QTimer mBatchTimer;
   qint64 mTranscriptId = 0, mGeneration = 0, mRevision = 0, mRequestId = 0, mLastProcessed = 0;
-  bool mRunning = false, mInFlight = false;
+  bool mRunning = false, mInFlight = false, mSkipLookback = false;
+  int mBatchLimit = 6, mFailures = 0;
   QJsonArray mCards, mRecords, mSuggestions, mPending, mInFlightPhrases, mLookback;
   QHash<QString, QJsonObject> mSources;
   QJsonObject mRequest;

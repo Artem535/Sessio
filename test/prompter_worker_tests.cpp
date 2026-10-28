@@ -19,7 +19,7 @@ namespace {
 struct Probe {
   std::atomic_int loads = 0, alive = 0, cancels = 0;
   std::atomic_int destroyed = 0;
-  std::atomic_bool block = false;
+  std::atomic_bool block = false, ignoreCancel = false;
   std::atomic<QThread *> loadThread = nullptr, destroyThread = nullptr;
 };
 
@@ -32,8 +32,8 @@ public:
     ++mProbe->destroyed;
   }
   QJsonValue generate(const QString &, const QByteArray &) override {
-    while (mProbe->block && !mCancelled) QThread::msleep(5);
-    if (mCancelled) throw std::runtime_error("cancelled");
+    while (mProbe->block && (!mCancelled || mProbe->ignoreCancel)) QThread::msleep(5);
+    if (mCancelled.exchange(false)) throw std::runtime_error("cancelled");
     return QJsonObject{{"events", QJsonArray{}}};
   }
   void cancel() override { ++mProbe->cancels; mCancelled = true; }
@@ -149,6 +149,45 @@ TEST_F(PrompterWorkerTest, StopCancelsInferenceDropsItsResultAndReleasesTheModel
   EXPECT_GE(probe->cancels, 1);
   QTest::qWait(50);
   EXPECT_EQ(replies.count(), 0);
+}
+
+TEST_F(PrompterWorkerTest, SlowCallTimesOutWithoutReleasingTheModel) {
+  PrompterWorker worker(factory(probe));
+  worker.setTimeouts(100, 5000);
+  QSignalSpy ready(&worker, &PrompterWorker::ready);
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  QSignalSpy failed(&worker, &PrompterWorker::failed);
+  ASSERT_TRUE(worker.start(model));
+  ASSERT_TRUE(ready.wait(5000));
+  probe->block = true;
+  worker.send(request(1));
+  ASSERT_TRUE(replies.wait(5000));
+  const auto reply = replies[0][0].toJsonObject();
+  EXPECT_EQ(reply["request_id"].toInt(), 1);
+  EXPECT_EQ(reply["error"].toString(), "inference_failed");
+  EXPECT_EQ(reply["reason"].toString(), "timeout");
+  EXPECT_EQ(failed.count(), 0);
+  EXPECT_EQ(probe->loads, 1);
+  EXPECT_EQ(probe->alive, 1);
+  probe->block = false;
+  worker.send(request(2));
+  ASSERT_TRUE(replies.wait(5000));
+  EXPECT_FALSE(replies[1][0].toJsonObject().contains("error"));
+}
+
+TEST_F(PrompterWorkerTest, CallIgnoringCancellationReleasesTheModel) {
+  PrompterWorker worker(factory(probe));
+  worker.setTimeouts(100, 100);
+  QSignalSpy ready(&worker, &PrompterWorker::ready);
+  QSignalSpy failed(&worker, &PrompterWorker::failed);
+  ASSERT_TRUE(worker.start(model));
+  ASSERT_TRUE(ready.wait(5000));
+  probe->block = true; probe->ignoreCancel = true;
+  worker.send(request(1));
+  ASSERT_TRUE(failed.wait(5000));
+  probe->block = false;
+  for (int i = 0; i < 500 && probe->alive > 0; ++i) QTest::qWait(10);
+  EXPECT_EQ(probe->alive, 0);
 }
 
 TEST_F(PrompterWorkerTest, StopAndImmediateRestartLoadsAFreshModel) {

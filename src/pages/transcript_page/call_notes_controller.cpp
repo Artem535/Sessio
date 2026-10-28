@@ -524,6 +524,7 @@ QString CallNotesController::statusText() const {
                     : tr("The model's reply could not be used. Retry once more of the conversation is transcribed.");
     if (reason == "too_long") return tr("The transcript is too long for local notes.");
     if (reason == "storage") return tr("Could not save the generated notes. Try again.");
+    if (reason == "timeout") return tr("The local model took too long. Try again.");
     return tr("The local model did not respond. Try again.");
   }
   if (status == "stale") return tr("The transcript changed. Generate the note again.");

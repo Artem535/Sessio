@@ -79,3 +79,14 @@ TEST(PrompterTaskGateTest, CompletedCancelledGenerationDoesNotCancelTheNextReque
   EXPECT_EQ(gate.run([] { return std::make_shared<FinishedTask>(); }), TaskGate::Result::Done);
   gate.endGeneration();
 }
+
+TEST(PrompterTaskGateTest, CancellationBetweenGenerationsDoesNotCancelTheNextRequest) {
+  TaskGate gate;
+  gate.cancel();
+  ASSERT_TRUE(gate.beginGeneration());
+  EXPECT_EQ(gate.run([] { return std::make_shared<FinishedTask>(); }), TaskGate::Result::Done);
+  gate.endGeneration();
+  gate.cancel();
+  ASSERT_TRUE(gate.beginGeneration());
+  gate.endGeneration();
+}

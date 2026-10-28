@@ -295,6 +295,17 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
   const auto call = [&generate](const QString &system, const Payload &payload) {
     return generate(system, dumpPayload(payload));
   };
+  // Matching and the deadline hint only refine extracted events. When the
+  // model fails on them (overflowing context, unusable reply), the event stays
+  // unresolved or without a hint. Cancellation still ends the request.
+  const auto refine = [&call](const QString &system, const Payload &payload) {
+    try {
+      return call(system, payload);
+    } catch (const PipelineError &error) {
+      if (QLatin1String(error.what()) == QLatin1String("cancelled")) throw;
+      return QJsonValue(QJsonValue::Undefined);
+    }
+  };
 
   const auto extracted = call(prompt("extract.txt"), {{"new_utterances", window}});
   if (!extracted.isObject() || !extracted.toObject().value("events").isArray())
@@ -326,7 +337,7 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
         matches << record.toObject().value("id").toString();
     bool invalidMatch = false;
     if (!candidates.isEmpty() && matches.isEmpty()) {
-      const auto result = call(prompt("match.txt"),
+      const auto result = refine(prompt("match.txt"),
                                {{"event", event}, {"records", candidates}, {"new_utterances", window}});
       const auto value = result.isObject() ? result.toObject().value("matches") : QJsonValue(QJsonValue::Undefined);
       QSet<QString> validIds;
@@ -361,7 +372,7 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
   }
   QJsonArray suggestions;
   if (!accepted.isEmpty()) {
-    const auto hint = call(kSuggestPrompt, {{"new_utterances", window}, {"accepted_events", accepted}});
+    const auto hint = refine(kSuggestPrompt, {{"new_utterances", window}, {"accepted_events", accepted}});
     const auto object = hint.toObject();
     if (hint.isObject() && object.value("missing_deadline").isBool() && object.value("missing_deadline").toBool() &&
         boundedStrings(object.value("evidence_ids"), acceptedIds))

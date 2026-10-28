@@ -8,6 +8,8 @@ namespace sessio::litert::detail {
 
 // Cancellation must cover task submission as well as execution: LiteRT's
 // session-wide CancelProcess() does not cancel tasks submitted afterwards.
+// A cancel() outside a generation is ignored: it must not fail the next,
+// unrelated request. Callers check their own request identity between calls.
 class TaskGate {
 public:
   class Task {
@@ -20,11 +22,13 @@ public:
 
   bool beginGeneration() {
     std::lock_guard lock(mMutex);
+    mGenerating = true;
     return !std::exchange(mCancelled, false);
   }
 
   void endGeneration() {
     std::lock_guard lock(mMutex);
+    mGenerating = false;
     mCancelled = false;
   }
 
@@ -51,6 +55,7 @@ public:
 
   void cancel() {
     std::lock_guard lock(mMutex);
+    if (!mGenerating) return;
     mCancelled = true;
     if (mActive) mActive->cancel();
   }
@@ -58,7 +63,7 @@ public:
 private:
   std::mutex mMutex;
   std::shared_ptr<Task> mActive;
-  bool mCancelled = false;
+  bool mGenerating = false, mCancelled = false;
 };
 
 } // namespace sessio::litert::detail

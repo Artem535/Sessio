@@ -13,6 +13,8 @@ bool validIds(const QJsonValue &value, const QSet<QString> &allowed) {
   return true;
 }
 QString uuid() { return QUuid::createUuid().toString(QUuid::WithoutBraces); }
+constexpr int kMaxBatch = 6;
+constexpr int kMaxFailures = 8; // consecutive failed requests before pausing
 }
 
 CallPrompterController::CallPrompterController(std::shared_ptr<pcm::database::Database> db, QObject *parent)
@@ -42,6 +44,7 @@ bool CallPrompterController::persist() {
 }
 void CallPrompterController::beginTranscript(qint64 transcriptId) {
   endCall(); ++mGeneration; mTranscriptId = transcriptId; mRevision = 0; mLastProcessed = 0;
+  mBatchLimit = kMaxBatch; mFailures = 0; mSkipLookback = false;
   mCards = {}; mRecords = {}; mSuggestions = {}; mSources.clear(); mLookback = {};
   try {
     const auto row = mDb->get_transcript(transcriptId);
@@ -73,7 +76,7 @@ void CallPrompterController::addPhrase(const DuckTranscriptPhrase &p) {
 }
 void CallPrompterController::resume() {
   if (!mTranscriptId || !mDb->get_transcript(mTranscriptId)) { setStatus(tr("Start transcription first")); return; }
-  mRunning = true; setStatus(tr("Waiting for completed phrases"));
+  mRunning = true; mFailures = 0; setStatus(tr("Waiting for completed phrases"));
   if (!mPending.isEmpty()) mBatchTimer.start();
 }
 void CallPrompterController::pause() {
@@ -114,10 +117,32 @@ bool CallPrompterController::evidenceUnchanged(const QJsonObject &card) const {
   } catch (...) { return false; }
 }
 void CallPrompterController::workerFailed() { pause(); setStatus(tr("Local prompter failed. Check its settings and retry.")); }
+// Decoding is greedy, so the same input fails the same way. Retry the batch
+// in halves, then once without lookback, then skip the phrase. Only a run of
+// failures, as from a broken runtime, pauses the prompter.
+void CallPrompterController::batchFailed() {
+  if (++mFailures >= kMaxFailures) { workerFailed(); return; }
+  const auto phrases = mInFlightPhrases;
+  const bool hadLookback = mRequest["utterances"].toArray().size() > phrases.size();
+  mInFlight = false; mInFlightPhrases = {}; mRequest = {};
+  if (phrases.size() > 1 || hadLookback) {
+    mBatchLimit = qMax<int>(1, phrases.size() / 2);
+    mSkipLookback = phrases.size() == 1;
+    for (auto i = phrases.size(); i > 0; --i) mPending.prepend(phrases[i - 1]);
+    setStatus(tr("Retrying a smaller part of the conversation"));
+  } else {
+    const auto previous = state();
+    for (const auto &p : phrases) mLastProcessed = qMax(mLastProcessed, p.toObject()["id"].toString().toLongLong());
+    if (!persist()) { restore(previous); return; }
+    mSkipLookback = false;
+    setStatus(tr("Skipped a phrase the local model could not process"));
+  }
+  if (mRunning && !mPending.isEmpty()) mBatchTimer.start();
+}
 void CallPrompterController::flush() {
   mBatchTimer.stop();
   if (!mRunning || mInFlight || mPending.isEmpty()) return;
-  QJsonArray utterances = mLookback;
+  QJsonArray utterances = mSkipLookback ? QJsonArray{} : mLookback;
   int chars = 0;
   for (const auto &p : utterances) chars += p.toObject()["text"].toString().size();
   // Lookback is optional context and must not starve a valid queued phrase.
@@ -127,7 +152,7 @@ void CallPrompterController::flush() {
     utterances.removeFirst();
   }
   mInFlightPhrases = {};
-  while (!mPending.isEmpty() && mInFlightPhrases.size() < 6) {
+  while (!mPending.isEmpty() && mInFlightPhrases.size() < mBatchLimit) {
     const auto p = mPending.first();
     const auto size = p.toObject()["text"].toString().size();
     if (size > 6000 || chars + size > 11000) {
@@ -159,7 +184,7 @@ void CallPrompterController::handleResult(const QJsonObject &result) {
   }
   if (result["protocol_version"].toInt() != 1 || result.contains("error") ||
       !result["events"].isArray() || result["events"].toArray().size() > 12 || !result["suggestions"].isArray()) {
-    workerFailed(); return;
+    batchFailed(); return;
   }
   QSet<QString> ids, speakers, targets;
   for (const auto &u : mRequest["utterances"].toArray()) {
@@ -176,7 +201,7 @@ void CallPrompterController::handleResult(const QJsonObject &result) {
     if (!value.isObject() || (kind != "accept" && kind != "cancel") || action.isEmpty() || action.size() > 2000 ||
         !validIds(event["evidence_ids"], ids) || !validIds(event["participants"], speakers) ||
         (!target.isEmpty() && !targets.contains(target)) || !event["unresolved"].isBool()) {
-      workerFailed(); return;
+      batchFailed(); return;
     }
     bool citesFresh = false;
     for (const auto &sourceId : event["evidence_ids"].toArray()) citesFresh = citesFresh || fresh.contains(sourceId.toString());
@@ -207,6 +232,7 @@ void CallPrompterController::handleResult(const QJsonObject &result) {
   if (!persist()) { restore(previous); emit cardsChanged(); return; }
   for (const auto &p : mInFlightPhrases) { mLookback.append(p); while (mLookback.size() > 2) mLookback.removeFirst(); }
   const auto last = mInFlightPhrases.last().toObject()["end_ms"].toInteger();
+  mBatchLimit = kMaxBatch; mFailures = 0; mSkipLookback = false;
   mInFlight = false; mInFlightPhrases = {}; mRequest = {};
   setStatus(tr("Processed through %1:%2 · %n phrases waiting", nullptr, mPending.size())
             .arg(last / 60000).arg((last / 1000) % 60, 2, 10, QLatin1Char('0')));

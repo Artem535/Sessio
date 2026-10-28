@@ -10,6 +10,7 @@
 #include <QStandardPaths>
 #include <atomic>
 #include <mutex>
+#include <utility>
 
 #include "prompter_pipeline.h"
 #include "call_notes_pipeline.h"
@@ -19,7 +20,9 @@ Q_LOGGING_CATEGORY(logPrompterWorker, "pcm.prompter.worker")
 
 namespace {
 constexpr int kLoadTimeoutMs = 180000; // first load compiles the XNNPACK cache
-constexpr int kRequestTimeoutMs = 90000;
+// Per model call, not per request: one request makes several calls. The
+// agreements deadline and the cancellation grace live in PrompterWorker.
+constexpr int kNotesCallTimeoutMs = 10 * 60 * 1000;
 constexpr qsizetype kMaxRequestBytes = 256 * 1024;
 const char *kModelFile = "gemma-4-E4B-it.litertlm";
 } // namespace
@@ -95,7 +98,7 @@ PrompterWorker::PrompterWorker(pcm::prompter::PrompterEngineFactory factory, QOb
   connect(mThread, &QThread::finished, mThread, &QObject::deleteLater);
   mThread->start(QThread::LowPriority);
   mTimeout.setSingleShot(true);
-  connect(&mTimeout, &QTimer::timeout, this, &PrompterWorker::fail);
+  connect(&mTimeout, &QTimer::timeout, this, &PrompterWorker::timedOut);
 }
 
 PrompterWorker::~PrompterWorker() {
@@ -122,7 +125,7 @@ bool PrompterWorker::start(const QString &model) {
   }
   if (!mStopped) return true;
   mModelPath = model;
-  mStopped = false; mReady = false; mPending = {}; mExpected = {}; mQueue.clear(); mReloadAfterCancel = false;
+  mStopped = false; mReady = false; mTimedOut = false; mPending = {}; mExpected = {}; mQueue.clear(); mReloadAfterCancel = false;
   const int generation = ++mGeneration;
   mShared->generation = generation;
   mTimeout.start(kLoadTimeoutMs);
@@ -158,7 +161,7 @@ bool PrompterWorker::start(const QString &model) {
 
 void PrompterWorker::stop() {
   const bool wasActive = !mStopped;
-  mStopped = true; mReady = false; mTimeout.stop(); mPending = {}; mExpected = {}; mQueue.clear(); mReloadAfterCancel = false;
+  mStopped = true; mReady = false; mTimedOut = false; mTimeout.stop(); mPending = {}; mExpected = {}; mQueue.clear(); mReloadAfterCancel = false;
   ++mShared->requestSerial;
   mShared->generation = ++mGeneration;
   mShared->cancel();
@@ -169,6 +172,24 @@ void PrompterWorker::stop() {
 }
 
 void PrompterWorker::fail() { stop(); emit failed(); }
+
+void PrompterWorker::timedOut() {
+  // A slow call cancels only its request and keeps the model loaded. A load
+  // that does not finish, or a call that ignores cancellation, releases it.
+  if (!mReady || mExpected.isEmpty() || mTimedOut) {
+    qCWarning(logPrompterWorker) << (mReady ? "model call did not stop after cancellation" : "model load timed out");
+    fail(); return;
+  }
+  qCWarning(logPrompterWorker) << mExpected["task"].toString("agreements") << "request timed out";
+  mTimedOut = true;
+  ++mShared->requestSerial; mShared->cancel();
+  mTimeout.start(mCancelGraceMs);
+}
+
+void PrompterWorker::progress(int generation, int serial) {
+  if (generation == mGeneration && serial == mSerial && !mStopped && !mExpected.isEmpty() && !mTimedOut)
+    mTimeout.start(mCallTimeoutMs);
+}
 
 void PrompterWorker::send(const QJsonObject &request) {
   if (mStopped) { emit failed(); return; }
@@ -186,9 +207,10 @@ void PrompterWorker::send(const QJsonObject &request) {
   }
   if (QJsonDocument(request).toJson(QJsonDocument::Compact).size() > kMaxRequestBytes) { fail(); return; }
   mExpected = request;
-  mTimeout.start(request["task"] == "notes" ? 10 * 60 * 1000 : kRequestTimeoutMs);
+  mCallTimeoutMs = request["task"] == "notes" ? kNotesCallTimeoutMs : mAgreementsCallMs;
+  mTimeout.start(mCallTimeoutMs);
   const int generation = mGeneration;
-  const int serial = ++mShared->requestSerial;
+  const int serial = mSerial = ++mShared->requestSerial;
   QMetaObject::invokeMethod(mThreadContext, [shared = mShared, request, generation, serial] {
     auto engine = shared->current();
     if (!engine || shared->generation != generation) return;
@@ -200,6 +222,7 @@ void PrompterWorker::send(const QJsonObject &request) {
           throw pcm::prompter::PipelineError("cancelled");
         const auto key = QCryptographicHash::hash(system.toUtf8() + QByteArray(1, '\0') + payload, QCryptographicHash::Sha256);
         if (notes && shared->notesCache.contains(key)) return shared->notesCache.value(key);
+        shared->post([generation, serial](PrompterWorker &worker) { worker.progress(generation, serial); });
         auto value = engine->generate(system, payload);
         if (shared->generation != generation || shared->requestSerial != serial)
           throw pcm::prompter::PipelineError("cancelled");
@@ -237,6 +260,8 @@ void PrompterWorker::finish(int generation, const QJsonObject &result) {
       result["session_generation"] != mExpected["session_generation"] ||
       result["ledger_revision"] != mExpected["ledger_revision"]) { fail(); return; }
   mExpected = {}; mTimeout.stop();
+  auto reply = result;
+  if (std::exchange(mTimedOut, false) && reply.contains("error")) reply["reason"] = QStringLiteral("timeout");
   if (mReloadAfterCancel) {
     // Cancellation may arrive after the model posted its reply. Decide here
     // on the GUI thread, where cancelNotes and queue ownership are serialized.
@@ -245,11 +270,11 @@ void PrompterWorker::finish(int generation, const QJsonObject &result) {
     auto queued = std::move(mQueue);
     mStopped = true; stop();
     if (start(mModelPath)) mQueue = std::move(queued);
-    emit resultReady(result);
+    emit resultReady(reply);
     return;
   }
   QPointer<PrompterWorker> guard(this);
-  emit resultReady(result);
+  emit resultReady(reply);
   if (guard && !mStopped && mExpected.isEmpty() && !mQueue.isEmpty()) send(mQueue.dequeue());
 }
 

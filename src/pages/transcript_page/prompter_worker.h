@@ -23,6 +23,8 @@ public:
   void stop();
   void send(const QJsonObject &request);
   void cancelNotes(qint64 materialId, const QString &requestToken = {});
+  // Tests shorten the agreements call deadline and the cancellation grace.
+  void setTimeouts(int agreementsCallMs, int cancelGraceMs) { mAgreementsCallMs = agreementsCallMs; mCancelGraceMs = cancelGraceMs; }
   // The Gemma model shipped next to the application, or empty.
   static QString bundledModel();
 signals:
@@ -33,6 +35,8 @@ signals:
 private:
   struct Shared;
   void fail();
+  void timedOut();
+  void progress(int generation, int serial);
   void finish(int generation, const QJsonObject &result);
   pcm::prompter::PrompterEngineFactory mFactory;
   std::shared_ptr<Shared> mShared;
@@ -43,7 +47,8 @@ private:
   QJsonObject mExpected;
   QQueue<QJsonObject> mQueue;
   QString mModelPath;
-  int mGeneration = 0;
-  bool mReady = false, mStopped = true;
+  int mGeneration = 0, mSerial = 0, mCallTimeoutMs = 0;
+  int mAgreementsCallMs = 120000, mCancelGraceMs = 30000;
+  bool mReady = false, mStopped = true, mTimedOut = false;
   bool mReloadAfterCancel = false;
 };
