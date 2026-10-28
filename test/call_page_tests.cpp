@@ -1591,3 +1591,60 @@ TEST(CallPageTest, NativeProviderStillStartsOnDeviceCheck) {
   auto *stack = page.findChild<QStackedWidget *>();
   EXPECT_EQ(stack->currentWidget(), page.findChild<QWidget *>("deviceCheckWidget"));
 }
+
+TEST(CallPageTest, WebViewStaysClearOfNativeControls) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  page.setSidePanelToggleVisible(true);
+  QWidget view;
+  auto *provider = new FakeVideoProvider();
+  provider->mCallView = &view;
+  VideoSession session(provider);
+  page.attachSession(&session);
+  page.resize(1280, 720);
+  page.show();
+  auto *stage = page.findChild<QWidget *>("videoStage");
+  ASSERT_NE(stage, nullptr);
+  resizeAndDeliverEvent(stage, QSize(1280, 720));
+
+  auto *bar = page.findChild<QWidget *>("controlBar");
+  auto *notes = page.findChild<QToolButton *>("notesToggleButton");
+  ASSERT_NE(bar, nullptr);
+  ASSERT_NE(notes, nullptr);
+  ASSERT_TRUE(notes->isVisible());
+  EXPECT_GT(view.height(), 0);
+  EXPECT_FALSE(view.geometry().intersects(bar->geometry()));
+  EXPECT_FALSE(view.geometry().intersects(notes->geometry()));
+
+  // Still clear after the stage is resized.
+  resizeAndDeliverEvent(stage, QSize(900, 500));
+  EXPECT_FALSE(view.geometry().intersects(bar->geometry()));
+  EXPECT_FALSE(view.geometry().intersects(notes->geometry()));
+  EXPECT_GT(view.height(), 0);
+}
+
+TEST(CallPageTest, NativeSessionDoesNotForceHiddenControlsVisible) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  page.findChild<QToolButton *>("screenShareButton")->setVisible(false);
+  auto *provider = new FakeVideoProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  EXPECT_TRUE(page.findChild<QToolButton *>("screenShareButton")->isHidden());
+}
+
+TEST(CallPageTest, ControlVisibilityIsRestoredAfterWebMode) {
+  pcm::video::DeviceManager deviceManager;
+  CallPage page(&deviceManager);
+  page.findChild<QToolButton *>("screenShareButton")->setVisible(false);
+  QWidget view;
+  auto *provider = new FakeVideoProvider();
+  provider->mCallView = &view;
+  {
+    VideoSession session(provider);
+    page.attachSession(&session);
+    EXPECT_TRUE(page.findChild<QToolButton *>("microphoneToggleButton")->isHidden());
+  }
+  EXPECT_FALSE(page.findChild<QToolButton *>("microphoneToggleButton")->isHidden());
+  EXPECT_TRUE(page.findChild<QToolButton *>("screenShareButton")->isHidden());
+}

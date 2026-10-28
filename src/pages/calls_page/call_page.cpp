@@ -143,8 +143,12 @@ constexpr int kBottomReserved = kControlBarBottomMargin + kControlBarHeight + 8;
 } // namespace
 
 void VideoStage::layoutChildren() {
+  const bool sharingStatus = mLayoutControls && mSharingBanner && !mSharingBanner->isHidden();
+  const int top = sharingStatus ? 104 : (mLayoutControls || (mNotesToggleWidget && !mNotesToggleWidget->isHidden())) ? 64 : 12;
   if (mContentWidget) {
-    mContentWidget->setGeometry(rect());
+    // The web page has its own toolbar along the bottom and the notes toggle sits at the top:
+    // keep the page clear of both bands so the native overlays never block its clicks.
+    mContentWidget->setGeometry(0, top, width(), std::max(0, height() - top - kBottomReserved));
     mContentWidget->lower();
   }
   while (auto *item = mTileGrid->takeAt(0))
@@ -157,8 +161,6 @@ void VideoStage::layoutChildren() {
     mTileGrid->setRowMinimumHeight(row, 0);
     mTileGrid->setRowStretch(row, 0);
   }
-  const bool sharingStatus = mLayoutControls && mSharingBanner && !mSharingBanner->isHidden();
-  const int top = sharingStatus ? 104 : (mLayoutControls || (mNotesToggleWidget && !mNotesToggleWidget->isHidden())) ? 64 : 12;
   QVector<ParticipantTile *> tiles;
   for (auto *tile : mTiles) {
     if (mContentWidget) { tile->hide(); continue; }
@@ -799,15 +801,27 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
 }
 
 void CallPage::setWebView(QWidget *view) {
+  const bool wasWeb = !mSavedControlVisibility.isEmpty();
   mWebView = view;
   mVideoStage->setContentWidget(view);
   const bool native = view == nullptr;
   // The web page has its own mic/camera/share/device controls (and Jitsi owns the devices).
-  for (QWidget *widget : {static_cast<QWidget *>(mMicrophoneToggleButton), static_cast<QWidget *>(mCameraToggleButton),
-                          static_cast<QWidget *>(mScreenShareButton), static_cast<QWidget *>(mDevicesButton),
-                          mLayoutControls})
-    if (widget)
-      widget->setVisible(native);
+  // Visibility is touched only on a mode switch, so a native session keeps whatever the
+  // native flow chose, and leaving web mode restores exactly what was there before.
+  if (!native && !wasWeb) {
+    for (QWidget *widget : {static_cast<QWidget *>(mMicrophoneToggleButton), static_cast<QWidget *>(mCameraToggleButton),
+                            static_cast<QWidget *>(mScreenShareButton), static_cast<QWidget *>(mDevicesButton),
+                            mLayoutControls.data()})
+      if (widget) {
+        mSavedControlVisibility.append({widget, !widget->isHidden()});
+        widget->hide();
+      }
+  } else if (native && wasWeb) {
+    for (const auto &saved : std::as_const(mSavedControlVisibility))
+      if (saved.first)
+        saved.first->setVisible(saved.second);
+    mSavedControlVisibility.clear();
+  }
   if (!native)
     mWaitingBanner->hide();
   mVideoStage->refreshLayout();
@@ -1219,6 +1233,10 @@ void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) 
   case VideoSessionState::Failed:
     mCallEnded = true;
     refreshEndedReason();
+    // The page is done: take the view off the stage so the native controls come back. It stays
+    // alive, owned by the provider, whose leave()/destruction is what stops the page.
+    if (mWebView)
+      setWebView(nullptr);
     if (mSidePanel && mNotesToggleButton) {
       if (auto *host = mSidePanel->parentWidget(); host && host->layout()) host->layout()->removeWidget(mSidePanel);
       mEndedSidePanelHost->layout()->addWidget(mSidePanel);

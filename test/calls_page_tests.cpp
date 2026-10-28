@@ -799,3 +799,125 @@ TEST(CallsPageTest, WebProviderLeaveReachesProviderAndKeepsControls) {
   fakeProvider->simulateLeft();
   waitForState(*session, stateSpy, pcm::video::VideoSessionState::Ended);
 }
+
+namespace {
+
+// Starts a Jitsi (web) call whose view is `view`, drives it to Joining and returns the session.
+pcm::video::VideoSession *startWebCall(CallsPage &page, FakeVideoProvider *&fakeProvider, QWidget *view) {
+  submitJoinCode(page, "code-1", "123456");
+  if (!QTest::qWaitFor([&]() { return fakeProvider && fakeProvider->mJoinCallCount == 1; }, 2000)) {
+    ADD_FAILURE() << "web call never joined";
+    return nullptr;
+  }
+  auto *session = qobject_cast<pcm::video::VideoSession *>(fakeProvider->parent());
+  EXPECT_TRUE(view->parentWidget() != nullptr);
+  return session;
+}
+
+void expectNativeControlsVisible(CallsPage &page) {
+  auto *callPage = page.findChild<CallPage *>();
+  ASSERT_NE(callPage, nullptr);
+  for (const char *name : {"microphoneToggleButton", "cameraToggleButton", "screenShareButton", "devicesButton"}) {
+    auto *button = callPage->findChild<QToolButton *>(name);
+    ASSERT_NE(button, nullptr) << name;
+    EXPECT_FALSE(button->isHidden()) << name;
+  }
+  auto *layoutControls = callPage->findChild<QWidget *>("layoutControls");
+  ASSERT_NE(layoutControls, nullptr);
+  EXPECT_FALSE(layoutControls->isHidden());
+}
+
+} // namespace
+
+TEST(CallsPageTest, WebJoinFailedReturnsToEntryAndDetachesView) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kJitsiTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+  FakeVideoProvider *fakeProvider = nullptr;
+  QWidget fakeView;
+  page.setVideoProviderFactoryForTesting([&](const QString &) -> pcm::video::VideoProvider * {
+    fakeProvider = new FakeVideoProvider();
+    fakeProvider->mCallView = &fakeView;
+    return fakeProvider;
+  });
+  auto *session = startWebCall(page, fakeProvider, &fakeView);
+  ASSERT_NE(session, nullptr);
+  auto *callPage = page.findChild<CallPage *>();
+  QSignalSpy stateSpy(session, &pcm::video::VideoSession::stateChanged);
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Joining);
+
+  fakeProvider->simulateJoinFailed("no room");
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Failed);
+
+  EXPECT_EQ(topStack(page)->currentWidget(), page.findChild<CallEntryWidget *>());
+  EXPECT_FALSE(callPage->isAncestorOf(&fakeView));
+  expectNativeControlsVisible(page);
+}
+
+TEST(CallsPageTest, WebConnectionLostReturnsToEntryAndDetachesView) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kJitsiTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+  FakeVideoProvider *fakeProvider = nullptr;
+  QWidget fakeView;
+  page.setVideoProviderFactoryForTesting([&](const QString &) -> pcm::video::VideoProvider * {
+    fakeProvider = new FakeVideoProvider();
+    fakeProvider->mCallView = &fakeView;
+    return fakeProvider;
+  });
+  auto *session = startWebCall(page, fakeProvider, &fakeView);
+  ASSERT_NE(session, nullptr);
+  auto *callPage = page.findChild<CallPage *>();
+  QSignalSpy stateSpy(session, &pcm::video::VideoSession::stateChanged);
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fakeProvider->simulateJoined();
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::WaitingForParticipants);
+
+  fakeProvider->simulateConnectionLost("page crashed");
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Failed);
+
+  EXPECT_EQ(topStack(page)->currentWidget(), page.findChild<CallEntryWidget *>());
+  EXPECT_FALSE(callPage->isAncestorOf(&fakeView));
+  expectNativeControlsVisible(page);
+}
+
+TEST(CallsPageTest, LiveKitCallAfterWebSessionHasNoDanglingView) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kJitsiTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager deviceManager;
+  CallsPage page(/*specialistMode=*/false, &deviceManager, &client);
+  FakeVideoProvider *fakeProvider = nullptr;
+  auto *fakeView = new QWidget;
+  QPointer<QWidget> viewGuard(fakeView);
+  bool useWeb = true;
+  page.setVideoProviderFactoryForTesting([&](const QString &) -> pcm::video::VideoProvider * {
+    fakeProvider = new FakeVideoProvider();
+    if (useWeb)
+      fakeProvider->mCallView = fakeView;
+    return fakeProvider;
+  });
+  auto *session = startWebCall(page, fakeProvider, fakeView);
+  ASSERT_NE(session, nullptr);
+  auto *callPage = page.findChild<CallPage *>();
+  QSignalSpy stateSpy(session, &pcm::video::VideoSession::stateChanged);
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Joining);
+  fakeProvider->simulateJoinFailed("gone");
+  waitForState(*session, stateSpy, pcm::video::VideoSessionState::Failed);
+
+  useWeb = false;
+  fakeProvider = nullptr;
+  server.setNextResponse(200, kTokenResponse);
+  submitJoinCode(page, "code-2", "654321");
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return fakeProvider != nullptr; }, 2000));
+
+  EXPECT_TRUE(!viewGuard || !callPage->isAncestorOf(viewGuard));
+  expectNativeControlsVisible(page);
+  auto *stack = callPage->findChild<QStackedWidget *>();
+  EXPECT_EQ(stack->currentWidget(), callPage->findChild<QWidget *>("deviceCheckWidget"));
+  delete fakeView;
+}

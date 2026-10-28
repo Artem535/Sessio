@@ -206,7 +206,9 @@ private:
   QComboBox *mDeviceSpeakerCombo{nullptr};
   QPointer<QWidget> mSidePanel;
   QPointer<QWidget> mWebView;
-  QWidget *mLayoutControls{nullptr};
+  QPointer<QWidget> mLayoutControls;
+  // Native controls' visibility from before web mode hid them; non-empty means web mode is on.
+  QVector<QPair<QPointer<QWidget>, bool>> mSavedControlVisibility;
   QPointer<pcm::video::VideoSession> mSession;
   // Not owned; passed into the constructor and outlives this CallPage (see
   // CallsPage, which owns the DeviceManager). Used by showDevicesPopover()
