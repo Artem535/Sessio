@@ -44,10 +44,21 @@ export async function createConference(options, handlers) {
     else handlers.onFailed(reason);
   };
 
+  // Frees the camera/mic and the XMPP connection; used on every exit path.
+  async function cleanup() {
+    closed = true;
+    for (const track of Object.values(localTracks)) {
+      if (track) await track.dispose().catch(() => {});
+    }
+    if (conference) await conference.leave().catch(() => {});
+    await Promise.resolve(connection.disconnect()).catch(() => {});
+  }
+
   // Failures while connecting reject (the caller reports a join failure);
   // later ones go through fail().
   let established = false;
-  await new Promise((resolve, reject) => {
+  try {
+    await new Promise((resolve, reject) => {
     connection.addEventListener(J.events.connection.CONNECTION_ESTABLISHED, () => {
       established = true;
       resolve();
@@ -59,7 +70,11 @@ export async function createConference(options, handlers) {
     });
     connection.addEventListener(J.events.connection.CONNECTION_DISCONNECTED, () => fail('connection disconnected'));
     connection.connect();
-  });
+    });
+  } catch (err) {
+    await cleanup();
+    throw err;
+  }
 
   conference = connection.initJitsiConference(room, {});
 
@@ -83,6 +98,9 @@ export async function createConference(options, handlers) {
     if (kind !== 'audio' && kind !== 'video') return;
     handlers.onTrackRemoved({ participantId: track.getParticipantId(), kind, track });
   });
+  const announce = (id, user) =>
+    handlers.onUserJoined({ participantId: id, displayName: (user && user.getDisplayName()) || id, isLocal: false });
+  conference.on(J.events.conference.USER_JOINED, announce);
   conference.on(J.events.conference.USER_LEFT, (id) => handlers.onParticipantLeft(id));
   conference.on(J.events.conference.DISPLAY_NAME_CHANGED, (id, name) => handlers.onDisplayName(id, name));
   conference.on(J.events.conference.CONFERENCE_FAILED, (err) => fail(`conference failed: ${err}`));
@@ -91,6 +109,9 @@ export async function createConference(options, handlers) {
     joined = true;
     localId = conference.myUserId();
     handlers.onJoined(localId);
+    handlers.onUserJoined({ participantId: localId, displayName: options.displayName || localId, isLocal: true });
+    // Members that were already present (the app ignores duplicates).
+    conference.getParticipants().forEach((p) => announce(p.getId(), p));
     for (const track of Object.values(localTracks)) {
       if (!track) continue;
       const ev = emitTrack(track, true);
@@ -122,9 +143,14 @@ export async function createConference(options, handlers) {
     }
   }
 
-  if (options.startWithMicrophone !== false) await attach('audio');
-  if (options.startWithCamera !== false) await attach('video');
-  conference.join();
+  try {
+    if (options.startWithMicrophone !== false) await attach('audio');
+    if (options.startWithCamera !== false) await attach('video');
+    conference.join();
+  } catch (err) {
+    await cleanup();
+    throw err;
+  }
 
   async function setEnabled(kind, enabled) {
     const track = localTracks[kind];
@@ -136,17 +162,7 @@ export async function createConference(options, handlers) {
   }
 
   return {
-    async leave() {
-      closed = true;
-      for (const track of Object.values(localTracks)) {
-        if (track) await track.dispose().catch(() => {});
-      }
-      try {
-        await conference.leave();
-      } finally {
-        await connection.disconnect().catch(() => {});
-      }
-    },
+    leave: cleanup,
     setMicrophoneEnabled: (enabled) => setEnabled('audio', enabled),
     setCameraEnabled: (enabled) => setEnabled('video', enabled),
   };

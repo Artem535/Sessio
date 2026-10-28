@@ -1,43 +1,53 @@
-// Tracks which media tracks belong to which participant. Jitsi swaps a
-// participant's tracks when it switches between P2P and the bridge, so audio
-// state (seq, tap) must live on the participant, never on the track.
+// Presence comes from conference membership (join/leave), never from track
+// counts: a P2P<->JVB switch removes a participant's track and adds a new one
+// while the participant stays in the call. Tracks and seq are bookkeeping on
+// the participant, so audio state survives such swaps.
 export class ParticipantRegistry {
   constructor() {
-    this.entries = new Map(); // id -> Set of live tracks
-    // Kept even after the participant is gone: a remove-then-add swap of the
-    // only track must not make the receiver see seq jump back to 0.
+    this.present = new Set();
+    this.tracks = new Map(); // id -> Set of live tracks
+    // Kept after the participant leaves so a seq never jumps back for an id.
     this.seqs = new Map();
   }
 
   has(participantId) {
-    return this.entries.has(participantId);
+    return this.present.has(participantId);
+  }
+
+  // true if the participant was not yet present.
+  join(participantId) {
+    if (this.present.has(participantId)) return false;
+    this.present.add(participantId);
+    return true;
+  }
+
+  // true if the participant was present.
+  leave(participantId) {
+    this.tracks.delete(participantId);
+    return this.present.delete(participantId);
   }
 
   addTrack(participantId, track) {
-    let tracks = this.entries.get(participantId);
-    const isNewParticipant = !tracks;
+    let tracks = this.tracks.get(participantId);
     if (!tracks) {
       tracks = new Set();
-      this.entries.set(participantId, tracks);
+      this.tracks.set(participantId, tracks);
     }
     tracks.add(track);
-    return { isNewParticipant };
   }
 
-  // A removal of a track that was already replaced (or never added) must not
-  // report the participant as gone while a newer track is live.
+  // Number of tracks still live; removing an unknown or already replaced
+  // track is harmless.
   removeTrack(participantId, track) {
-    const tracks = this.entries.get(participantId);
-    if (!tracks) return { participantGone: false };
+    const tracks = this.tracks.get(participantId);
+    if (!tracks) return 0;
     tracks.delete(track);
-    if (tracks.size > 0) return { participantGone: false };
-    this.entries.delete(participantId);
-    return { participantGone: true };
+    return tracks.size;
   }
 
-  // Forced removal for an explicit "user left" signal; true if it was known.
-  drop(participantId) {
-    return this.entries.delete(participantId);
+  trackCount(participantId) {
+    const tracks = this.tracks.get(participantId);
+    return tracks ? tracks.size : 0;
   }
 
   seq(participantId) {

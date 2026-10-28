@@ -2,59 +2,60 @@ import { describe, expect, it } from 'vitest';
 import { ParticipantRegistry } from '../src/participants.js';
 
 describe('ParticipantRegistry', () => {
-  it('flags only the first track as a new participant', () => {
+  it('reports a participant as new only on the first join', () => {
     const r = new ParticipantRegistry();
-    expect(r.addTrack('a', {}).isNewParticipant).toBe(true);
-    expect(r.addTrack('a', {}).isNewParticipant).toBe(false);
-    expect(r.addTrack('b', {}).isNewParticipant).toBe(true);
-  });
-
-  it('continues seq across track re-adds and is per participant', () => {
-    const r = new ParticipantRegistry();
-    const t1 = {};
-    r.addTrack('a', t1);
-    expect(r.seq('a')).toBe(0);
-    expect(r.seq('a')).toBe(1);
-    r.removeTrack('a', t1);
-    r.addTrack('a', {});
-    expect(r.seq('a')).toBe(2);
-    r.addTrack('b', {});
-    expect(r.seq('b')).toBe(0);
-    expect(r.seq('b')).toBe(1);
-  });
-
-  it('reports participantGone only when the last track goes', () => {
-    const r = new ParticipantRegistry();
-    const t1 = {};
-    const t2 = {};
-    r.addTrack('a', t1);
-    r.addTrack('a', t2);
-    expect(r.removeTrack('a', t1).participantGone).toBe(false);
-    expect(r.removeTrack('a', t2).participantGone).toBe(true);
-  });
-
-  it('ignores a stale removeTrack after a newer addTrack', () => {
-    const r = new ParticipantRegistry();
-    const old = {};
-    r.addTrack('a', old);
-    r.addTrack('a', {});
-    r.removeTrack('a', old);
-    expect(r.removeTrack('a', old).participantGone).toBe(false);
+    expect(r.join('a')).toBe(true);
+    expect(r.join('a')).toBe(false);
+    expect(r.join('b')).toBe(true);
     expect(r.has('a')).toBe(true);
   });
 
-  it('ignores removal of unknown participants', () => {
+  it('leave reports presence once', () => {
     const r = new ParticipantRegistry();
-    expect(r.removeTrack('zz', {}).participantGone).toBe(false);
+    r.join('a');
+    expect(r.leave('a')).toBe(true);
+    expect(r.leave('a')).toBe(false);
+    expect(r.has('a')).toBe(false);
   });
 
-  it('keeps seq monotonic even if the only track was swapped remove-then-add', () => {
+  it('remove-then-add track swap keeps the participant present and seq continuing', () => {
     const r = new ParticipantRegistry();
-    const t = {};
-    r.addTrack('a', t);
-    r.seq('a');
-    expect(r.removeTrack('a', t).participantGone).toBe(true);
-    r.addTrack('a', {});
+    const t1 = {};
+    r.join('a');
+    r.addTrack('a', t1);
+    expect(r.seq('a')).toBe(0);
     expect(r.seq('a')).toBe(1);
+    expect(r.removeTrack('a', t1)).toBe(0);
+    expect(r.has('a')).toBe(true);
+    r.addTrack('a', {});
+    expect(r.has('a')).toBe(true);
+    expect(r.seq('a')).toBe(2);
+  });
+
+  it('add-then-remove swap leaves the newer track live', () => {
+    const r = new ParticipantRegistry();
+    const old = {};
+    r.join('a');
+    r.addTrack('a', old);
+    r.addTrack('a', {});
+    expect(r.removeTrack('a', old)).toBe(1);
+    expect(r.removeTrack('a', old)).toBe(1); // stale repeat
+    expect(r.has('a')).toBe(true);
+  });
+
+  it('seq is per participant and survives leave/rejoin of the same id', () => {
+    const r = new ParticipantRegistry();
+    r.join('a');
+    r.seq('a');
+    r.join('b');
+    expect(r.seq('b')).toBe(0);
+    r.leave('a');
+    r.join('a');
+    expect(r.seq('a')).toBe(1);
+  });
+
+  it('ignores removal for unknown participants', () => {
+    const r = new ParticipantRegistry();
+    expect(r.removeTrack('zz', {})).toBe(0);
   });
 });

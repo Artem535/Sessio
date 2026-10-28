@@ -235,17 +235,29 @@ function forgetParticipant(id, notifyCpp) {
   if (notifyCpp) notify('participantLeft', id);
 }
 
+function announceParticipant(id, name, isLocal) {
+  if (!registry.join(id)) return;
+  peerFor(id, isLocal);
+  ensureTile(id, name, isLocal);
+  notify('participantJoined', id, name || id, !!isLocal);
+}
+
+// Terminal paths (join failure, lost connection, kicked) release everything,
+// so a later join() works without C++ having to call leave() first.
 const handlers = {
   onJoined(localId) {
+    if (!joining) return;
     setStatus('connected');
     notify('joined', localId);
   },
   onFailed(reason) {
-    setStatus('failed');
+    if (!joining) return;
+    teardown('failed');
     notify('joinFailed', String(reason));
   },
   onConnectionLost(reason) {
-    setStatus('reconnecting');
+    if (!joining) return;
+    teardown(reason === 'kicked' ? 'kicked' : 'lost');
     notify('connectionLost', String(reason));
   },
   onMediaError(reason) {
@@ -254,15 +266,18 @@ const handlers = {
   onDisplayName(id, name) {
     setTileName(id, name);
   },
+  onUserJoined({ participantId, displayName, isLocal }) {
+    if (!joining) return;
+    announceParticipant(participantId, displayName, isLocal);
+  },
   onParticipantLeft(id) {
-    if (registry.drop(id)) forgetParticipant(id, true);
+    if (registry.leave(id)) forgetParticipant(id, true);
   },
   onTrackAdded({ participantId, displayName, isLocal, kind, track, stream, audible }) {
     if (!joining) return; // late event from a call we already left
-    const { isNewParticipant } = registry.addTrack(participantId, track);
+    announceParticipant(participantId, displayName, isLocal); // no-op when membership came first
+    registry.addTrack(participantId, track);
     const peer = peerFor(participantId, isLocal);
-    ensureTile(participantId, displayName, isLocal);
-    if (isNewParticipant) notify('participantJoined', participantId, displayName || participantId, !!isLocal);
     if (kind === 'video') {
       attachVideo(participantId, stream, track);
       return;
@@ -285,19 +300,20 @@ const handlers = {
       bindTapSource(peer);
     }
   },
+  // Tracks only drive the tap; presence is membership (see onParticipantLeft).
   onTrackRemoved({ participantId, kind, track }) {
+    registry.removeTrack(participantId, track);
     const peer = peers.get(participantId);
-    if (peer && kind === 'audio' && peer.audio && peer.audio.track === track) {
+    if (!peer) return;
+    if (kind === 'audio' && peer.audio && peer.audio.track === track) {
       if (peer.audio.el) peer.audio.el.remove();
       peer.audio = null;
       bindTapSource(peer); // silence until the replacement track arrives
     }
-    if (peer && kind === 'video') {
+    if (kind === 'video') {
       const tile = tiles.get(participantId);
       if (tile && tile.videoTrack === track) detachVideo(participantId);
     }
-    const { participantGone } = registry.removeTrack(participantId, track);
-    if (participantGone) forgetParticipant(participantId, true);
   },
 };
 
@@ -319,12 +335,11 @@ async function join(options) {
     }
     conference = created;
   } catch (err) {
-    joining = false;
     handlers.onFailed(err && err.message ? err.message : err);
   }
 }
 
-async function leave() {
+async function teardown(statusKey) {
   const was = conference;
   joining = false;
   conference = null;
@@ -336,13 +351,17 @@ async function leave() {
     old.close();
   }
   clearUi();
-  setStatus('left');
+  setStatus(statusKey);
+  registry = new ParticipantRegistry();
   try {
     if (was) await was.leave();
   } catch (err) {
     console.warn('sessio-call: leave failed', err);
   }
-  registry = new ParticipantRegistry();
+}
+
+async function leave() {
+  await teardown('left');
   notify('left');
 }
 

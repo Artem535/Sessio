@@ -2,7 +2,8 @@ const strings = {
   en: {
     connecting: 'Connecting…',
     connected: 'Connected',
-    reconnecting: 'Connection lost',
+    lost: 'Connection lost, the call has ended',
+    kicked: 'You were removed from the call',
     left: 'Call ended',
     failed: 'Could not join the call',
     mic: 'Microphone',
@@ -14,7 +15,8 @@ const strings = {
   ru: {
     connecting: 'Подключение…',
     connected: 'Соединение установлено',
-    reconnecting: 'Соединение потеряно',
+    lost: 'Соединение потеряно, звонок завершён',
+    kicked: 'Вас удалили из звонка',
     left: 'Звонок завершён',
     failed: 'Не удалось войти в звонок',
     mic: 'Микрофон',
