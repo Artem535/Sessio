@@ -1206,3 +1206,12 @@ target_link_libraries(Sessio_my_day_logic_tests PRIVATE
     Sessio_my_day_page
 )
 gtest_discover_tests(Sessio_my_day_logic_tests)
+
+# Shared "join meeting" decision (inspector + My Day)
+add_executable(Sessio_meeting_join_tests meeting_join_tests.cpp)
+target_link_libraries(Sessio_meeting_join_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_meeting
+)
+gtest_discover_tests(Sessio_meeting_join_tests)

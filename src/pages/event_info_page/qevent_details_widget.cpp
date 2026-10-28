@@ -1,3 +1,5 @@
+#include "meeting_join.h"
+#include "provider_kind.h"
 #include "qevent_details_widget.h"
 #include "../../widgets/accent_color.h"
 #include "../../widgets/app_settings.h"
@@ -1296,16 +1298,30 @@ void QEventDetailsWidget::onMeetingUrlChanged(const QString &url) {
 }
 
 void QEventDetailsWidget::onOpenMeetingClicked() {
-  if (mSeriesBacked) {
-    emit openLiveKitMeetingRequested(mSeriesJoinTarget);
-    return;
+  if (mSeriesBacked && mSeriesJoinTarget.isEmpty()) {
+    return; // the button is disabled in this state
   }
-  if (mCurrentEvent &&
-      mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit) {
-    emit openLiveKitMeetingRequested(mCurrentEvent->meetingRef());
-    return;
+  DuckEvent event;
+  event.meeting_url = mMeetingUrlEdit->text().toStdString();
+  if (mCurrentEvent) {
+    if (const auto kind = mCurrentEvent->providerKind()) {
+      event.provider_kind = pcm::meeting::providerKindToString(*kind);
+    }
+    event.meeting_ref = mCurrentEvent->meetingRef().toStdString();
   }
-  pcm::meeting::openMeetingUrl(mMeetingUrlEdit->text(), this);
+  const std::optional<QString> seriesTarget =
+      mSeriesBacked ? std::optional<QString>(mSeriesJoinTarget) : std::nullopt;
+  const pcm::meeting::JoinAction action = pcm::meeting::resolveJoinAction(event, seriesTarget);
+  switch (action.kind) {
+  case pcm::meeting::JoinAction::Kind::LiveKit:
+    emit openLiveKitMeetingRequested(action.target);
+    break;
+  case pcm::meeting::JoinAction::Kind::Url:
+    pcm::meeting::openMeetingUrl(action.target, this);
+    break;
+  case pcm::meeting::JoinAction::Kind::None:
+    break;
+  }
 }
 
 void QEventDetailsWidget::onCopyMeetingUrlClicked() {
