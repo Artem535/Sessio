@@ -1237,3 +1237,14 @@ target_link_libraries(Sessio_meeting_join_tests PRIVATE
     Sessio_meeting
 )
 gtest_discover_tests(Sessio_meeting_join_tests)
+
+# MainWindow «Мой день» start page tests
+add_executable(Sessio_main_window_my_day_tests main_window_my_day_tests.cpp)
+target_link_libraries(Sessio_main_window_my_day_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Widgets
+    Sessio_app
+    Sessio_my_day_page
+)
+gtest_discover_tests(Sessio_main_window_my_day_tests)

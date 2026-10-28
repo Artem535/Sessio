@@ -1445,6 +1445,10 @@
         <translation>Показать неактивных</translation>
     </message>
     <message>
+        <source>: NAV_MY_DAY</source>
+        <translation>Мой день</translation>
+    </message>
+    <message>
         <source>Notes</source>
         <translation>Заметки</translation>
     </message>
@@ -1475,6 +1479,10 @@
     <message>
         <source>Built with Qt, DuckDB, and Qlementine.</source>
         <translation>Собрано на Qt, DuckDB и Qlementine.</translation>
+    </message>
+    <message>
+        <source>My day</source>
+        <translation>Мой день</translation>
     </message>
     <message>
         <source>Clients</source>
@@ -1638,6 +1646,93 @@
     <message>
         <source>Next year</source>
         <translation>Следующий год</translation>
+    </message>
+</context>
+<context>
+    <name>MyDay</name>
+    <message>
+        <source>Morning</source>
+        <translation>Утро</translation>
+    </message>
+    <message>
+        <source>Afternoon</source>
+        <translation>После полудня</translation>
+    </message>
+    <message>
+        <source>Evening</source>
+        <translation>Вечер</translation>
+    </message>
+    <message>
+        <source>My day</source>
+        <translation>Мой день</translation>
+    </message>
+    <message>
+        <source>Previous day</source>
+        <translation>Предыдущий день</translation>
+    </message>
+    <message>
+        <source>Today</source>
+        <translation>Сегодня</translation>
+    </message>
+    <message>
+        <source>Next day</source>
+        <translation>Следующий день</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n meeting(s)</source>
+        <translation>
+            <numerusform>%n встреча</numerusform>
+            <numerusform>%n встречи</numerusform>
+            <numerusform>%n встреч</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>planned income</source>
+        <translation>плановый доход</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n unpaid</source>
+        <translation>
+            <numerusform>%n не оплачена</numerusform>
+            <numerusform>%n не оплачены</numerusform>
+            <numerusform>%n не оплачено</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>All paid</source>
+        <translation>Всё оплачено</translation>
+    </message>
+    <message>
+        <source>open</source>
+        <translation>открыть</translation>
+    </message>
+    <message>
+        <source>Unpaid</source>
+        <translation>Неоплаченные</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n without notes</source>
+        <translation>
+            <numerusform>%n без заметки</numerusform>
+            <numerusform>%n без заметок</numerusform>
+            <numerusform>%n без заметок</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>All notes written</source>
+        <translation>Все заметки написаны</translation>
+    </message>
+    <message>
+        <source>this week</source>
+        <translation>за неделю</translation>
+    </message>
+    <message>
+        <source>Without notes</source>
+        <translation>Без заметок</translation>
+    </message>
+    <message>
+        <source>No meetings</source>
+        <translation>Встреч нет</translation>
     </message>
 </context>
 <context>
@@ -2864,6 +2959,10 @@ See you!</source>
         <source> s</source>
         <translation> с</translation>
     </message>
+    <message>
+        <source>General</source>
+        <translation>Общие</translation>
+    </message>
 </context>
 <context>
     <name>QShortcut</name>
@@ -3658,6 +3757,84 @@ See you!</source>
     </message>
 </context>
 <context>
+    <name>TimelineCard</name>
+    <message>
+        <source>Canceled</source>
+        <translation>Отменено</translation>
+    </message>
+    <message>
+        <source>unpaid</source>
+        <translation>не оплачено</translation>
+    </message>
+    <message>
+        <source>no note</source>
+        <translation>нет заметки</translation>
+    </message>
+    <message>
+        <source>in person</source>
+        <translation>очно</translation>
+    </message>
+    <message>
+        <source>personal</source>
+        <translation>личное</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Подключиться</translation>
+    </message>
+</context>
+<context>
+    <name>TodoColumn</name>
+    <message>
+        <source>No client</source>
+        <translation>Без клиента</translation>
+    </message>
+    <message>
+        <source>No meeting</source>
+        <translation>Без встречи</translation>
+    </message>
+    <message>
+        <source>To-dos for today</source>
+        <translation>Дела на сегодня</translation>
+    </message>
+    <message>
+        <source>To-dos</source>
+        <translation>Дела</translation>
+    </message>
+    <message>
+        <source>Clients</source>
+        <translation>Клиенты</translation>
+    </message>
+    <message>
+        <source>Meetings</source>
+        <translation>Встречи</translation>
+    </message>
+    <message>
+        <source>from %1</source>
+        <translation>с %1</translation>
+    </message>
+    <message>
+        <source>No to-dos</source>
+        <translation>Дел нет</translation>
+    </message>
+    <message>
+        <source>Add to-do</source>
+        <translation>Добавить дело</translation>
+    </message>
+    <message>
+        <source>What needs to be done?</source>
+        <translation>Что нужно сделать?</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Добавить</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Готово</translation>
+    </message>
+</context>
+<context>
     <name>TranscriptClientDialog</name>
     <message>
         <source>Attach clients</source>
@@ -4427,6 +4604,29 @@ Your previous data was kept.</source>
     <message>
         <source>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</source>
         <translation>Некоторые встречи сместятся на другие даты или время. Выберите другой часовой пояс или отмените и оставьте серию как есть.</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::my_day::MyDayBridge</name>
+    <message numerus="yes">
+        <source>next in %n min</source>
+        <translation>
+            <numerusform>следующая через %n мин</numerusform>
+            <numerusform>следующая через %n мин</numerusform>
+            <numerusform>следующая через %n мин</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>next at %1</source>
+        <translation>следующая в %1</translation>
+    </message>
+    <message>
+        <source>All done for today</source>
+        <translation>На сегодня всё</translation>
+    </message>
+    <message>
+        <source>first at %1</source>
+        <translation>первая в %1</translation>
     </message>
 </context>
 <context>

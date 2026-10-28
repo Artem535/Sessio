@@ -36,8 +36,10 @@ MyDayPage::MyDayPage(std::shared_ptr<pcm::database::Database> db, QTimelineModel
 
 void MyDayPage::showEvent(QShowEvent *event) {
   QWidget::showEvent(event);
-  mBridge->setActive(true);
-  mBridge->reload();
+  // setActive(true) reloads by itself when data changed while hidden; reload here only otherwise.
+  if (!mBridge->setActive(true)) {
+    mBridge->reload();
+  }
 }
 
 void MyDayPage::hideEvent(QHideEvent *event) {

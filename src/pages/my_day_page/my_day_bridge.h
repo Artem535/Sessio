@@ -64,7 +64,8 @@ public:
   void reload();
   // While inactive (page hidden) model signals and the minute timer only mark the bridge dirty;
   // becoming active again reloads once if anything changed meanwhile.
-  void setActive(bool active);
+  // Returns true when it reloaded because data changed while inactive.
+  bool setActive(bool active);
 
   Q_INVOKABLE void previousDay();
   Q_INVOKABLE void nextDay();

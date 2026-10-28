@@ -123,14 +123,16 @@ void MyDayBridge::scheduleReload() {
   });
 }
 
-void MyDayBridge::setActive(const bool active) {
+bool MyDayBridge::setActive(const bool active) {
   if (mActive == active) {
-    return;
+    return false;
   }
   mActive = active;
   if (mActive && mDirty) {
     reload();
+    return true;
   }
+  return false;
 }
 
 void MyDayBridge::setDay(const QDate &day) {
@@ -380,6 +382,8 @@ QVariantList MyDayBridge::meetingChoices() {
     row["id"] = static_cast<qint64>(item.event.id);
     row["title"] = titleFor(item.event);
     row["time"] = toLocal(item.event.start_date.value_or(0)).toString("HH:mm");
+    const auto clientId = clientIdFor(item.event);
+    row["clientId"] = clientId ? static_cast<qint64>(*clientId) : qint64{0};
     list.append(row);
   }
   return list;

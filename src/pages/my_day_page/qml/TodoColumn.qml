@@ -19,12 +19,23 @@ Rectangle {
         if (!bridge) return
         clientOptions = [{ id: 0, name: qsTr("No client") }].concat(bridge.clientChoices())
         meetingOptions = [{ id: 0, label: qsTr("No meeting") }].concat(
-            bridge.meetingChoices().map(m => ({ id: m.id, label: m.time + " " + m.title })))
+            bridge.meetingChoices().map(m => ({ id: m.id, clientId: m.clientId, label: m.time + " " + m.title })))
         newTitle.text = ""
         clientBox.currentIndex = 0
         meetingBox.currentIndex = 0
         adding = true
         newTitle.forceActiveFocus()
+    }
+    // Picking a meeting selects that meeting's client in the client picker.
+    function syncClientToMeeting() {
+        const meeting = meetingOptions[meetingBox.currentIndex]
+        if (!meeting || !meeting.clientId) return
+        for (let i = 0; i < clientOptions.length; ++i) {
+            if (clientOptions[i].id === meeting.clientId) {
+                clientBox.currentIndex = i
+                return
+            }
+        }
     }
     function saveNew() {
         if (!bridge || newTitle.text.trim().length === 0) return
@@ -316,6 +327,7 @@ Rectangle {
                             Layout.preferredWidth: 1
                             model: root.meetingOptions
                             textRole: "label"
+                            onActivated: root.syncClientToMeeting()
                         }
                     }
                     RowLayout {
