@@ -39,6 +39,17 @@ target_link_libraries(Sessio_database_transcript_tests PRIVATE
 )
 gtest_discover_tests(Sessio_database_transcript_tests)
 
+# "My day" to-do storage tests
+add_executable(Sessio_database_day_todo_tests database_day_todo_tests.cpp)
+target_link_libraries(Sessio_database_day_todo_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_config
+    Sessio_database
+    Poco::Foundation
+)
+gtest_discover_tests(Sessio_database_day_todo_tests)
+
 # Schedule identity / transactional outbox tests
 add_executable(Sessio_schedule_outbox_tests schedule_outbox_tests.cpp)
 target_link_libraries(Sessio_schedule_outbox_tests PRIVATE

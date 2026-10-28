@@ -384,6 +384,7 @@ bool Database::remove_event(const int64_t &id) {
   }
 
   for (const auto *query : {constance::kDetachTranscriptsOfEventQuery,
+                           constance::kDetachDayTodosOfEventQuery,
                            "UPDATE CallMaterial SET event_id=NULL WHERE event_id=$1"}) {
     auto transcriptResult = executePrepared(conn, query, {duckdb::Value::BIGINT(id)});
     if (!transcriptResult || transcriptResult->HasError()) {
@@ -559,6 +560,7 @@ bool Database::delete_event_series_overrides_from(
   auto &conn = write_connection(ownedConn);
   const auto from = db_utils::toDuckTimestamp(std::make_optional(occurrence_start_ms * 1000));
   for (const auto *query : {constance::kDetachTranscriptsOfSeriesOverridesQuery,
+                           constance::kDetachDayTodosOfSeriesOverridesQuery,
                            "UPDATE CallMaterial SET event_id=NULL WHERE event_id IN "
                            "(SELECT id FROM Event WHERE series_id=$1 AND original_occurrence_start >= $2)"}) {
     auto transcriptResult =
@@ -856,6 +858,10 @@ bool Database::remove_client(const int64_t &id) {
   auto transcriptLinks = executePrepared(conn,
       "DELETE FROM TranscriptClient WHERE client_id = $1", {duckdb::Value::BIGINT(id)});
   if (!transcriptLinks || transcriptLinks->HasError()) return false;
+
+  auto todoLinks = executePrepared(conn, constance::kDetachDayTodosOfClientQuery,
+                                   {duckdb::Value::BIGINT(id)});
+  if (!todoLinks || todoLinks->HasError()) return false;
 
   if (hasLinkedEvents) {
     auto deactivateResult = executePrepared(
@@ -2416,6 +2422,86 @@ std::vector<DuckTranscript> Database::get_transcripts() {
                            "ORDER BY created_at DESC, id DESC");
   if (!result || result->HasError()) throw std::runtime_error("Cannot list transcripts");
   std::vector<DuckTranscript> rows;
+  while (auto chunk = result->Fetch())
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i) rows.emplace_back(*chunk, i);
+  return rows;
+}
+
+// --- DayTodo ---
+
+int64_t Database::add_day_todo(const DuckDayTodo &todo) {
+  if (todo.title.empty()) {
+    PLOG_WARNING << "Rejected day todo with empty title";
+    return 0;
+  }
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  const auto micros = [](const std::optional<int64_t> &ms) {
+    return db_utils::toDuckTimestamp(ms ? std::make_optional(*ms * 1000) : std::nullopt);
+  };
+  const auto created = todo.created_at_ms > 0 ? todo.created_at_ms : nowMs();
+  auto result = executePrepared(
+      conn, constance::kInsertDayTodoQuery,
+      {duckdb::Value(todo.title), duckdb::Value(db_utils::msToLocalDateString(todo.day_ms)),
+       db_utils::toDuckValue(todo.client_id), db_utils::toDuckValue(todo.event_id),
+       db_utils::toDuckValue(todo.series_id), micros(todo.occurrence_start_ms),
+       micros(todo.done_at_ms), micros(created)});
+  if (!result || result->HasError()) {
+    PLOG_ERROR << "Failed to insert day todo: " << (result ? result->GetError() : "prepare failed");
+    return 0;
+  }
+  auto chunk = result->Fetch();
+  if (!chunk || chunk->size() == 0) return 0;
+  return static_cast<int64_t>(chunk->GetValue(0, 0).GetValue<int32_t>());
+}
+
+bool Database::update_day_todo_title(const int64_t id, const std::string &title) {
+  if (id <= 0 || title.empty()) return false;
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  auto result = executePrepared(conn, "UPDATE DayTodo SET title = $2 WHERE id = $1",
+                                {duckdb::Value::BIGINT(id), duckdb::Value(title)});
+  return result && !result->HasError();
+}
+
+bool Database::set_day_todo_done(const int64_t id, const std::optional<int64_t> doneAtMs) {
+  if (id <= 0) return false;
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  auto result = executePrepared(
+      conn, "UPDATE DayTodo SET done_at = $2 WHERE id = $1",
+      {duckdb::Value::BIGINT(id),
+       db_utils::toDuckTimestamp(doneAtMs ? std::make_optional(*doneAtMs * 1000) : std::nullopt)});
+  return result && !result->HasError();
+}
+
+bool Database::delete_day_todo(const int64_t id) {
+  if (id <= 0) return false;
+  std::optional<duckdb::Connection> ownedConn;
+  auto &conn = write_connection(ownedConn);
+  auto result = executePrepared(conn, "DELETE FROM DayTodo WHERE id = $1",
+                                {duckdb::Value::BIGINT(id)});
+  return result && !result->HasError();
+}
+
+std::vector<DuckDayTodo> Database::get_day_todos(const int64_t dayStartMs, const int64_t dayEndMs,
+                                                 const bool isToday) {
+  duckdb::Connection conn(*mDb);
+  const auto day = duckdb::Value(db_utils::msToLocalDateString(dayStartMs));
+  const auto start = db_utils::toDuckTimestamp(std::make_optional(dayStartMs * 1000));
+  const auto end = db_utils::toDuckTimestamp(std::make_optional(dayEndMs * 1000));
+  const auto now = nowMs();
+  const bool isPast = dayEndMs <= now && !isToday;
+  std::unique_ptr<duckdb::QueryResult> result;
+  if (isToday) {
+    result = executePrepared(conn, constance::kSelectDayTodosTodayQuery, {day, start, end});
+  } else if (isPast) {
+    result = executePrepared(conn, constance::kSelectDayTodosPastQuery, {day, start, end});
+  } else {
+    result = executePrepared(conn, constance::kSelectDayTodosFutureQuery, {day});
+  }
+  if (!result || result->HasError()) throw std::runtime_error("Cannot list day todos");
+  std::vector<DuckDayTodo> rows;
   while (auto chunk = result->Fetch())
     for (duckdb::idx_t i = 0; i < chunk->size(); ++i) rows.emplace_back(*chunk, i);
   return rows;

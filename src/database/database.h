@@ -119,6 +119,16 @@ public:
   std::vector<DuckTranscript> get_transcripts_for_event(int64_t event_id);
   std::vector<DuckTranscript> get_transcripts_for_client(int64_t client_id);
   std::vector<DuckTranscript> get_transcripts();
+  // "My day" to-dos. Returns the new id, 0 on failure.
+  int64_t add_day_todo(const DuckDayTodo &todo);
+  bool update_day_todo_title(int64_t id, const std::string &title);
+  // nullopt marks the to-do as not done.
+  bool set_day_todo_done(int64_t id, std::optional<int64_t> doneAtMs);
+  bool delete_day_todo(int64_t id);
+  // dayStartMs/dayEndMs are the local day bounds. Today also carries over unfinished
+  // to-dos of earlier days; other days show to-dos dated that day (past: plus those
+  // finished that day).
+  std::vector<DuckDayTodo> get_day_todos(int64_t dayStartMs, int64_t dayEndMs, bool isToday);
   bool set_transcript_clients(int64_t transcript_id, const std::vector<int64_t> &client_ids);
   std::vector<int64_t> get_transcript_client_ids(int64_t transcript_id);
   PrompterState get_prompter_state(int64_t transcript_id);

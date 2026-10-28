@@ -573,6 +573,36 @@ struct ScheduleCommit {
   std::int64_t desired_revision = 0;
 };
 
+// --- DuckDayTodo ---
+// A simple to-do of the "My day" screen. `day_ms` is local midnight of the planned day
+// in epoch milliseconds; the other times are epoch milliseconds as well.
+struct DuckDayTodo {
+  std::int64_t id = -1;
+  std::string title;
+  std::int64_t day_ms = 0;
+  std::optional<std::int64_t> client_id = std::nullopt;
+  std::optional<std::int64_t> event_id = std::nullopt;
+  std::optional<std::int64_t> series_id = std::nullopt;
+  std::optional<std::int64_t> occurrence_start_ms = std::nullopt;
+  std::optional<std::int64_t> done_at_ms = std::nullopt;
+  std::int64_t created_at_ms = 0;
+
+  DuckDayTodo() = default;
+  // Column order: id, title, day (VARCHAR 'YYYY-MM-DD'), client_id, event_id, series_id,
+  // occurrence_start, done_at, created_at.
+  DuckDayTodo(const duckdb::DataChunk &chunk, duckdb::idx_t index) {
+    id = db_utils::toInt32AsInt64(chunk.GetValue(0, index));
+    title = chunk.GetValue(1, index).ToString();
+    day_ms = db_utils::localDateStringToMidnightMs(chunk.GetValue(2, index).ToString());
+    client_id = db_utils::toOptionalInt32AsInt64(chunk.GetValue(3, index));
+    event_id = db_utils::toOptionalInt32AsInt64(chunk.GetValue(4, index));
+    series_id = db_utils::toOptionalInt32AsInt64(chunk.GetValue(5, index));
+    occurrence_start_ms = db_utils::toOptionalTimestampMs(chunk.GetValue(6, index));
+    done_at_ms = db_utils::toOptionalTimestampMs(chunk.GetValue(7, index));
+    created_at_ms = db_utils::toOptionalTimestampMs(chunk.GetValue(8, index)).value_or(0);
+  }
+};
+
 struct ScheduleAck {
   bool has_newer_pending = false;
 };

@@ -1374,6 +1374,43 @@ TEST(RestoreServiceTest, CallMaterialsRoundTripEncryptedBackupIncludingManualOnl
   Poco::File(attachments).remove(true); Poco::File(restoredAttachments).remove(true);
 }
 
+TEST(RestoreServiceTest, backupRoundTripKeepsDayTodos) {
+  const auto root = tempPath("tmp_restore_day_todo_source");
+  const auto target = root + "-target";
+  const auto backup = root + ".psybackup";
+  const auto attachments = root + "-attachments";
+  const auto restoredAttachments = target + "-attachments";
+  Poco::File(attachments).createDirectories();
+  if (Poco::File(target).exists()) Poco::File(target).remove(true);
+  removeIfExists(backup);
+  int64_t todoId = 0;
+  {
+    auto source = makeTestDatabase("tmp_restore_day_todo_source");
+    DuckDayTodo todo;
+    todo.title = "Call back";
+    todo.day_ms = 1730000000000;
+    todo.client_id = 5;
+    todo.done_at_ms = 1730003600000;
+    todoId = source.add_day_todo(todo);
+    ASSERT_GT(todoId, 0);
+    ASSERT_TRUE(createEncryptedBackup(source, backup, attachments));
+  }
+  const auto restored = restoreWithRecoveryPhrase(backup, target, restoredAttachments);
+  ASSERT_TRUE(restored.ok) << restored.error;
+  {
+    pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(target)}};
+    pcm::database::Database db(conf);
+    const auto rows = db.get_day_todos(1730000000000, 1730000000000 + 86400000, false);
+    ASSERT_EQ(rows.size(), 1u);
+    EXPECT_EQ(rows[0].id, todoId);
+    EXPECT_EQ(rows[0].title, "Call back");
+    EXPECT_EQ(rows[0].client_id, 5);
+    EXPECT_EQ(rows[0].done_at_ms, 1730003600000);
+  }
+  Poco::File(backup).remove(); Poco::File(target).remove(true); Poco::File(root).remove(true);
+  Poco::File(attachments).remove(true); Poco::File(restoredAttachments).remove(true);
+}
+
 TEST(RestoreServiceTest, CallMaterialSchemaThreeBackupMigratesBeforeReplacement) {
   const auto root = tempPath("tmp_restore_call_material_schema_three");
   const auto target = root + "-target";
