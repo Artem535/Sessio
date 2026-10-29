@@ -4,6 +4,11 @@
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <algorithm>
+#include <atomic>
+#include <exception>
+#include <mutex>
+#include <thread>
+#include <vector>
 #include <optional>
 #include <rfl.hpp>
 #include <rfl/json.hpp>
@@ -185,7 +190,7 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
   }();
   const auto leafDates = restrictStrings(leafBase, "date", schemaDays);
 
-  int calls = 0;
+  std::atomic_int calls = 0;
   const auto call = [&](const QString &system, const QByteArray &payload, const QByteArray &schema) {
     if (system.toUtf8().size() + payload.size() > kContextInputBytes || ++calls > kMaxCalls)
       throw PipelineError("notes generation budget exceeded");
@@ -211,16 +216,48 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
 
   // Decoding is greedy: a rejected chunk would fail the same way again, so it
   // is retried once as two halves (different input, different reply).
-  QList<Leaf> leaves;
-  for (const auto &input : inputs) {
-    if (auto result = leaf(input)) { leaves.append(*result); continue; }
-    if (input.size() < 2) continue;
+  const auto leavesOf = [&](const QJsonArray &input) {
+    QList<Leaf> out;
+    if (auto result = leaf(input)) { out.append(*result); return out; }
+    if (input.size() < 2) return out;
     const auto half = input.size() / 2;
     QJsonArray first, second;
     for (qsizetype i = 0; i < input.size(); ++i) (i < half ? first : second).append(input[i]);
     for (const auto &part : {first, second})
-      if (auto result = leaf(part)) leaves.append(*result);
+      if (auto result = leaf(part)) out.append(*result);
+    return out;
+  };
+  // Chunks are independent; with parallelism above 1 they run on a few threads
+  // and are collected in call order, so the result does not depend on timing.
+  QList<QList<Leaf>> perInput(inputs.size());
+  const auto threads = std::min<qsizetype>(std::max(ctx.parallelism, 1), inputs.size());
+  if (threads <= 1) {
+    for (qsizetype i = 0; i < inputs.size(); ++i) perInput[i] = leavesOf(inputs[i]);
+  } else {
+    std::atomic_int next = 0;
+    std::atomic_bool stop = false;
+    std::mutex failureMutex;
+    std::exception_ptr failure;
+    std::vector<std::thread> pool;
+    for (qsizetype t = 0; t < threads; ++t)
+      pool.emplace_back([&] {
+        while (!stop) {
+          const auto i = next++;
+          if (i >= inputs.size()) return;
+          try {
+            perInput[i] = leavesOf(inputs[i]);
+          } catch (...) {
+            std::lock_guard lock(failureMutex);
+            if (!failure) failure = std::current_exception();
+            stop = true;
+          }
+        }
+      });
+    for (auto &thread : pool) thread.join();
+    if (failure) std::rethrow_exception(failure);
   }
+  QList<Leaf> leaves;
+  for (const auto &part : perInput) leaves.append(part);
   if (leaves.isEmpty()) throw PipelineError("invalid notes output");
 
   QList<QJsonArray> points, tasks, questions;

@@ -1,7 +1,11 @@
 #include "summary_pipeline.h"
 
 #include <QJsonDocument>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <functional>
+#include <mutex>
 #include <gtest/gtest.h>
 
 using namespace pcm::prompter;
@@ -317,4 +321,79 @@ TEST(SummaryPipeline, ExcessSourceAndChunkBudgetsFailBeforeModelCalls) {
   for (int i = 0; i < 40; ++i) sources.append(source(QString::number(i), QString(6000, QChar(1))));
   EXPECT_THROW(processSummary(sources, ctx(), model.generate()), PipelineError);
   EXPECT_TRUE(model.payloads.empty());
+}
+
+namespace {
+// A thread-safe generator for parallel runs: leaves rendezvous so a test can
+// see how many ran at once.
+struct ParallelModel {
+  std::mutex mutex;
+  std::condition_variable arrived;
+  int running = 0, maxRunning = 0, waitFor = 1;
+  std::function<QJsonValue(const QJsonObject &)> leaf = [](const QJsonObject &i) { return leafReply(i); };
+  Generate generate() {
+    return [this](const QString &, const QByteArray &payload, const QByteArray &) -> QJsonValue {
+      const auto input = parsed(payload);
+      if (!input.contains("utterances")) return overviewReply(input);
+      {
+        std::unique_lock lock(mutex);
+        ++running;
+        maxRunning = std::max(maxRunning, running);
+        arrived.notify_all();
+        arrived.wait_for(lock, std::chrono::seconds(3), [this] { return running >= waitFor; });
+      }
+      struct Done { ParallelModel &m; ~Done() { std::lock_guard l(m.mutex); --m.running; } } done{*this};
+      return leaf(input);
+    };
+  }
+};
+SummaryContext parallelCtx(int parallelism) {
+  auto c = ctx();
+  c.parallelism = parallelism;
+  return c;
+}
+} // namespace
+
+TEST(SummaryPipeline, ParallelLeavesProduceTheSameSummaryAsSequential) {
+  ParallelModel sequentialModel, parallelModel;
+  const auto sequential = processSummary(longCall(7), parallelCtx(1), sequentialModel.generate());
+  const auto parallel = processSummary(longCall(7), parallelCtx(4), parallelModel.generate());
+  EXPECT_EQ(parallel, sequential);
+}
+
+TEST(SummaryPipeline, ParallelLeavesRunConcurrently) {
+  ParallelModel model;
+  model.waitFor = 3;  // each leaf waits until three are in flight
+  processSummary(longCall(6), parallelCtx(4), model.generate());
+  EXPECT_GE(model.maxRunning, 3);
+}
+
+TEST(SummaryPipeline, ParallelismNeverExceedsTheLimit) {
+  ParallelModel model;
+  model.waitFor = 2;  // a leaf proceeds once two run together; a third would show a broken cap
+  processSummary(longCall(6), parallelCtx(2), model.generate());
+  EXPECT_EQ(model.maxRunning, 2);
+}
+
+TEST(SummaryPipeline, ParallelLeafRejectedLikeSequential) {
+  const auto bad = [](const QJsonObject &input) -> QJsonValue {
+    if (firstId(input) == "u1") return QJsonObject{{"nonsense", 1}};
+    return leafReply(input);
+  };
+  ParallelModel sequentialModel, parallelModel;
+  sequentialModel.leaf = parallelModel.leaf = bad;
+  const auto sequential = processSummary(longCall(4), parallelCtx(1), sequentialModel.generate());
+  const auto parallel = processSummary(longCall(4), parallelCtx(4), parallelModel.generate());
+  EXPECT_EQ(parallel, sequential);
+  EXPECT_FALSE(texts(parallel["key_points"].toArray()).contains("Пункт u1"));
+  EXPECT_TRUE(texts(parallel["key_points"].toArray()).contains("Пункт u2"));
+}
+
+TEST(SummaryPipeline, ParallelNonReplyFailurePropagates) {
+  ParallelModel model;
+  model.leaf = [](const QJsonObject &input) -> QJsonValue {
+    if (firstId(input) == "u2") throw PipelineError("cloud auth");
+    return leafReply(input);
+  };
+  EXPECT_THROW(processSummary(longCall(5), parallelCtx(3), model.generate()), PipelineError);
 }
