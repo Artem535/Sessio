@@ -1,4 +1,5 @@
 #include "prompter_worker.h"
+#include "prompter_pipeline.h"
 #include <QApplication>
 #include <QElapsedTimer>
 #include <QEvent>
@@ -11,6 +12,8 @@
 #include <QTemporaryDir>
 #include <QThread>
 #include <atomic>
+#include <functional>
+#include <mutex>
 #include <thread>
 #include <gtest/gtest.h>
 
@@ -55,6 +58,55 @@ QJsonObject request(int id) {
   return {{"protocol_version", 1}, {"request_id", id}, {"session_generation", 1}, {"ledger_revision", 0},
           {"utterances", QJsonArray{QJsonObject{{"id", "1"}, {"speaker", "A"}, {"text", "Привет"}}}},
           {"candidates", QJsonArray{}}};
+}
+
+// A cloud engine that records what it was sent and answers from a script.
+struct CloudScript {
+  std::mutex mutex;
+  QList<QByteArray> payloads;
+  std::function<QJsonValue(const QByteArray &)> answer = [](const QByteArray &) -> QJsonValue {
+    return QJsonObject{{"events", QJsonArray{}}};
+  };
+  std::atomic_int cancels = 0;
+  std::atomic_bool block = false;
+  QList<QByteArray> sent() { std::lock_guard lock(mutex); return payloads; }
+};
+
+class ScriptedCloudEngine final : public pcm::prompter::PrompterEngine {
+public:
+  explicit ScriptedCloudEngine(std::shared_ptr<CloudScript> script) : mScript(std::move(script)) {}
+  QJsonValue generate(const QString &, const QByteArray &payload, const QByteArray &) override {
+    { std::lock_guard lock(mScript->mutex); mScript->payloads.append(payload); }
+    while (mScript->block && !mCancelled) QThread::msleep(5);
+    if (mCancelled) throw pcm::prompter::PipelineError("cancelled");
+    return mScript->answer(payload);
+  }
+  void cancel() override { ++mScript->cancels; mCancelled = true; }
+private:
+  std::shared_ptr<CloudScript> mScript;
+  std::atomic_bool mCancelled = false;
+};
+
+PrompterWorker::CloudRouting routing(const std::shared_ptr<CloudScript> &script, QStringList cloudTasks,
+                                     bool pseudonymize = true) {
+  PrompterWorker::CloudRouting r;
+  r.useCloud = [cloudTasks](const QString &task) { return cloudTasks.contains(task.isEmpty() ? "agreements" : task); };
+  r.makeEngine = [script]() -> std::unique_ptr<pcm::prompter::PrompterEngine> {
+    return std::make_unique<ScriptedCloudEngine>(script);
+  };
+  r.pseudonymize = [pseudonymize] { return pseudonymize; };
+  r.label = [] { return QStringLiteral("cloud:test-model"); };
+  r.parallelism = [] { return 1; };
+  return r;
+}
+
+QJsonObject livePoints(int id, const QString &text) {
+  auto r = request(id);
+  r["task"] = "live_points"; r["material_id"] = 7; r["request_token"] = QString::number(id);
+  r["known_points"] = QJsonArray{};
+  r["subjects"] = QJsonObject{{"client", QJsonArray{"Иван"}}, {"specialist", QJsonArray{"Мария"}}};
+  r["utterances"] = QJsonArray{QJsonObject{{"id", "1"}, {"speaker", "Иван"}, {"text", text}, {"start_ms", 0}, {"end_ms", 1000}}};
+  return r;
 }
 
 class PrompterWorkerTest : public ::testing::Test {
@@ -336,4 +388,149 @@ int main(int argc, char **argv) {
   QApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+
+TEST_F(PrompterWorkerTest, CloudRoutedRequestUsesCloudEngineAndLabelsTheResult) {
+  auto script = std::make_shared<CloudScript>();
+  script->answer = [](const QByteArray &) -> QJsonValue {
+    return QJsonObject{{"key_points", QJsonArray{QJsonObject{{"text", "Позвонить [Клиент]"}, {"evidence_ids", QJsonArray{"1"}}}}}};
+  };
+  PrompterWorker worker(factory(probe));
+  worker.setCloudRouting(routing(script, {"live_points"}));
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.startCloud());
+  worker.send(livePoints(1, "Позвонить Ивану завтра"));
+  ASSERT_TRUE(replies.wait(5000));
+  const auto reply = replies[0][0].toJsonObject();
+  EXPECT_EQ(reply["engine"].toString(), "cloud:test-model");
+  EXPECT_EQ(probe->loads, 0);  // no local model was loaded
+  // The name never left; the reply is restored before anyone sees it.
+  ASSERT_EQ(script->sent().size(), 1);
+  EXPECT_FALSE(script->sent()[0].contains("Иван"));
+  EXPECT_TRUE(script->sent()[0].contains("[Клиент]"));
+  EXPECT_EQ(reply["notes"].toObject()["key_points"].toArray()[0].toObject()["text"].toString(), "Позвонить Иван");
+}
+
+TEST_F(PrompterWorkerTest, PseudonymizationOffSendsRawText) {
+  auto script = std::make_shared<CloudScript>();
+  script->answer = [](const QByteArray &) -> QJsonValue { return QJsonObject{{"key_points", QJsonArray{}}}; };
+  PrompterWorker worker(factory(probe));
+  worker.setCloudRouting(routing(script, {"live_points"}, false));
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.startCloud());
+  worker.send(livePoints(1, "Позвонить Ивану завтра"));
+  ASSERT_TRUE(replies.wait(5000));
+  ASSERT_EQ(script->sent().size(), 1);
+  EXPECT_TRUE(script->sent()[0].contains("Иван"));
+}
+
+TEST_F(PrompterWorkerTest, LocalRoutedRequestStillUsesTheLocalEngine) {
+  auto script = std::make_shared<CloudScript>();
+  PrompterWorker worker(factory(probe));
+  worker.setCloudRouting(routing(script, {}));
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.start(model));
+  worker.send(request(1));
+  ASSERT_TRUE(replies.wait(5000));
+  EXPECT_EQ(replies[0][0].toJsonObject()["engine"].toString(), "local");
+  EXPECT_EQ(script->sent().size(), 0);
+}
+
+TEST_F(PrompterWorkerTest, FeaturesCanSplitBetweenLocalAndCloud) {
+  auto script = std::make_shared<CloudScript>();
+  script->answer = [](const QByteArray &) -> QJsonValue { return QJsonObject{{"key_points", QJsonArray{}}}; };
+  PrompterWorker worker(factory(probe));
+  worker.setCloudRouting(routing(script, {"live_points"}));
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.start(model));
+  worker.send(request(1));
+  worker.send(livePoints(2, "Привет"));
+  for (int i = 0; i < 4 && replies.count() < 2; ++i) replies.wait(5000);
+  ASSERT_EQ(replies.count(), 2);
+  QMap<int, QString> engines;
+  for (const auto &reply : replies) engines[reply[0].toJsonObject()["request_id"].toInt()] = reply[0].toJsonObject()["engine"].toString();
+  EXPECT_EQ(engines[1], "local");
+  EXPECT_EQ(engines[2], "cloud:test-model");
+}
+
+TEST_F(PrompterWorkerTest, CloudFailureIsReportedAndNeverFallsBackToLocal) {
+  auto script = std::make_shared<CloudScript>();
+  script->answer = [](const QByteArray &) -> QJsonValue { throw pcm::prompter::PipelineError("cloud auth"); };
+  PrompterWorker worker(factory(probe));
+  worker.setCloudRouting(routing(script, {"live_points"}));
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.start(model));  // a local model IS available
+  worker.send(livePoints(1, "Привет"));
+  ASSERT_TRUE(replies.wait(5000));
+  const auto reply = replies[0][0].toJsonObject();
+  EXPECT_EQ(reply["error"].toString(), "inference_failed");
+  EXPECT_EQ(reply["reason"].toString(), "cloud");
+  EXPECT_EQ(reply["cloud_detail"].toString(), "auth");
+  EXPECT_FALSE(reply.contains("engine"));
+  EXPECT_EQ(probe->cancels, 0);
+}
+
+TEST_F(PrompterWorkerTest, CloudTimeoutIsReportedAsTimeout) {
+  auto script = std::make_shared<CloudScript>();
+  script->answer = [](const QByteArray &) -> QJsonValue { throw pcm::prompter::PipelineError("cloud timeout"); };
+  PrompterWorker worker(factory(probe));
+  worker.setCloudRouting(routing(script, {"live_points"}));
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.startCloud());
+  worker.send(livePoints(1, "Привет"));
+  ASSERT_TRUE(replies.wait(5000));
+  EXPECT_EQ(replies[0][0].toJsonObject()["reason"].toString(), "timeout");
+}
+
+TEST_F(PrompterWorkerTest, LocalRequestWithoutLocalModelFailsInsteadOfHanging) {
+  auto script = std::make_shared<CloudScript>();
+  PrompterWorker worker(factory(probe));
+  worker.setCloudRouting(routing(script, {"live_points"}));
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.startCloud());
+  worker.send(request(1));  // agreements route to the local engine
+  ASSERT_TRUE(replies.wait(5000));
+  EXPECT_EQ(replies[0][0].toJsonObject()["reason"].toString(), "runtime");
+}
+
+TEST_F(PrompterWorkerTest, MissingCloudEngineFailsAsCloud) {
+  auto script = std::make_shared<CloudScript>();
+  auto r = routing(script, {"live_points"});
+  r.makeEngine = [] { return std::unique_ptr<pcm::prompter::PrompterEngine>(); };
+  PrompterWorker worker(factory(probe));
+  worker.setCloudRouting(r);
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.startCloud());
+  worker.send(livePoints(1, "Привет"));
+  ASSERT_TRUE(replies.wait(5000));
+  EXPECT_EQ(replies[0][0].toJsonObject()["reason"].toString(), "cloud");
+}
+
+TEST_F(PrompterWorkerTest, CancellingACloudRequestAbortsItWithoutReloadingTheLocalModel) {
+  auto script = std::make_shared<CloudScript>();
+  script->block = true;
+  PrompterWorker worker(factory(probe));
+  worker.setCloudRouting(routing(script, {"live_points"}));
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.start(model));
+  QTRY_VERIFY_WITH_TIMEOUT(probe->loads == 1, 5000);
+  worker.send(livePoints(1, "Привет"));
+  QTRY_VERIFY_WITH_TIMEOUT(script->sent().size() == 1, 5000);
+  worker.cancelNotes(7, "1");
+  ASSERT_TRUE(replies.wait(5000));
+  EXPECT_EQ(replies[0][0].toJsonObject()["reason"].toString(), "cancelled");
+  EXPECT_EQ(script->cancels, 1);
+  QTest::qWait(100);
+  EXPECT_EQ(probe->loads, 1);  // the local model stayed loaded
+}
+
+TEST_F(PrompterWorkerTest, LaterStartLoadsTheLocalModelAfterCloudOnly) {
+  auto script = std::make_shared<CloudScript>();
+  PrompterWorker worker(factory(probe));
+  worker.setCloudRouting(routing(script, {"live_points"}));
+  QSignalSpy ready(&worker, &PrompterWorker::ready);
+  ASSERT_TRUE(worker.startCloud());
+  ASSERT_TRUE(worker.start(model));
+  ASSERT_TRUE(ready.wait(5000));
+  EXPECT_EQ(probe->loads, 1);
 }

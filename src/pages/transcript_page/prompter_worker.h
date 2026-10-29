@@ -4,6 +4,7 @@
 #include <QThread>
 #include <QTimer>
 #include <QQueue>
+#include <functional>
 #include <memory>
 
 #include "prompter_engine.h"
@@ -20,6 +21,21 @@ public:
   explicit PrompterWorker(pcm::prompter::PrompterEngineFactory factory, QObject *parent = nullptr);
   ~PrompterWorker() override;
   bool start(const QString &model);
+  // Cloud-routed requests only: no local model is loaded, a request routed to
+  // the local engine fails with reason "runtime". A later start() loads one.
+  bool startCloud();
+  // Which engine serves a request. By default the user's settings decide
+  // (featureEngine per task) and the engine is built from the cloud settings
+  // and the API key given to setCloudApiKey(). Tests replace all of it.
+  struct CloudRouting {
+    std::function<bool(const QString &task)> useCloud;
+    std::function<std::unique_ptr<pcm::prompter::PrompterEngine>()> makeEngine;  // GUI thread, per request
+    std::function<bool()> pseudonymize;
+    std::function<QString()> label;  // "cloud:<model>" in results
+    std::function<int()> parallelism;  // concurrent summary leaf calls
+  };
+  void setCloudRouting(CloudRouting routing) { mCloud = std::move(routing); }
+  void setCloudApiKey(const QString &key) { mCloudApiKey = key; }
   void stop();
   void send(const QJsonObject &request);
   void cancelNotes(qint64 materialId, const QString &requestToken = {});
@@ -47,6 +63,9 @@ private:
   QJsonObject mExpected;
   QQueue<QJsonObject> mQueue;
   QString mModelPath;
+  CloudRouting mCloud;
+  QString mCloudApiKey;
+  bool mCloudOnly = false, mExpectedCloud = false;
   int mGeneration = 0, mSerial = 0, mCallTimeoutMs = 0;
   int mAgreementsCallMs = 120000, mCancelGraceMs = 30000;
   bool mReady = false, mStopped = true, mTimedOut = false;

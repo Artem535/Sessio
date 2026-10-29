@@ -10,6 +10,7 @@ namespace pcm::prompter {
 struct SummaryContext {
   QDate callDate;          // meeting dates resolve against this day
   QStringList agreements;  // accepted agreements of the meeting, never repeated as tasks
+  int parallelism = 1;     // concurrent leaf calls; above 1 the generator must be thread-safe
 };
 
 // The meeting summary, run once after the call over the whole transcript.

@@ -16,6 +16,8 @@
 #include "live_points_pipeline.h"
 #include "summary_pipeline.h"
 #include "app_settings.h"
+#include "cloud_engine.h"
+#include "pseudonymizer.h"
 
 Q_LOGGING_CATEGORY(logPrompterWorker, "pcm.prompter.worker")
 
@@ -36,6 +38,9 @@ struct PrompterWorker::Shared {
   // GUI destructor clears it before QObject destruction can race with posting.
   PrompterWorker *receiver = nullptr;
   std::shared_ptr<pcm::prompter::PrompterEngine> engine;
+  // The engine of the request in flight when it is cloud-routed.
+  std::shared_ptr<pcm::prompter::PrompterEngine> cloudEngine;
+  std::mutex cacheMutex;  // leaf calls may run concurrently
   std::atomic_int generation = 0;
   std::atomic_int requestSerial = 0;
   // Model-thread-only cache of deterministic note subproblems. Finalization
@@ -44,6 +49,11 @@ struct PrompterWorker::Shared {
   void cancel() {
     std::lock_guard lock(mutex);
     if (engine) engine->cancel();
+    if (cloudEngine) cloudEngine->cancel();
+  }
+  void setCloud(std::shared_ptr<pcm::prompter::PrompterEngine> next) {
+    std::lock_guard lock(mutex);
+    cloudEngine = std::move(next);
   }
   std::shared_ptr<pcm::prompter::PrompterEngine> current() {
     std::lock_guard lock(mutex);
@@ -59,7 +69,10 @@ struct PrompterWorker::Shared {
   // Called only on the model thread, including from QThread::finished when
   // quit() bypasses the queued release. Destruction happens outside the lock.
   void release() {
-    notesCache.clear();
+    {
+      std::lock_guard lock(cacheMutex);
+      notesCache.clear();
+    }
     std::shared_ptr<pcm::prompter::PrompterEngine> released;
     {
       std::lock_guard lock(mutex);
@@ -67,6 +80,12 @@ struct PrompterWorker::Shared {
     }
   }
 };
+
+namespace {
+QString featureOfTask(const QString &task) {
+  return task == "summary" || task == "live_points" ? task : QStringLiteral("agreements");
+}
+} // namespace
 
 PrompterWorker::PrompterWorker(QObject *parent)
     : PrompterWorker([](const QString &model) {
@@ -83,6 +102,17 @@ PrompterWorker::PrompterWorker(QObject *parent)
 PrompterWorker::PrompterWorker(pcm::prompter::PrompterEngineFactory factory, QObject *parent)
     : QObject(parent), mFactory(std::move(factory)), mShared(std::make_shared<Shared>()) {
   mShared->receiver = this;
+  mCloud.useCloud = [](const QString &task) { return pcm::app_settings::featureEngine(featureOfTask(task)) == "cloud"; };
+  mCloud.pseudonymize = [] { return pcm::app_settings::cloudPseudonymize(); };
+  mCloud.label = [] { return QStringLiteral("cloud:") + pcm::app_settings::cloudModel(); };
+  mCloud.parallelism = [] { return 4; };
+  mCloud.makeEngine = [this]() -> std::unique_ptr<pcm::prompter::PrompterEngine> {
+    pcm::prompter::CloudConfig config;
+    config.baseUrl = pcm::app_settings::cloudBaseUrl();
+    config.model = pcm::app_settings::cloudModel();
+    config.apiKey = mCloudApiKey;
+    return pcm::prompter::createCloudEngine(config);
+  };
   // No GUI owner: synchronous loading can outlive PrompterWorker. Neither the
   // thread nor its callbacks own or dereference that worker after destruction.
   mThread = new QThread;
@@ -124,7 +154,9 @@ bool PrompterWorker::start(const QString &model) {
   if (!QFileInfo(model).isFile()) {
     fail(); return false;
   }
-  if (!mStopped) return true;
+  if (!mStopped && !mCloudOnly) return true;
+  if (mCloudOnly && !mExpected.isEmpty()) return true;  // a cloud request is running; load later
+  mCloudOnly = false;
   mModelPath = model;
   mStopped = false; mReady = false; mTimedOut = false; mPending = {}; mExpected = {}; mQueue.clear(); mReloadAfterCancel = false;
   const int generation = ++mGeneration;
@@ -160,12 +192,22 @@ bool PrompterWorker::start(const QString &model) {
   return true;
 }
 
+bool PrompterWorker::startCloud() {
+  if (!mStopped) return true;
+  mStopped = false; mReady = true; mCloudOnly = true; mTimedOut = false;
+  mPending = {}; mExpected = {}; mQueue.clear(); mReloadAfterCancel = false; mExpectedCloud = false;
+  mShared->generation = ++mGeneration;
+  return true;
+}
+
 void PrompterWorker::stop() {
   const bool wasActive = !mStopped;
+  mCloudOnly = false; mExpectedCloud = false;
   mStopped = true; mReady = false; mTimedOut = false; mTimeout.stop(); mPending = {}; mExpected = {}; mQueue.clear(); mReloadAfterCancel = false;
   ++mShared->requestSerial;
   mShared->generation = ++mGeneration;
   mShared->cancel();
+  mShared->setCloud(nullptr);
   QMetaObject::invokeMethod(mThreadContext, [shared = mShared] {
     shared->release();
   }, Qt::QueuedConnection);
@@ -217,28 +259,77 @@ void PrompterWorker::send(const QJsonObject &request) {
   }
   if (QJsonDocument(request).toJson(QJsonDocument::Compact).size() > kMaxRequestBytes) { fail(); return; }
   mExpected = request;
+  const auto task = request["task"].toString();
+  const bool cloud = mCloud.useCloud && mCloud.useCloud(task);
+  mExpectedCloud = cloud;
+  const auto failNow = [this, &request](const char *reason, const char *detail) {
+    QJsonObject result{{"protocol_version", 1}, {"error", "inference_failed"}, {"reason", reason}};
+    if (detail) result.insert("cloud_detail", detail);
+    for (const char *key : {"request_id", "session_generation", "ledger_revision", "task", "material_id", "final", "request_token"})
+      if (request.contains(key)) result.insert(key, request.value(key));
+    // Queued, like every other result: the caller may not be listening yet.
+    QMetaObject::invokeMethod(this, [this, generation = mGeneration, result] { finish(generation, result); }, Qt::QueuedConnection);
+  };
+  std::shared_ptr<pcm::prompter::PrompterEngine> cloudEngine;
+  if (cloud) {
+    if (mCloud.makeEngine) cloudEngine = mCloud.makeEngine();
+    if (!cloudEngine) { failNow("cloud", "no_engine"); return; }
+    mShared->setCloud(cloudEngine);
+  } else if (mCloudOnly) {
+    failNow("runtime", nullptr); return;
+  }
+  const bool pseudonymize = cloud && (!mCloud.pseudonymize || mCloud.pseudonymize());
+  const int parallelism = cloud && mCloud.parallelism ? std::max(1, mCloud.parallelism()) : 1;
+  const QString engineLabel = cloud ? (mCloud.label ? mCloud.label() : QStringLiteral("cloud")) : QStringLiteral("local");
   mCallTimeoutMs = isNotesTask(request) ? kNotesCallTimeoutMs : mAgreementsCallMs;
   mTimeout.start(mCallTimeoutMs);
   const int generation = mGeneration;
   const int serial = mSerial = ++mShared->requestSerial;
-  QMetaObject::invokeMethod(mThreadContext, [shared = mShared, request, generation, serial] {
-    auto engine = shared->current();
+  QMetaObject::invokeMethod(mThreadContext, [shared = mShared, request, generation, serial, cloud, cloudEngine,
+                                              pseudonymize, parallelism, engineLabel] {
+    auto engine = cloud ? cloudEngine : shared->current();
     if (!engine || shared->generation != generation) return;
     QJsonObject result;
     QList<QByteArray> cached; // replies cached by this request; dropped if it fails
+    std::mutex cachedMutex;
+    std::shared_ptr<pcm::prompter::Pseudonymizer> pseudonyms;
+    std::mutex pseudonymMutex;  // leaf calls may run concurrently
+    if (pseudonymize) {
+      pcm::prompter::PseudonymSubjects subjects;
+      const auto subjectsObject = request["subjects"].toObject();
+      const auto list = [&subjectsObject](const char *key) {
+        QStringList out;
+        for (const auto &value : subjectsObject[key].toArray()) out << value.toString();
+        return out;
+      };
+      subjects.clientNames = list("client"); subjects.specialistNames = list("specialist");
+      subjects.phones = list("phones"); subjects.emails = list("emails");
+      pseudonyms = std::make_shared<pcm::prompter::Pseudonymizer>(subjects);
+    }
     try {
-      auto generate = [&engine, &cached, shared, generation, serial, notes = isNotesTask(request)](const QString &system, const QByteArray &payload, const QByteArray &schema) {
+      auto generate = [&engine, &cached, &cachedMutex, &pseudonyms, &pseudonymMutex, shared, generation, serial, cloud,
+                       notes = isNotesTask(request)](const QString &system, const QByteArray &payload, const QByteArray &schema) {
         if (shared->generation != generation || shared->requestSerial != serial)
           throw pcm::prompter::PipelineError("cancelled");
-        const auto key = QCryptographicHash::hash(system.toUtf8() + QByteArray(1, '\0') + payload + QByteArray(1, '\0') + schema, QCryptographicHash::Sha256);
-        if (notes && shared->notesCache.contains(key)) return shared->notesCache.value(key);
+        const auto key = QCryptographicHash::hash(system.toUtf8() + QByteArray(1, '\0') + payload + QByteArray(1, '\0') + schema +
+                                                  QByteArray(1, cloud ? 'c' : 'l'), QCryptographicHash::Sha256);
+        if (notes) {
+          std::lock_guard lock(shared->cacheMutex);
+          if (shared->notesCache.contains(key)) return shared->notesCache.value(key);
+        }
         shared->post([generation, serial](PrompterWorker &worker) { worker.progress(generation, serial); });
-        auto value = engine->generate(system, payload, schema);
+        QByteArray outgoing = payload;
+        if (pseudonyms) { std::lock_guard lock(pseudonymMutex); outgoing = pseudonyms->applyJson(payload); }
+        auto value = engine->generate(system, outgoing, schema);
+        if (pseudonyms) { std::lock_guard lock(pseudonymMutex); value = pseudonyms->restore(value); }
         if (shared->generation != generation || shared->requestSerial != serial)
           throw pcm::prompter::PipelineError("cancelled");
         if (notes) {
+          std::lock_guard lock(shared->cacheMutex);
           if (shared->notesCache.size() >= 128) shared->notesCache.erase(shared->notesCache.begin());
-          shared->notesCache.insert(key, value); cached.append(key);
+          shared->notesCache.insert(key, value);
+          std::lock_guard cachedLock(cachedMutex);
+          cached.append(key);
         }
         return value;
       };
@@ -251,6 +342,7 @@ void PrompterWorker::send(const QJsonObject &request) {
         } else if (request["task"] == "summary") {
           pcm::prompter::SummaryContext context{QDate::fromString(request["call_date"].toString(), Qt::ISODate), {}};
           for (const auto &text : request["agreements"].toArray()) context.agreements << text.toString();
+          context.parallelism = parallelism;
           notes = pcm::prompter::processSummary(request["utterances"].toArray(), context, generate);
         } else {
           throw pcm::prompter::PipelineError("unsupported notes task");
@@ -259,16 +351,21 @@ void PrompterWorker::send(const QJsonObject &request) {
         for (const char *key : {"request_id", "session_generation", "ledger_revision", "task", "material_id", "final", "request_token"})
           result.insert(key, request.value(key));
       } else result = pcm::prompter::processRequest(request, generate);
+      result.insert("engine", engineLabel);
     } catch (...) {
       // Greedy decoding repeats a rejected reply for the same input, so a
       // cached copy would make every retry fail the same way.
-      for (const auto &key : cached) shared->notesCache.remove(key);
+      {
+        std::lock_guard lock(shared->cacheMutex);
+        for (const auto &key : cached) shared->notesCache.remove(key);
+      }
       // PipelineError texts are fixed codes in src/call_prompter; anything
       // else may describe source text or prompts and is never logged.
       QString code = QStringLiteral("unexpected");
       try { throw; } catch (const pcm::prompter::PipelineError &error) { code = QString::fromLatin1(error.what()); } catch (...) {}
       qCWarning(logPrompterWorker) << request["task"].toString("agreements") << "request failed:" << code;
       result = {{"protocol_version", 1}, {"error", "inference_failed"}, {"reason", pcm::prompter::failureReason(code)}};
+      if (cloud && code.startsWith(QLatin1String("cloud "))) result.insert("cloud_detail", code.mid(6).replace(' ', '_'));
       for (const char *key : {"request_id", "session_generation", "ledger_revision", "task", "material_id", "final", "request_token"})
         if (request.contains(key)) result.insert(key, request.value(key));
     }
@@ -282,6 +379,7 @@ void PrompterWorker::finish(int generation, const QJsonObject &result) {
       result["session_generation"] != mExpected["session_generation"] ||
       result["ledger_revision"] != mExpected["ledger_revision"]) { fail(); return; }
   mExpected = {}; mTimeout.stop();
+  mShared->setCloud(nullptr);
   auto reply = result;
   if (std::exchange(mTimedOut, false) && reply.contains("error")) reply["reason"] = QStringLiteral("timeout");
   if (mReloadAfterCancel) {
@@ -309,7 +407,8 @@ void PrompterWorker::cancelNotes(qint64 materialId, const QString &requestToken)
     if (matches(mQueue[i - 1])) mQueue.removeAt(i - 1);
   if (matches(mPending)) mPending = {};
   if (matches(mExpected)) {
-    mReloadAfterCancel = true;
+    // A cloud request leaves the local model alone; only a local one reloads it.
+    mReloadAfterCancel = !mExpectedCloud;
     ++mShared->requestSerial; mShared->cancel();
   }
 }
