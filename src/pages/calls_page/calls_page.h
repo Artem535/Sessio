@@ -57,6 +57,10 @@ public:
   // without a real LiveKit SDK/network connection.
   void setVideoProviderFactoryForTesting(std::function<pcm::video::VideoProvider *(const QString &provider)> factory);
 
+  // Whether the call that ended last actually joined (reached the room), as opposed to a
+  // cancelled device check or a failed join. Valid while handling callSessionEnded().
+  [[nodiscard]] bool lastCallConnected() const { return mLastCallConnected; }
+
 signals:
   void materialRequested(qint64 id);
   void transcriptRequested(qint64 id);
@@ -91,6 +95,8 @@ private:
   CallPage *mCallPage{nullptr};
   std::unique_ptr<pcm::video::VideoSession> mSession;
   bool mSessionStarted{false};
+  bool mSessionConnected{false};
+  bool mLastCallConnected{false};
   QList<UpcomingMeeting> mUpcomingMeetings;
   std::optional<int64_t> mCurrentEventId;
   // The url/token from the most recent tokenReceived() are held here rather

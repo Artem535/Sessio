@@ -9,6 +9,8 @@
 #include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QSet>
+#include <QDate>
 #include <QTemporaryDir>
 #include <gtest/gtest.h>
 #include <iostream>
@@ -92,6 +94,35 @@ TEST_F(ModelSmokeTest, AgreementWithoutDeadlineAsksForIt) {
                            {"id":"2","speaker":"Борис","text":"Хорошо, жду ваши документы."}])");
   EXPECT_EQ(out["events"].toArray().size(), 1);
   EXPECT_EQ(out["suggestions"].toArray().size(), 1);
+}
+
+TEST_F(ModelSmokeTest, AdditionalAnnouncedMeetingIsSeparateFromTheFirst) {
+  const auto out = run(R"([{"id":"1","speaker":"Артем","text":"Давай поговорим о следующем: завтра будет встреча в семнадцать ноль ноль."},
+                           {"id":"2","speaker":"Артем","text":"Потом будет важная встреча в двенадцать ноль ноль тоже завтра."}])");
+  const auto events = out["events"].toArray();
+  ASSERT_EQ(events.size(), 2);
+  QSet<QString> times, sources;
+  for (const auto &value : events) {
+    const auto event = value.toObject();
+    EXPECT_TRUE(event["meeting"].toBool());
+    EXPECT_EQ(event["kind"].toString(), "accept");
+    EXPECT_EQ(event["date"].toString(), QDate::currentDate().addDays(1).toString(Qt::ISODate));
+    EXPECT_TRUE(event["target_id"].toString().isEmpty());
+    times.insert(event["time"].toString());
+    for (const auto &source : event["evidence_ids"].toArray()) sources.insert(source.toString());
+  }
+  EXPECT_EQ(times, (QSet<QString>{"17:00", "12:00"}));
+  EXPECT_EQ(sources, (QSet<QString>{"1", "2"}));
+}
+
+TEST_F(ModelSmokeTest, AnnouncingAnotherTimeDoesNotRescheduleTheExistingMeeting) {
+  const auto out = run(R"([{"id":"2","speaker":"Артем","text":"Потом будет важная встреча в двенадцать ноль ноль тоже завтра."}])",
+                       R"([{"id":"first","text":"Встреча завтра в 17:00","participants":["Артем"]}])");
+  const auto events = out["events"].toArray();
+  ASSERT_EQ(events.size(), 1);
+  EXPECT_EQ(events.first().toObject()["time"].toString(), "12:00");
+  EXPECT_TRUE(events.first().toObject()["target_id"].toString().isEmpty());
+  EXPECT_FALSE(events.first().toObject()["unresolved"].toBool());
 }
 
 TEST_F(ModelSmokeTest, AcceptedRescheduleTargetsTheMeetingWithoutAHint) {
@@ -212,6 +243,49 @@ TEST_F(ModelSmokeTest, LivePointsOnSyntheticLongCall) {
   EXPECT_FALSE(a["key_points"].toArray().isEmpty());
   EXPECT_FALSE(b["key_points"].toArray().isEmpty());
   for (const auto &p : b["key_points"].toArray()) EXPECT_FALSE(known.contains(p.toObject()["text"].toString()));
+}
+
+TEST_F(ModelSmokeTest, LivePointsIgnoreGreetingsAudioChecksAndIncompleteAsr) {
+  auto sources = parse(R"([
+    {"id":"1","speaker":"Анна","text":"Всем привет!"},
+    {"id":"2","speaker":"Борис","text":"Слышно меня? Раз два."},
+    {"id":"3","speaker":"Анна","text":"Да, слышно. Спасибо."},
+    {"id":"4","speaker":"Борис","text":"Он... это... хотя... лента."},
+    {"id":"5","speaker":"Анна","text":"Ладно, до свидания."}
+  ])");
+  for (qsizetype i = 0; i < sources.size(); ++i) {
+    auto source = sources[i].toObject();
+    source["start_ms"] = i * 1000; source["end_ms"] = (i + 1) * 1000;
+    sources[i] = source;
+  }
+  const auto out = processLivePoints(sources, {}, printing("chatter"));
+  EXPECT_TRUE(out["key_points"].toArray().isEmpty());
+}
+
+TEST_F(ModelSmokeTest, LivePointsKeepAConcreteDecisionAmidChatter) {
+  auto sources = parse(R"([
+    {"id":"1","speaker":"Анна","text":"Всем привет, меня слышно?"},
+    {"id":"2","speaker":"Борис","text":"Да, спасибо."},
+    {"id":"3","speaker":"Анна","text":"Записывать демонстрацию будем через OBS, встроенная запись создаёт слишком большие файлы."},
+    {"id":"4","speaker":"Борис","text":"Договорились, используем OBS."}
+  ])");
+  for (qsizetype i = 0; i < sources.size(); ++i) {
+    auto source = sources[i].toObject();
+    source["start_ms"] = i * 1000; source["end_ms"] = (i + 1) * 1000;
+    sources[i] = source;
+  }
+  const auto out = processLivePoints(sources, {}, printing("decision"));
+  const auto items = out["key_points"].toArray();
+  ASSERT_FALSE(items.isEmpty());
+  EXPECT_LE(items.size(), 2);
+  bool obs = false;
+  for (const auto &value : items) {
+    const auto item = value.toObject();
+    obs |= item["text"].toString().contains("OBS");
+    for (const auto &id : item["evidence_ids"].toArray())
+      EXPECT_TRUE(id == QJsonValue("3") || id == QJsonValue("4"));
+  }
+  EXPECT_TRUE(obs);
 }
 
 TEST_F(ModelSmokeTest, NextMeetingDateResolvedFromWeekday) {

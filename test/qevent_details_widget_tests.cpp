@@ -139,6 +139,19 @@ std::unique_ptr<QEventItem> makeLiveKitEvent(const QString &meetingRef) {
 
 } // namespace
 
+TEST(QEventDetailsWidgetTest, RetypingAnEventTitleUpdatesApplyAvailability) {
+  EventDetailsFixture fixture(nullptr);
+  auto event = std::make_unique<QEventItem>(7, "Original", at(10, 0), at(10, 50));
+  fixture.widget.startEditingEvent(event.get(), std::nullopt);
+  ASSERT_TRUE(fixture.apply->isEnabled());
+  fixture.title->clear();
+  EXPECT_FALSE(fixture.apply->isEnabled());
+  fixture.title->setText("Renamed");
+  EXPECT_TRUE(fixture.apply->isEnabled());
+  fixture.apply->click();
+  EXPECT_EQ(event->getTitle(), "Renamed");
+}
+
 TEST(QEventDetailsWidgetTest, JitsiDisabledForRecurringEvents) {
   MeetingCoordinator coordinator("", "");
   EventDetailsFixture fixture(&coordinator);

@@ -45,12 +45,14 @@ public:
   void showHistory(qint64 materialId);
   bool historyMode() const;
   void setEditorMode();
+  void setCallPanelMode();
   bool editorDirty() const;
 signals:
   void sourceRequested(qint64 phraseId);
   void retryRequested();
   void editorCloseRequested();
   void editorSaved();
+  void paymentChanged();
 
 protected:
   void changeEvent(QEvent *event) override;
@@ -88,7 +90,7 @@ class NotesEditorDialog final : public QDialog {
   Q_OBJECT
 public:
   explicit NotesEditorDialog(QWidget *parent = nullptr);
-  void setPage(CallNotesPage *page);
+  void setPage(CallNotesPage *page, bool editorMode = true);
   void setDiscardConfirmation(std::function<bool()> confirm) { mConfirmDiscard = std::move(confirm); }
 public slots:
   void reject() override;

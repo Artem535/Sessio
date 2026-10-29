@@ -23,6 +23,12 @@ QByteArray serialize(const QJsonObject &object) {
   return QJsonDocument(object).toJson(QJsonDocument::Compact);
 }
 
+QString pointKey(const QString &text) {
+  auto key = text.normalized(QString::NormalizationForm_C).toCaseFolded().simplified();
+  while (!key.isEmpty() && key.back().isPunct()) key.chop(1);
+  return key.trimmed();
+}
+
 QString prompt(const char *name) {
   QFile file(QStringLiteral(":/call-prompter/%1").arg(QString::fromLatin1(name)));
   if (!file.open(QIODevice::ReadOnly)) throw PipelineError("notes prompt resource missing");

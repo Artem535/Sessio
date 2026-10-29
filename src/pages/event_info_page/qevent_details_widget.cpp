@@ -659,6 +659,8 @@ void QEventDetailsWidget::initConnections() {
           &QEventDetailsWidget::onChangeClicked);
 
   // --- Input Change Connections ---
+  connect(mUI->mTitle, &QLineEdit::textChanged, this,
+          [this] { updateButtonState(); });
   connect(mEventTypeSwitch, &QAbstractButton::toggled, this,
           &QEventDetailsWidget::onEventTypeToggled);
   connect(mOnlineSessionSwitch, &QAbstractButton::toggled, this,
