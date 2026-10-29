@@ -217,8 +217,16 @@ QJsonValue parseModelReply(const QString &raw) {
   // Wrapping accepts scalar replies too, like Python's json.loads.
   QJsonParseError error;
   const auto doc = QJsonDocument::fromJson("[" + value.toUtf8() + "]", &error);
-  if (error.error != QJsonParseError::NoError || doc.array().size() != 1) throw PipelineError("reply is not JSON");
-  return doc.array().first();
+  if (error.error == QJsonParseError::NoError && doc.array().size() == 1) return doc.array().first();
+  // The model sometimes wraps one object in a sentence or a second fence.
+  // Take the first complete object; the caller still validates its schema.
+  const auto start = value.indexOf('{');
+  if (start < 0) throw PipelineError("reply is not JSON");
+  const auto object = value.mid(start).toUtf8();
+  auto parsed = QJsonDocument::fromJson(object, &error);
+  if (error.error == QJsonParseError::GarbageAtEnd) parsed = QJsonDocument::fromJson(object.left(error.offset), &error);
+  if (error.error != QJsonParseError::NoError || !parsed.isObject()) throw PipelineError("reply is not JSON");
+  return parsed.object();
 }
 
 QString gemmaSystemTurn(const QString &system) {
@@ -235,12 +243,14 @@ QString renderGemmaPrompt(const QString &system, const QString &user) {
 
 QString failureReason(const QString &error) {
   if (error == QLatin1String("cancelled")) return QStringLiteral("cancelled");
-  if (error.contains(QLatin1String("budget")) || error.contains(QLatin1String("count exceeded")))
-    return error.startsWith(QLatin1String("output")) ? QStringLiteral("invalid_output") : QStringLiteral("too_long");
   // "invalid notes source*" rejects the request's own utterances, not the reply.
   if (error == QLatin1String("invalid notes source") || error == QLatin1String("invalid notes source fields"))
     return QStringLiteral("runtime");
-  if (error.startsWith(QLatin1String("invalid notes")) || error.startsWith(QLatin1String("invalid empty")) ||
+  // Before the budget check: "invalid notes output schema/budget" is a reply.
+  if (error.startsWith(QLatin1String("invalid notes"))) return QStringLiteral("invalid_output");
+  if (error.contains(QLatin1String("budget")) || error.contains(QLatin1String("count exceeded")))
+    return error.startsWith(QLatin1String("output")) ? QStringLiteral("invalid_output") : QStringLiteral("too_long");
+  if (error.startsWith(QLatin1String("invalid empty")) ||
       error == QLatin1String("invalid extraction") || error == QLatin1String("reply is not JSON") ||
       error == QLatin1String("malformed code fence") || error == QLatin1String("output truncated") ||
       error == QLatin1String("too many events"))
@@ -293,7 +303,7 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
   }
   const QString window = lines.join('\n');
   const auto call = [&generate](const QString &system, const Payload &payload) {
-    return generate(system, dumpPayload(payload));
+    return generate(system, dumpPayload(payload), {});
   };
   // Matching and the deadline hint only refine extracted events. When the
   // model fails on them (overflowing context, unusable reply), the event stays

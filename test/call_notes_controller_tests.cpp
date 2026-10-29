@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QDir>
 #include <QSignalSpy>
+#include <QTest>
 #include <QTemporaryDir>
 #include <gtest/gtest.h>
 
@@ -304,6 +305,58 @@ TEST_F(CallNotesTest, SavedViewCanFollowAndCancelAnAutomaticFinalQueuedBehindAno
   EXPECT_TRUE(requests.isEmpty());
   CallNotesController reopened(db); reopened.openMaterial(c->materialId());
   EXPECT_EQ(reopened.finalStatus(), "cancelled");
+}
+TEST_F(CallNotesTest, FailedLiveUpdateRetriesByItselfWithGrowingDelay) {
+  c->setRetryDelay(1000);
+  const auto p = phrase(); c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
+  ASSERT_EQ(requests.count(), 1);
+  c->handleResult(reply(requests.last()[0].toJsonObject(), p));
+  ASSERT_EQ(c->liveStatus(), "ready");
+  for (const auto *reason : {"invalid_output", "runtime", "timeout"}) {
+    const auto before = requests.count();
+    phrase(); c->flush();
+    ASSERT_EQ(requests.count(), before + 1);
+    auto failed = requests.last()[0].toJsonObject();
+    failed["error"] = "inference_failed"; failed["reason"] = reason;
+    c->handleResult(failed);
+    // No Retry button: the last good summary stays while an update is queued.
+    EXPECT_EQ(c->liveStatus(), "queued") << reason;
+    EXPECT_TRUE(c->retryPending());
+    EXPECT_EQ(c->draft()["text"].toString(), "Rehearsal discussed");
+    EXPECT_FALSE(c->busy());
+  }
+  // The third failure in a row waits 1000 * 2^2 ms. A new phrase does not
+  // cut that backoff short.
+  const auto before = requests.count();
+  phrase();
+  QTest::qWait(2500);
+  EXPECT_EQ(requests.count(), before);
+  ASSERT_TRUE(requests.wait(3000));
+  const auto retried = requests.last()[0].toJsonObject();
+  EXPECT_EQ(retried["final"].toBool(), false);
+  c->handleResult(reply(retried, p));
+  EXPECT_EQ(c->liveStatus(), "ready");
+  EXPECT_FALSE(c->retryPending());
+}
+TEST_F(CallNotesTest, BrokenWorkerOrFinalNoteStillWaitForTheUser) {
+  c->setRetryDelay(10);
+  phrase(); c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
+  ASSERT_EQ(requests.count(), 1);
+  c->workerFailed();
+  EXPECT_EQ(c->liveStatus(), "error");
+  EXPECT_FALSE(c->retryPending());
+  c->setGenerationEnabled(true); c->finishCall(); c->flush();
+  ASSERT_EQ(requests.count(), 2);
+  auto failed = requests.last()[0].toJsonObject();
+  ASSERT_TRUE(failed["final"].toBool());
+  failed["error"] = "inference_failed"; failed["reason"] = "runtime";
+  c->handleResult(failed);
+  EXPECT_EQ(c->finalStatus(), "error");
+  EXPECT_FALSE(c->retryPending());
+  QTest::qWait(50);
+  EXPECT_EQ(requests.count(), 2);
 }
 int main(int argc, char **argv) {
   QApplication app(argc, argv); ::testing::InitGoogleTest(&argc, argv); return RUN_ALL_TESTS();

@@ -217,13 +217,13 @@ void PrompterWorker::send(const QJsonObject &request) {
     QJsonObject result;
     QList<QByteArray> cached; // replies cached by this request; dropped if it fails
     try {
-      auto generate = [&engine, &cached, shared, generation, serial, notes = request["task"] == "notes"](const QString &system, const QByteArray &payload) {
+      auto generate = [&engine, &cached, shared, generation, serial, notes = request["task"] == "notes"](const QString &system, const QByteArray &payload, const QByteArray &schema) {
         if (shared->generation != generation || shared->requestSerial != serial)
           throw pcm::prompter::PipelineError("cancelled");
-        const auto key = QCryptographicHash::hash(system.toUtf8() + QByteArray(1, '\0') + payload, QCryptographicHash::Sha256);
+        const auto key = QCryptographicHash::hash(system.toUtf8() + QByteArray(1, '\0') + payload + QByteArray(1, '\0') + schema, QCryptographicHash::Sha256);
         if (notes && shared->notesCache.contains(key)) return shared->notesCache.value(key);
         shared->post([generation, serial](PrompterWorker &worker) { worker.progress(generation, serial); });
-        auto value = engine->generate(system, payload);
+        auto value = engine->generate(system, payload, schema);
         if (shared->generation != generation || shared->requestSerial != serial)
           throw pcm::prompter::PipelineError("cancelled");
         if (notes) {

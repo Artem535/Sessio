@@ -22,7 +22,7 @@ protected:
   std::vector<QByteArray> payloads;
 
   QJsonObject run(std::deque<QJsonValue> replies) {
-    return processRequest(request, [&](const QString &, const QByteArray &payload) {
+    return processRequest(request, [&](const QString &, const QByteArray &payload, const QByteArray &) {
       payloads.push_back(payload);
       if (replies.empty()) throw PipelineError("unexpected model call");
       auto reply = replies.front();
@@ -75,7 +75,7 @@ TEST_F(PipelineTest, ForeignMatchingTargetCannotBeApplied) {
 TEST_F(PipelineTest, FailedMatchingAndHintKeepTheExtractedEvents) {
   request["candidates"] = json(R"([{"id":"a","text":"Документ","participants":["Анна"]}])");
   int calls = 0;
-  const auto out = processRequest(request, [&](const QString &, const QByteArray &) -> QJsonValue {
+  const auto out = processRequest(request, [&](const QString &, const QByteArray &, const QByteArray &) -> QJsonValue {
     if (++calls == 1) return events(event());
     throw PipelineError("context budget exceeded");
   });
@@ -87,7 +87,7 @@ TEST_F(PipelineTest, FailedMatchingAndHintKeepTheExtractedEvents) {
 TEST_F(PipelineTest, CancellationDuringMatchingEndsTheRequest) {
   request["candidates"] = json(R"([{"id":"a","text":"Документ","participants":["Анна"]}])");
   int calls = 0;
-  EXPECT_THROW(processRequest(request, [&](const QString &, const QByteArray &) -> QJsonValue {
+  EXPECT_THROW(processRequest(request, [&](const QString &, const QByteArray &, const QByteArray &) -> QJsonValue {
     if (++calls == 1) return events(event());
     throw PipelineError("cancelled");
   }), PipelineError);
@@ -163,7 +163,7 @@ TEST_F(PipelineTest, MissingProtocolFieldsAndExcessInputFailClosed) {
   for (const char *field : {"request_id", "ledger_revision", "session_generation"}) {
     auto broken = request;
     broken.remove(field);
-    EXPECT_THROW(processRequest(broken, [](const QString &, const QByteArray &) { return QJsonValue(); }), PipelineError);
+    EXPECT_THROW(processRequest(broken, [](const QString &, const QByteArray &, const QByteArray &) { return QJsonValue(); }), PipelineError);
   }
   request["utterances"] = QJsonArray{QJsonObject{{"id", "1"}, {"speaker", "A"}, {"text", QString(20000, 'x')}}};
   EXPECT_THROW(run({}), PipelineError);
@@ -201,12 +201,17 @@ TEST(PipelineFormatTest, ReplyParserAcceptsFencesAndRejectsProse) {
   EXPECT_EQ(parseModelReply("```json\n{\"events\":[]}\n```").toObject()["events"].toArray().size(), 0);
   EXPECT_TRUE(parseModelReply("  true ").toBool());
   EXPECT_THROW(parseModelReply("Here are the events"), PipelineError);
+  // Gemma sometimes wraps the object in prose or repeats it after a fence.
+  EXPECT_EQ(parseModelReply("Вот заметки: {\"events\":[1]} Надеюсь, это поможет.").toObject()["events"].toArray().size(), 1);
+  EXPECT_EQ(parseModelReply("```json\n{\"events\":[]}\n```\n```json\n{\"events\":[]}\n```").toObject().size(), 1);
+  EXPECT_THROW(parseModelReply("{\"events\": [ unfinished"), PipelineError);
 }
 
 TEST(PipelineFailureReasonTest, GroupsFixedErrorCodesForTheUser) {
   using pcm::prompter::failureReason;
   EXPECT_EQ(failureReason("invalid notes evidence count"), "invalid_output");
   EXPECT_EQ(failureReason("invalid notes evidence source"), "invalid_output");
+  EXPECT_EQ(failureReason("invalid notes output schema/budget"), "invalid_output");
   EXPECT_EQ(failureReason("reply is not JSON"), "invalid_output");
   EXPECT_EQ(failureReason("output budget exceeded"), "invalid_output");
   EXPECT_EQ(failureReason("notes transcript budget exceeded"), "too_long");

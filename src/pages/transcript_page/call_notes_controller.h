@@ -54,6 +54,9 @@ public:
   bool ended() const { return mEnded; }
   bool busy() const { return mInFlight; }
   qint64 materialId() const { return mMaterialId; }
+  bool retryPending() const { return mRetry.isActive(); }
+  // Tests shorten the first automatic retry delay of live notes.
+  void setRetryDelay(int ms) { mRetryDelayMs = ms; }
   qint64 transcriptId() const { return mTranscriptId; }
 signals:
   void changed();
@@ -67,9 +70,12 @@ private:
   QJsonArray phrases() const;
   void dispatch(bool final);
   void fail(const QString &reason);
+  void retryLater();
+  void stopRetrying();
   std::shared_ptr<pcm::database::Database> mDb;
   QString mAttachmentRoot;
-  QTimer mBatch;
+  QTimer mBatch, mRetry;
+  int mRetries = 0, mRetryDelayMs = 15000;
   qint64 mMaterialId = 0, mTranscriptId = 0, mRevision = 0, mGeneration = 0, mRequestId = 0;
   bool mEnabled = false, mEnded = false, mInFlight = false, mDirty = false, mFinalPending = false;
   bool mDeferred = false;

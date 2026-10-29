@@ -17,10 +17,11 @@ public:
   GemmaEngine(std::unique_ptr<sessio::litert::Model> model, bool reusePrefix)
       : mModel(std::move(model)), mReusePrefix(reusePrefix) {}
 
-  QJsonValue generate(const QString &system, const QByteArray &payload) override {
+  QJsonValue generate(const QString &system, const QByteArray &payload, const QByteArray &schema) override {
     std::string reply;
     sessio::litert::GenerateOptions options;
     options.reusePrefix = mReusePrefix;
+    options.jsonSchema = schema.toStdString();
     sessio::litert::GenerateStats stats;
     QElapsedTimer timer;
     timer.start();
@@ -31,6 +32,7 @@ public:
     qCInfo(logPrompterModel).nospace()
         << "generate " << timer.elapsed() << " ms: prefill " << stats.prefillTokens << " tokens "
         << qRound(stats.prefillSeconds * 1000) << " ms" << (stats.prefixReused ? " (prefix reused)" : "")
+        << (schema.isEmpty() ? "" : stats.constrained ? " (schema)" : " (schema unavailable)")
         << ", decode " << stats.decodeTokens << " tokens " << qRound(stats.decodeSeconds * 1000) << " ms";
     switch (status) {
     case sessio::litert::Status::Ok: break;

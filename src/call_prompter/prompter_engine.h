@@ -10,11 +10,12 @@ namespace pcm::prompter {
 
 // A loaded local model. generate() runs on one worker thread at a time;
 // cancel() may be called from any thread to abort the running generate(),
-// which then throws.
+// which then throws. A nonempty `schema` is a JSON schema the reply is
+// constrained to while decoding; the reply is still validated afterwards.
 class PrompterEngine {
 public:
   virtual ~PrompterEngine() = default;
-  virtual QJsonValue generate(const QString &system, const QByteArray &payload) = 0;
+  virtual QJsonValue generate(const QString &system, const QByteArray &payload, const QByteArray &schema) = 0;
   virtual void cancel() = 0;
 };
 

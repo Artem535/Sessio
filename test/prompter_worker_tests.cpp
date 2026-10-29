@@ -31,7 +31,7 @@ public:
     --mProbe->alive;
     ++mProbe->destroyed;
   }
-  QJsonValue generate(const QString &, const QByteArray &) override {
+  QJsonValue generate(const QString &, const QByteArray &, const QByteArray &) override {
     while (mProbe->block && (!mCancelled || mProbe->ignoreCancel)) QThread::msleep(5);
     if (mCancelled.exchange(false)) throw std::runtime_error("cancelled");
     return QJsonObject{{"events", QJsonArray{}}};

@@ -18,7 +18,8 @@ qt_add_resources(${TARGET_NAME} call_prompter_prompts
   BASE prompts
   FILES prompts/extract.txt prompts/match.txt prompts/notes.txt prompts/notes_merge.txt)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Core)
+find_package(reflectcpp CONFIG REQUIRED)
+target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Core PRIVATE reflectcpp::reflectcpp)
 
 # Gemma through the LiteRT-LM C++ API, or a stub without the runtime.
 set(ENGINE_TARGET ${PROJECT_NAME}_call_prompter_engine)

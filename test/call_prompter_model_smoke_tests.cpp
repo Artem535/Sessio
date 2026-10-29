@@ -48,8 +48,8 @@ protected:
                               {"candidates", parse(candidates)}};
     QElapsedTimer timer; timer.start();
     const bool print = !qEnvironmentVariableIsEmpty("SESSIO_PROMPTER_PRINT");
-    const auto out = processRequest(request, [print](const QString &system, const QByteArray &payload) {
-      const auto value = sEngine->generate(system, payload);
+    const auto out = processRequest(request, [print](const QString &system, const QByteArray &payload, const QByteArray &schema) {
+      const auto value = sEngine->generate(system, payload, schema);
       if (print) std::cout << "model " << QJsonDocument::fromJson("[" + dumpJson(value) + "]").toJson(QJsonDocument::Compact).toStdString() << "\n";
       return value;
     });
@@ -136,7 +136,7 @@ TEST_F(ModelSmokeTest, InstructionsInsideASourceAreData) {
 TEST_F(ModelSmokeTest, CancellationStopsAnActiveNativeRequest) {
   std::packaged_task<bool()> task([] {
     try {
-      sEngine->generate(QStringLiteral("Верни только JSON с полем ok=true."), QByteArray(6000, 'x'));
+      sEngine->generate(QStringLiteral("Верни только JSON с полем ok=true."), QByteArray(6000, 'x'), {});
       return false;
     } catch (const PipelineError &error) {
       return std::string(error.what()) == "cancelled";
@@ -155,8 +155,8 @@ TEST_F(ModelSmokeTest, CallNotesPreserveCorrectionAndCiteOriginalSources) {
     QJsonObject{{"id", "n1"}, {"speaker", "Анна"}, {"text", "Обсудили подготовку к выступлению. Я сначала попробую репетицию перед одним знакомым."}, {"start_ms", 0}, {"end_ms", 1000}},
     QJsonObject{{"id", "n2"}, {"speaker", "Анна"}, {"text", "Я отправлю план во вторник. Нет, поправка: в четверг."}, {"start_ms", 1000}, {"end_ms", 2000}},
     QJsonObject{{"id", "n3"}, {"speaker", "Борис"}, {"text", "Хорошо, ждём план в четверг."}, {"start_ms", 2000}, {"end_ms", 3000}}};
-  const auto out = processNotes(sources, [](const QString &system, const QByteArray &payload) {
-    const auto value = sEngine->generate(system, payload);
+  const auto out = processNotes(sources, [](const QString &system, const QByteArray &payload, const QByteArray &schema) {
+    const auto value = sEngine->generate(system, payload, schema);
     std::cout << "synthetic notes stage: " << dumpJson(value).toStdString() << '\n';
     return value;
   });
@@ -176,8 +176,8 @@ TEST_F(ModelSmokeTest, LongCallNotesIncludeTheLateCancellation) {
   }
   sources.append(QJsonObject{{"id", "last"}, {"speaker", "Борис"}, {"text", "Окончательная поправка: встреча отменена. Подготовка больше не нужна."}, {"start_ms", 6000}, {"end_ms", 7000}});
   int calls = 0;
-  const auto out = processNotes(sources, [&calls](const QString &system, const QByteArray &payload) {
-    ++calls; const auto value = sEngine->generate(system, payload);
+  const auto out = processNotes(sources, [&calls](const QString &system, const QByteArray &payload, const QByteArray &schema) {
+    ++calls; const auto value = sEngine->generate(system, payload, schema);
     std::cout << "synthetic long notes stage: " << dumpJson(value).toStdString() << '\n';
     return value;
   });
