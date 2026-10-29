@@ -23,6 +23,53 @@ QJsonArray loadMaterialAgreements(pcm::database::Database &db, int64_t materialI
   return records;
 }
 
+namespace {
+// Read-modify-write of one transcript's prompter state; the save fails when
+// another writer got there first.
+template <typename Edit> bool editPrompterState(pcm::database::Database &db, int64_t transcript, Edit edit) {
+  const auto stored = db.get_prompter_state(transcript);
+  auto state = parse(stored.json);
+  if (!edit(state)) return false;
+  return db.save_prompter_state(transcript, stored.revision,
+                                QJsonDocument(state).toJson(QJsonDocument::Compact).toStdString());
+}
+}
+
+bool appendMaterialAgreement(pcm::database::Database &db, int64_t materialId, const QJsonObject &record) {
+  try {
+    const auto transcripts = db.get_call_material_transcript_ids(materialId);
+    if (transcripts.empty() || record["id"].toString().isEmpty()) return false;
+    return editPrompterState(db, transcripts.back(), [&record](QJsonObject &state) {
+      auto records = state["records"].toArray();
+      records.append(record);
+      state["records"] = records;
+      return true;
+    });
+  } catch (...) { return false; }
+}
+
+bool setMaterialAgreementEvent(pcm::database::Database &db, int64_t materialId, const QString &recordId,
+                               int64_t eventId) {
+  try {
+    for (const auto transcript : db.get_call_material_transcript_ids(materialId)) {
+      bool found = false;
+      const bool saved = editPrompterState(db, transcript, [&](QJsonObject &state) {
+        auto records = state["records"].toArray();
+        for (qsizetype i = 0; i < records.size(); ++i) {
+          auto record = records[i].toObject();
+          if (record["id"].toString() != recordId) continue;
+          if (eventId > 0) record["event_id"] = static_cast<qint64>(eventId); else record.remove("event_id");
+          records[i] = record; found = true;
+        }
+        state["records"] = records;
+        return found;
+      });
+      if (found) return saved;
+    }
+  } catch (...) {}
+  return false;
+}
+
 std::vector<MeetingRecord> loadMeetingHistory(pcm::database::Database &db, int64_t clientId,
                                               qint64 excludeMaterialId) {
   std::vector<MeetingRecord> result;

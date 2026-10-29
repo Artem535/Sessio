@@ -90,6 +90,22 @@ void CallPrompterController::pause() {
   setStatus(tr("Prompter is paused"));
 }
 void CallPrompterController::endCall() { pause(); mPending = {}; }
+bool CallPrompterController::refreshFromStorage() {
+  if (!mTranscriptId) return false;
+  try {
+    const auto stored = mDb->get_prompter_state(mTranscriptId);
+    if (stored.revision == mRevision || stored.json.empty()) return false;
+    const auto doc = QJsonDocument::fromJson(QByteArray::fromStdString(stored.json));
+    if (!doc.isObject()) return false;
+    // An in-flight reply was computed against the old ledger: drop it and
+    // send its phrases again with the new records as candidates.
+    const bool running = mRunning;
+    if (mInFlight) pause();
+    restore(doc.object()); mRevision = stored.revision;
+    if (running && !mRunning) resume();
+  } catch (...) { return false; }
+  emit cardsChanged(); return true;
+}
 void CallPrompterController::transcriptDeleted(qint64 id) {
   if (id == mTranscriptId) beginTranscript(0);
 }
@@ -171,7 +187,8 @@ void CallPrompterController::flush() {
   }
   while (candidates.size() > 32) candidates.removeFirst();
   mRequest = {{"protocol_version", 1}, {"request_id", ++mRequestId}, {"session_generation", mGeneration},
-      {"ledger_revision", mRevision}, {"utterances", utterances}, {"candidates", candidates}};
+      {"ledger_revision", mRevision}, {"utterances", utterances}, {"candidates", candidates},
+      {"call_date", (mCallDate.isValid() ? mCallDate : QDate::currentDate()).toString(Qt::ISODate)}};
   mInFlight = true;
   setStatus(tr("Processing conversation · %n phrases waiting", nullptr, mPending.size()));
   emit requestReady(mRequest);
@@ -200,7 +217,9 @@ void CallPrompterController::handleResult(const QJsonObject &result) {
     const auto target = event["target_id"].toString(); const auto action = event["action"].toString().trimmed();
     if (!value.isObject() || (kind != "accept" && kind != "cancel") || action.isEmpty() || action.size() > 2000 ||
         !validIds(event["evidence_ids"], ids) || !validIds(event["participants"], speakers) ||
-        (!target.isEmpty() && !targets.contains(target)) || !event["unresolved"].isBool()) {
+        (!target.isEmpty() && !targets.contains(target)) || !event["unresolved"].isBool() ||
+        (event.contains("meeting") && !event["meeting"].isBool()) ||
+        (event.contains("date") && !event["date"].isString()) || (event.contains("time") && !event["time"].isString())) {
       batchFailed(); return;
     }
     bool citesFresh = false;
@@ -266,7 +285,8 @@ bool CallPrompterController::acceptCard(const QString &id, const QString &edited
     card["previous_action"] = mRecords[recordIndex].toObject()["text"];
   }
   QJsonObject record{{"id", target.isEmpty() ? id : target}, {"text", action},
-      {"participants", card["participants"]}, {"active", card["kind"].toString() != "cancel"}, {"evidence_ids", card["evidence_ids"]}};
+      {"participants", card["participants"]}, {"active", card["kind"].toString() != "cancel"}, {"evidence_ids", card["evidence_ids"]},
+      {"meeting", card["meeting"].toBool(false)}, {"date", card["date"].toString()}, {"time", card["time"].toString()}};
   if (recordIndex >= 0) mRecords[recordIndex] = record; else mRecords.append(record);
   card["action"] = action; card["decision"] = "accepted"; mCards[index] = card;
   if (!persist()) { restore(old); emit cardsChanged(); return false; }

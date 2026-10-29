@@ -1,4 +1,5 @@
 #include "call_prompter_controller.h"
+#include "meeting_history.h"
 #include "config.h"
 #include <QApplication>
 #include <QSignalSpy>
@@ -256,6 +257,109 @@ TEST_F(PrompterControllerTest, DeletedTranscriptClearsAllVisibleDerivedData) {
   EXPECT_TRUE(controller->suggestions().isEmpty());
   EXPECT_TRUE(controller->source(QString::number(p.id)).isEmpty());
 }
+namespace {
+QJsonObject withMeeting(QJsonObject result, const QJsonValue &meeting = true, const QString &date = "2026-11-05",
+                        const QString &time = "15:00") {
+  auto events = result["events"].toArray();
+  auto event = events[0].toObject();
+  event["meeting"] = meeting; event["date"] = date; event["time"] = time;
+  events[0] = event; result["events"] = events;
+  return result;
+}
+} // namespace
+
+TEST_F(PrompterControllerTest, RequestCarriesCallDate) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  controller->setCallDate(QDate(2026, 10, 29));
+  controller->addPhrase(phrase("Meet Thursday")); controller->flush();
+  ASSERT_EQ(requests.count(), 1);
+  EXPECT_EQ(requests[0][0].toJsonObject()["call_date"].toString(), "2026-10-29");
+}
+TEST_F(PrompterControllerTest, MeetingFieldsReachCardAndRecord) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  const auto p = phrase("Meet Thursday at 15");
+  controller->addPhrase(p); controller->flush();
+  controller->handleResult(withMeeting(reply(requests[0][0].toJsonObject(), p)));
+  ASSERT_EQ(controller->cards().size(), 1);
+  const auto card = controller->cards()[0].toObject();
+  EXPECT_TRUE(card["meeting"].toBool());
+  EXPECT_EQ(card["date"].toString(), "2026-11-05");
+  ASSERT_TRUE(controller->acceptCard(card["id"].toString()));
+  const auto record = controller->records()[0].toObject();
+  EXPECT_TRUE(record["meeting"].toBool());
+  EXPECT_EQ(record["date"].toString(), "2026-11-05");
+  EXPECT_EQ(record["time"].toString(), "15:00");
+}
+TEST_F(PrompterControllerTest, AcceptWithEditedTextKeepsMeetingFields) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  const auto p = phrase("Meet Thursday at 15");
+  controller->addPhrase(p); controller->flush();
+  controller->handleResult(withMeeting(reply(requests[0][0].toJsonObject(), p)));
+  ASSERT_TRUE(controller->acceptCard(controller->cards()[0].toObject()["id"].toString(), "Meet on Friday instead"));
+  const auto record = controller->records()[0].toObject();
+  EXPECT_EQ(record["text"].toString(), "Meet on Friday instead");
+  EXPECT_TRUE(record["meeting"].toBool());
+  EXPECT_EQ(record["date"].toString(), "2026-11-05");
+  EXPECT_EQ(record["time"].toString(), "15:00");
+}
+TEST_F(PrompterControllerTest, InvalidMeetingFieldTypesRejectBatch) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  const auto p = phrase("Meet Thursday at 15");
+  controller->addPhrase(p); controller->flush();
+  controller->handleResult(withMeeting(reply(requests[0][0].toJsonObject(), p), "yes"));
+  EXPECT_TRUE(controller->cards().isEmpty());
+}
+TEST_F(PrompterControllerTest, AppendMaterialAgreementAndSetEventRoundTrip) {
+  const auto material = db->create_call_material(std::nullopt);
+  ASSERT_TRUE(db->link_call_material_transcript(material, id));
+  const QJsonObject record{{"id", "task-1"}, {"text", "Meet Thursday"}, {"participants", QJsonArray{}},
+                           {"active", true}, {"evidence_ids", QJsonArray{"1"}}, {"meeting", true},
+                           {"date", "2026-11-05"}, {"time", "15:00"}};
+  ASSERT_TRUE(appendMaterialAgreement(*db, material, record));
+  auto records = loadMaterialAgreements(*db, material);
+  ASSERT_EQ(records.size(), 1);
+  EXPECT_EQ(records[0].toObject()["text"].toString(), "Meet Thursday");
+  ASSERT_TRUE(setMaterialAgreementEvent(*db, material, "task-1", 42));
+  EXPECT_EQ(loadMaterialAgreements(*db, material)[0].toObject()["event_id"].toInteger(), 42);
+  ASSERT_TRUE(setMaterialAgreementEvent(*db, material, "task-1", 0));
+  EXPECT_FALSE(loadMaterialAgreements(*db, material)[0].toObject().contains("event_id"));
+  EXPECT_FALSE(setMaterialAgreementEvent(*db, material, "missing", 1));
+  EXPECT_FALSE(appendMaterialAgreement(*db, db->create_call_material(std::nullopt), record));
+}
+TEST_F(PrompterControllerTest, RefreshFromStorageSeesExternalAppend) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  const auto p = phrase("Send document Friday");
+  controller->addPhrase(p); controller->flush();
+  controller->handleResult(reply(requests[0][0].toJsonObject(), p));
+  const auto material = db->create_call_material(std::nullopt);
+  ASSERT_TRUE(db->link_call_material_transcript(material, id));
+  ASSERT_TRUE(appendMaterialAgreement(*db, material, QJsonObject{{"id", "task-1"}, {"text", "Meet Thursday"},
+      {"participants", QJsonArray{}}, {"active", true}, {"evidence_ids", QJsonArray{}}}));
+  EXPECT_TRUE(controller->refreshFromStorage());
+  ASSERT_EQ(controller->records().size(), 1);
+  ASSERT_TRUE(controller->acceptCard(controller->cards()[0].toObject()["id"].toString()));
+  EXPECT_EQ(loadMaterialAgreements(*db, material).size(), 2);
+}
+
+TEST_F(PrompterControllerTest, RefreshDuringInflightRequestRequeuesItsPhrases) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  const auto p = phrase("Send document Friday");
+  controller->addPhrase(p); controller->flush();
+  ASSERT_EQ(requests.count(), 1);
+  const auto material = db->create_call_material(std::nullopt);
+  ASSERT_TRUE(db->link_call_material_transcript(material, id));
+  ASSERT_TRUE(appendMaterialAgreement(*db, material, QJsonObject{{"id", "task-1"}, {"text", "Meet Thursday"},
+      {"participants", QJsonArray{}}, {"active", true}, {"evidence_ids", QJsonArray{}}}));
+  EXPECT_TRUE(controller->refreshFromStorage());
+  EXPECT_EQ(controller->records().size(), 1);
+  controller->handleResult(reply(requests[0][0].toJsonObject(), p)); // stale generation, ignored
+  EXPECT_TRUE(controller->cards().isEmpty());
+  controller->flush();
+  ASSERT_EQ(requests.count(), 2);
+  controller->handleResult(reply(requests[1][0].toJsonObject(), p));
+  EXPECT_EQ(controller->cards().size(), 1);
+}
+
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
