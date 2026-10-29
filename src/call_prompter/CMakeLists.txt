@@ -11,12 +11,17 @@ add_library(${TARGET_NAME} STATIC
   prompter_pipeline.cpp
   call_notes_pipeline.h
   call_notes_pipeline.cpp
+  notes_common.h
+  notes_common.cpp
+  live_points_pipeline.h
+  live_points_pipeline.cpp
   prompter_engine.h
 )
 qt_add_resources(${TARGET_NAME} call_prompter_prompts
   PREFIX /call-prompter
   BASE prompts
-  FILES prompts/extract.txt prompts/match.txt prompts/notes.txt prompts/notes_merge.txt)
+  FILES prompts/extract.txt prompts/match.txt prompts/notes.txt prompts/notes_merge.txt
+        prompts/live_points.txt)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 find_package(reflectcpp CONFIG REQUIRED)
 target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Core PRIVATE reflectcpp::reflectcpp)
