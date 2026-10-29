@@ -276,6 +276,8 @@ void CallNotesController::workerFailed() { fail(QStringLiteral("runtime")); }
 void CallNotesController::fail(const QString &reason) {
   if (!mInFlight) return;
   mState[mRequest["final"].toBool() ? "final_status" : "live_status"] = "error";
+  // A summary the user asked for while a live request ran would otherwise stay queued forever.
+  if (mFinalPending) mState["final_status"] = "error";
   mState["error_reason"] = reason;
   mInFlight = false; mFinalPending = false; mBatch.stop(); stopRetrying(); mEnabled = false;
   ++mGeneration; mRequest = {}; persist(); emit changed();
@@ -617,10 +619,11 @@ bool CallNotesController::appendAgreement(const QString &id, const QString &text
 }
 QString CallNotesController::liveStatus() const { return mState["live_status"].toString("idle"); }
 QString CallNotesController::finalStatus() const {
-  if (mState["final"].isObject() && !sourcesCurrent()) return QStringLiteral("stale");
+  const bool hasFinal = mState["final"].isObject() && !mState["final"].toObject()["dismissed"].toBool();
+  if (hasFinal && !sourcesCurrent()) return QStringLiteral("stale");
   const auto status = mState["final_status"].toString("idle");
-  // An ended meeting with a transcript and no summary offers one.
-  if (mEnded && !mState["final"].isObject() && mTranscriptId > 0 && status == "idle")
+  // An ended meeting with a transcript and no (or a dismissed) summary offers one.
+  if (mEnded && !hasFinal && mTranscriptId > 0 && (status == "idle" || status == "ready"))
     return QStringLiteral("offered");
   return status;
 }

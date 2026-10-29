@@ -491,15 +491,17 @@ void NotesWorkspaceBridge::agreementsWritten(CallNotesController *storage) {
   emit stateChanged();
 }
 void NotesWorkspaceBridge::addAgreementToCalendar(const QString &recordId) {
-  auto *storage = context() ? context()->storage.data() : nullptr;
+  // The dialog runs a nested event loop that may replace or delete the controller.
+  QPointer<CallNotesController> storage = context() ? context()->storage.data() : nullptr;
   if (!storage || !mCalendarOpener) return;
+  const auto materialId = storage->materialId();
   QJsonObject record;
   for (const auto &value : agreementRecords(storage))
     if (value.toObject()["id"].toString() == recordId) record = value.toObject();
   if (record.isEmpty()) return;
   std::optional<DuckEvent> callEvent;
   try {
-    const auto material = mDb->get_call_material(storage->materialId());
+    const auto material = mDb->get_call_material(materialId);
     if (material.event_id)
       if (const auto event = mDb->get_event(*material.event_id)) callEvent = *event;
   } catch (...) {}
@@ -509,7 +511,7 @@ void NotesWorkspaceBridge::addAgreementToCalendar(const QString &recordId) {
                                         name, storage->callDate());
   const auto eventId = mCalendarOpener(t);
   if (!eventId || *eventId <= 0) return;
-  if (setMaterialAgreementEvent(*mDb, storage->materialId(), recordId, *eventId)) agreementsWritten(storage);
+  if (setMaterialAgreementEvent(*mDb, materialId, recordId, *eventId) && storage) agreementsWritten(storage);
 }
 void NotesWorkspaceBridge::openAgreementEvent(const QString &recordId) {
   auto *storage = context() ? context()->storage.data() : nullptr;

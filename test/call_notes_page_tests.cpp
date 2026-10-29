@@ -598,3 +598,36 @@ int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+TEST_F(CallNotesPageTest, UnavailableSummaryShowsRetry) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  controller.setGenerationEnabled(false);
+  controller.requestFinal();
+  CallNotesPage page(db, &controller); page.resize(1200, 900); page.show(); QApplication::processEvents();
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  ASSERT_EQ(bridge->state()["summaryState"].toString(), "unavailable");
+  auto *retry = page.findChild<QQuickWidget *>("notesQuickWorkspace")->rootObject()->findChild<QQuickItem *>("qmlSummaryRetry");
+  ASSERT_NE(retry, nullptr);
+  EXPECT_TRUE(retry->isVisible());
+}
+
+TEST_F(CallNotesPageTest, CalendarOpenerThatDeletesTheControllerStillLinksTheEvent) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  const auto id = meeting.addMeetingAgreement();
+  const auto materialId = controller.materialId();
+  auto *viewed = new CallNotesController(db);
+  viewed->openMaterial(materialId);
+  NotesWorkspaceBridge bridge(db, viewed, nullptr);
+  bridge.setAgreements(loadMaterialAgreements(*db, materialId));
+  DuckEvent created; created.name = "Next"; created.start_date = 1; created.end_date = 2;
+  const auto eventId = db->add_event(created, true);
+  bridge.setCalendarOpener([&](const EventTemplate &) -> std::optional<int64_t> {
+    delete viewed;
+    // Reuse the freed block so a stale pointer reads garbage.
+    std::vector<char> filler(sizeof(CallNotesController) * 4, char(0x5a));
+    (void)filler;
+    return eventId;
+  });
+  bridge.addAgreementToCalendar(id);
+  EXPECT_EQ(loadMaterialAgreements(*db, materialId)[0].toObject()["event_id"].toInteger(), eventId);
+}

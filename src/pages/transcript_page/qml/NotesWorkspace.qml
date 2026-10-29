@@ -13,7 +13,9 @@ Rectangle {
     readonly property var historyModel: workspaceBridge ? workspaceBridge.history : []
     readonly property var notesModel: workspaceBridge ? workspaceBridge.notes : []
     readonly property var activeAgreements: (info.agreements || []).filter(a => a.active !== false && (a.text || "").length > 0)
-    readonly property bool summaryShown: (info.summary || "").length > 0 || ["error", "running", "queued", "stale", "cancelled", "interrupted"].includes(info.summaryState)
+    readonly property bool summaryShown: (info.summary || "").length > 0 || (info.points || []).length > 0 || (info.tasks || []).length > 0
+                                         || (info.openQuestions || []).length > 0
+                                         || ["error", "running", "queued", "stale", "cancelled", "interrupted", "unavailable"].includes(info.summaryState)
     readonly property var phrasesModel: workspaceBridge ? workspaceBridge.phrases : []
     SystemPalette { id: theme; colorGroup: SystemPalette.Active }
     readonly property color paper: theme.base
@@ -503,13 +505,13 @@ Rectangle {
                                         Copy { text: qsTr("Prepared by AI"); font.pixelSize: 11; color: root.muted }
                                     }
                                     Copy { objectName: "qmlSummaryOverview"; text: root.info.summary || ""; visible: text.length > 0; Layout.fillWidth: true }
-                                    Copy { text: root.info.summaryProblem || ""; visible: ["error", "stale", "running", "queued", "cancelled", "interrupted"].includes(root.info.summaryState); color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
+                                    Copy { text: root.info.summaryProblem || ""; visible: ["error", "stale", "running", "queued", "cancelled", "interrupted", "unavailable"].includes(root.info.summaryState); color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
                                     Flow {
                                         Layout.fillWidth: true
                                         spacing: 10
                                         Action { text: "+ " + qsTr("Add to my notes"); quiet: true; enabled: !(workspaceBridge && workspaceBridge.editing) && (root.info.summary || "").length > 0; onClicked: if (workspaceBridge) workspaceBridge.appendSummary() }
                                         SourceButton { sources: root.info.summarySources || [] }
-                                        Action { text: qsTr("Retry"); quiet: true; visible: ["error", "stale", "cancelled", "interrupted"].includes(root.info.summaryState); enabled: !root.info.busy; onClicked: if (workspaceBridge) workspaceBridge.retrySummary() }
+                                        Action { objectName: "qmlSummaryRetry"; text: qsTr("Retry"); quiet: true; visible: ["error", "stale", "cancelled", "interrupted", "unavailable"].includes(root.info.summaryState); enabled: !root.info.busy; onClicked: if (workspaceBridge) workspaceBridge.retrySummary() }
                                         Action { text: qsTr("Create again"); quiet: true; visible: root.info.summaryState === "ready"; enabled: !root.info.busy; onClicked: if (workspaceBridge) workspaceBridge.summarizeMeeting() }
                                     }
                                     ColumnLayout {

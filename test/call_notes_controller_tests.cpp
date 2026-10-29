@@ -549,3 +549,28 @@ TEST(MaterialSummaryText, ReadsOverviewOrLegacyNoteNeverLive) {
 int main(int argc, char **argv) {
   QApplication app(argc, argv); ::testing::InitGoogleTest(&argc, argv); return RUN_ALL_TESTS();
 }
+
+TEST_F(CallNotesTest, LiveFailureAfterSummarizeClickReportsSummaryError) {
+  const auto p = phrase(); c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady);
+  c->flush();
+  ASSERT_EQ(requests.count(), 1);
+  auto live = requests[0][0].toJsonObject();
+  ASSERT_EQ(live["task"].toString(), "live_points");
+  c->finishCall(); c->requestFinal();
+  live["error"] = true; live["reason"] = "parse";
+  c->handleResult(live);
+  EXPECT_NE(c->finalStatus(), "queued");
+  EXPECT_EQ(c->finalStatus(), "error");
+}
+
+TEST_F(CallNotesTest, DismissedSummaryIsOfferedAgain) {
+  const auto p = phrase(); c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady);
+  c->finishCall(); c->requestFinal();
+  ASSERT_EQ(requests.count(), 1);
+  c->handleResult(reply(requests[0][0].toJsonObject(), p));
+  ASSERT_EQ(c->finalStatus(), "ready");
+  c->dismissDraft();
+  EXPECT_EQ(c->finalStatus(), "offered");
+}

@@ -1350,6 +1350,7 @@ void Application::connectSignals() {
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptStarted, prompter,
             [prompter, worker, notes, startPrompter, manualPrompterRequested](qint64 id) {
       worker->stop(); prompter->beginTranscript(id); notes->attachTranscript(id);
+      prompter->setCallDate(notes->callDate());  // «в четверг» resolves against the call's day, even past midnight
       if (*manualPrompterRequested || pcm::app_settings::prompterAutoStart()) startPrompter();
       *manualPrompterRequested = false;
     });
@@ -1579,6 +1580,7 @@ void Application::connectSignals() {
       connect(page, &CallNotesPage::sourceRequested, reviewPage, focusSource, Qt::QueuedConnection);
       auto *reviewPrompter = new CallPrompterController(mDb, host);
       reviewPrompter->beginTranscript(transcriptId);
+      reviewPrompter->setCallDate(saved->callDate());
       auto *reviewSuggestions = new PrompterPanel(reviewPrompter, mDb, page);
       reviewSuggestions->setCallNoteSaver([saved](const QString &cardId, const QString &text) {
         return saved->appendAgreement(cardId, text);
