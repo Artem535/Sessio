@@ -5,6 +5,8 @@
 #include <QObject>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QStringList>
+#include <QUrl>
 #include <QTime>
 
 namespace {
@@ -144,6 +146,50 @@ QString prompterAcceleration() {
   return mode == "gpu" || mode == "cpu" ? mode : QStringLiteral("auto");
 }
 void setPrompterAcceleration(const QString &mode) { QSettings().setValue("prompter/acceleration", mode); }
+
+namespace {
+QString normalisedUrl(const QString &url) {
+  const auto trimmed = url.trimmed();
+  if (trimmed.isEmpty()) return {};
+  return QUrl(trimmed).adjusted(QUrl::StripTrailingSlash | QUrl::NormalizePathSegments).toString();
+}
+const QStringList kFeatures{"agreements", "live_points", "summary"};
+} // namespace
+
+QString cloudBaseUrl() { return QSettings().value("cloud/baseUrl").toString(); }
+void setCloudBaseUrl(const QString &url) {
+  const auto next = url.trimmed();
+  if (normalisedUrl(next) != normalisedUrl(cloudBaseUrl())) revokeCloudConsent();
+  QSettings().setValue("cloud/baseUrl", next);
+}
+QString cloudModel() { return QSettings().value("cloud/model").toString(); }
+void setCloudModel(const QString &model) { QSettings().setValue("cloud/model", model.trimmed()); }
+int cloudContextTokens() { return qMax(2048, QSettings().value("cloud/contextTokens", 32768).toInt()); }
+void setCloudContextTokens(int tokens) { QSettings().setValue("cloud/contextTokens", qMax(2048, tokens)); }
+bool cloudConsentValid() {
+  const QSettings settings;
+  const auto consent = settings.value("cloud/consentUrl").toString();
+  return !consent.isEmpty() && consent == normalisedUrl(settings.value("cloud/baseUrl").toString());
+}
+void acceptCloudConsent() {
+  QSettings settings;
+  settings.setValue("cloud/consentUrl", normalisedUrl(settings.value("cloud/baseUrl").toString()));
+}
+void revokeCloudConsent() {
+  QSettings settings;
+  settings.remove("cloud/consentUrl");
+  for (const auto &feature : kFeatures) settings.remove("cloud/engine/" + feature);
+}
+bool cloudPseudonymize() { return QSettings().value("cloud/pseudonymize", true).toBool(); }
+void setCloudPseudonymize(bool enabled) { QSettings().setValue("cloud/pseudonymize", enabled); }
+QString featureEngine(const QString &feature) {
+  if (!cloudConsentValid()) return QStringLiteral("local");
+  return QSettings().value("cloud/engine/" + feature).toString() == QLatin1String("cloud") ? QStringLiteral("cloud")
+                                                                                         : QStringLiteral("local");
+}
+void setFeatureEngine(const QString &feature, const QString &engine) {
+  QSettings().setValue("cloud/engine/" + feature, engine == QLatin1String("cloud") ? "cloud" : "local");
+}
 
 pcm::transcription::TranscriptionTuning transcriptionTuning() {
   using pcm::transcription::TranscriptionTuning;
