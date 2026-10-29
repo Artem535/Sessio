@@ -64,6 +64,12 @@ public:
                              std::optional<int> durationMinutes = std::nullopt);
 
   /**
+   * @brief Fills the title and, with a client, makes it a work event for that
+   * client. Call after startCreatingNewEvent().
+   */
+  void applyTemplate(const QString &title, std::optional<int64_t> clientId);
+
+  /**
    * @brief Configures widget for usage inside a modal dialog.
    */
   void setDialogMode(bool enabled);
