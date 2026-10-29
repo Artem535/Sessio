@@ -114,6 +114,22 @@ TEST_F(PrompterWorkerTest, LivePointsAndSummaryAreBackgroundTasks) {
   EXPECT_EQ(replies[2][0].toJsonObject()["task"].toString(), "live_points");
 }
 
+TEST_F(PrompterWorkerTest, SummaryRequestRunsTheSummaryPipeline) {
+  PrompterWorker worker(factory(probe));
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.start(model));
+  auto summary = request(1); summary["task"] = "summary"; summary["material_id"] = 7; summary["final"] = true;
+  summary["call_date"] = "2026-10-29"; summary["agreements"] = QJsonArray{};
+  summary["utterances"] = QJsonArray{QJsonObject{{"id", "1"}, {"speaker", "A"}, {"text", "Привет"},
+                                                 {"start_ms", 0}, {"end_ms", 1000}}};
+  worker.send(summary);
+  ASSERT_TRUE(replies.wait(5000));
+  // The fake model's {"events":[]} is not a summary leaf: the pipeline ran and rejected it.
+  const auto reply = replies[0][0].toJsonObject();
+  EXPECT_EQ(reply["task"].toString(), "summary");
+  EXPECT_EQ(reply["reason"].toString(), "invalid_output");
+}
+
 TEST_F(PrompterWorkerTest, MissingModelFailsWithoutLoading) {
   PrompterWorker worker(factory(probe));
   QSignalSpy failed(&worker, &PrompterWorker::failed);

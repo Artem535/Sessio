@@ -16,6 +16,8 @@
 namespace pcm::prompter {
 namespace {
 using namespace notes;
+// Legacy budget of this pipeline (384 output tokens), kept until it is removed.
+constexpr qsizetype kLegacyInputBytes = 4096 - 384 - 128;
 constexpr qsizetype kSummaryBytes = 1100;
 
 // The reply shape checkedSummary() accepts, for constrained decoding. Rules a
@@ -105,7 +107,7 @@ QJsonObject processNotes(const QJsonArray &utterances, const Generate &generate)
   // Prompt edits consume the same context as source JSON. Split using the
   // remaining capacity, rather than filling chunks to a fixed payload ceiling
   // and then rejecting them at the generator boundary.
-  const auto leafBudget = std::min(kPayloadBytes, kContextInputBytes - notesPrompt.toUtf8().size());
+  const auto leafBudget = std::min(kPayloadBytes, kLegacyInputBytes - notesPrompt.toUtf8().size());
   if (leafBudget <= 0) throw PipelineError("notes generation budget exceeded");
   const auto inputs = chunks(utterances, leafBudget);
   if (!generate) throw PipelineError("notes generator missing");
@@ -117,7 +119,7 @@ QJsonObject processNotes(const QJsonArray &utterances, const Generate &generate)
     const auto payload = serialize(input);
     // Byte fallback provides a conservative token ceiling. Reserve 384 output
     // tokens and 128 for chat framing within the 4096-token model context.
-    if (payload.size() > kPayloadBytes || system.toUtf8().size() + payload.size() > kContextInputBytes ||
+    if (payload.size() > kPayloadBytes || system.toUtf8().size() + payload.size() > kLegacyInputBytes ||
         ++calls > 1023)
       throw PipelineError("notes generation budget exceeded");
     try {

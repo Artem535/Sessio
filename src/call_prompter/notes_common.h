@@ -12,8 +12,9 @@ namespace pcm::prompter::notes {
 // Each serialized model payload stays within 2400 UTF-8 bytes, conservative
 // for the 4096-token context; the byte fallback is a token ceiling.
 constexpr qsizetype kPayloadBytes = 2400;
-// Input capacity after the 384-token output and 128-token framing reserves.
-constexpr qsizetype kContextInputBytes = 4096 - 384 - 128;
+// Input capacity after the 1024-token output and 128-token framing reserves
+// (GemmaEngine allows 1024 output tokens for schema-constrained calls).
+constexpr qsizetype kContextInputBytes = 4096 - 1024 - 128;
 constexpr qsizetype kMaxEvidenceIds = 8;
 
 QByteArray serialize(const QJsonObject &object);

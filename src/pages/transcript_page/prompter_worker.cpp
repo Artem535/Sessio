@@ -15,6 +15,7 @@
 #include "prompter_pipeline.h"
 #include "call_notes_pipeline.h"
 #include "live_points_pipeline.h"
+#include "summary_pipeline.h"
 #include "app_settings.h"
 
 Q_LOGGING_CATEGORY(logPrompterWorker, "pcm.prompter.worker")
@@ -248,6 +249,10 @@ void PrompterWorker::send(const QJsonObject &request) {
           QStringList known;
           for (const auto &text : request["known_points"].toArray()) known << text.toString();
           notes = pcm::prompter::processLivePoints(request["utterances"].toArray(), known, generate);
+        } else if (request["task"] == "summary") {
+          pcm::prompter::SummaryContext context{QDate::fromString(request["call_date"].toString(), Qt::ISODate), {}};
+          for (const auto &text : request["agreements"].toArray()) context.agreements << text.toString();
+          notes = pcm::prompter::processSummary(request["utterances"].toArray(), context, generate);
         } else if (request["task"] == "notes") {
           notes = pcm::prompter::processNotes(request["utterances"].toArray(), generate);
         } else {
