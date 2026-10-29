@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QByteArray>
+#include <QDate>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QString>
@@ -43,6 +45,19 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
 // events and keep the extraction schema order; others are alphabetical, which
 // is the order of the compact Qt JSON the controller sends.
 QByteArray dumpJson(const QJsonValue &value);
+
+// `days` consecutive dates from `from`, each {"date":"yyyy-MM-dd","weekday":
+// Russian weekday name}. The model picks meeting dates from this list rather
+// than resolving "в четверг" itself.
+QJsonArray calendarDays(const QDate &from, int days = 60);
+
+// Schema text edits for constrained decoding. reflect-cpp writes each string
+// field as {"type":"string"...} and each string list as {"type":"array",
+// "items":{"type":"string"}...}; these add an "enum" of `values` to every
+// field named `key` of either shape, or close every object. Text edits keep
+// reflect-cpp's property order, which llguidance follows.
+QByteArray restrictStrings(QByteArray schema, const QString &key, const QStringList &values);
+QByteArray closeObjects(QByteArray schema);
 QByteArray dumpPayload(const Payload &payload);
 
 // Parses a raw model reply, tolerating surrounding whitespace and a Markdown
