@@ -1,4 +1,5 @@
 #include "call_prompter_controller.h"
+#include <QCoreApplication>
 #include <QJsonDocument>
 #include <QUuid>
 
@@ -13,6 +14,15 @@ bool validIds(const QJsonValue &value, const QSet<QString> &allowed) {
   return true;
 }
 QString uuid() { return QUuid::createUuid().toString(QUuid::WithoutBraces); }
+QString speakerOf(const DuckTranscriptPhrase &p) {
+  auto speaker = QString::fromStdString(p.speaker_name.value_or(p.track_role));
+  // Persisted unnamed tracks have only a role label; participant attribution needs review.
+  return speaker.isEmpty() ? QCoreApplication::translate("CallPrompterController", "Participant") : speaker;
+}
+void renameAll(QJsonArray &values, const QHash<QString, QString> &renamed) {
+  for (auto i = 0; i < values.size(); ++i)
+    if (values[i].isString() && renamed.contains(values[i].toString())) values[i] = renamed[values[i].toString()];
+}
 constexpr int kMaxBatch = 6;
 constexpr int kMaxFailures = 8; // consecutive failed requests before pausing
 }
@@ -64,15 +74,58 @@ void CallPrompterController::beginTranscript(qint64 transcriptId) {
 }
 void CallPrompterController::addPhrase(const DuckTranscriptPhrase &p) {
   if (p.transcript_id != mTranscriptId || p.id <= 0 || mSources.contains(QString::number(p.id))) return;
-  auto speaker = QString::fromStdString(p.speaker_name.value_or(p.track_role));
-  // Persisted unnamed tracks have only a role label; participant attribution needs review.
-  if (speaker.isEmpty()) speaker = tr("Participant");
-  QJsonObject source{{"id", QString::number(p.id)}, {"speaker", speaker},
+  QJsonObject source{{"id", QString::number(p.id)}, {"speaker", speakerOf(p)},
       {"text", QString::fromStdString(p.text)}, {"start_ms", static_cast<qint64>(p.start_ms)}, {"end_ms", static_cast<qint64>(p.end_ms)}};
   mSources.insert(QString::number(p.id), source);
   if (p.id > mLastProcessed) mPending.append(source);
   else { mLookback.append(source); while (mLookback.size() > 2) mLookback.removeFirst(); }
   if (mRunning && !mInFlight) mBatchTimer.start();
+}
+void CallPrompterController::speakersRenamed(qint64 transcriptId) {
+  if (!mTranscriptId || transcriptId != mTranscriptId) return;
+  const bool wasRunning = mRunning;
+  if (mInFlight) pause(); // The reply would cite the old names; resend the batch.
+  QHash<QString, QString> renamed; // old speaker -> new speaker
+  try {
+    for (const auto &p : mDb->get_transcript_phrases(mTranscriptId)) {
+      const auto id = QString::number(p.id);
+      if (!mSources.contains(id)) continue;
+      auto source = mSources[id];
+      const auto old = source["speaker"].toString(), speaker = speakerOf(p);
+      if (old == speaker) continue;
+      renamed.insert(old, speaker); source["speaker"] = speaker; mSources.insert(id, source);
+    }
+  } catch (...) { return; }
+  auto refresh = [this](QJsonArray &sources) {
+    for (auto i = 0; i < sources.size(); ++i) {
+      const auto id = sources[i].toObject()["id"].toString();
+      if (mSources.contains(id)) sources[i] = mSources[id];
+    }
+  };
+  refresh(mPending); refresh(mLookback);
+  bool saved = true;
+  if (!renamed.isEmpty()) {
+    const auto previous = state();
+    auto relabel = [&](QJsonArray &items) {
+      for (auto i = 0; i < items.size(); ++i) {
+        auto item = items[i].toObject();
+        auto participants = item["participants"].toArray(); renameAll(participants, renamed);
+        item["participants"] = participants;
+        auto snapshots = item["evidence_snapshot"].toArray();
+        for (auto j = 0; j < snapshots.size(); ++j) {
+          auto snapshot = snapshots[j].toObject();
+          if (renamed.contains(snapshot["speaker"].toString())) snapshot["speaker"] = renamed[snapshot["speaker"].toString()];
+          snapshots[j] = snapshot;
+        }
+        if (item.contains("evidence_snapshot")) item["evidence_snapshot"] = snapshots;
+        items[i] = item;
+      }
+    };
+    relabel(mCards); relabel(mRecords);
+    if (!persist()) { restore(previous); saved = false; }
+    emit cardsChanged();
+  }
+  if (wasRunning && !mRunning && saved) resume();
 }
 void CallPrompterController::resume() {
   if (!mTranscriptId || !mDb->get_transcript(mTranscriptId)) { setStatus(tr("Start transcription first")); return; }
@@ -106,9 +159,7 @@ bool CallPrompterController::evidenceUnchanged(const QJsonObject &card) const {
       const auto snapshot = value.toObject(); bool found = false;
       for (const auto &p : phrases) {
         if (QString::number(p.id) != snapshot["id"].toString()) continue;
-        auto speaker = QString::fromStdString(p.speaker_name.value_or(p.track_role));
-        if (speaker.isEmpty()) speaker = tr("Participant");
-        found = QString::fromStdString(p.text) == snapshot["text"].toString() && speaker == snapshot["speaker"].toString();
+        found = QString::fromStdString(p.text) == snapshot["text"].toString() && speakerOf(p) == snapshot["speaker"].toString();
         break;
       }
       if (!found) return false;

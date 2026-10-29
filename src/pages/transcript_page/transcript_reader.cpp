@@ -146,7 +146,7 @@ QVariantList TranscriptPage::readerPhrases() const {
       const auto time = seconds >= 3600 ? QString("%1:%2:%3").arg(seconds / 3600).arg(seconds / 60 % 60, 2, 10, QChar('0')).arg(seconds % 60, 2, 10, QChar('0'))
         : QString("%1:%2").arg(seconds / 60).arg(seconds % 60, 2, 10, QChar('0'));
       result.append(QVariantMap{{"id", QString::number(phrase.id)}, {"time", time},
-        {"speaker", phrase.speaker_name ? QString::fromStdString(*phrase.speaker_name) : phrase.track_role == "practitioner" ? tr("Practitioner") : tr("Participant")},
+        {"speaker", speakerName(phrase)}, {"trackRole", QString::fromStdString(phrase.track_role)},
         {"practitioner", phrase.track_role == "practitioner"}, {"text", QString::fromStdString(phrase.text)}});
     }
   } catch (...) {}

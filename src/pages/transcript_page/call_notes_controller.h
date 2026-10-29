@@ -20,6 +20,8 @@ public:
   void openTranscript(qint64 transcriptId);
   void openMaterial(qint64 materialId);
   void addPhrase(const DuckTranscriptPhrase &phrase);
+  // The live transcript changed (new phrase, renamed speaker): regenerate soon.
+  void transcriptChanged(qint64 transcriptId);
   void setGenerationEnabled(bool enabled);
   void finishCall();
   void requestFinal();
@@ -69,6 +71,7 @@ private:
   void load(qint64 materialId);
   QJsonArray phrases() const;
   void dispatch(bool final);
+  void markDirty();
   void fail(const QString &reason);
   void retryLater();
   void stopRetrying();

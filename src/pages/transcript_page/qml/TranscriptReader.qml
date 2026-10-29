@@ -229,7 +229,19 @@ Rectangle {
                         RowLayout {
                             Copy { text: modelData.time; font.pixelSize: 12; color: root.muted }
                             Copy { text: "●"; color: modelData.practitioner ? theme.highlight : "#8ebeb9"; font.pixelSize: 10 }
-                            Copy { text: modelData.speaker; font.weight: Font.DemiBold; font.pixelSize: 13 }
+                            Copy {
+                                text: modelData.speaker; font.weight: Font.DemiBold; font.pixelSize: 13
+                                TapHandler {
+                                    enabled: root.info.canDelete === true
+                                    acceptedButtons: Qt.RightButton
+                                    onTapped: speakerMenu.popup()
+                                }
+                                Menu {
+                                    id: speakerMenu
+                                    background: Rectangle { implicitWidth: 190; color: theme.base; border.color: theme.mid; radius: 8 }
+                                    ThemedMenuItem { text: qsTr("Rename speaker…"); onTriggered: if (readerBridge) readerBridge.promptSpeakerRename(modelData.trackRole) }
+                                }
+                            }
                         }
                         TextEdit {
                             text: modelData.text

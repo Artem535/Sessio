@@ -102,7 +102,9 @@ void TranscriptPanel::addPhrase(const DuckTranscriptPhrase &phrase) {
   auto *layout = new QVBoxLayout(row);
   layout->setContentsMargins(18, 12, 18, 14); layout->setSpacing(8);
   const bool practitioner = phrase.track_role == "practitioner";
-  const QString name = phrase.speaker_name && !phrase.speaker_name->empty() ? QString::fromStdString(*phrase.speaker_name) : (practitioner ? tr("You") : tr("Participant"));
+  const auto role = QString::fromStdString(phrase.track_role);
+  const QString name = phrase.speaker_name && !phrase.speaker_name->empty() ? QString::fromStdString(*phrase.speaker_name)
+      : mSpeakerNames.value(role, practitioner ? tr("You") : tr("Participant"));
   row->setProperty("practitioner", practitioner);
   auto *meta = new QHBoxLayout;
   auto *dot = label(QStringLiteral("●"), "speakerMarker", row);
@@ -112,6 +114,8 @@ void TranscriptPanel::addPhrase(const DuckTranscriptPhrase &phrase) {
   dot->setWordWrap(false); dot->setFixedWidth(dot->fontMetrics().horizontalAdvance(QStringLiteral("●")) + 2);
   meta->addWidget(dot);
   auto *speaker = label(name, "phraseSpeaker", row);
+  speaker->setProperty("trackRole", role);
+  pcm::transcriptionui::offerSpeakerRename(speaker, [this, role] { requestSpeakerRename(role); });
   QFont font = speaker->font(); font.setWeight(QFont::DemiBold); speaker->setFont(font);
   meta->addWidget(speaker); meta->addStretch();
   const auto range = phrase.end_ms > phrase.start_ms ? timestamp(phrase.start_ms) + QStringLiteral(" – ") + timestamp(phrase.end_ms) : timestamp(phrase.start_ms);
@@ -131,8 +135,20 @@ void TranscriptPanel::setAudioGap(bool interrupted) { mAudioGap->setVisible(inte
 void TranscriptPanel::setError(const QString &text) { message(mError, text); }
 void TranscriptPanel::clearPhrases() {
   while (mRows->count() > 1) { auto *item = mRows->takeAt(0); delete item->widget(); delete item; }
-  mPhraseCount = 0; mFollowing = true;
+  mPhraseCount = 0; mFollowing = true; mSpeakerNames.clear();
   mExport->setEnabled(false);
+}
+void TranscriptPanel::requestSpeakerRename(const QString &trackRole) {
+  QString current = mSpeakerNames.value(trackRole, trackRole == QStringLiteral("practitioner") ? tr("You") : tr("Participant"));
+  for (const auto *speaker : findChildren<QLabel *>("phraseSpeaker"))
+    if (speaker->property("trackRole").toString() == trackRole) { current = speaker->text(); break; }
+  if (const auto name = pcm::transcriptionui::askSpeakerName(this, mRenamePrompt, current))
+    emit speakerRenameRequested(trackRole, *name);
+}
+void TranscriptPanel::setSpeakerName(const QString &trackRole, const QString &name) {
+  mSpeakerNames.insert(trackRole, name);
+  for (auto *speaker : findChildren<QLabel *>("phraseSpeaker"))
+    if (speaker->property("trackRole").toString() == trackRole) speaker->setText(name);
 }
 int TranscriptPanel::phraseCount() const { return mPhraseCount; }
 bool TranscriptPanel::focusPhrase(qint64 phraseId) {

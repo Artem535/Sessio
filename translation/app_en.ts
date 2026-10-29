@@ -3745,6 +3745,25 @@ See you!</translation>
     </message>
 </context>
 <context>
+    <name>SpeakerRename</name>
+    <message>
+        <source>Rename speaker</source>
+        <translation>Rename speaker</translation>
+    </message>
+    <message>
+        <source>Name shown for this speaker in the whole transcript:</source>
+        <translation>Name shown for this speaker in the whole transcript:</translation>
+    </message>
+    <message>
+        <source>Right-click to rename this speaker</source>
+        <translation>Right-click to rename this speaker</translation>
+    </message>
+    <message>
+        <source>Rename speaker…</source>
+        <translation>Rename speaker…</translation>
+    </message>
+</context>
+<context>
     <name>TimelineCard</name>
     <message>
         <source>Canceled</source>
@@ -4223,6 +4242,10 @@ They appear here after a call with transcription turned on.</translation>
         <translation>All speakers</translation>
     </message>
     <message>
+        <source>Rename speaker…</source>
+        <translation>Rename speaker…</translation>
+    </message>
+    <message>
         <source>No matching phrases</source>
         <translation>No matching phrases</translation>
     </message>
@@ -4614,6 +4637,10 @@ Your previous data was kept.</translation>
 </context>
 <context>
     <name>pcm::transcriptionui::CallTranscriptionController</name>
+    <message>
+        <source>The speaker could not be renamed. Please try again.</source>
+        <translation>The speaker could not be renamed. Please try again.</translation>
+    </message>
     <message>
         <source>Transcription is turned off in Settings</source>
         <translation>Transcription is turned off in Settings</translation>

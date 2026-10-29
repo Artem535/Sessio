@@ -212,6 +212,14 @@ CREATE TABLE IF NOT EXISTS TranscriptPhrase (
     text TEXT NOT NULL,
     edited BOOLEAN DEFAULT FALSE
 );
+-- Name a speaker (one track role of a transcript) was given by a rename. It wins over
+-- the recogniser's name for later phrases of that role. Cleared with the transcript.
+CREATE TABLE IF NOT EXISTS TranscriptSpeaker (
+    transcript_id INTEGER NOT NULL,
+    track_role TEXT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (transcript_id, track_role)
+);
 -- Simple day to-dos for the "My day" screen. `day` is the local calendar date the
 -- to-do was planned for. No foreign keys: links are cleared by Database on delete.
 CREATE TABLE IF NOT EXISTS DayTodo (
@@ -815,9 +823,11 @@ constexpr auto kInsertTranscriptPhraseQuery = R"duckdb(
 INSERT INTO TranscriptPhrase (
     id, transcript_id, track_role, speaker_name, start_ms, end_ms, text, edited
 )
-SELECT COALESCE(MAX(id), 0) + 1, $1, $2, $3, $4, $5, $6, FALSE
+SELECT COALESCE(MAX(id), 0) + 1, $1, $2,
+       COALESCE((SELECT name FROM TranscriptSpeaker WHERE transcript_id = $1 AND track_role = $2), $3),
+       $4, $5, $6, FALSE
 FROM TranscriptPhrase
-RETURNING id
+RETURNING id, speaker_name
 )duckdb";
 
 constexpr auto kSelectTranscriptPhrasesQuery = R"duckdb(
@@ -869,6 +879,12 @@ constexpr auto kRenameTranscriptSpeakerQuery = R"duckdb(
 UPDATE TranscriptPhrase SET speaker_name = $1
 WHERE transcript_id = $2 AND track_role = $3
 )duckdb";
+constexpr auto kUpsertTranscriptSpeakerQuery = R"duckdb(
+INSERT INTO TranscriptSpeaker VALUES ($1, $2, $3)
+ON CONFLICT (transcript_id, track_role) DO UPDATE SET name = excluded.name
+)duckdb";
+constexpr auto kDeleteSpeakersByTranscriptIdQuery =
+    "DELETE FROM TranscriptSpeaker WHERE transcript_id = $1";
 
 constexpr auto kInsertClientNoteQuery = R"duckdb(
 INSERT INTO ClientNote (

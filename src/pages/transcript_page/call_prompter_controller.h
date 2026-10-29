@@ -17,6 +17,8 @@ public:
   void pause();
   void endCall();
   void transcriptDeleted(qint64 transcriptId);
+  // Applies stored speaker names to queued phrases, cards and records.
+  void speakersRenamed(qint64 transcriptId);
   bool evidenceAvailable(const QString &cardId) const;
   void flush();
   void handleResult(const QJsonObject &result);

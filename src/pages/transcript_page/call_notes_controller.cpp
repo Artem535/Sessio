@@ -151,7 +151,14 @@ QJsonArray CallNotesController::phrases() const {
   return out;
 }
 void CallNotesController::addPhrase(const DuckTranscriptPhrase &p) {
-  if (p.transcript_id != mTranscriptId) return;
+  if (p.transcript_id == mTranscriptId) markDirty();
+}
+void CallNotesController::transcriptChanged(qint64 transcriptId) {
+  if (transcriptId != mTranscriptId) return;
+  if (!mInFlight && mMaterialId > 0) syncStored(); // Pick up derived notes the change invalidated.
+  markDirty();
+}
+void CallNotesController::markDirty() {
   mDirty = true;
   // A pending retry already covers new phrases; keep its backoff.
   if (mEnabled && !mInFlight && !mEnded && !mRetry.isActive()) mBatch.start();

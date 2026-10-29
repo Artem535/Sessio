@@ -26,6 +26,22 @@ CallTranscriptionController::CallTranscriptionController(
     if (mSession)
       mSession->revoke();
   });
+  connect(panel, &TranscriptPanel::speakerRenameRequested, this,
+          [this](const QString &trackRole, const QString &name) {
+    // The panel keeps showing the last transcript after it stopped, so a
+    // speaker can still be named then.
+    const auto id = mShownTranscriptId;
+    bool renamed = false;
+    try {
+      renamed = id > 0 && mDb->rename_transcript_speaker(id, trackRole.toStdString(), name.toStdString());
+    } catch (...) {}
+    if (!renamed) {
+      if (mPanel) mPanel->setError(tr("The speaker could not be renamed. Please try again."));
+      return;
+    }
+    if (mPanel) mPanel->setSpeakerName(trackRole, name);
+    emit speakersRenamed(id);
+  });
   refreshAvailability();
 }
 CallTranscriptionController::~CallTranscriptionController() { shutdown(); }
@@ -162,6 +178,7 @@ void CallTranscriptionController::onTranscribeRequested() {
       mDb, mCall->provider(), factory, this);
   mSession = session;
   mSessionHadFailure = false;
+  mShownTranscriptId = 0;
   if (mPanel) {
     mPanel->clearPhrases();
     mPanel->setError({});
@@ -260,6 +277,7 @@ void CallTranscriptionController::onTranscribeRequested() {
               if (deleted && mPanel)
                 mPanel->clearPhrases();
               if (deleted) {
+                mShownTranscriptId = 0;
                 emit transcriptDeleted(id);
                 if (!self) return;
               }
@@ -283,6 +301,7 @@ void CallTranscriptionController::onTranscribeRequested() {
   }
   refreshAvailability();
   // The session owns the exact persisted identity; never infer it from list order.
+  mShownTranscriptId = session->transcriptId();
   emit transcriptStarted(session->transcriptId());
   if (!mStartingAutomatically) emit requestOpenTranscriptTab();
   emit transcribeButtonState(true, tr("Transcription running"));

@@ -25,7 +25,8 @@ struct WriterStats {
 class PhraseWriter {
 public:
   // Returns the new row id, or <= 0 on failure. Runs on the writer thread.
-  using Store = std::function<int64_t(const DuckTranscriptPhrase &)>;
+  // May fill in fields the store derived (the speaker name) before Written.
+  using Store = std::function<int64_t(DuckTranscriptPhrase &)>;
   // Called with the stored row (id assigned) on the writer thread.
   using Written = std::function<void(const DuckTranscriptPhrase &)>;
 

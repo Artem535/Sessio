@@ -337,6 +337,33 @@ int TranscriptPage::transcriptCount() const { return mSelector->count(); }
 void TranscriptPage::reportFailure() {
   mNotice->setText(tr("Could not update the transcript. Please try again."));
 }
+QString TranscriptPage::speakerName(const DuckTranscriptPhrase &phrase) {
+  return phrase.speaker_name ? QString::fromStdString(*phrase.speaker_name) :
+      phrase.track_role == "practitioner" ? tr("Practitioner") : tr("Participant");
+}
+void TranscriptPage::promptSpeakerRename(const QString &trackRole) {
+  if (mEditing || mSelector->currentIndex() < 0) return;
+  try {
+    QString current;
+    for (const auto &phrase : mDb->get_transcript_phrases(mSelector->currentData().toLongLong()))
+      if (QString::fromStdString(phrase.track_role) == trackRole) { current = speakerName(phrase); break; }
+    if (current.isEmpty()) return;
+    if (const auto name = pcm::transcriptionui::askSpeakerName(this, mRenamePrompt, current))
+      renameSpeaker(trackRole, *name);
+  } catch (...) { reportFailure(); }
+}
+bool TranscriptPage::renameSpeaker(const QString &trackRole, const QString &name) {
+  const auto value = name.simplified();
+  if (mEditing) { mNotice->setText(tr("Save or cancel the current edit first.")); return false; }
+  if (value.isEmpty() || mSelector->currentIndex() < 0) return false;
+  try {
+    const auto id = mSelector->currentData().toLongLong();
+    if (!mayMutate(id)) return false;
+    if (!mDb->rename_transcript_speaker(id, trackRole.toStdString(), value.toStdString())) { reportFailure(); return false; }
+    showTranscript(); emit transcriptsChanged(); emit speakersRenamed(id);
+    return true;
+  } catch (...) { reportFailure(); return false; }
+}
 bool TranscriptPage::mayMutate(int64_t transcriptId) {
   const auto row = mDb->get_transcript(transcriptId);
   if (!row || (mTranscriptId ? row->id != *mTranscriptId : row->event_id != mEventId)) return false;
@@ -434,8 +461,7 @@ void TranscriptPage::showTranscript() {
       widget->setObjectName("phraseCard_" + QString::number(phrase.id));
       auto *layout = new QVBoxLayout(widget);
       layout->setContentsMargins(18, 12, 18, 14); layout->setSpacing(8);
-      const auto speaker = phrase.speaker_name ? QString::fromStdString(*phrase.speaker_name) :
-          phrase.track_role == "practitioner" ? tr("Practitioner") : tr("Participant");
+      const auto speaker = speakerName(phrase);
       auto *header = new QHBoxLayout;
       auto *dot = label(QStringLiteral("●"), "speakerMarker", widget);
       auto markerPalette = dot->palette();
@@ -444,6 +470,10 @@ void TranscriptPage::showTranscript() {
       dot->setPalette(markerPalette);
       header->addWidget(dot);
       auto *speakerLabel = label(speaker, "phraseSpeaker", widget);
+      if (!recording) {
+        const auto role = QString::fromStdString(phrase.track_role);
+        pcm::transcriptionui::offerSpeakerRename(speakerLabel, [this, role] { promptSpeakerRename(role); });
+      }
       auto speakerFont = speakerLabel->font(); speakerFont.setBold(true); speakerFont.setPointSize(11);
       speakerLabel->setFont(speakerFont);
       header->addWidget(speakerLabel); header->addStretch();

@@ -1,4 +1,5 @@
 #include "transcript_page.h"
+#include "transcript_export.h"
 #include "config.h"
 #include "call_notes_controller.h"
 #include "call_notes_page.h"
@@ -242,6 +243,36 @@ TEST_F(TranscriptPageTest, MarkReviewedUpdatesStatusAndChip) {
   EXPECT_EQ(page->findChild<QLabel *>("transcriptStatus")->text(), "Reviewed");
   EXPECT_TRUE(button("markReviewed")->isHidden());
   EXPECT_EQ(spy.count(), 1);
+}
+TEST_F(TranscriptPageTest, RenamingASpeakerUpdatesEveryPhraseReaderAndExport) {
+  DuckTranscriptPhrase own; own.transcript_id = id; own.track_role = "practitioner";
+  own.text = "Mine"; own.start_ms = 3000; own.end_ms = 3500;
+  db->set_transcript_status(id, "recording");
+  ASSERT_GT(db->add_transcript_phrase(own), 0);
+  db->set_transcript_status(id, "draft");
+  page->reload(event, "Session");
+  QSignalSpy changed(page.get(), &TranscriptPage::transcriptsChanged);
+  auto speakers = page->findChildren<QLabel *>("phraseSpeaker");
+  ASSERT_EQ(speakers.size(), 3);
+  EXPECT_EQ(speakers[0]->contextMenuPolicy(), Qt::CustomContextMenu);
+  QString asked;
+  page->setRenamePromptHook([&](const QString &current) { asked = current; return std::optional<QString>(" Anna "); });
+  page->promptSpeakerRename("participant");
+  EXPECT_EQ(asked, "Participant");
+  EXPECT_EQ(changed.count(), 1);
+  speakers = page->findChildren<QLabel *>("phraseSpeaker");
+  ASSERT_EQ(speakers.size(), 3);
+  EXPECT_EQ(speakers[0]->text(), "Anna"); EXPECT_EQ(speakers[1]->text(), "Anna");
+  EXPECT_EQ(speakers[2]->text(), "Practitioner");
+  EXPECT_EQ(page->readerPhrases().first().toMap().value("speaker").toString(), "Anna");
+  EXPECT_EQ(page->readerPhrases().first().toMap().value("trackRole").toString(), "participant");
+  EXPECT_TRUE(pcm::transcriptionui::transcriptExportText(*db, id).contains("00:01 Anna: First"));
+
+  db->set_transcript_status(id, "recording");
+  EXPECT_FALSE(page->renameSpeaker("participant", "Boris"));
+  EXPECT_EQ(db->get_transcript_phrases(id).front().speaker_name.value_or(""), "Anna");
+  db->set_transcript_status(id, "draft");
+  EXPECT_FALSE(page->renameSpeaker("participant", "   "));
 }
 TEST_F(TranscriptPageTest, RecordingTranscriptDisablesEditDeleteAndReview) {
   db->set_transcript_status(id, "recording"); page->reload(event, "Session");

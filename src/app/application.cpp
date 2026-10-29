@@ -1348,6 +1348,10 @@ void Application::connectSignals() {
             prompter, [worker, prompter, notes] { notes->cancel(); notes->setGenerationEnabled(false); prompter->pause(); worker->stop(); });
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::consentRevoked,
             prompter, [worker, prompter, notes, notesWanted] { *notesWanted = false; notes->revoke(); prompter->endCall(); worker->stop(); });
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::speakersRenamed,
+            prompter, &CallPrompterController::speakersRenamed);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::speakersRenamed,
+            notes, &CallNotesController::transcriptChanged);
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptDeleted,
             prompter, &CallPrompterController::transcriptDeleted);
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptDeleted,
@@ -1567,6 +1571,7 @@ void Application::connectSignals() {
       connect(page, &CallNotesPage::sourceRequested, reviewPage, focusSource, Qt::QueuedConnection);
       auto *reviewPrompter = new CallPrompterController(mDb, host);
       reviewPrompter->beginTranscript(transcriptId);
+      connect(reviewPage, &TranscriptPage::speakersRenamed, reviewPrompter, &CallPrompterController::speakersRenamed);
       auto *reviewSuggestions = new PrompterPanel(reviewPrompter, mDb, page);
       reviewSuggestions->setCallNoteSaver([saved](const QString &cardId, const QString &text) {
         return saved->appendAgreement(cardId, text);

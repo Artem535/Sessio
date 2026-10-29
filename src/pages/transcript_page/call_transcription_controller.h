@@ -42,6 +42,8 @@ signals:
   void transcriptionStopped();
   void consentRevoked();
   void transcriptDeleted(qint64 transcriptId);
+  // A speaker of the transcript shown in the panel got a new name.
+  void speakersRenamed(qint64 transcriptId);
 
 private:
   void releaseSession(pcm::calltranscription::TranscriptionSession *session);
@@ -62,5 +64,6 @@ private:
   bool mAutoStartAttempted = false;
   bool mStartingAutomatically = false;
   quint64 mAttachmentGeneration = 0;
+  int64_t mShownTranscriptId = 0;
 };
 } // namespace pcm::transcriptionui
