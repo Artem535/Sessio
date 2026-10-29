@@ -55,7 +55,8 @@ struct Delivered {
 class AudioBridgeServerTest : public ::testing::Test {
 protected:
   void SetUp() override {
-    server = new AudioBridgeServer(kOrigin, [this](const AudioChunk &c) {
+    // Members by reference, not `this`: the analyzer cannot prove `this` non-null here.
+    server = new AudioBridgeServer(kOrigin, [&thread = thread, &mutex = mutex, &chunks = chunks](const AudioChunk &c) {
       EXPECT_EQ(QThread::currentThread(), &thread);  // sink runs on the server thread
       std::lock_guard lock(mutex);
       chunks.push_back({c.participantId, c.seq, std::vector<int16_t>(c.samples, c.samples + c.count)});

@@ -14,7 +14,9 @@ const bridge = await new Promise((resolve) => {
     resolve(null);
     return;
   }
-  new QWebChannel(qt.webChannelTransport, (ch) => resolve(ch.objects.bridge));
+  // The channel lives as long as its transport; the callback delivers the bridge.
+  const channel = new QWebChannel(qt.webChannelTransport, (ch) => resolve(ch.objects.bridge));
+  console.debug('sessio-call: host channel', channel ? 'opened' : 'missing');
 });
 
 function notify(name, ...args) {
@@ -252,12 +254,12 @@ const handlers = {
   },
   onFailed(reason) {
     if (!joining) return;
-    teardown('failed');
+    teardown('failed').catch((e) => console.warn('sessio-call: teardown failed', e));
     notify('joinFailed', String(reason));
   },
   onConnectionLost(reason) {
     if (!joining) return;
-    teardown(reason === 'kicked' ? 'kicked' : 'lost');
+    teardown(reason === 'kicked' ? 'kicked' : 'lost').catch((e) => console.warn('sessio-call: teardown failed', e));
     notify('connectionLost', String(reason));
   },
   onMediaError(reason) {

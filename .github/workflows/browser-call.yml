@@ -33,5 +33,5 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: web/jitsi-call/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm test
