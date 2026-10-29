@@ -28,6 +28,7 @@ qt_add_library(${TARGET_NAME} STATIC
     transcript_panel.h transcript_panel.cpp
     transcription_consent_dialog.h transcription_consent_dialog.cpp
     failure_text.h failure_text.cpp
+    cloud_subjects.h cloud_subjects.cpp
     speaker_rename.h speaker_rename.cpp)
 set_target_properties(${TARGET_NAME} PROPERTIES AUTOMOC ON)
 qt_add_resources(${TARGET_NAME} notes_workspace_qml

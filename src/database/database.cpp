@@ -2580,6 +2580,19 @@ std::vector<int64_t> Database::get_transcript_client_ids(const int64_t id) {
   return ids;
 }
 
+std::vector<int64_t> Database::get_event_client_ids(const int64_t event_id) {
+  duckdb::Connection conn(*mDb);
+  auto result = executePrepared(conn,
+      "SELECT ec.client_id FROM EventClient ec JOIN Client c ON c.id = ec.client_id "
+      "WHERE ec.event_id = $1 ORDER BY ec.id", {duckdb::Value::BIGINT(event_id)});
+  if (!result || result->HasError()) throw std::runtime_error("Cannot read event clients");
+  std::vector<int64_t> ids;
+  while (auto chunk = result->Fetch())
+    for (duckdb::idx_t i = 0; i < chunk->size(); ++i)
+      ids.push_back(db_utils::toInt32AsInt64(chunk->GetValue(0, i)));
+  return ids;
+}
+
 bool Database::set_transcript_clients(const int64_t id, const std::vector<int64_t> &client_ids) {
   duckdb::Connection conn(*mDb);
   Transaction tx(conn);

@@ -33,6 +33,7 @@ struct NotesFixture {
   std::shared_ptr<pcm::database::Database> db = std::make_shared<pcm::database::Database>(conf);
   CallNotesController controller{db};
   DuckTranscriptPhrase phrase;
+  QString engine;  // set before generate() to record which engine wrote the summary
   void generate(const QString &text = QStringLiteral("Prepare a short outline."),
                 const QString &pointText = QStringLiteral("Outline is due")) {
     const auto id = db->add_transcript(std::nullopt, "live_local_v1");
@@ -53,6 +54,7 @@ struct NotesFixture {
     auto question = note; question["text"] = QStringLiteral("Which outline format?");
     reply["notes"] = QJsonObject{{"format", 2}, {"overview", note}, {"key_points", QJsonArray{point}},
                                  {"tasks", QJsonArray{task}}, {"open_questions", QJsonArray{question}}};
+    if (!engine.isEmpty()) reply["engine"] = engine;
     controller.handleResult(reply);
     ASSERT_EQ(controller.draft()["text"].toString(), text);
   }
@@ -515,6 +517,25 @@ TEST_F(CallNotesPageTest, FourSectionsAndLivePointsRender) {
     EXPECT_TRUE(item->isVisible()) << name;
   }
   EXPECT_NE(root->findChild<QQuickItem *>("qmlLivePoints"), nullptr);
+}
+
+TEST_F(CallNotesPageTest, SummaryCaptionNamesTheEngineThatWroteIt) {
+  engine = "cloud:m1";
+  generate();
+  CallNotesPage page(db, &controller); page.resize(1200, 900); page.show(); QApplication::processEvents();
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  EXPECT_EQ(bridge->state()["summaryEngine"].toString(), "Cloud · m1");
+  auto *root = page.findChild<QQuickWidget *>("notesQuickWorkspace")->rootObject();
+  auto *caption = root->findChild<QQuickItem *>("qmlSummaryEngine");
+  ASSERT_NE(caption, nullptr);
+  EXPECT_EQ(caption->property("text").toString(), "Prepared by AI · Cloud · m1");
+}
+
+TEST_F(CallNotesPageTest, SummaryCaptionWithoutEngineIsUnchanged) {
+  generate();
+  CallNotesPage page(db, &controller); page.resize(1200, 900); page.show(); QApplication::processEvents();
+  auto *root = page.findChild<QQuickWidget *>("notesQuickWorkspace")->rootObject();
+  EXPECT_EQ(root->findChild<QQuickItem *>("qmlSummaryEngine")->property("text").toString(), "Prepared by AI");
 }
 
 TEST_F(CallNotesPageTest, AddToCalendarCallsOpenerWithTemplateAndStoresEventId) {

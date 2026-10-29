@@ -1,3 +1,6 @@
+#include "app_settings.h"
+#include "cloud_subjects.h"
+#include "failure_text.h"
 #include "call_prompter_controller.h"
 #include <QCoreApplication>
 #include <QJsonDocument>
@@ -183,6 +186,16 @@ bool CallPrompterController::evidenceUnchanged(const QJsonObject &card) const {
     return true;
   } catch (...) { return false; }
 }
+// A cloud failure says nothing about the input, so the batch is retried as it
+// is, later. One the user must fix (key, model, provider) pauses the prompter;
+// nothing falls back to the local model.
+void CallPrompterController::cloudFailed(const QString &detail) {
+  pause();  // returns the in-flight phrases to the queue
+  setStatus(pcm::transcriptionui::cloudFailureText(detail));
+  if (!pcm::transcriptionui::cloudFailureIsTransient(detail) || ++mFailures >= kMaxFailures) return;
+  mRunning = true;
+  mBatchTimer.start();
+}
 void CallPrompterController::workerFailed() { pause(); setStatus(tr("Local prompter failed. Check its settings and retry.")); }
 // Decoding is greedy, so the same input fails the same way. Retry the batch
 // in halves, then once without lookback, then skip the phrase. Only a run of
@@ -240,6 +253,10 @@ void CallPrompterController::flush() {
   mRequest = {{"protocol_version", 1}, {"request_id", ++mRequestId}, {"session_generation", mGeneration},
       {"ledger_revision", mRevision}, {"utterances", utterances}, {"candidates", candidates},
       {"call_date", (mCallDate.isValid() ? mCallDate : QDate::currentDate()).toString(Qt::ISODate)}};
+  if (pcm::app_settings::featureEngine("agreements") == "cloud") {
+    mRequest["cloud"] = true;
+    mRequest["subjects"] = pcm::transcriptionui::cloudSubjects(*mDb, {mTranscriptId}, mEventId);
+  }
   mInFlight = true;
   setStatus(tr("Processing conversation · %n phrases waiting", nullptr, mPending.size()));
   emit requestReady(mRequest);
@@ -249,6 +266,11 @@ void CallPrompterController::handleResult(const QJsonObject &result) {
       result["session_generation"] != mRequest["session_generation"]) return;
   if (result["ledger_revision"].toInteger(-1) != mRevision) {
     pause(); resume(); return; // Keep all in-flight phrases for a fresh snapshot.
+  }
+  if (result.contains("error") && mRequest["cloud"].toBool()) {
+    const auto reason = result["reason"].toString();
+    if (reason == "cloud") { cloudFailed(result["cloud_detail"].toString(QStringLiteral("request"))); return; }
+    if (reason == "timeout") { cloudFailed(QStringLiteral("timeout")); return; }
   }
   if (result["protocol_version"].toInt() != 1 || result.contains("error") ||
       !result["events"].isArray() || result["events"].toArray().size() > 12 || !result["suggestions"].isArray()) {
@@ -304,8 +326,11 @@ void CallPrompterController::handleResult(const QJsonObject &result) {
   const auto last = mInFlightPhrases.last().toObject()["end_ms"].toInteger();
   mBatchLimit = kMaxBatch; mFailures = 0; mSkipLookback = false;
   mInFlight = false; mInFlightPhrases = {}; mRequest = {};
-  setStatus(tr("Processed through %1:%2 · %n phrases waiting", nullptr, mPending.size())
-            .arg(last / 60000).arg((last / 1000) % 60, 2, 10, QLatin1Char('0')));
+  mEngine = pcm::transcriptionui::engineLabel(result["engine"].toString());
+  auto done = tr("Processed through %1:%2 · %n phrases waiting", nullptr, mPending.size())
+                  .arg(last / 60000).arg((last / 1000) % 60, 2, 10, QLatin1Char('0'));
+  if (!mEngine.isEmpty()) done += QStringLiteral(" · ") + mEngine;
+  setStatus(done);
   emit cardsChanged();
   if (mRunning && !mPending.isEmpty()) mBatchTimer.start();
 }

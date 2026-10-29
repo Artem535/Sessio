@@ -1,10 +1,30 @@
 #include "call_prompter_controller.h"
 #include "meeting_history.h"
+#include "app_settings.h"
+#include <QCoreApplication>
+#include <QSettings>
 #include "config.h"
 #include <QApplication>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <gtest/gtest.h>
+
+namespace {
+struct CloudSettingsScope {
+  CloudSettingsScope() {
+    static QTemporaryDir settingsDir;
+    QCoreApplication::setOrganizationName("SessioPrompterCloudTests");
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir.path());
+    QSettings().clear();
+    pcm::app_settings::setCloudBaseUrl("https://cloud.test/v1");
+    pcm::app_settings::setCloudModel("m1");
+    pcm::app_settings::acceptCloudConsent();
+    pcm::app_settings::setFeatureEngine("agreements", "cloud");
+  }
+  ~CloudSettingsScope() { QSettings().clear(); }
+};
+} // namespace
 
 class PrompterControllerTest : public ::testing::Test {
 protected:
@@ -383,4 +403,70 @@ int main(int argc, char **argv) {
   QApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+
+TEST_F(PrompterControllerTest, LocalRequestsCarryNoCloudMarker) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  controller->addPhrase(phrase("Send document Friday")); controller->flush();
+  ASSERT_EQ(requests.count(), 1);
+  EXPECT_FALSE(requests[0][0].toJsonObject().contains("cloud"));
+  EXPECT_FALSE(requests[0][0].toJsonObject().contains("subjects"));
+}
+
+TEST_F(PrompterControllerTest, CloudRoutedRequestCarriesMarkerAndSubjects) {
+  CloudSettingsScope scope;
+  DuckClient client; client.name = "Мария"; client.last_name = "Петрова";
+  const auto clientId = db->add_client(client);
+  const auto p = phrase("Send document Friday");
+  ASSERT_TRUE(db->set_transcript_status(id, "draft"));  // clients can be linked once recording ended
+  ASSERT_TRUE(db->set_transcript_clients(id, {clientId}));
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  controller->addPhrase(p); controller->flush();
+  ASSERT_EQ(requests.count(), 1);
+  const auto request = requests[0][0].toJsonObject();
+  EXPECT_TRUE(request["cloud"].toBool());
+  EXPECT_EQ(request["subjects"].toObject()["client"].toArray(), (QJsonArray{"Мария", "Петрова"}));
+}
+
+TEST_F(PrompterControllerTest, FixableCloudFailurePausesWithCloudTextAndKeepsThePhrases) {
+  CloudSettingsScope scope;
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  controller->addPhrase(phrase("Send document Friday")); controller->flush();
+  ASSERT_EQ(requests.count(), 1);
+  auto failure = requests[0][0].toJsonObject();
+  failure.remove("utterances"); failure.remove("candidates");
+  failure["error"] = "inference_failed"; failure["reason"] = "cloud"; failure["cloud_detail"] = "auth";
+  controller->handleResult(failure);
+  EXPECT_FALSE(controller->running());
+  EXPECT_TRUE(controller->status().startsWith("Cloud unavailable")) << controller->status().toStdString();
+  controller->resume(); controller->flush();
+  ASSERT_EQ(requests.count(), 2);  // the phrase was not lost
+  EXPECT_EQ(requests[1][0].toJsonObject()["utterances"].toArray().last().toObject()["text"].toString(), "Send document Friday");
+}
+
+TEST_F(PrompterControllerTest, TransientCloudFailureRetriesTheSameBatchWithoutShrinkingIt) {
+  CloudSettingsScope scope;
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  controller->addPhrase(phrase("One")); controller->addPhrase(phrase("Two")); controller->flush();
+  ASSERT_EQ(requests.count(), 1);
+  const auto first = requests[0][0].toJsonObject();
+  auto failure = first;
+  failure.remove("utterances"); failure.remove("candidates");
+  failure["error"] = "inference_failed"; failure["reason"] = "cloud"; failure["cloud_detail"] = "network";
+  controller->handleResult(failure);
+  EXPECT_TRUE(controller->running());
+  controller->flush();
+  ASSERT_EQ(requests.count(), 2);
+  EXPECT_EQ(requests[1][0].toJsonObject()["utterances"].toArray().size(), first["utterances"].toArray().size());
+}
+
+TEST_F(PrompterControllerTest, ResultEngineIsShownInTheStatus) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  const auto p = phrase("Send document Friday");
+  controller->addPhrase(p); controller->flush();
+  auto result = reply(requests[0][0].toJsonObject(), p);
+  result["engine"] = "cloud:m1";
+  controller->handleResult(result);
+  EXPECT_EQ(controller->engine(), "Cloud · m1");
+  EXPECT_TRUE(controller->status().endsWith("Cloud · m1")) << controller->status().toStdString();
 }

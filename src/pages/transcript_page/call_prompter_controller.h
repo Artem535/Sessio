@@ -19,6 +19,10 @@ public:
   void endCall();
   // Meeting dates in agreements resolve against this day (default: today).
   void setCallDate(const QDate &date) { mCallDate = date; }
+  // The call's event: its clients are hidden from a cloud request by name.
+  void setEventId(qint64 id) { mEventId = id; }
+  // What produced the latest result ("Cloud · model"), or empty.
+  QString engine() const { return mEngine; }
   // Reloads cards and records written by another view (an agreement added from
   // the summary, a calendar link). False when nothing changed or a request is
   // in flight.
@@ -30,6 +34,7 @@ public:
   void flush();
   void handleResult(const QJsonObject &result);
   void workerFailed();
+  void cloudFailed(const QString &detail);
   bool acceptCard(const QString &id, const QString &editedText = {});
   bool rejectCard(const QString &id);
   bool resolveCard(const QString &id, const QString &targetId);
@@ -62,6 +67,7 @@ private:
   QJsonArray mCards, mRecords, mSuggestions, mPending, mInFlightPhrases, mLookback;
   QHash<QString, QJsonObject> mSources;
   QJsonObject mRequest;
-  QString mStatus;
+  QString mStatus, mEngine;
+  qint64 mEventId = 0;
   QDate mCallDate;
 };

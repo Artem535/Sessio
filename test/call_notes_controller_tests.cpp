@@ -1,6 +1,9 @@
 #include "call_notes_controller.h"
 #include "call_notes_finalizer.h"
 #include "meeting_history.h"
+#include "app_settings.h"
+#include <QCoreApplication>
+#include <QSettings>
 #include <QApplication>
 #include <QFile>
 #include <QDateTime>
@@ -10,6 +13,23 @@
 #include <QTest>
 #include <QTemporaryDir>
 #include <gtest/gtest.h>
+
+namespace {
+// The cloud settings live in QSettings; keep them out of the user's real config.
+struct CloudSettingsScope {
+  CloudSettingsScope() {
+    static QTemporaryDir settingsDir;
+    QCoreApplication::setOrganizationName("SessioNotesCloudTests");
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir.path());
+    QSettings().clear();
+    pcm::app_settings::setCloudBaseUrl("https://cloud.test/v1");
+    pcm::app_settings::setCloudModel("m1");
+    pcm::app_settings::acceptCloudConsent();
+  }
+  ~CloudSettingsScope() { QSettings().clear(); }
+};
+} // namespace
 
 class CallNotesTest : public ::testing::Test {
 protected:
@@ -573,4 +593,129 @@ TEST_F(CallNotesTest, DismissedSummaryIsOfferedAgain) {
   ASSERT_EQ(c->finalStatus(), "ready");
   c->dismissDraft();
   EXPECT_EQ(c->finalStatus(), "offered");
+}
+
+TEST_F(CallNotesTest, LocalRequestsCarryNoCloudMarkerOrSubjects) {
+  CloudSettingsScope scope;
+  phrase(); c->setGenerationEnabled(true); c->finishCall();
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->requestFinal();
+  ASSERT_EQ(requests.count(), 1);
+  EXPECT_FALSE(requests[0][0].toJsonObject()["cloud"].toBool());
+  EXPECT_FALSE(requests[0][0].toJsonObject().contains("subjects"));
+}
+
+TEST_F(CallNotesTest, CloudRoutedSummaryCarriesMarkerAndSubjectsFromClientCards) {
+  CloudSettingsScope scope;
+  pcm::app_settings::setFeatureEngine("summary", "cloud");
+  DuckClient client; client.name = "Иван"; client.last_name = "Иванов"; client.phone_number = "+7 999 123-45-67";
+  client.email = "ivan@example.com";
+  const auto clientId = db->add_client(client);
+  phrase(); c->setGenerationEnabled(true); c->finishCall();
+  ASSERT_TRUE(db->set_transcript_status(transcript, "draft"));  // a finished call: clients can be linked
+  ASSERT_TRUE(db->set_transcript_clients(transcript, {clientId}));
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->requestFinal();
+  ASSERT_EQ(requests.count(), 1);
+  const auto request = requests[0][0].toJsonObject();
+  EXPECT_TRUE(request["cloud"].toBool());
+  const auto subjects = request["subjects"].toObject();
+  EXPECT_EQ(subjects["client"].toArray(), (QJsonArray{"Иван", "Иванов"}));
+  EXPECT_EQ(subjects["phones"].toArray(), (QJsonArray{"+7 999 123-45-67"}));
+  EXPECT_EQ(subjects["emails"].toArray(), (QJsonArray{"ivan@example.com"}));
+}
+
+TEST_F(CallNotesTest, ResultEngineIsStoredAndLabelled) {
+  const auto p = phrase(); c->setGenerationEnabled(true); c->finishCall();
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->requestFinal();
+  auto result = reply(requests[0][0].toJsonObject(), p);
+  result["engine"] = "cloud:m1";
+  c->handleResult(result);
+  ASSERT_EQ(c->finalStatus(), "ready");
+  EXPECT_EQ(c->summaryEngine(), "Cloud · m1");
+  CallNotesController reopened(db); reopened.openTranscript(transcript);
+  EXPECT_EQ(reopened.summaryEngine(), "Cloud · m1");
+}
+
+TEST_F(CallNotesTest, ResultWithoutEngineShowsNoLabel) {
+  const auto p = phrase(); c->setGenerationEnabled(true); c->finishCall();
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->requestFinal();
+  c->handleResult(reply(requests[0][0].toJsonObject(), p));
+  EXPECT_TRUE(c->summaryEngine().isEmpty());
+}
+
+TEST_F(CallNotesTest, LiveEngineIsLabelled) {
+  const auto p = phrase(); c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
+  ASSERT_EQ(requests.count(), 1);
+  auto result = reply(requests[0][0].toJsonObject(), p); result["engine"] = "local";
+  c->handleResult(result);
+  EXPECT_EQ(c->liveEngine(), "Local model");
+}
+
+TEST_F(CallNotesTest, CloudFailureOfTheSummaryShowsCloudUnavailableAndNoRetry) {
+  CloudSettingsScope scope;
+  pcm::app_settings::setFeatureEngine("summary", "cloud");
+  phrase(); c->setGenerationEnabled(true); c->finishCall();
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->requestFinal();
+  auto failure = requests[0][0].toJsonObject();
+  failure.remove("utterances"); failure["error"] = "inference_failed"; failure["reason"] = "cloud"; failure["cloud_detail"] = "auth";
+  c->handleResult(failure);
+  EXPECT_EQ(c->finalStatus(), "error");
+  EXPECT_TRUE(c->statusText().startsWith("Cloud unavailable")) << c->statusText().toStdString();
+  EXPECT_TRUE(c->statusText().contains("API key"));
+  EXPECT_EQ(requests.count(), 1);
+}
+
+TEST_F(CallNotesTest, TransientCloudFailureOfLivePointsIsRetriedLater) {
+  CloudSettingsScope scope;
+  pcm::app_settings::setFeatureEngine("live_points", "cloud");
+  phrase(); c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
+  ASSERT_EQ(requests.count(), 1);
+  auto failure = requests[0][0].toJsonObject();
+  failure.remove("utterances"); failure["error"] = "inference_failed"; failure["reason"] = "cloud"; failure["cloud_detail"] = "network";
+  c->handleResult(failure);
+  EXPECT_EQ(c->liveStatus(), "queued");
+}
+
+TEST_F(CallNotesTest, FixableCloudFailureOfLivePointsStopsThem) {
+  CloudSettingsScope scope;
+  pcm::app_settings::setFeatureEngine("live_points", "cloud");
+  phrase(); c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
+  auto failure = requests[0][0].toJsonObject();
+  failure.remove("utterances"); failure["error"] = "inference_failed"; failure["reason"] = "cloud"; failure["cloud_detail"] = "model";
+  c->handleResult(failure);
+  EXPECT_EQ(c->liveStatus(), "error");
+  EXPECT_TRUE(c->statusText().startsWith("Cloud unavailable"));
+}
+
+TEST_F(CallNotesTest, CloudTimeoutIsNamedAsCloud) {
+  CloudSettingsScope scope;
+  pcm::app_settings::setFeatureEngine("summary", "cloud");
+  phrase(); c->setGenerationEnabled(true); c->finishCall();
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->requestFinal();
+  auto failure = requests[0][0].toJsonObject();
+  failure.remove("utterances"); failure["error"] = "inference_failed"; failure["reason"] = "timeout";
+  c->handleResult(failure);
+  EXPECT_TRUE(c->statusText().startsWith("Cloud unavailable")) << c->statusText().toStdString();
+}
+
+TEST_F(CallNotesTest, LiveCloudRequestNamesTheEventClientBeforeAnyTranscriptClientExists) {
+  CloudSettingsScope scope;
+  pcm::app_settings::setFeatureEngine("live_points", "cloud");
+  DuckClient client; client.name = "Мария"; client.last_name = "Петрова";
+  const auto clientId = db->add_client(client);
+  DuckEvent event; event.name = "Session";
+  event.start_date = QDateTime(QDate(2026, 10, 1), QTime(10, 0)).toMSecsSinceEpoch();
+  event.end_date = QDateTime(QDate(2026, 10, 1), QTime(11, 0)).toMSecsSinceEpoch();
+  const auto eventId = db->add_event(event, true);
+  ASSERT_GT(db->add_event_client(eventId, clientId), 0);
+  CallNotesController notes(db); notes.beginCall(eventId);
+  const auto own = db->add_transcript(std::nullopt, "live_local_v1");
+  notes.attachTranscript(own); notes.setGenerationEnabled(true);
+  DuckTranscriptPhrase p; p.transcript_id = own; p.track_role = "participant";
+  p.text = "See you"; p.start_ms = 0; p.end_ms = 1000; p.id = db->add_transcript_phrase(p); notes.addPhrase(p);
+  QSignalSpy requests(&notes, &CallNotesController::requestReady); notes.flush();
+  ASSERT_EQ(requests.count(), 1);
+  EXPECT_EQ(requests[0][0].toJsonObject()["subjects"].toObject()["client"].toArray(), (QJsonArray{"Мария", "Петрова"}));
 }

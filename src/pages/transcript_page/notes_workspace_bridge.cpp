@@ -296,6 +296,8 @@ QVariantMap NotesWorkspaceBridge::state() const {
   result["summary"] = storage->draft()["text"].toString();
   result["summaryState"] = storage->ended() ? storage->finalStatus() : storage->liveStatus();
   result["summaryProblem"] = storage->statusText();
+  result["summaryEngine"] = storage->summaryEngine();
+  result["liveEngine"] = storage->liveEngine();
   result["busy"] = storage->busy(); result["sourcesCurrent"] = storage->sourcesCurrent();
   result["points"] = summary["key_points"].toArray().toVariantList();
   result["livePoints"] = storage->livePoints().toVariantList();

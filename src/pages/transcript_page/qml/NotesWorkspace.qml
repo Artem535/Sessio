@@ -502,7 +502,7 @@ Rectangle {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Copy { text: "✧ " + qsTr("Meeting summary"); color: root.accent; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true }
-                                        Copy { text: qsTr("Prepared by AI"); font.pixelSize: 11; color: root.muted }
+                                        Copy { objectName: "qmlSummaryEngine"; text: root.info.summaryEngine ? qsTr("Prepared by AI · %1").arg(root.info.summaryEngine) : qsTr("Prepared by AI"); font.pixelSize: 11; color: root.muted }
                                     }
                                     Copy { objectName: "qmlSummaryOverview"; text: root.info.summary || ""; visible: text.length > 0; Layout.fillWidth: true }
                                     Copy { text: root.info.summaryProblem || ""; visible: ["error", "stale", "running", "queued", "cancelled", "interrupted", "unavailable"].includes(root.info.summaryState); color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
@@ -585,7 +585,11 @@ Rectangle {
                                 Layout.fillWidth: true
                                 spacing: 6
                                 visible: (root.info.livePoints || []).length > 0
-                                Copy { text: qsTr("From the call"); font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Copy { text: qsTr("From the call"); font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true }
+                                    Copy { objectName: "qmlLiveEngine"; text: root.info.liveEngine || ""; visible: text.length > 0; font.pixelSize: 11; color: root.muted }
+                                }
                                 Repeater {
                                     model: root.info.livePoints || []
                                     RowLayout {

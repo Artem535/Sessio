@@ -140,6 +140,8 @@ public:
   std::vector<DuckDayTodo> get_day_todos(int64_t dayStartMs, int64_t dayEndMs, bool isToday);
   bool set_transcript_clients(int64_t transcript_id, const std::vector<int64_t> &client_ids);
   std::vector<int64_t> get_transcript_client_ids(int64_t transcript_id);
+  // Clients of an event (a live call has none on its transcript yet).
+  std::vector<int64_t> get_event_client_ids(int64_t event_id);
   PrompterState get_prompter_state(int64_t transcript_id);
   int64_t create_call_material(std::optional<int64_t> event_id);
   // Adopts a late transcript event when unassociated, rejects conflicting

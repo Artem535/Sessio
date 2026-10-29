@@ -1350,6 +1350,7 @@ void Application::connectSignals() {
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptStarted, prompter,
             [prompter, worker, notes, startPrompter, manualPrompterRequested](qint64 id) {
       worker->stop(); prompter->beginTranscript(id); notes->attachTranscript(id);
+      prompter->setEventId(notes->eventId());
       prompter->setCallDate(notes->callDate());  // «в четверг» resolves against the call's day, even past midnight
       if (*manualPrompterRequested || pcm::app_settings::prompterAutoStart()) startPrompter();
       *manualPrompterRequested = false;

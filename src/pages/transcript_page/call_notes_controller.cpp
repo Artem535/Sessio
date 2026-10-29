@@ -1,3 +1,6 @@
+#include "app_settings.h"
+#include "cloud_subjects.h"
+#include "failure_text.h"
 #include "call_notes_controller.h"
 #include "app_settings.h"
 #include "meeting_history.h"
@@ -242,7 +245,17 @@ void CallNotesController::dispatch(bool final) {
       {"request_id", ++mRequestId}, {"session_generation", mGeneration}, {"ledger_revision", mRevision},
       {"final", final}, {"utterances", inputs}};
   if (!final) mRequest["known_points"] = known;
-  else {
+  if (pcm::app_settings::featureEngine(final ? "summary" : "live_points") == "cloud") {
+    mRequest["cloud"] = true;
+    QList<qint64> transcripts{mTranscriptId};
+    qint64 eventId = 0;
+    try {
+      for (const auto id : mDb->get_call_material_transcript_ids(mMaterialId)) transcripts << id;
+      eventId = mDb->get_call_material(mMaterialId).event_id.value_or(0);
+    } catch (...) {}
+    mRequest["subjects"] = pcm::transcriptionui::cloudSubjects(*mDb, transcripts, eventId);
+  }
+  if (final) {
     mRequest["task"] = "summary";
     mRequest["call_date"] = callDate().toString(Qt::ISODate);
     QJsonArray agreements;
@@ -307,8 +320,12 @@ void CallNotesController::handleResult(const QJsonObject &result) {
       result["request_id"] != mRequest["request_id"] || result["session_generation"] != mGeneration ||
       result["request_token"] != mRequest["request_token"] || result["ledger_revision"] != mRequest["ledger_revision"]) return;
   if (result.contains("error") || !result["notes"].isObject()) {
-    const auto reason = result["reason"].toString(QStringLiteral("runtime"));
-    const bool transient = reason == "runtime" || reason == "timeout" || reason == "invalid_output";
+    auto reason = result["reason"].toString(QStringLiteral("runtime"));
+    // A cloud request's failures name the cloud: the user can fix the account, not the local model.
+    if (reason == "cloud") reason = "cloud:" + result["cloud_detail"].toString(QStringLiteral("request"));
+    else if (mRequest["cloud"].toBool() && reason == "timeout") reason = QStringLiteral("cloud:timeout");
+    const bool transient = reason == "runtime" || reason == "timeout" || reason == "invalid_output" ||
+        (reason.startsWith("cloud:") && pcm::transcriptionui::cloudFailureIsTransient(reason.mid(6)));
     if (transient && !mRequest["final"].toBool() && !mEnded && mEnabled) retryLater();
     else fail(reason);
     return;
@@ -323,7 +340,7 @@ void CallNotesController::handleResult(const QJsonObject &result) {
     allowed.insert(p.toObject()["id"].toString());
   }
   auto notes = result["notes"].toObject();
-  if (!final) { appendLivePoints(notes, inputs, allowed); return; }
+  if (!final) { appendLivePoints(notes, inputs, allowed, result["engine"]); return; }
   if (notes["format"].toInt() != 2 || !notes["overview"].isObject() || !validItem(notes["overview"].toObject(), allowed) ||
       !validList(notes["key_points"], 10, allowed) || !validList(notes["tasks"], 8, allowed, true) ||
       !validList(notes["open_questions"], 5, allowed)) { fail(QStringLiteral("invalid_output")); return; }
@@ -334,6 +351,7 @@ void CallNotesController::handleResult(const QJsonObject &result) {
   // Merge the validated proposal onto that revision, preserving manual edits.
   if (!syncStored()) { fail(QStringLiteral("storage")); return; }
   notes["sources"] = inputs; notes["id"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
+  if (result["engine"].isString()) notes["engine"] = result["engine"];
   mState[final ? "final" : "live"] = notes;
   mState[final ? "final_status" : "live_status"] = "ready";
   mState["processed_ms"] = inputs.last().toObject()["end_ms"];
@@ -341,7 +359,7 @@ void CallNotesController::handleResult(const QJsonObject &result) {
   if (mFinalPending || (mDirty && !mEnded)) mBatch.start();
 }
 void CallNotesController::appendLivePoints(const QJsonObject &notes, const QJsonArray &inputs,
-                                           const QSet<QString> &allowed) {
+                                           const QSet<QString> &allowed, const QJsonValue &engine) {
   if (notes.size() != 1 || !notes["key_points"].isArray()) { fail(QStringLiteral("invalid_output")); return; }
   const auto found = notes["key_points"].toArray();
   for (const auto &point : found)
@@ -363,6 +381,7 @@ void CallNotesController::appendLivePoints(const QJsonObject &notes, const QJson
   auto sources = live["sources"].toArray();
   for (const auto &p : inputs) if (cited.contains(p.toObject()["id"].toString())) sources.append(p);
   live["key_points"] = points; live["sources"] = sources;
+  if (engine.isString()) live["engine"] = engine;
   if (!live.contains("id")) live["id"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
   mState["live"] = live;
   mState["live_status"] = "ready";
@@ -634,6 +653,15 @@ QString CallNotesController::finalStatus() const {
     return QStringLiteral("offered");
   return status;
 }
+qint64 CallNotesController::eventId() const {
+  try { return mMaterialId > 0 ? mDb->get_call_material(mMaterialId).event_id.value_or(0) : 0; } catch (...) { return 0; }
+}
+QString CallNotesController::summaryEngine() const {
+  return pcm::transcriptionui::engineLabel(mState["final"].toObject()["engine"].toString());
+}
+QString CallNotesController::liveEngine() const {
+  return pcm::transcriptionui::engineLabel(mState["live"].toObject()["engine"].toString());
+}
 QString CallNotesController::statusText() const {
   if (mState["storage_error"].toBool()) return tr("Could not save call materials. Reopen the call and try again.");
   const auto status = mEnded ? finalStatus() : liveStatus();
@@ -642,6 +670,7 @@ QString CallNotesController::statusText() const {
   if (status == "ready") return mEnded ? tr("Meeting summary saved with this call") : tr("Key points updated through %1").arg(timeLabel(mState["processed_ms"].toInteger()));
   if (status == "error") {
     const auto reason = mState["error_reason"].toString();
+    if (reason.startsWith("cloud:")) return pcm::transcriptionui::cloudFailureText(reason.mid(6));
     // Decoding is greedy: the same transcript gives the same reply, so a retry
     // only helps once the input changes (more phrases, an edited source).
     if (reason == "invalid_output")

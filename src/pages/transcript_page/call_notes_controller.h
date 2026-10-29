@@ -58,11 +58,15 @@ public:
   QJsonArray livePoints() const;
   // Day of the call: its event's start, else when the material was created.
   QDate callDate() const;
+  qint64 eventId() const;
   QJsonObject source(const QString &id) const;
   bool sourcesCurrent() const;
   QString liveStatus() const;
   QString finalStatus() const;
   QString statusText() const;
+  // What wrote the saved summary / latest live points ("Cloud · model", "Local model"), or empty.
+  QString summaryEngine() const;
+  QString liveEngine() const;
   qint64 processedThroughMs() const { return mState["processed_ms"].toInteger(); }
   bool ended() const { return mEnded; }
   bool busy() const { return mInFlight; }
@@ -86,7 +90,7 @@ private:
   void fail(const QString &reason);
   void retryLater();
   void stopRetrying();
-  void appendLivePoints(const QJsonObject &notes, const QJsonArray &inputs, const QSet<QString> &allowed);
+  void appendLivePoints(const QJsonObject &notes, const QJsonArray &inputs, const QSet<QString> &allowed, const QJsonValue &engine);
   std::shared_ptr<pcm::database::Database> mDb;
   QString mAttachmentRoot;
   QTimer mBatch, mRetry;
