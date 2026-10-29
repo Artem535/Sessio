@@ -1,5 +1,7 @@
 #include "call_page.h"
+#include "fake_screen_capture.h"
 #include "fake_video_provider.h"
+#include "screen_share_controller.h"
 #include "device_manager.h"
 #include "busy_spinner.h"
 #include "call_control_icons.h"
@@ -1500,6 +1502,73 @@ TEST(CallPageTest, FeaturedScreenFillsTheStageAndEverythingElseSitsInAStrip) {
   QTest::mouseClick(firstScreen, Qt::LeftButton);
   resizeAndDeliverEvent(page.findChild<QWidget *>("videoStage"), QSize(1281, 720));
   EXPECT_GT(firstScreen->height(), secondScreen->height());
+}
+
+namespace {
+
+// Shares through the real ScreenShareController, wired the way
+// LiveKitVideoProvider wires it, with a capture the test controls.
+class ControllerSharingProvider final : public FakeVideoProvider {
+public:
+  ControllerSharingProvider() {
+    connect(&mShare, &pcm::video::ScreenShareController::failed, this, &VideoProvider::mediaError);
+    connect(&mShare, &pcm::video::ScreenShareController::sharingChanged, this,
+            &VideoProvider::screenSharingChanged);
+  }
+  void startScreenShare(const pcm::video::ScreenCaptureTarget &target) override {
+    auto capture = std::make_unique<FakeScreenCapture>(captureLog);
+    lastCapture = capture.get();
+    mShare.start(std::move(capture), target);
+  }
+  void stopScreenShare() override { mShare.stop(); }
+  [[nodiscard]] bool isScreenSharing() const override { return mShare.isSharing(); }
+
+  std::shared_ptr<FakeScreenCapture::Log> captureLog = std::make_shared<FakeScreenCapture::Log>();
+  QPointer<FakeScreenCapture> lastCapture;
+  int publishedTracks{0};
+
+private:
+  pcm::video::ScreenShareController mShare{[this](pcm::video::ScreenCapture &) { ++publishedTracks; },
+                                           [this] { --publishedTracks; }};
+};
+
+} // namespace
+
+// The 2026-10-28 call: the portal refused the share, the track went out anyway
+// and the button and banner claimed the screen was being shared.
+TEST(CallPageTest, FailedScreenCaptureLeavesNothingPublishedAndTheUiIdle) {
+  pcm::video::DeviceManager devices;
+  CallPage page(&devices);
+  auto *provider = new ControllerSharingProvider();
+  VideoSession session(provider);
+  page.attachSession(&session);
+  connectSession(session, provider);
+  auto *button = page.findChild<QToolButton *>("screenShareButton");
+  auto *sharingBanner = page.findChild<QWidget *>("sharingBanner");
+  auto *errorBanner = page.findChild<QLabel *>("mediaErrorBanner");
+  ASSERT_TRUE(button && sharingBanner && errorBanner);
+
+  provider->startScreenShare({});
+  ASSERT_FALSE(provider->lastCapture.isNull());
+  EXPECT_FALSE(button->isChecked()) << "the picker is still open: nothing is shared yet";
+  provider->lastCapture->fail(QStringLiteral("Screen selection was cancelled."));
+  QTest::qWait(20);
+
+  EXPECT_EQ(provider->publishedTracks, 0);
+  EXPECT_EQ(provider->captureLog->stops, 1);
+  EXPECT_FALSE(button->isChecked());
+  EXPECT_EQ(button->accessibleName(), QStringLiteral("Share screen"));
+  EXPECT_TRUE(sharingBanner->isHidden());
+  EXPECT_FALSE(errorBanner->isHidden());
+  EXPECT_TRUE(errorBanner->text().contains(QStringLiteral("cancelled")));
+
+  // And sharing again in the same call works.
+  provider->startScreenShare({});
+  provider->lastCapture->deliverFirstFrame();
+  QTest::qWait(20);
+  EXPECT_EQ(provider->publishedTracks, 1);
+  EXPECT_TRUE(button->isChecked());
+  EXPECT_FALSE(sharingBanner->isHidden());
 }
 
 TEST(CallPageTest, SharingBannerFollowsLocalScreenShare) {

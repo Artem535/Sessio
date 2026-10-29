@@ -2,25 +2,66 @@
 
 #include "screen_capture_worker.h"
 
+#ifdef SESSIO_HAVE_PIPEWIRE
+#include "pipewire_screen_stream.h"
+#include "portal_screen_cast.h"
+#endif
+
+#include <QGuiApplication>
+
 namespace pcm::video {
 
+struct ScreenCaptureAdapter::PortalCapture {
+#ifdef SESSIO_HAVE_PIPEWIRE
+  PortalScreenCast portal;
+  std::unique_ptr<PipeWireScreenStream> stream;
+#endif
+};
+
 ScreenCaptureAdapter::ScreenCaptureAdapter(QObject *parent)
-    : QObject(parent), mVideoSource(std::make_shared<livekit::VideoSource>(kWidth, kHeight)) {
+    : ScreenCapture(parent), mVideoSource(std::make_shared<livekit::VideoSource>(kWidth, kHeight)) {
   mSession.setVideoSink(&mSink);
   connect(&mSink, &QVideoSink::videoFrameChanged, this, &ScreenCaptureAdapter::onVideoFrameChanged);
 }
 
 ScreenCaptureAdapter::~ScreenCaptureAdapter() { stop(); }
 
+bool screenCaptureUsesSystemPicker() {
+#ifdef SESSIO_HAVE_PIPEWIRE
+  // Qt 6.10's own Wayland capture reuses one portal request path, which some
+  // portal backends never release: only the first share of a process worked.
+  // An X11 client on a Wayland desktop cannot grab other clients' windows either.
+  const QString platform = QGuiApplication::platformName();
+  const bool wayland = platform.startsWith(QLatin1String("wayland")) ||
+                       (platform == QLatin1String("xcb") && qEnvironmentVariable("XDG_SESSION_TYPE") == "wayland");
+  return wayland && PortalScreenCast::isAvailable();
+#else
+  return false;
+#endif
+}
+
 bool ScreenCaptureAdapter::start(const ScreenCaptureTarget &target) {
   stop();
   if (!target.isValid()) return false;
 
   mWorker = std::make_unique<ScreenCaptureWorker>(mVideoSource);
-  connect(mWorker.get(), &ScreenCaptureWorker::captureFailed, this, &ScreenCaptureAdapter::captureFailed);
+  connect(mWorker.get(), &ScreenCaptureWorker::captureFailed, this, &ScreenCaptureAdapter::reportFailure);
+  connect(mWorker.get(), &ScreenCaptureWorker::frameDelivered, this,
+          [this, generation = mGeneration] { onFrameDelivered(generation); });
   mWorker->moveToThread(&mWorkerThread);
   mWorkerThread.start();
 
+  mSinceLastFrame.invalidate();
+  mStarted = false;
+  mActive = true;
+  if (screenCaptureUsesSystemPicker())
+    startPortalCapture(target);
+  else
+    startQtCapture(target);
+  return true;
+}
+
+void ScreenCaptureAdapter::startQtCapture(const ScreenCaptureTarget &target) {
   if (target.window.isValid()) {
     mWindowCapture = std::make_unique<QWindowCapture>(this);
     connect(mWindowCapture.get(), &QWindowCapture::errorOccurred, this,
@@ -36,9 +77,37 @@ bool ScreenCaptureAdapter::start(const ScreenCaptureTarget &target) {
     mSession.setScreenCapture(mScreenCapture.get());
     mScreenCapture->start();
   }
-  mSinceLastFrame.invalidate();
-  mActive = true;
-  return true;
+}
+
+void ScreenCaptureAdapter::startPortalCapture(const ScreenCaptureTarget &target) {
+  // The desktop's picker offers screens and windows; our request only asked to share.
+  Q_UNUSED(target);
+#ifdef SESSIO_HAVE_PIPEWIRE
+  mPortal = std::make_unique<PortalCapture>();
+  PortalScreenCast &portal = mPortal->portal;
+  connect(&portal, &PortalScreenCast::failed, this, &ScreenCaptureAdapter::reportFailure);
+  connect(&portal, &PortalScreenCast::closed, this,
+          [this] { reportFailure(QStringLiteral("The desktop ended screen sharing.")); });
+  connect(&portal, &PortalScreenCast::streamReady, this, [this](int fd, quint32 nodeId) {
+    const quint64 generation = mGeneration;
+    // Both handlers run on PipeWire's thread; hop to ours, dropping a replaced capture's.
+    mPortal->stream = std::make_unique<PipeWireScreenStream>(
+        [this, generation](QImage image) {
+          QMetaObject::invokeMethod(this, [this, generation, image = std::move(image)] {
+            if (generation == mGeneration) onVideoFrameChanged(QVideoFrame(image));
+          }, Qt::QueuedConnection);
+        },
+        [this, generation](QString message) {
+          QMetaObject::invokeMethod(this, [this, generation, message] {
+            if (generation == mGeneration) reportFailure(message);
+          }, Qt::QueuedConnection);
+        },
+        kMinFrameIntervalMs);
+    QString error;
+    if (!mPortal->stream->open(fd, nodeId, &error)) reportFailure(error);
+  });
+  portal.start(PortalScreenCast::Monitor | PortalScreenCast::Window);
+#endif
 }
 
 void ScreenCaptureAdapter::reportFailure(const QString &message) {
@@ -50,8 +119,23 @@ void ScreenCaptureAdapter::reportFailure(const QString &message) {
   }, Qt::QueuedConnection);
 }
 
+void ScreenCaptureAdapter::onFrameDelivered(quint64 generation) {
+  if (generation != mGeneration || !mActive || mStarted) return;
+  mStarted = true;
+  emit started();
+}
+
 void ScreenCaptureAdapter::stop() {
   ++mGeneration;
+#ifdef SESSIO_HAVE_PIPEWIRE
+  if (mPortal) {
+    // Stream first (joins PipeWire's thread), then the portal session it came from.
+    if (mPortal->stream) mPortal->stream->close();
+    mPortal->portal.disconnect(this);
+    mPortal->portal.close();
+    mPortal.reset();
+  }
+#endif
   if (mScreenCapture) {
     mScreenCapture->stop();
     mSession.setScreenCapture(nullptr);
@@ -69,6 +153,7 @@ void ScreenCaptureAdapter::stop() {
     mWorker.reset();
   }
   mActive = false;
+  mStarted = false;
 }
 
 void ScreenCaptureAdapter::onVideoFrameChanged(const QVideoFrame &frame) {

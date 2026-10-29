@@ -362,6 +362,7 @@ gtest_discover_tests(Sessio_device_manager_tests)
 # plan's Task 9 lifecycle-stress acceptance criterion.
 add_executable(Sessio_video_capture_adapter_smoke_test
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture.h
     ${CMAKE_SOURCE_DIR}/src/video/screen_capture_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/video/screen_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_worker.cpp
@@ -380,6 +381,7 @@ set_tests_properties(VideoCaptureAdapterSmokeTest PROPERTIES TIMEOUT 30)
 # Screen capture adapter: failure delivery must let the caller destroy the
 # capture safely (crash in libQt6Core when sharing via the Wayland portal).
 add_executable(Sessio_screen_capture_adapter_tests
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture.h
     ${CMAKE_SOURCE_DIR}/src/video/screen_capture_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/video/screen_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/frame_convert.cpp
@@ -390,6 +392,24 @@ target_link_libraries(Sessio_screen_capture_adapter_tests PRIVATE
     Qt6::Gui Qt6::Multimedia Qt6::Test GTest::gtest LiveKit::livekit)
 set_target_properties(Sessio_screen_capture_adapter_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_screen_capture_adapter_tests)
+
+# Screen share controller: a capture that fails (cancelled portal picker,
+# portal error) must never leave a published screen track behind.
+add_executable(Sessio_screen_share_controller_tests
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture.h
+    ${CMAKE_SOURCE_DIR}/src/video/screen_share_controller.cpp
+    fake_screen_capture.h
+    screen_share_controller_tests.cpp
+)
+target_include_directories(Sessio_screen_share_controller_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_screen_share_controller_tests PRIVATE Qt6::Gui Qt6::Multimedia Qt6::Test GTest::gtest)
+set_target_properties(Sessio_screen_share_controller_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_screen_share_controller_tests)
+
+# Manual probe for a real desktop (not a ctest test): share, stop and share
+# again in one process through the Wayland portal. See the file's header.
+add_executable(Sessio_screen_share_portal_probe screen_share_portal_probe.cpp)
+target_link_libraries(Sessio_screen_share_portal_probe PRIVATE Sessio_video Qt6::Gui)
 
 # Audio capture adapter smoke test (own main(), not GoogleTest — mirrors the
 # video capture adapter smoke test above). Proves repeated start/destroy
@@ -526,8 +546,10 @@ add_executable(Sessio_livekit_video_provider_smoke_test
     ${CMAKE_SOURCE_DIR}/src/video/participant_model.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_frame_source.cpp
     ${CMAKE_SOURCE_DIR}/src/video/livekit_video_provider.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_share_controller.cpp
     ${CMAKE_SOURCE_DIR}/src/video/livekit_video_frame_source.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture.h
     ${CMAKE_SOURCE_DIR}/src/video/screen_capture_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/video/screen_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_worker.cpp
@@ -937,6 +959,7 @@ gtest_discover_tests(Sessio_device_check_widget_tests)
 find_package(Qt6 REQUIRED COMPONENTS StateMachine Test)
 add_executable(Sessio_call_page_tests
     call_page_tests.cpp
+    fake_screen_capture.h
     call_layout_strategy_tests.cpp
 )
 target_link_libraries(Sessio_call_page_tests PRIVATE

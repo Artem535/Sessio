@@ -812,6 +812,11 @@ void CallPage::showScreenShareMenu() {
   auto *provider = mSession ? mSession->provider() : nullptr;
   if (!provider || !mScreenShareButton)
     return;
+  // On Wayland the desktop's own picker chooses the screen or window.
+  if (pcm::video::screenCaptureUsesSystemPicker()) {
+    provider->startScreenShare({QGuiApplication::primaryScreen(), {}});
+    return;
+  }
   auto *menu = new QMenu(this);
   menu->setAttribute(Qt::WA_DeleteOnClose);
   menu->setObjectName("screenShareMenu");

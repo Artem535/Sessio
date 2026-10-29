@@ -13,4 +13,8 @@ struct ScreenCaptureTarget {
   [[nodiscard]] bool isValid() const { return screen || window.isValid(); }
 };
 
+// True when the desktop's own picker chooses what is shared (the Wayland
+// ScreenCast portal): a requested target then only asks to share.
+[[nodiscard]] bool screenCaptureUsesSystemPicker();
+
 } // namespace pcm::video
