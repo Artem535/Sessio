@@ -67,7 +67,7 @@ TEST_F(MeetingHistoryTest, ClientNotesFeedShowsFinalAiSummaries) {
 
 TEST_F(MeetingHistoryTest, HistoryListsClientMeetingsNewestFirst) {
   const auto older = meeting({{"final", QJsonObject{{"note", QJsonObject{{"text", "Older summary"}}}}}});
-  const auto newer = meeting({{"live", QJsonObject{{"note", QJsonObject{{"text", "Newer summary"}}}}},
+  const auto newer = meeting({{"final", QJsonObject{{"format", 2}, {"overview", QJsonObject{{"text", "Newer summary"}}}}},
                               {"manual_entries", QJsonArray{QJsonObject{{"body_markdown", "My note"}}}}});
   meeting({}, false);  // the current, unfinished call is not history
   const auto history = loadMeetingHistory(*db, client, 0);

@@ -254,24 +254,24 @@
         <translation>Could not save call materials. Reopen the call and try again.</translation>
     </message>
     <message>
-        <source>Forming the final meeting note…</source>
-        <translation>Forming the final meeting note…</translation>
-    </message>
-    <message>
-        <source>Updating conversation notes…</source>
-        <translation>Updating conversation notes…</translation>
-    </message>
-    <message>
         <source>Waiting for local processing</source>
         <translation>Waiting for local processing</translation>
     </message>
     <message>
-        <source>Final note saved with this call</source>
-        <translation>Final note saved with this call</translation>
+        <source>Summarizing the meeting…</source>
+        <translation>Summarizing the meeting…</translation>
     </message>
     <message>
-        <source>Notes updated through %1</source>
-        <translation>Notes updated through %1</translation>
+        <source>Updating key points…</source>
+        <translation>Updating key points…</translation>
+    </message>
+    <message>
+        <source>Meeting summary saved with this call</source>
+        <translation>Meeting summary saved with this call</translation>
+    </message>
+    <message>
+        <source>Key points updated through %1</source>
+        <translation>Key points updated through %1</translation>
     </message>
     <message>
         <source>The model&apos;s reply could not be used for this transcript. Write the note yourself or edit the transcript and retry.</source>
@@ -312,6 +312,10 @@
     <message>
         <source>A saved transcript and a local model are required.</source>
         <translation>A saved transcript and a local model are required.</translation>
+    </message>
+    <message>
+        <source>Summarize the whole meeting when you are ready.</source>
+        <translation>Summarize the whole meeting when you are ready.</translation>
     </message>
     <message>
         <source>Notes are saved with this call. A client is optional.</source>
@@ -1828,6 +1832,14 @@
 <context>
     <name>NotesWorkspace</name>
     <message>
+        <source>Add to calendar</source>
+        <translation>Add to calendar</translation>
+    </message>
+    <message>
+        <source>In calendar</source>
+        <translation>In calendar</translation>
+    </message>
+    <message>
         <source>View source</source>
         <translation>View source</translation>
     </message>
@@ -1960,6 +1972,14 @@
         <translation>Meeting summary</translation>
     </message>
     <message>
+        <source>Summarize the whole meeting: overview, key points, agreements and tasks, open questions.</source>
+        <translation>Summarize the whole meeting: overview, key points, agreements and tasks, open questions.</translation>
+    </message>
+    <message>
+        <source>Summarize meeting</source>
+        <translation>Summarize meeting</translation>
+    </message>
+    <message>
         <source>Prepared by AI</source>
         <translation>Prepared by AI</translation>
     </message>
@@ -1972,8 +1992,28 @@
         <translation>Retry</translation>
     </message>
     <message>
+        <source>Create again</source>
+        <translation>Create again</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Key points</translation>
+    </message>
+    <message>
+        <source>Agreements and tasks</source>
+        <translation>Agreements and tasks</translation>
+    </message>
+    <message>
+        <source>Open questions</source>
+        <translation>Open questions</translation>
+    </message>
+    <message>
         <source>For the next meeting</source>
         <translation>For the next meeting</translation>
+    </message>
+    <message>
+        <source>From the call</source>
+        <translation>From the call</translation>
     </message>
     <message>
         <source>Transcript</source>

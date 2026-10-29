@@ -254,24 +254,24 @@
         <translation>Не удалось сохранить материалы. Откройте звонок заново и повторите попытку.</translation>
     </message>
     <message>
-        <source>Forming the final meeting note…</source>
-        <translation>Формируется итог встречи…</translation>
-    </message>
-    <message>
-        <source>Updating conversation notes…</source>
-        <translation>Обновляются заметки разговора…</translation>
-    </message>
-    <message>
         <source>Waiting for local processing</source>
         <translation>В очереди на локальную обработку</translation>
     </message>
     <message>
-        <source>Final note saved with this call</source>
-        <translation>Итог сохранён у этого звонка</translation>
+        <source>Summarizing the meeting…</source>
+        <translation>Составляется итог встречи…</translation>
     </message>
     <message>
-        <source>Notes updated through %1</source>
-        <translation>Заметки обновлены до %1</translation>
+        <source>Updating key points…</source>
+        <translation>Обновляются ключевые моменты…</translation>
+    </message>
+    <message>
+        <source>Meeting summary saved with this call</source>
+        <translation>Итог встречи сохранён у этого звонка</translation>
+    </message>
+    <message>
+        <source>Key points updated through %1</source>
+        <translation>Ключевые моменты обновлены до %1</translation>
     </message>
     <message>
         <source>The model&apos;s reply could not be used for this transcript. Write the note yourself or edit the transcript and retry.</source>
@@ -312,6 +312,10 @@
     <message>
         <source>A saved transcript and a local model are required.</source>
         <translation>Нужны сохранённая транскрипция и локальная модель.</translation>
+    </message>
+    <message>
+        <source>Summarize the whole meeting when you are ready.</source>
+        <translation>Когда будете готовы, подведите итог всей встречи.</translation>
     </message>
     <message>
         <source>Notes are saved with this call. A client is optional.</source>
@@ -1839,6 +1843,14 @@
 <context>
     <name>NotesWorkspace</name>
     <message>
+        <source>Add to calendar</source>
+        <translation>Добавить в календарь</translation>
+    </message>
+    <message>
+        <source>In calendar</source>
+        <translation>В календаре</translation>
+    </message>
+    <message>
         <source>View source</source>
         <translation>Посмотреть источник</translation>
     </message>
@@ -1971,6 +1983,14 @@
         <translation>Кратко о встрече</translation>
     </message>
     <message>
+        <source>Summarize the whole meeting: overview, key points, agreements and tasks, open questions.</source>
+        <translation>Итог всей встречи: обзор, ключевые моменты, договорённости и задачи, открытые вопросы.</translation>
+    </message>
+    <message>
+        <source>Summarize meeting</source>
+        <translation>Подвести итог встречи</translation>
+    </message>
+    <message>
         <source>Prepared by AI</source>
         <translation>Подготовлено ИИ</translation>
     </message>
@@ -1983,8 +2003,28 @@
         <translation>Повторить</translation>
     </message>
     <message>
+        <source>Create again</source>
+        <translation>Создать заново</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Ключевые моменты</translation>
+    </message>
+    <message>
+        <source>Agreements and tasks</source>
+        <translation>Договорённости и задачи</translation>
+    </message>
+    <message>
+        <source>Open questions</source>
+        <translation>Открытые вопросы</translation>
+    </message>
+    <message>
         <source>For the next meeting</source>
         <translation>На следующую встречу</translation>
+    </message>
+    <message>
+        <source>From the call</source>
+        <translation>Во время звонка</translation>
     </message>
     <message>
         <source>Transcript</source>

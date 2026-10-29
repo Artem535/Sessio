@@ -67,7 +67,7 @@ void AiSummaryWidget::retry() {
 bool AiSummaryWidget::hasContent() const {
   if (!mController || mController->materialId() <= 0) return false;
   const auto state = mController->ended() ? mController->finalStatus() : mController->liveStatus();
-  return !mController->draft()["text"].toString().trimmed().isEmpty() || (state != "idle" && state != "ready");
+  return !mController->draft()["text"].toString().trimmed().isEmpty() || (state != "idle" && state != "ready" && state != "offered");
 }
 
 void AiSummaryWidget::refresh() {
