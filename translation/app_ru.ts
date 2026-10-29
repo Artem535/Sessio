@@ -1614,8 +1614,16 @@
         <translation>Расшифровки</translation>
     </message>
     <message>
-        <source>Use a Sessio invitation code or invitation link.</source>
-        <translation>Введите код приглашения Sessio или ссылку-приглашение.</translation>
+        <source>Join a Sessio or Jitsi call using the invitation from its organizer.</source>
+        <translation>Подключитесь к звонку Sessio или Jitsi по приглашению организатора.</translation>
+    </message>
+    <message>
+        <source>Paste the Sessio invitation link, or enter its code and passcode. The invitation selects Jitsi automatically.</source>
+        <translation>Вставьте ссылку-приглашение Sessio или введите код и код доступа. Jitsi выбирается по приглашению автоматически.</translation>
+    </message>
+    <message>
+        <source>To host a Jitsi call: create an event in Calendar, enable Online, select Jitsi, and save. Use Copy invite to send the invitation to participants.</source>
+        <translation>Чтобы провести звонок в Jitsi, создайте событие в Календаре, включите «Онлайн», выберите Jitsi и сохраните. Кнопкой «Скопировать приглашение» отправьте приглашение участникам.</translation>
     </message>
     <message>
         <source>Invitation code or link</source>
@@ -1895,6 +1903,30 @@
         <translation>Открыть расшифровку</translation>
     </message>
     <message>
+        <source>Payment status</source>
+        <translation>Статус оплаты</translation>
+    </message>
+    <message>
+        <source>Pending</source>
+        <translation>Не оплачено</translation>
+    </message>
+    <message>
+        <source>Paid</source>
+        <translation>Оплачено</translation>
+    </message>
+    <message>
+        <source>Canceled</source>
+        <translation>Отменено</translation>
+    </message>
+    <message>
+        <source>Refunded</source>
+        <translation>Возврат</translation>
+    </message>
+    <message>
+        <source>Skipped</source>
+        <translation>Без оплаты</translation>
+    </message>
+    <message>
         <source>Edit</source>
         <translation>Редактировать</translation>
     </message>
@@ -2068,6 +2100,10 @@
     <message>
         <source>Attach files</source>
         <translation>Прикрепить файлы</translation>
+    </message>
+    <message>
+        <source>Could not update payment status.</source>
+        <translation>Не удалось обновить статус оплаты.</translation>
     </message>
     <message>
         <source>Export</source>
@@ -3881,6 +3917,10 @@ See you!</source>
         <translation>Встречи</translation>
     </message>
     <message>
+        <source>Rename</source>
+        <translation>Переименовать</translation>
+    </message>
+    <message>
         <source>from %1</source>
         <translation>с %1</translation>
     </message>
@@ -4632,6 +4672,10 @@ Your previous data was kept.</source>
     <message>
         <source>ended</source>
         <translation>завершена</translation>
+    </message>
+    <message>
+        <source>Meeting review</source>
+        <translation>Разбор встречи</translation>
     </message>
     <message>
         <source>Transcript</source>
