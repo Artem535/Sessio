@@ -2,6 +2,7 @@
 #include "call_notes_finalizer.h"
 #include <QApplication>
 #include <QFile>
+#include <QJsonDocument>
 #include <QDir>
 #include <QSignalSpy>
 #include <QTest>
@@ -27,10 +28,17 @@ protected:
     p.text = text; p.start_ms = 1000; p.end_ms = 2000;
     p.id = db->add_transcript_phrase(p); c->addPhrase(p); return p;
   }
-  QJsonObject reply(QJsonObject req, const DuckTranscriptPhrase &p) {
-    req["notes"] = QJsonObject{{"note", QJsonObject{{"text", "Rehearsal discussed"},
-      {"evidence_ids", QJsonArray{QString::number(p.id)}}}}, {"key_points", QJsonArray{}}};
+  // Live requests get incremental points, final ones a summary.
+  QJsonObject reply(QJsonObject req, const DuckTranscriptPhrase &p, const QString &text = "Rehearsal discussed") {
+    const QJsonObject item{{"text", text}, {"evidence_ids", QJsonArray{QString::number(p.id)}}};
+    if (req["task"] == "live_points") req["notes"] = QJsonObject{{"key_points", QJsonArray{item}}};
+    else req["notes"] = QJsonObject{{"note", item}, {"key_points", QJsonArray{}}};
     return req;
+  }
+  QStringList liveTexts() const {
+    QStringList out;
+    for (const auto &point : c->livePoints()) out << point.toObject()["text"].toString();
+    return out;
   }
 };
 
@@ -40,9 +48,10 @@ TEST_F(CallNotesTest, AiSummaryIsStoredWithCallWithoutAcceptStep) {
   QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
   ASSERT_EQ(requests.count(), 1); c->handleResult(reply(requests[0][0].toJsonObject(), p));
   EXPECT_EQ(c->manualText(), "My own text");
-  EXPECT_FALSE(c->draft().contains("accepted"));
+  EXPECT_TRUE(c->draft().isEmpty()); // no running summary during the call
   CallNotesController reopened(db); reopened.openTranscript(transcript);
-  EXPECT_EQ(reopened.draft()["text"].toString(), "Rehearsal discussed");
+  ASSERT_EQ(reopened.livePoints().size(), 1);
+  EXPECT_EQ(reopened.livePoints()[0].toObject()["text"].toString(), "Rehearsal discussed");
   EXPECT_EQ(reopened.manualText(), "My own text");
 }
 TEST_F(CallNotesTest, SeparateMarkdownEntriesAndAttachmentsSurviveReopeningWithoutAClient) {
@@ -144,7 +153,7 @@ TEST_F(CallNotesTest, ReplyAfterCancelCannotReplaceDraftOrManualText) {
   QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
   ASSERT_EQ(requests.count(), 1); const auto out = reply(requests[0][0].toJsonObject(), p);
   c->cancel(); c->handleResult(out);
-  EXPECT_TRUE(c->draft().isEmpty()); EXPECT_EQ(c->manualText(), "Keep me");
+  EXPECT_TRUE(c->livePoints().isEmpty()); EXPECT_EQ(c->manualText(), "Keep me");
 }
 TEST_F(CallNotesTest, EditingEvidenceMakesSummaryStale) {
   const auto p = phrase(); c->setGenerationEnabled(true);
@@ -323,21 +332,84 @@ TEST_F(CallNotesTest, FailedLiveUpdateRetriesByItselfWithGrowingDelay) {
     // No Retry button: the last good summary stays while an update is queued.
     EXPECT_EQ(c->liveStatus(), "queued") << reason;
     EXPECT_TRUE(c->retryPending());
-    EXPECT_EQ(c->draft()["text"].toString(), "Rehearsal discussed");
+    EXPECT_EQ(liveTexts(), QStringList{"Rehearsal discussed"});
     EXPECT_FALSE(c->busy());
   }
   // The third failure in a row waits 1000 * 2^2 ms. A new phrase does not
   // cut that backoff short.
   const auto before = requests.count();
-  phrase();
+  const auto latest = phrase();
   QTest::qWait(2500);
   EXPECT_EQ(requests.count(), before);
   ASSERT_TRUE(requests.wait(3000));
   const auto retried = requests.last()[0].toJsonObject();
   EXPECT_EQ(retried["final"].toBool(), false);
-  c->handleResult(reply(retried, p));
+  // The retry carries every phrase since the last success, the failed ones too.
+  EXPECT_EQ(retried["utterances"].toArray().size(), 4);
+  c->handleResult(reply(retried, latest, "Second point"));
   EXPECT_EQ(c->liveStatus(), "ready");
   EXPECT_FALSE(c->retryPending());
+}
+TEST_F(CallNotesTest, LiveRequestContainsOnlyPhrasesAfterLastSuccess) {
+  for (int i = 0; i < 3; ++i) phrase();
+  c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
+  ASSERT_EQ(requests.count(), 1);
+  const auto first = requests[0][0].toJsonObject();
+  EXPECT_EQ(first["task"].toString(), "live_points");
+  EXPECT_EQ(first["utterances"].toArray().size(), 3);
+  const auto last = db->get_transcript_phrases(transcript).back();
+  c->handleResult(reply(first, last));
+  const auto a = phrase("Fourth"); const auto b = phrase("Fifth"); c->flush();
+  ASSERT_EQ(requests.count(), 2);
+  const auto second = requests[1][0].toJsonObject()["utterances"].toArray();
+  ASSERT_EQ(second.size(), 2);
+  EXPECT_EQ(second[0].toObject()["id"].toString(), QString::number(a.id));
+  EXPECT_EQ(second[1].toObject()["id"].toString(), QString::number(b.id));
+  EXPECT_EQ(requests[1][0].toJsonObject()["known_points"].toArray(), (QJsonArray{"Rehearsal discussed"}));
+}
+TEST_F(CallNotesTest, LiveResultAppendsWithoutRewritingEarlierPoints) {
+  const auto p = phrase(); c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
+  c->handleResult(reply(requests[0][0].toJsonObject(), p, "First"));
+  const auto q = phrase("More"); c->flush();
+  ASSERT_EQ(requests.count(), 2);
+  c->handleResult(reply(requests[1][0].toJsonObject(), q, "Second"));
+  EXPECT_EQ(liveTexts(), (QStringList{"First", "Second"}));
+  // Sources of earlier points stay known for navigation.
+  EXPECT_FALSE(c->source(QString::number(p.id)).isEmpty());
+  EXPECT_FALSE(c->source(QString::number(q.id)).isEmpty());
+}
+TEST_F(CallNotesTest, LiveResultCitingUnsentIdIsRejected) {
+  const auto p = phrase(); c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
+  c->handleResult(reply(requests[0][0].toJsonObject(), p, "First"));
+  phrase("More"); c->flush();
+  ASSERT_EQ(requests.count(), 2);
+  c->handleResult(reply(requests[1][0].toJsonObject(), p, "Cites an old phrase"));
+  EXPECT_EQ(liveTexts(), QStringList{"First"});
+}
+TEST_F(CallNotesTest, LivePointsCapStopsLiveRuns) {
+  c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady);
+  for (int i = 0; i < 40; ++i) {
+    const auto p = phrase(); c->flush();
+    ASSERT_EQ(requests.count(), i + 1);
+    c->handleResult(reply(requests.last()[0].toJsonObject(), p, QString("Point %1").arg(i)));
+  }
+  ASSERT_EQ(c->livePoints().size(), 40);
+  phrase(); c->flush();
+  EXPECT_EQ(requests.count(), 40);
+}
+TEST_F(CallNotesTest, LegacyLiveNoteIsIgnoredForDraft) {
+  const auto p = phrase();
+  auto state = QJsonDocument::fromJson(QByteArray::fromStdString(db->get_call_material(c->materialId()).json)).object();
+  state["live"] = QJsonObject{{"note", QJsonObject{{"text", "Old running note"}, {"evidence_ids", QJsonArray{QString::number(p.id)}}}},
+                              {"key_points", QJsonArray{}}};
+  const auto stored = db->get_call_material(c->materialId());
+  ASSERT_TRUE(db->save_call_material(c->materialId(), stored.revision, QJsonDocument(state).toJson().toStdString()));
+  CallNotesController reopened(db); reopened.openTranscript(transcript);
+  EXPECT_TRUE(reopened.draft().isEmpty());
 }
 TEST_F(CallNotesTest, BrokenWorkerOrFinalNoteStillWaitForTheUser) {
   c->setRetryDelay(10);

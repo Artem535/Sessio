@@ -88,6 +88,32 @@ TEST_F(PrompterWorkerTest, CancellingColdNotesDrainsTheOtherQueuedRequest) {
   EXPECT_EQ(replies[0][0].toJsonObject()["request_id"].toInt(), 2);
 }
 
+TEST_F(PrompterWorkerTest, LivePointsAndSummaryAreBackgroundTasks) {
+  auto entered = std::make_shared<QSemaphore>();
+  auto gate = std::make_shared<QSemaphore>();
+  PrompterWorker worker([probe = probe, entered, gate](const QString &) -> std::unique_ptr<pcm::prompter::PrompterEngine> {
+    entered->release(); gate->acquire(); return std::make_unique<FakeEngine>(probe);
+  });
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.start(model));
+  ASSERT_TRUE(entered->tryAcquire(1, 5000));
+  worker.send(request(1)); // waits for the model
+  for (const auto &[id, task] : {std::pair{2, "live_points"}, std::pair{3, "summary"}, std::pair{4, "live_points"}}) {
+    auto background = request(id); background["task"] = task; background["material_id"] = 7;
+    background["request_token"] = QString::number(id);
+    worker.send(background);
+  }
+  worker.send(request(5)); // agreements jump ahead of background work
+  worker.cancelNotes(7, "4");
+  gate->release();
+  for (int i = 0; i < 4 && replies.count() < 4; ++i) replies.wait(5000);
+  ASSERT_EQ(replies.count(), 4);
+  QList<int> order;
+  for (const auto &reply : replies) order << reply[0].toJsonObject()["request_id"].toInt();
+  EXPECT_EQ(order, (QList<int>{1, 5, 2, 3}));
+  EXPECT_EQ(replies[2][0].toJsonObject()["task"].toString(), "live_points");
+}
+
 TEST_F(PrompterWorkerTest, MissingModelFailsWithoutLoading) {
   PrompterWorker worker(factory(probe));
   QSignalSpy failed(&worker, &PrompterWorker::failed);

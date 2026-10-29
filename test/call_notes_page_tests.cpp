@@ -25,7 +25,7 @@
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 #include <gtest/gtest.h>
 
-// Produces a controller with one ready live draft and one key point.
+// Produces a controller with one ready summary (made after the call) and one key point.
 struct NotesFixture {
   QTemporaryDir dir;
   pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir.path().toStdString())}};
@@ -41,8 +41,9 @@ struct NotesFixture {
     phrase.start_ms = 73000; phrase.end_ms = 76000;
     phrase.id = db->add_transcript_phrase(phrase);
     QSignalSpy requests(&controller, &CallNotesController::requestReady);
-    controller.addPhrase(phrase); controller.flush();
+    controller.addPhrase(phrase); controller.finishCall(); controller.flush();
     ASSERT_FALSE(requests.isEmpty());
+    ASSERT_TRUE(requests.last().first().toJsonObject()["final"].toBool());
     auto reply = requests.last().first().toJsonObject();
     const QJsonObject note{{"text", text}, {"evidence_ids", QJsonArray{QString::number(phrase.id)}}};
     auto point = note; point["text"] = pointText;

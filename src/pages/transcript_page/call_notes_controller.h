@@ -3,6 +3,7 @@
 #include "database.h"
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QSet>
 #include <QObject>
 #include <QTimer>
 #include <QStringList>
@@ -45,6 +46,8 @@ public:
   QString manualText() const;
   QJsonObject draft() const;
   QJsonArray keyPoints() const;
+  // Key points found during the call, oldest first (at most 40).
+  QJsonArray livePoints() const;
   QJsonObject source(const QString &id) const;
   bool sourcesCurrent() const;
   QString liveStatus() const;
@@ -72,6 +75,7 @@ private:
   void fail(const QString &reason);
   void retryLater();
   void stopRetrying();
+  void appendLivePoints(const QJsonObject &notes, const QJsonArray &inputs, const QSet<QString> &allowed);
   std::shared_ptr<pcm::database::Database> mDb;
   QString mAttachmentRoot;
   QTimer mBatch, mRetry;

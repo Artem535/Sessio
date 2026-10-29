@@ -11,6 +11,7 @@
 #include <algorithm>
 
 namespace {
+constexpr qsizetype kMaxLivePoints = 40;
 QString timeLabel(qint64 ms) {
   return QStringLiteral("%1:%2").arg(ms / 60000).arg(ms / 1000 % 60, 2, 10, QLatin1Char('0'));
 }
@@ -200,11 +201,22 @@ void CallNotesController::dispatch(bool final) {
     mState[final ? "final_status" : "live_status"] = "unavailable";
     mFinalPending = false; mDirty = false; persist(); emit changed(); return;
   }
+  QJsonArray known;
+  if (!final) {
+    // Live points are incremental: only phrases after the last successful run.
+    const auto through = mState["live_through_id"].toInteger();
+    QJsonArray fresh;
+    for (const auto &p : inputs) if (p.toObject()["id"].toString().toLongLong() > through) fresh.append(p);
+    for (const auto &point : livePoints()) known.append(point.toObject()["text"]);
+    if (fresh.isEmpty() || known.size() >= kMaxLivePoints) { mDirty = false; return; }
+    inputs = fresh;
+  }
   mDirty = false; mFinalPending = false;
-  mRequest = {{"protocol_version", 1}, {"task", "notes"}, {"material_id", mMaterialId},
+  mRequest = {{"protocol_version", 1}, {"task", final ? "notes" : "live_points"}, {"material_id", mMaterialId},
       {"request_token", QUuid::createUuid().toString(QUuid::WithoutBraces)},
       {"request_id", ++mRequestId}, {"session_generation", mGeneration}, {"ledger_revision", mRevision},
       {"final", final}, {"utterances", inputs}};
+  if (!final) mRequest["known_points"] = known;
   mState[final ? "final_status" : "live_status"] = "running";
   mState.remove("error_reason");
   if (!persist()) return;
@@ -253,7 +265,7 @@ void CallNotesController::retryLater() {
 }
 void CallNotesController::stopRetrying() { mRetry.stop(); mRetries = 0; }
 void CallNotesController::handleResult(const QJsonObject &result) {
-  if (!mInFlight || result["task"] != "notes" || result["material_id"] != mMaterialId ||
+  if (!mInFlight || result["task"] != mRequest["task"] || result["material_id"] != mMaterialId ||
       result["request_id"] != mRequest["request_id"] || result["session_generation"] != mGeneration ||
       result["request_token"] != mRequest["request_token"] || result["ledger_revision"] != mRequest["ledger_revision"]) return;
   if (result.contains("error") || !result["notes"].isObject()) {
@@ -273,6 +285,7 @@ void CallNotesController::handleResult(const QJsonObject &result) {
     allowed.insert(p.toObject()["id"].toString());
   }
   auto notes = result["notes"].toObject();
+  if (!final) { appendLivePoints(notes, inputs, allowed); return; }
   if (!notes["note"].isObject() || !validItem(notes["note"].toObject(), allowed) ||
       !notes["key_points"].isArray() || notes["key_points"].toArray().size() > 8) { fail(QStringLiteral("invalid_output")); return; }
   for (const auto &point : notes["key_points"].toArray())
@@ -287,6 +300,37 @@ void CallNotesController::handleResult(const QJsonObject &result) {
   mState[final ? "final" : "live"] = notes;
   mState[final ? "final_status" : "live_status"] = "ready";
   mState["processed_ms"] = inputs.last().toObject()["end_ms"];
+  mInFlight = false; mRequest = {}; mRetries = 0; persist(); emit changed();
+  if (mFinalPending || (mDirty && !mEnded)) mBatch.start();
+}
+void CallNotesController::appendLivePoints(const QJsonObject &notes, const QJsonArray &inputs,
+                                           const QSet<QString> &allowed) {
+  if (notes.size() != 1 || !notes["key_points"].isArray()) { fail(QStringLiteral("invalid_output")); return; }
+  const auto found = notes["key_points"].toArray();
+  for (const auto &point : found)
+    if (!point.isObject() || point.toObject()["text"].toString().trimmed().isEmpty() ||
+        !validItem(point.toObject(), allowed)) { fail(QStringLiteral("invalid_output")); return; }
+  // Another view may have saved manual text while inference was running.
+  if (!syncStored()) { fail(QStringLiteral("storage")); return; }
+  auto live = mState["live"].toObject();
+  live.remove("note");
+  auto points = live["key_points"].toArray();
+  QSet<QString> cited;
+  for (const auto &point : found) {
+    if (points.size() >= kMaxLivePoints) break;
+    points.append(point);
+    for (const auto &id : point.toObject()["evidence_ids"].toArray()) cited.insert(id.toString());
+  }
+  // Keep only the phrases the points cite: an edit elsewhere in the call does
+  // not make the live points stale.
+  auto sources = live["sources"].toArray();
+  for (const auto &p : inputs) if (cited.contains(p.toObject()["id"].toString())) sources.append(p);
+  live["key_points"] = points; live["sources"] = sources;
+  if (!live.contains("id")) live["id"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
+  mState["live"] = live;
+  mState["live_status"] = "ready";
+  mState["processed_ms"] = inputs.last().toObject()["end_ms"];
+  mState["live_through_id"] = inputs.last().toObject()["id"].toString().toLongLong();
   mInFlight = false; mRequest = {}; mRetries = 0; persist(); emit changed();
   if (mFinalPending || (mDirty && !mEnded)) mBatch.start();
 }
@@ -462,8 +506,9 @@ bool CallNotesController::removeNoteEntry(const QString &entryId) {
   return false;
 }
 QJsonObject CallNotesController::draft() const {
-  const auto key = mState["final"].isObject() ? "final" : "live";
-  const auto packet = mState[key].toObject();
+  // Live notes keep only key points; a note left by older versions is ignored.
+  if (!mState["final"].isObject()) return {};
+  const auto packet = mState["final"].toObject();
   if (packet["dismissed"].toBool()) return {};
   auto note = packet["note"].toObject();
   return note;
@@ -471,9 +516,11 @@ QJsonObject CallNotesController::draft() const {
 QJsonArray CallNotesController::keyPoints() const {
   return mState[mState["final"].isObject() ? "final" : "live"].toObject()["key_points"].toArray();
 }
+QJsonArray CallNotesController::livePoints() const { return mState["live"].toObject()["key_points"].toArray(); }
 QJsonObject CallNotesController::source(const QString &id) const {
-  const auto packet = mState[mState["final"].isObject() ? "final" : "live"].toObject();
-  for (const auto &p : packet["sources"].toArray()) if (p.toObject()["id"].toString() == id) return p.toObject();
+  for (const auto *key : {"final", "live"})
+    for (const auto &p : mState[key].toObject()["sources"].toArray())
+      if (p.toObject()["id"].toString() == id) return p.toObject();
   return {};
 }
 bool CallNotesController::sourcesCurrent() const {
