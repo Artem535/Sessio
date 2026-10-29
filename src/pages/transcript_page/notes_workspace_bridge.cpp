@@ -14,6 +14,7 @@
 #include <QTextDocument>
 #include <QTextList>
 #include <QUrl>
+#include <QUuid>
 
 struct NotesWorkspaceBridge::Context {
   QPointer<CallNotesController> storage;
@@ -290,13 +291,27 @@ QVariantMap NotesWorkspaceBridge::state() const {
       result["title"] = QString::fromStdString(event->name.value_or(""));
       if (event->start_date) result["date"] = QDateTime::fromMSecsSinceEpoch(*event->start_date).toLocalTime().toString("dd MMMM yyyy · HH:mm");
     }
+  const auto summary = storage->summary();
+  const auto records = agreementRecords(storage);
   result["summary"] = storage->draft()["text"].toString();
   result["summaryState"] = storage->ended() ? storage->finalStatus() : storage->liveStatus();
   result["summaryProblem"] = storage->statusText();
   result["busy"] = storage->busy(); result["sourcesCurrent"] = storage->sourcesCurrent();
-  result["points"] = storage->keyPoints().toVariantList();
+  result["points"] = summary["key_points"].toArray().toVariantList();
+  result["livePoints"] = storage->livePoints().toVariantList();
+  result["openQuestions"] = summary["open_questions"].toArray().toVariantList();
+  QSet<QString> agreed;
+  for (const auto &r : records)
+    if (r.toObject()["active"].toBool(true)) agreed.insert(r.toObject()["text"].toString().toCaseFolded().simplified());
+  QVariantList tasks;
+  for (const auto &value : summary["tasks"].toArray()) {
+    auto task = value.toObject().toVariantMap();
+    task["accepted"] = agreed.contains(task["text"].toString().toCaseFolded().simplified());
+    tasks.append(task);
+  }
+  result["tasks"] = tasks;
   result["summarySources"] = storage->draft()["evidence_ids"].toArray().toVariantList();
-  result["agreements"] = (mLive == storage ? mAgreements : loadMaterialAgreements(*mDb, storage->materialId())).toVariantList();
+  result["agreements"] = decoratedAgreements(records);
   QVariantList files;
   const auto paths = mSessionDocument ? mSessionFiles : editing() ? item->editFiles : storage->draftAttachmentPaths();
   for (const auto &path : paths) files.append(QVariantMap{{"name", QFileInfo(path).fileName()}});
@@ -446,6 +461,75 @@ void NotesWorkspaceBridge::retrySummary() {
   if (!context() || !context()->storage) return;
   if (context()->storage->ended()) context()->storage->requestFinal();
   else emit retryRequested();
+}
+void NotesWorkspaceBridge::summarizeMeeting() {
+  if (context() && context()->storage && context()->storage->ended()) context()->storage->requestFinal();
+}
+QJsonArray NotesWorkspaceBridge::agreementRecords(CallNotesController *storage) const {
+  return mLive == storage ? mAgreements : loadMaterialAgreements(*mDb, storage->materialId());
+}
+QVariantList NotesWorkspaceBridge::decoratedAgreements(const QJsonArray &records) const {
+  QVariantList out;
+  for (const auto &value : records) {
+    auto record = value.toObject().toVariantMap();
+    const auto eventId = value.toObject()["event_id"].toInteger();
+    bool inCalendar = false;
+    // The event may have been deleted from the calendar since it was linked.
+    try { inCalendar = eventId > 0 && mDb->get_event(eventId) != nullptr; } catch (...) {}
+    record["inCalendar"] = inCalendar;
+    record["canAddToCalendar"] = value.toObject()["active"].toBool(true) && value.toObject()["meeting"].toBool() && !inCalendar;
+    out.append(record);
+  }
+  return out;
+}
+void NotesWorkspaceBridge::agreementsWritten(CallNotesController *storage) {
+  // The live prompter holds the same records: reload it, then the copy here.
+  if (mLive == storage) {
+    if (mPrompter && mPrompter->controller()) mPrompter->controller()->refreshFromStorage();
+    mAgreements = loadMaterialAgreements(*mDb, storage->materialId());
+  }
+  emit stateChanged();
+}
+void NotesWorkspaceBridge::addAgreementToCalendar(const QString &recordId) {
+  auto *storage = context() ? context()->storage.data() : nullptr;
+  if (!storage || !mCalendarOpener) return;
+  QJsonObject record;
+  for (const auto &value : agreementRecords(storage))
+    if (value.toObject()["id"].toString() == recordId) record = value.toObject();
+  if (record.isEmpty()) return;
+  std::optional<DuckEvent> callEvent;
+  try {
+    const auto material = mDb->get_call_material(storage->materialId());
+    if (material.event_id)
+      if (const auto event = mDb->get_event(*material.event_id)) callEvent = *event;
+  } catch (...) {}
+  const auto name = mClient ? (QString::fromStdString(mClient->name.value_or("")) + ' ' +
+                               QString::fromStdString(mClient->last_name.value_or(""))).trimmed() : QString();
+  const auto t = agreementEventTemplate(record, callEvent, mClient ? std::make_optional<int64_t>(mClient->id) : std::nullopt,
+                                        name, storage->callDate());
+  const auto eventId = mCalendarOpener(t);
+  if (!eventId || *eventId <= 0) return;
+  if (setMaterialAgreementEvent(*mDb, storage->materialId(), recordId, *eventId)) agreementsWritten(storage);
+}
+void NotesWorkspaceBridge::openAgreementEvent(const QString &recordId) {
+  auto *storage = context() ? context()->storage.data() : nullptr;
+  if (!storage || !mEventOpener) return;
+  for (const auto &value : agreementRecords(storage))
+    if (value.toObject()["id"].toString() == recordId && value.toObject()["event_id"].toInteger() > 0)
+      mEventOpener(value.toObject()["event_id"].toInteger());
+}
+bool NotesWorkspaceBridge::acceptSummaryTask(int index) {
+  auto *storage = context() ? context()->storage.data() : nullptr;
+  if (!storage) return false;
+  const auto tasks = state()["tasks"].toList();
+  if (index < 0 || index >= tasks.size() || tasks[index].toMap()["accepted"].toBool()) return false;
+  const auto task = storage->summary()["tasks"].toArray()[index].toObject();
+  const QJsonObject record{{"id", QUuid::createUuid().toString(QUuid::WithoutBraces)}, {"text", task["text"]},
+      {"participants", QJsonArray{}}, {"active", true}, {"evidence_ids", task["evidence_ids"]},
+      {"meeting", task["meeting"].toBool()}, {"date", task["date"].toString()}, {"time", task["time"].toString()}};
+  if (!appendMaterialAgreement(*mDb, storage->materialId(), record)) return false;
+  agreementsWritten(storage);
+  return true;
 }
 void NotesWorkspaceBridge::exportDocument() {
   if (!context() || !context()->storage) return;

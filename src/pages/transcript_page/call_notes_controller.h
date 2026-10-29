@@ -54,6 +54,8 @@ public:
   QJsonArray keyPoints() const;
   // Key points found during the call, oldest first (at most 40).
   QJsonArray livePoints() const;
+  // Day of the call: its event's start, else when the material was created.
+  QDate callDate() const;
   QJsonObject source(const QString &id) const;
   bool sourcesCurrent() const;
   QString liveStatus() const;
@@ -77,8 +79,6 @@ private:
   bool syncStored(bool force = false);
   void load(qint64 materialId);
   QJsonArray phrases() const;
-  // Day of the call: its event's start, else when the material was created.
-  QDate callDate() const;
   void dispatch(bool final);
   void fail(const QString &reason);
   void retryLater();

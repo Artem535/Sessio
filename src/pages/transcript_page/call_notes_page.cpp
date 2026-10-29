@@ -269,6 +269,14 @@ void CallNotesPage::setMeeting(const QString &details, const QString &status) {
   mMeeting->setStatus(status);
 }
 
+void CallNotesPage::setCalendarOpener(std::function<std::optional<int64_t>(const EventTemplate &)> opener) {
+  if (mWorkspace) mWorkspace->setCalendarOpener(std::move(opener));
+}
+
+void CallNotesPage::setEventOpener(std::function<void(int64_t)> opener) {
+  if (mWorkspace) mWorkspace->setEventOpener(std::move(opener));
+}
+
 void CallNotesPage::setAgreements(const QJsonArray &records) {
   if (mWorkspace) mWorkspace->setAgreements(records);
   mAgreements->setRecords(records);

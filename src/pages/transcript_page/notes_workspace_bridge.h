@@ -1,5 +1,6 @@
 #pragma once
 
+#include "agreement_calendar.h"
 #include "database.h"
 #include <QObject>
 #include <QPointer>
@@ -51,6 +52,11 @@ public:
   void setAgreements(const QJsonArray &agreements);
   void setPrompterPanel(PrompterPanel *panel);
   void setControllerFactory(std::function<CallNotesController *(qint64, QObject *)> factory) { mFactory = std::move(factory); }
+  // Opens the new-event dialog; returns the saved event's ID, nullopt when cancelled.
+  using CalendarOpener = std::function<std::optional<int64_t>(const EventTemplate &)>;
+  void setCalendarOpener(CalendarOpener opener) { mCalendarOpener = std::move(opener); }
+  // Shows an existing event in the calendar.
+  void setEventOpener(std::function<void(int64_t)> opener) { mEventOpener = std::move(opener); }
   Q_INVOKABLE void attachDocument(QQuickTextDocument *document);
   Q_INVOKABLE void selectMaterial(const QString &id);
   Q_INVOKABLE void editNote(const QString &id);
@@ -63,6 +69,14 @@ public:
   Q_INVOKABLE void appendSummary();
   Q_INVOKABLE void showSource(const QString &id);
   Q_INVOKABLE void retrySummary();
+  // Runs the meeting summary of an ended meeting (the «Summarize meeting» offer).
+  Q_INVOKABLE void summarizeMeeting();
+  // Opens the pre-filled new-event dialog for an accepted meeting agreement and
+  // links the saved event to it. Nothing is stored when the dialog is cancelled.
+  Q_INVOKABLE void addAgreementToCalendar(const QString &recordId);
+  Q_INVOKABLE void openAgreementEvent(const QString &recordId);
+  // Moves summary task `index` into the meeting's agreements.
+  Q_INVOKABLE bool acceptSummaryTask(int index);
   Q_INVOKABLE void exportDocument();
   Q_INVOKABLE void startPrompter();
   Q_INVOKABLE void pausePrompter();
@@ -83,6 +97,9 @@ private:
   void activateDocument();
   QTextDocument *activeDocument() const;
   void documentEdited(Context *context);
+  QJsonArray agreementRecords(CallNotesController *storage) const;
+  QVariantList decoratedAgreements(const QJsonArray &records) const;
+  void agreementsWritten(CallNotesController *storage);
   std::shared_ptr<pcm::database::Database> mDb;
   QPointer<CallNotesController> mLive;
   QPointer<PrompterPanel> mPrompter;
@@ -100,4 +117,6 @@ private:
   QString mSessionOriginal, mSessionDraft;
   QStringList mSessionFiles, mSessionOriginalFiles;
   std::function<CallNotesController *(qint64, QObject *)> mFactory;
+  CalendarOpener mCalendarOpener;
+  std::function<void(int64_t)> mEventOpener;
 };

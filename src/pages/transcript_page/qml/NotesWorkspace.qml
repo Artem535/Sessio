@@ -12,6 +12,8 @@ Rectangle {
     readonly property var info: workspaceBridge ? workspaceBridge.state : ({})
     readonly property var historyModel: workspaceBridge ? workspaceBridge.history : []
     readonly property var notesModel: workspaceBridge ? workspaceBridge.notes : []
+    readonly property var activeAgreements: (info.agreements || []).filter(a => a.active !== false && (a.text || "").length > 0)
+    readonly property bool summaryShown: (info.summary || "").length > 0 || ["error", "running", "queued", "stale", "cancelled", "interrupted"].includes(info.summaryState)
     readonly property var phrasesModel: workspaceBridge ? workspaceBridge.phrases : []
     SystemPalette { id: theme; colorGroup: SystemPalette.Active }
     readonly property color paper: theme.base
@@ -65,6 +67,24 @@ Rectangle {
         wrapMode: Text.Wrap
         lineHeight: 1.5
         textFormat: Text.PlainText
+    }
+    component AgreementRow: RowLayout {
+        required property var modelData
+        Layout.fillWidth: true
+        Copy { text: "•  " + modelData.text; Layout.fillWidth: true }
+        Action {
+            objectName: "qmlAddToCalendar"
+            visible: modelData.canAddToCalendar === true
+            text: qsTr("Add to calendar")
+            quiet: true
+            onClicked: if (workspaceBridge) workspaceBridge.addAgreementToCalendar(modelData.id)
+        }
+        Action {
+            visible: modelData.inCalendar === true
+            text: qsTr("In calendar") + " ↗"
+            quiet: true
+            onClicked: if (workspaceBridge) workspaceBridge.openAgreementEvent(modelData.id)
+        }
     }
     component SourceButton: Action {
         property var sources: []
@@ -444,8 +464,31 @@ Rectangle {
                                 }
                             }
                             Rectangle {
+                                objectName: "qmlSummaryOffer"
                                 Layout.fillWidth: true
-                                visible: (root.info.summary || "").length > 0 || ["error", "running", "queued", "stale"].includes(root.info.summaryState)
+                                visible: root.info.summaryState === "offered"
+                                color: root.soft
+                                radius: 7
+                                implicitHeight: offerColumn.implicitHeight + 38
+                                ColumnLayout {
+                                    id: offerColumn
+                                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                                    anchors.margins: 19
+                                    spacing: 12
+                                    Copy { text: "✧ " + qsTr("Meeting summary"); color: root.accent; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true }
+                                    Copy { text: qsTr("Summarize the whole meeting: overview, key points, agreements and tasks, open questions."); color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
+                                    Action {
+                                        objectName: "qmlSummarizeMeeting"
+                                        text: qsTr("Summarize meeting")
+                                        primary: true
+                                        enabled: !root.info.busy
+                                        onClicked: if (workspaceBridge) workspaceBridge.summarizeMeeting()
+                                    }
+                                }
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                visible: root.summaryShown
                                 color: root.soft
                                 radius: 7
                                 implicitHeight: summaryColumn.implicitHeight + 38
@@ -459,29 +502,96 @@ Rectangle {
                                         Copy { text: "✧ " + qsTr("Meeting summary"); color: root.accent; font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true }
                                         Copy { text: qsTr("Prepared by AI"); font.pixelSize: 11; color: root.muted }
                                     }
-                                    Copy { text: root.info.summary || ""; Layout.fillWidth: true }
-                                    Copy { text: root.info.summaryProblem || ""; visible: ["error", "stale", "running", "queued"].includes(root.info.summaryState); color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
+                                    Copy { objectName: "qmlSummaryOverview"; text: root.info.summary || ""; visible: text.length > 0; Layout.fillWidth: true }
+                                    Copy { text: root.info.summaryProblem || ""; visible: ["error", "stale", "running", "queued", "cancelled", "interrupted"].includes(root.info.summaryState); color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
                                     Flow {
                                         Layout.fillWidth: true
                                         spacing: 10
                                         Action { text: "+ " + qsTr("Add to my notes"); quiet: true; enabled: !(workspaceBridge && workspaceBridge.editing) && (root.info.summary || "").length > 0; onClicked: if (workspaceBridge) workspaceBridge.appendSummary() }
                                         SourceButton { sources: root.info.summarySources || [] }
-                                        Action { text: qsTr("Retry"); quiet: true; visible: ["error", "stale"].includes(root.info.summaryState); enabled: !root.info.busy; onClicked: if (workspaceBridge) workspaceBridge.retrySummary() }
+                                        Action { text: qsTr("Retry"); quiet: true; visible: ["error", "stale", "cancelled", "interrupted"].includes(root.info.summaryState); enabled: !root.info.busy; onClicked: if (workspaceBridge) workspaceBridge.retrySummary() }
+                                        Action { text: qsTr("Create again"); quiet: true; visible: root.info.summaryState === "ready"; enabled: !root.info.busy; onClicked: if (workspaceBridge) workspaceBridge.summarizeMeeting() }
+                                    }
+                                    ColumnLayout {
+                                        objectName: "qmlSummaryPoints"
+                                        Layout.fillWidth: true
+                                        spacing: 6
+                                        visible: (root.info.points || []).length > 0
+                                        Copy { text: qsTr("Key points"); font.weight: Font.DemiBold; Layout.fillWidth: true }
+                                        Repeater {
+                                            model: root.info.points || []
+                                            RowLayout {
+                                                required property var modelData
+                                                Layout.fillWidth: true
+                                                Copy { text: "•  " + modelData.text; Layout.fillWidth: true }
+                                                SourceButton { sources: modelData.evidence_ids || [] }
+                                            }
+                                        }
+                                    }
+                                    ColumnLayout {
+                                        objectName: "qmlSummaryTasks"
+                                        Layout.fillWidth: true
+                                        spacing: 6
+                                        visible: root.activeAgreements.length > 0 || (root.info.tasks || []).length > 0
+                                        Copy { text: qsTr("Agreements and tasks"); font.weight: Font.DemiBold; Layout.fillWidth: true }
+                                        Repeater {
+                                            model: root.activeAgreements
+                                            AgreementRow {}
+                                        }
+                                        Repeater {
+                                            model: root.info.tasks || []
+                                            RowLayout {
+                                                required property var modelData
+                                                required property int index
+                                                Layout.fillWidth: true
+                                                Copy { text: "•  " + modelData.text; color: modelData.accepted ? root.muted : root.ink; Layout.fillWidth: true }
+                                                SourceButton { sources: modelData.evidence_ids || [] }
+                                                Action {
+                                                    visible: !modelData.accepted
+                                                    text: qsTr("Accept")
+                                                    quiet: true
+                                                    onClicked: if (workspaceBridge) workspaceBridge.acceptSummaryTask(index)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    ColumnLayout {
+                                        objectName: "qmlSummaryQuestions"
+                                        Layout.fillWidth: true
+                                        spacing: 6
+                                        visible: (root.info.openQuestions || []).length > 0
+                                        Copy { text: qsTr("Open questions"); font.weight: Font.DemiBold; Layout.fillWidth: true }
+                                        Repeater {
+                                            model: root.info.openQuestions || []
+                                            RowLayout {
+                                                required property var modelData
+                                                Layout.fillWidth: true
+                                                Copy { text: "•  " + modelData.text; Layout.fillWidth: true }
+                                                SourceButton { sources: modelData.evidence_ids || [] }
+                                            }
+                                        }
                                     }
                                 }
                             }
-                            Copy { text: qsTr("For the next meeting"); visible: (root.info.agreements || []).length > 0; font.pixelSize: 16; font.weight: Font.DemiBold }
+                            Copy { text: qsTr("For the next meeting"); visible: !root.summaryShown && root.activeAgreements.length > 0; font.pixelSize: 16; font.weight: Font.DemiBold }
                             Repeater {
-                                model: root.info.agreements || []
-                                Copy { required property var modelData; text: "•  " + modelData.text; visible: modelData.active !== false; Layout.fillWidth: true }
+                                model: root.summaryShown ? [] : root.activeAgreements
+                                AgreementRow {}
                             }
-                            Repeater {
-                                model: root.info.points || []
-                                RowLayout {
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    Copy { text: "•  " + modelData.text; Layout.fillWidth: true }
-                                    SourceButton { sources: modelData.evidence_ids || [] }
+                            ColumnLayout {
+                                objectName: "qmlLivePoints"
+                                Layout.fillWidth: true
+                                spacing: 6
+                                visible: (root.info.livePoints || []).length > 0
+                                Copy { text: qsTr("From the call"); font.pixelSize: 16; font.weight: Font.DemiBold; Layout.fillWidth: true }
+                                Repeater {
+                                    model: root.info.livePoints || []
+                                    RowLayout {
+                                        required property var modelData
+                                        Layout.fillWidth: true
+                                        Copy { text: "•  " + modelData.text; Layout.fillWidth: true }
+                                        SourceButton { sources: modelData.evidence_ids || [] }
+                                    }
                                 }
                             }
                         }
