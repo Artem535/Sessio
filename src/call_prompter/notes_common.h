@@ -18,6 +18,8 @@ constexpr qsizetype kContextInputBytes = 4096 - 1024 - 128;
 constexpr qsizetype kMaxEvidenceIds = 8;
 
 QByteArray serialize(const QJsonObject &object);
+// Stable key for duplicate facts; retains words, numbers and negations.
+QString pointKey(const QString &text);
 // A prompt from the :/call-prompter resources. Throws PipelineError if missing.
 QString prompt(const char *name);
 // One {text, evidence_ids} reply item: text <= limit, 1-8 unique IDs from

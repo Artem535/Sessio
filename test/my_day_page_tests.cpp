@@ -130,6 +130,32 @@ TEST_F(MyDayPageTest, PopulatedDayRendersWithoutWarnings) {
   EXPECT_TRUE(gWarnings.isEmpty()) << gWarnings.join("\n").toStdString();
 }
 
+TEST_F(MyDayPageTest, TodoCanBeRenamedWithAnExplicitActionAndFocusLoss) {
+  pcm::my_day::MyDayPage page(db, model.get(), nullptr);
+  page.resize(1100, 700);
+  page.show();
+  page.bridge()->addTodo("Original", 0, 0);
+  QTest::qWait(50);
+  auto *quick = quickOf(page);
+  const auto findVisual = [](auto &&self, QQuickItem *item, const QString &name) -> QQuickItem * {
+    if (item->objectName() == name) return item;
+    for (auto *child : item->childItems())
+      if (auto *found = self(self, child, name)) return found;
+    return nullptr;
+  };
+  auto *action = findVisual(findVisual, quick->rootObject(), "todoRename");
+  ASSERT_NE(action, nullptr);
+  ASSERT_TRUE(QMetaObject::invokeMethod(action, "clicked"));
+  QTest::qWait(20);
+  auto *editor = findVisual(findVisual, quick->rootObject(), "todoTitleEditor");
+  ASSERT_NE(editor, nullptr);
+  ASSERT_TRUE(editor->isVisible());
+  editor->setProperty("text", "Renamed");
+  quick->rootObject()->forceActiveFocus();
+  QTest::qWait(30);
+  EXPECT_EQ(page.bridge()->todoGroups().first().toMap()["todos"].toList().first().toMap()["title"].toString(), "Renamed");
+}
+
 } // namespace
 
 int main(int argc, char **argv) {

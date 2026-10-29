@@ -118,8 +118,15 @@ QTextDocument *NotesWorkspaceBridge::activeDocument() const {
   return ctx ? (editing() ? ctx->edit : ctx->draft) : nullptr;
 }
 bool NotesWorkspaceBridge::editorDirty() const {
-  return mSessionDocument && (mSessionDocument->toMarkdown() != mSessionOriginal ||
-      mSessionFiles != mSessionOriginalFiles);
+  if (mSessionDocument)
+    return mSessionDocument->toMarkdown() != mSessionOriginal || mSessionFiles != mSessionOriginalFiles;
+  for (const auto &[id, item] : mContexts) {
+    if (!item->editingId.isEmpty() && (item->edit->isModified() || !item->editFiles.isEmpty()))
+      return true;
+    // A refused autosave leaves the only copy of the draft in this document.
+    if (item->failed) return true;
+  }
+  return false;
 }
 void NotesWorkspaceBridge::beginEditorSession() {
   if (!context() || !context()->storage || mSessionDocument) return;
@@ -206,6 +213,9 @@ QVariantMap NotesWorkspaceBridge::state() const {
       {"meeting", mMeeting}, {"materialId", QString::number(mSelected)}, {"current", mLive && mSelected == mLive->materialId()}};
   auto *item = context();
   const bool ended = item && item->storage ? item->storage->ended() : (mLive ? mLive->ended() : false);
+  result["ended"] = ended;
+  result["paymentError"] = mPaymentError;
+  result["canChangePayment"] = false;
   if (current && mPrompter && mPrompter->controller()) {
     auto *ctrl = mPrompter->controller();
     const bool controls = mPrompter->controlsVisible() && !ended;
@@ -289,6 +299,8 @@ QVariantMap NotesWorkspaceBridge::state() const {
   if (material.event_id)
     if (const auto event = mDb->get_event(*material.event_id)) {
       result["title"] = QString::fromStdString(event->name.value_or(""));
+      result["canChangePayment"] = ended && event->is_work_event;
+      result["paymentStatus"] = static_cast<int>(event->payment_stat_id);
       if (event->start_date) result["date"] = QDateTime::fromMSecsSinceEpoch(*event->start_date).toLocalTime().toString("dd MMMM yyyy · HH:mm");
     }
   const auto summary = storage->summary();
@@ -466,6 +478,27 @@ void NotesWorkspaceBridge::retrySummary() {
 }
 void NotesWorkspaceBridge::summarizeMeeting() {
   if (context() && context()->storage && context()->storage->ended()) context()->storage->requestFinal();
+}
+bool NotesWorkspaceBridge::setPaymentStatus(int status) {
+  if (status < 1 || status > 5 || !context() || !context()->storage || !context()->storage->ended())
+    return false;
+  try {
+    const auto material = mDb->get_call_material(context()->storage->materialId());
+    if (!material.event_id) return false;
+    const auto event = mDb->get_event(*material.event_id);
+    if (!event || !event->is_work_event) return false;
+    auto updated = *event;
+    updated.payment_stat_id = status;
+    if (!mDb->update_event(updated, true)) throw std::runtime_error("payment update failed");
+    mPaymentError.clear();
+    emit stateChanged();
+    emit paymentChanged();
+    return true;
+  } catch (...) {
+    mPaymentError = tr("Could not update payment status.");
+    emit stateChanged();
+    return false;
+  }
 }
 QJsonArray NotesWorkspaceBridge::agreementRecords(CallNotesController *storage) const {
   return mLive == storage ? mAgreements : loadMaterialAgreements(*mDb, storage->materialId());

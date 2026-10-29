@@ -1169,9 +1169,11 @@ void Application::connectSignals() {
     auto *panel = new TranscriptPanel;
     auto *notes = new CallNotesController(mDb, this);
     auto *notesPage = new CallNotesPage(mDb, notes, callsPage);
+    notesPage->setCallPanelMode();
     mCallNotesPanel = notesPage->editor();
     // Agreement → calendar: the pre-filled dialog lives on the Calendar page; «In calendar» jumps there.
     const auto wireCalendar = [this, eventPage](CallNotesPage *page) {
+      connect(page, &CallNotesPage::paymentChanged, eventPage, &QEventInfoPage::reloadSelectedDay);
       page->setCalendarOpener([eventPage](const EventTemplate &t) {
         return eventPage ? eventPage->createEventFromTemplate(t) : std::nullopt;
       });
@@ -1468,11 +1470,11 @@ void Application::connectSignals() {
       mMainWindow->openTranscriptPage();
       reviewPage->focusPhrase(id);
     });
-    auto openMaterials = [this, notes, prompter, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting, wireCalendar](qint64 materialId, qint64 transcriptId) {
+    auto openMaterials = [this, notes, prompter, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting, wireCalendar](qint64 materialId, qint64 transcriptId, bool postCall = false) {
       auto *dialog = new NotesEditorDialog(mMainWindow.get());
       dialog->setAttribute(Qt::WA_DeleteOnClose);
       CallNotesController *saved = notes;
-      if (notes->materialId() != materialId || materialId <= 0) {
+      if (postCall || notes->materialId() != materialId || materialId <= 0) {
         saved = new CallNotesController(mDb, dialog);
         if (materialId > 0) saved->openMaterial(materialId); else saved->openTranscript(transcriptId);
         // The call owns its queued final, even when this review dialog closes.
@@ -1486,6 +1488,11 @@ void Application::connectSignals() {
         });
         connect(saved, &CallNotesController::cancelRequested, saved, [saved, finals](const QString &) {
           finals->cancel(saved->materialId());
+        });
+        // Late ASR writes still belong to the completed call. Keep this view
+        // pinned to that material even when the next call replaces live notes.
+        connect(notes, &CallNotesController::changed, saved, [notes, saved, materialId] {
+          if (notes->materialId() == materialId) saved->refreshFromStorage();
         });
       }
       auto *page = new CallNotesPage(mDb, saved, dialog);
@@ -1505,23 +1512,39 @@ void Application::connectSignals() {
       connect(page->editor(), &ClientNotesPage::openEventRequested, mMainWindow.get(), &MainWindow::returnToEvent);
       if (saved == notes)
         connect(page, &CallNotesPage::retryRequested, prompterPanel, &PrompterPanel::startRequested);
-      dialog->setPage(page);
+      dialog->setPage(page, !postCall);
       connect(dialog, &QDialog::accepted, this, [this] {
         if (auto *journal = qobject_cast<ClientNotesPage *>(mMainWindow->getPage(MainWindow::Pages::clientNotes)))
           journal->refresh();
       });
       connect(page, &CallNotesPage::sourceRequested, dialog, [this, saved, notes, panel, sidePanel, reviewPage, dialog, selectedEvent](qint64 phraseId) {
-        const auto source = saved->source(QString::number(phraseId));
         if (saved == notes && panel->focusPhrase(phraseId)) { sidePanel->showTranscript(); dialog->close(); return; }
-        const auto transcript = source["transcript_id"].toInteger();
+        // The workspace may show another meeting picked from History, so the phrase
+        // is resolved through the database, not through this window's own material.
+        const auto transcript = mDb->get_transcript_id_for_phrase(phraseId).value_or(0);
         if (transcript <= 0 || reviewPage->editing()) return;
         *selectedEvent = {0, 0};
         reviewPage->reloadTranscript(transcript, tr("Transcript")); mMainWindow->openTranscriptPage();
         reviewPage->focusPhrase(phraseId);
         dialog->close();
       });
-      dialog->open();
+      if (postCall) {
+        dialog->setWindowTitle(tr("Meeting review"));
+        dialog->setModal(false);
+        dialog->showMaximized();
+      } else {
+        dialog->open();
+      }
     };
+    connect(callsPage, &CallsPage::callSessionEnded, this, [this, callsPage, notes, openMaterials] {
+      // A cancelled device check or a failed join has nothing to review.
+      if (!callsPage->lastCallConnected()) return;
+      const auto materialId = notes->materialId();
+      if (materialId <= 0) return;
+      QTimer::singleShot(0, mMainWindow.get(), [this, materialId, openMaterials] {
+        if (mMainWindow->isVisible()) openMaterials(materialId, 0, true);
+      });
+    });
     auto reviewNotesViews = std::make_shared<QHash<qint64, QPointer<QWidget>>>();
     auto bindReviewNotes = [this, reviewPage, reviewNotesViews, notes, finals, controller,
                             bindNotesEditor, meetingControllers, describeMeeting, wireCalendar](qint64 transcriptId) {

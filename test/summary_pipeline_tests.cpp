@@ -397,3 +397,76 @@ TEST(SummaryPipeline, ParallelNonReplyFailurePropagates) {
   };
   EXPECT_THROW(processSummary(longCall(5), parallelCtx(3), model.generate()), PipelineError);
 }
+
+namespace {
+// Two leaf chunks (one source each); each leaf reply carries the given tasks.
+QJsonObject twoChunkSummary(const QStringList &first, const QStringList &second, const QStringList &agreements = {}) {
+  Model model;
+  model.leaf = [&](const QJsonObject &input) {
+    auto reply = leafReply(input);
+    QJsonArray tasks;
+    for (const auto &text : firstId(input) == "u0" ? first : second) tasks.append(task(text, {firstId(input)}));
+    reply["tasks"] = tasks;
+    return reply;
+  };
+  return processSummary(longCall(2), ctx(agreements), model.generate());
+}
+} // namespace
+
+TEST(SummaryPipeline, SourceIdsNeverAppearInTheProse) {
+  Model model;
+  model.leaf = [](const QJsonObject &input) {
+    return QJsonObject{
+        {"note", item("Обсудили проект (реплика 4821), сроки [4822].", {"4821"})},
+        {"key_points", QJsonArray{item("Срок сдвинули на пятницу, реплика 4822", {"4822"})}},
+        {"tasks", QJsonArray{task("Отправить отчёт 4821 до пятницы", {"4821"})}},
+        {"open_questions", QJsonArray{item("[4822]", {"4822"})}}};
+  };
+  model.overview = [](const QJsonObject &) {
+    return QJsonObject{{"overview", item("Итог: проект и сроки (см. 4821 и 4822).", {"4821"})}};
+  };
+  const auto out = processSummary({source("4821"), source("4822")}, ctx(), model.generate());
+  EXPECT_EQ(out["overview"].toObject()["text"].toString(), "Итог: проект и сроки.");
+  EXPECT_EQ(texts(out["key_points"].toArray()), QStringList{"Срок сдвинули на пятницу"});
+  EXPECT_EQ(texts(out["tasks"].toArray()), QStringList{"Отправить отчёт до пятницы"});
+  // An item that was nothing but an id is dropped, not kept empty.
+  EXPECT_TRUE(out["open_questions"].toArray().isEmpty());
+  EXPECT_EQ(out["tasks"].toArray()[0].toObject()["evidence_ids"].toArray(), (QJsonArray{"4821"}));
+}
+
+TEST(SummaryPipeline, CutOffVariantsOfOneTaskBecomeOneWithTheFullerWording) {
+  const auto out = twoChunkSummary({"Отправить отчёт Ивану"}, {"Отправить отчёт Ивану до пятницы"});
+  const auto tasks = out["tasks"].toArray();
+  ASSERT_EQ(tasks.size(), 1);
+  EXPECT_EQ(tasks[0].toObject()["text"].toString(), "Отправить отчёт Ивану до пятницы");
+  EXPECT_EQ(tasks[0].toObject()["evidence_ids"].toArray(), (QJsonArray{"u0", "u1"}));
+}
+
+TEST(SummaryPipeline, DifferentActionsOnTheSameSubjectStaySeparate) {
+  const auto out = twoChunkSummary({"Отправить отчёт Ивану"}, {"Отправить договор Ивану"});
+  EXPECT_EQ(out["tasks"].toArray().size(), 2);
+}
+
+TEST(SummaryPipeline, ANegationOrADifferentTimeIsNotARepeat) {
+  EXPECT_EQ(twoChunkSummary({"Клиент согласен на встречу"}, {"Клиент не согласен на встречу"})["tasks"].toArray().size(), 2);
+  EXPECT_EQ(twoChunkSummary({"Встреча завтра в 17:00"}, {"Встреча завтра в 12:00"})["tasks"].toArray().size(), 2);
+}
+
+TEST(SummaryPipeline, AVariantOfAnAcceptedAgreementIsNotAddedAsATask) {
+  const auto out = twoChunkSummary({"Отправить отчёт Ивану до пятницы"}, {"Назначить следующую встречу"},
+                                   {"Отправить отчёт Ивану"});
+  EXPECT_EQ(texts(out["tasks"].toArray()), QStringList{"Назначить следующую встречу"});
+}
+
+TEST(SummaryPipeline, FallbackOverviewDoesNotRepeatTheSameSentence) {
+  Model model;
+  model.leaf = [](const QJsonObject &input) {
+    auto reply = leafReply(input);
+    reply["note"] = item("Обсудили проект и сроки сдачи.", {firstId(input)});
+    return reply;
+  };
+  // An overview citing a source outside the notes is unusable, so the notes are joined.
+  model.overview = [](const QJsonObject &) { return QJsonObject{{"overview", item("Итог.", {"missing"})}}; };
+  const auto out = processSummary(longCall(2), ctx(), model.generate());
+  EXPECT_EQ(out["overview"].toObject()["text"].toString(), "Обсудили проект и сроки сдачи.");
+}

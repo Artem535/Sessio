@@ -8,14 +8,18 @@ Rectangle {
     property bool dark: false
     property bool sourceOpen: false
     property bool historyOpen: false
+    property bool callPanel: false
+    // The side panel of a running call leaves the final summary to the post-call window, but
+    // an older meeting picked from History is a finished record and shows everything.
+    readonly property bool liveCallPanel: callPanel && info.current === true
     property string highlightedSource: ""
     readonly property var info: workspaceBridge ? workspaceBridge.state : ({})
     readonly property var historyModel: workspaceBridge ? workspaceBridge.history : []
     readonly property var notesModel: workspaceBridge ? workspaceBridge.notes : []
     readonly property var activeAgreements: (info.agreements || []).filter(a => a.active !== false && (a.text || "").length > 0)
-    readonly property bool summaryShown: (info.summary || "").length > 0 || (info.points || []).length > 0 || (info.tasks || []).length > 0
+    readonly property bool summaryShown: !liveCallPanel && info.ended === true && ((info.summary || "").length > 0 || (info.points || []).length > 0 || (info.tasks || []).length > 0
                                          || (info.openQuestions || []).length > 0
-                                         || ["error", "running", "queued", "stale", "cancelled", "interrupted", "unavailable"].includes(info.summaryState)
+                                         || ["error", "running", "queued", "stale", "cancelled", "interrupted", "unavailable"].includes(info.summaryState))
     readonly property var phrasesModel: workspaceBridge ? workspaceBridge.phrases : []
     SystemPalette { id: theme; colorGroup: SystemPalette.Active }
     readonly property color paper: theme.base
@@ -70,8 +74,9 @@ Rectangle {
         lineHeight: 1.5
         textFormat: Text.PlainText
     }
-    component AgreementRow: RowLayout {
+    component AgreementRow: GridLayout {
         required property var modelData
+        columns: root.width < 600 ? 1 : 2
         Layout.fillWidth: true
         Copy { text: "•  " + modelData.text; Layout.fillWidth: true }
         Action {
@@ -100,13 +105,16 @@ Rectangle {
         spacing: 0
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: 86
+            implicitHeight: root.width < 600 ? Math.max(86, headerRow.implicitHeight + 44) : 86
             color: "transparent"
-            RowLayout {
+            GridLayout {
+                id: headerRow
+                columns: root.width < 600 ? 2 : 3
                 anchors.fill: parent
                 anchors.margins: 22
                 ColumnLayout {
                     spacing: 3
+                    Layout.columnSpan: root.width < 600 ? 2 : 1
                     Layout.fillWidth: true
                     Copy { text: root.info.client || qsTr("Meeting notes"); font.pixelSize: 23; font.weight: Font.DemiBold; Layout.fillWidth: true }
                     Copy { text: root.info.date || ""; color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
@@ -236,6 +244,30 @@ Rectangle {
                             spacing: 20
                             Copy { text: root.info.date || ""; font.pixelSize: 14; color: root.muted; Layout.fillWidth: true }
                             Copy { text: root.info.title || qsTr("Meeting notes"); font.pixelSize: 24; font.weight: Font.DemiBold; Layout.fillWidth: true }
+                            ColumnLayout {
+                                visible: !root.liveCallPanel && root.info.canChangePayment === true
+                                Layout.fillWidth: true
+                                Copy { text: qsTr("Payment status"); font.pixelSize: 14; color: root.muted; Layout.fillWidth: true }
+                                ComboBox {
+                                    objectName: "qmlPaymentStatus"
+                                    Layout.fillWidth: true
+                                    textRole: "label"
+                                    valueRole: "id"
+                                    model: [
+                                        { id: 1, label: qsTr("Pending") },
+                                        { id: 2, label: qsTr("Paid") },
+                                        { id: 3, label: qsTr("Canceled") },
+                                        { id: 4, label: qsTr("Refunded") },
+                                        { id: 5, label: qsTr("Skipped") }
+                                    ]
+                                    currentIndex: Math.max(0, Number(root.info.paymentStatus || 1) - 1)
+                                    onActivated: {
+                                        if (workspaceBridge) workspaceBridge.setPaymentStatus(currentValue)
+                                        currentIndex = Qt.binding(function() { return Math.max(0, Number(root.info.paymentStatus || 1) - 1) })
+                                    }
+                                }
+                                Copy { text: root.info.paymentError || ""; visible: text.length > 0; color: root.muted; Layout.fillWidth: true }
+                            }
                             Rectangle { implicitHeight: 1; color: root.line; Layout.fillWidth: true; Layout.topMargin: 2; Layout.bottomMargin: 4 }
                             Repeater {
                                 model: root.notesModel
@@ -468,7 +500,7 @@ Rectangle {
                             Rectangle {
                                 objectName: "qmlSummaryOffer"
                                 Layout.fillWidth: true
-                                visible: root.info.summaryState === "offered"
+                                visible: !root.liveCallPanel && root.info.summaryState === "offered"
                                 color: root.soft
                                 radius: 7
                                 implicitHeight: offerColumn.implicitHeight + 38
@@ -592,8 +624,9 @@ Rectangle {
                                 }
                                 Repeater {
                                     model: root.info.livePoints || []
-                                    RowLayout {
+                                    GridLayout {
                                         required property var modelData
+                                        columns: root.width < 600 ? 1 : 2
                                         Layout.fillWidth: true
                                         Copy { text: "•  " + modelData.text; Layout.fillWidth: true }
                                         SourceButton { sources: modelData.evidence_ids || [] }

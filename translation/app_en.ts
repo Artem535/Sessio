@@ -1854,8 +1854,16 @@
         <translation>Transcripts</translation>
     </message>
     <message>
-        <source>Use a Sessio invitation code or invitation link.</source>
-        <translation>Use a Sessio invitation code or invitation link.</translation>
+        <source>Join a Sessio or Jitsi call using the invitation from its organizer.</source>
+        <translation>Join a Sessio or Jitsi call using the invitation from its organizer.</translation>
+    </message>
+    <message>
+        <source>Paste the Sessio invitation link, or enter its code and passcode. The invitation selects Jitsi automatically.</source>
+        <translation>Paste the Sessio invitation link, or enter its code and passcode. The invitation selects Jitsi automatically.</translation>
+    </message>
+    <message>
+        <source>To host a Jitsi call: create an event in Calendar, enable Online, select Jitsi, and save. Use Copy invite to send the invitation to participants.</source>
+        <translation>To host a Jitsi call: create an event in Calendar, enable Online, select Jitsi, and save. Use Copy invite to send the invitation to participants.</translation>
     </message>
     <message>
         <source>Invitation code or link</source>
@@ -2132,6 +2140,30 @@
         <translation>Open transcript</translation>
     </message>
     <message>
+        <source>Payment status</source>
+        <translation>Payment status</translation>
+    </message>
+    <message>
+        <source>Pending</source>
+        <translation>Pending</translation>
+    </message>
+    <message>
+        <source>Paid</source>
+        <translation>Paid</translation>
+    </message>
+    <message>
+        <source>Canceled</source>
+        <translation>Canceled</translation>
+    </message>
+    <message>
+        <source>Refunded</source>
+        <translation>Refunded</translation>
+    </message>
+    <message>
+        <source>Skipped</source>
+        <translation>Skipped</translation>
+    </message>
+    <message>
         <source>Edit</source>
         <translation>Edit</translation>
     </message>
@@ -2309,6 +2341,10 @@
     <message>
         <source>Attach files</source>
         <translation>Attach files</translation>
+    </message>
+    <message>
+        <source>Could not update payment status.</source>
+        <translation>Could not update payment status.</translation>
     </message>
     <message>
         <source>Export</source>
@@ -4125,6 +4161,10 @@ See you!</translation>
         <translation>Meetings</translation>
     </message>
     <message>
+        <source>Rename</source>
+        <translation>Rename</translation>
+    </message>
+    <message>
         <source>from %1</source>
         <translation>from %1</translation>
     </message>
@@ -4872,6 +4912,10 @@ Your previous data was kept.</translation>
     <message>
         <source>ended</source>
         <translation>ended</translation>
+    </message>
+    <message>
+        <source>Meeting review</source>
+        <translation>Meeting review</translation>
     </message>
     <message>
         <source>Transcript</source>

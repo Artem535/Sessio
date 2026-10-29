@@ -231,17 +231,40 @@ Rectangle {
 
                                     TextField {
                                         id: editor
+                                        objectName: "todoTitleEditor"
                                         visible: todoRow.editing
                                         Layout.fillWidth: true
                                         implicitHeight: 28
                                         font.pixelSize: 13
                                         color: theme.text
                                         background: Rectangle { radius: 6; color: theme.base; border.color: theme.highlight }
-                                        onAccepted: {
-                                            if (root.bridge) root.bridge.setTodoTitle(todoRow.modelData.id, text)
+                                        function finishEdit() {
+                                            if (!todoRow.editing) return
+                                            const id = todoRow.modelData.id
+                                            const title = text
                                             todoRow.editing = false
+                                            if (root.bridge) root.bridge.setTodoTitle(id, title)
                                         }
+                                        onAccepted: finishEdit()
+                                        onEditingFinished: finishEdit()
                                         Keys.onEscapePressed: todoRow.editing = false
+                                    }
+
+                                    ToolButton {
+                                        objectName: "todoRename"
+                                        visible: !todoRow.editing
+                                        text: "✎"
+                                        implicitWidth: 28
+                                        implicitHeight: 28
+                                        Accessible.name: qsTr("Rename")
+                                        ToolTip.visible: hovered
+                                        ToolTip.text: qsTr("Rename")
+                                        onClicked: {
+                                            todoRow.editing = true
+                                            editor.text = todoRow.modelData.title
+                                            editor.forceActiveFocus()
+                                            editor.selectAll()
+                                        }
                                     }
 
                                     Text {

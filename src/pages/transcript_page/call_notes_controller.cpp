@@ -4,6 +4,7 @@
 #include "call_notes_controller.h"
 #include "app_settings.h"
 #include "meeting_history.h"
+#include "notes_common.h"
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -371,8 +372,14 @@ void CallNotesController::appendLivePoints(const QJsonObject &notes, const QJson
   live.remove("note");
   auto points = live["key_points"].toArray();
   QSet<QString> cited;
+  QSet<QString> known;
+  for (const auto &point : points)
+    known.insert(pcm::prompter::notes::pointKey(point.toObject()["text"].toString()));
   for (const auto &point : found) {
     if (points.size() >= kMaxLivePoints) break;
+    const auto key = pcm::prompter::notes::pointKey(point.toObject()["text"].toString());
+    if (known.contains(key)) continue;
+    known.insert(key);
     points.append(point);
     for (const auto &id : point.toObject()["evidence_ids"].toArray()) cited.insert(id.toString());
   }
