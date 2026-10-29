@@ -28,6 +28,8 @@ inline oatpp::web::protocol::http::Status statusForError(ServiceError err) {
     return oatpp::web::protocol::http::Status::CODE_410;
   case ServiceError::InvalidDisplayName:
   case ServiceError::InvalidRequest:
+  case ServiceError::JitsiNotConfigured:
+  case ServiceError::InvalidProvider:
     return oatpp::web::protocol::http::Status::CODE_400;
   case ServiceError::InvitationExists:
   case ServiceError::IdempotencyConflict:
@@ -79,12 +81,14 @@ public:
       return createDtoResponse(Status::CODE_400, err);
     }
     auto result = service_.createMeeting(authCredentialOf(request), toStdString(body->scheduledStart),
-                                          toStdString(body->scheduledEnd));
+                                          toStdString(body->scheduledEnd),
+                                          body->provider ? *body->provider : std::string("livekit"));
     if (!result.ok()) {
       auto status = statusForError(*result.error);
       logServiceFailure("POST", kRoute, "", status.code, *result.error);
       auto err = ErrorResponseDto::createShared();
-      err->error = "unauthorized";
+      err->error = *result.error == ServiceError::Unauthorized ? "unauthorized"
+                                                                : serviceErrorName(*result.error);
       return createDtoResponse(status, err);
     }
     logRequestOk("POST", kRoute, result.value->meetingRef, Status::CODE_200.code);
@@ -156,6 +160,7 @@ public:
     dto->roomName = result.value->roomName;
     dto->token = result.value->jwt;
     dto->expiresAt = result.value->expiresAtUnix;
+    dto->provider = result.value->provider;
     auto response = createDtoResponse(Status::CODE_200, dto); response->putHeader("Cache-Control", "no-store"); return response;
   }
 

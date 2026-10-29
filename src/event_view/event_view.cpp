@@ -17,6 +17,8 @@ Q_LOGGING_CATEGORY(logEventView, "pcm.EventView")
 
 namespace {
 constexpr int kHighlightDurationMs = 2500;
+constexpr int kNowLineRefreshMs = 30'000;
+const QColor kNowLineColor(0xE5, 0x48, 0x4D);
 } // namespace
 
 QEventView::QEventView(QWidget *parent)
@@ -48,6 +50,41 @@ QEventView::QEventView(QWidget *parent)
           .arg(borderCss, backgroundCss));
 
   updateSceneSize();
+
+  // Keeps the current-time line moving while the timeline is open.
+  auto *nowTimer = new QTimer(this);
+  nowTimer->setInterval(kNowLineRefreshMs);
+  connect(nowTimer, &QTimer::timeout, this, [this] {
+    if (isVisible()) viewport()->update();
+  });
+  nowTimer->start();
+}
+
+std::optional<qreal> QEventView::currentTimeLineY(const QDateTime &now) const {
+  if (!mModel || mModel->currentDate() != now.date()) {
+    return std::nullopt;
+  }
+  const auto time = now.time();
+  const qreal minutes = time.hour() * 60 + time.minute() + time.second() / 60.0;
+  return minutes * mPixelPerMin;
+}
+
+void QEventView::drawForeground(QPainter *painter, const QRectF &rect) {
+  QGraphicsView::drawForeground(painter, rect);
+  const auto y = currentTimeLineY(QDateTime::currentDateTime());
+  if (!y) {
+    return;
+  }
+  constexpr qreal x = pcm::widgets::constants::kWidthLabel;
+  constexpr qreal kDotRadius = 4.0;
+  painter->save();
+  painter->setRenderHint(QPainter::Antialiasing);
+  painter->setPen(QPen(kNowLineColor, 2.0));
+  painter->drawLine(QLineF(x, *y, rect.right(), *y));
+  painter->setPen(Qt::NoPen);
+  painter->setBrush(kNowLineColor);
+  painter->drawEllipse(QPointF(x, *y), kDotRadius, kDotRadius);
+  painter->restore();
 }
 
 void QEventView::setModel(QTimelineModel *model) {

@@ -1,4 +1,5 @@
 #pragma once
+#include "event_template.h"
 
 #include "database.h"
 #include "day_summary_widget.h"
@@ -61,6 +62,11 @@ signals:
    * to MainWindow's Calls tab instead of opening a URL.
    */
   void openLiveKitMeetingRequested(QString meetingRef);
+
+public:
+  // Opens the new-event dialog pre-filled from `t`. Returns the created event's
+  // ID after the user saved it, nullopt when cancelled or the save failed.
+  std::optional<int64_t> createEventFromTemplate(const EventTemplate &t);
 
 public slots:
   void reloadSelectedDay();
@@ -137,6 +143,7 @@ private:
   QuickSlotsWidget *mQuickSlotsWidget = nullptr;
   DaySummaryWidget *mDaySummaryWidget = nullptr;
   QPointer<QEventDetailsWidget> mActiveEventDetailsWidget;
+  int64_t mLastCreatedEventId = 0; // set by onEventSaved for a newly created event
 
   int64_t mClientId = 0;
   QDate mSelectedDate;

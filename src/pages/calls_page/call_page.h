@@ -42,6 +42,10 @@ public:
   // While any screen is shared, the featured one fills the stage and every other tile
   // (screens and cameras) sits in a strip underneath. Empty or unknown: the first screen.
   void setFeaturedScreen(const QString &key);
+  // A web-hosted call (provider->callView()) fills the whole stage under the overlays; the
+  // tile grid is bypassed. nullptr restores the native tiles. Not owned: the view is
+  // reparented back to nothing so its provider can delete it.
+  void setContentWidget(QWidget *widget);
   void setViewLayout(CallViewLayout mode) { mViewLayout = mode; layoutChildren(); }
   void setLayoutControls(QWidget *widget) { mLayoutControls = widget; layoutChildren(); }
   void refreshLayout() { layoutChildren(); }
@@ -62,6 +66,7 @@ private:
   QString mFeaturedScreen;
   CallViewLayout mViewLayout{CallViewLayout::Auto};
   QPointer<QWidget> mLayoutControls;
+  QPointer<QWidget> mContentWidget;
 };
 
 } // namespace pcm::video::detail
@@ -88,6 +93,8 @@ public:
   void setTranscribeButtonVisible(bool visible);
   void setTranscribeButtonState(bool active, const QString &tooltip);
   void openSidePanel();
+  void setNotesFocused(bool focused);
+  bool hasSidePanelWidget() const { return mSidePanel != nullptr; }
 
 signals:
   void transcribeRequested();
@@ -97,6 +104,7 @@ signals:
   void leaveRequested();
   void deviceCheckCanceled();
   void callEnded();
+  void backToCallsRequested();
   // Emitted when the user confirms their camera/mic/speaker choices on the
   // device-check screen and clicks its own Join button. CallPage has no
   // token client and no url/token of its own — it only relays "the user
@@ -111,6 +119,9 @@ signals:
 public slots:
   void onSessionStateChanged(pcm::video::VideoSessionState state);
 
+protected:
+  void resizeEvent(QResizeEvent *event) override;
+
 private:
   void buildDeviceCheckScreen(pcm::video::DeviceManager *deviceManager);
   // Passes the device-check screen's camera/microphone/speaker choice to the provider.
@@ -121,10 +132,13 @@ private:
   // Shows/hides the notes panel; the first time it opens it gets a sensible default width,
   // afterwards it keeps whatever width the user dragged it to.
   void setSidePanelOpen(bool open);
+  void arrangeNotesLayout();
   void buildConnectedScreen();
   void syncParticipants();
   void clearParticipants();
   void refreshMediaButtons();
+  // Switches the connected screen between native tiles and a provider-hosted web view.
+  void setWebView(QWidget *view);
   void onSessionFailureReason(const QString &reason);
   void refreshEndedReason();
   // Shows mMediaErrorBanner with `reason` and starts its auto-hide timer.
@@ -166,8 +180,13 @@ private:
   // by onMediaError() and auto-hidden a few seconds later by a QTimer.
   QLabel *mMediaErrorBanner{nullptr};
   QWidget *mEndedScreen{nullptr};
+  QWidget *mEndedSidePanelHost{nullptr};
   QLabel *mEndedReasonLabel{nullptr};
   QWidget *mSidePanelHost{nullptr};
+  QWidget *mNotesTools{nullptr};
+  QToolButton *mNotesFocusButton{nullptr};
+  bool mNotesFocused{false};
+  bool mCallEnded{false};
   QToolButton *mNotesToggleButton{nullptr};
   QToolButton *mMicrophoneToggleButton{nullptr};
   QToolButton *mCameraToggleButton{nullptr};
@@ -186,6 +205,10 @@ private:
   QComboBox *mDeviceMicrophoneCombo{nullptr};
   QComboBox *mDeviceSpeakerCombo{nullptr};
   QPointer<QWidget> mSidePanel;
+  QPointer<QWidget> mWebView;
+  QPointer<QWidget> mLayoutControls;
+  // Native controls' visibility from before web mode hid them; non-empty means web mode is on.
+  QVector<QPair<QPointer<QWidget>, bool>> mSavedControlVisibility;
   QPointer<pcm::video::VideoSession> mSession;
   // Not owned; passed into the constructor and outlives this CallPage (see
   // CallsPage, which owns the DeviceManager). Used by showDevicesPopover()

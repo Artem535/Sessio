@@ -23,6 +23,9 @@ const std::vector<const char *> kConfigEnvVars = {
     "LIVEKIT_WS_ENDPOINT",
     "INVITATION_BASE_URL",
     "TOKEN_TTL_SECONDS",
+    "JITSI_URL",
+    "JITSI_APP_ID",
+    "JITSI_APP_SECRET",
 };
 
 } // namespace
@@ -199,4 +202,45 @@ TEST_F(ConfigTest, SucceedsWithAllVarsSet) {
   EXPECT_EQ(config.port, 9000);
   EXPECT_EQ(config.dbPath, "custom.db");
   EXPECT_EQ(config.tokenTtlSeconds, 3600);
+}
+
+// Jitsi is optional, but a half-configured set would only fail later, when the
+// first Jitsi meeting is created. All three or none, caught at startup.
+TEST_F(ConfigTest, JitsiAllOrNothing) {
+  setAllRequired();
+  setenv("JITSI_URL", "https://jitsi.example.test", 1);
+
+  EXPECT_THROW(
+      {
+        try {
+          pcm::tokenbackend::Config::fromEnv();
+          FAIL() << "Expected std::runtime_error";
+        } catch (const std::runtime_error &e) {
+          EXPECT_THAT(std::string(e.what()), ::testing::HasSubstr("JITSI_APP_ID"));
+          throw;
+        }
+      },
+      std::runtime_error);
+}
+
+TEST_F(ConfigTest, JitsiOptional) {
+  setAllRequired();
+
+  const auto config = pcm::tokenbackend::Config::fromEnv();
+
+  EXPECT_FALSE(config.jitsiConfigured());
+}
+
+TEST_F(ConfigTest, JitsiFullSetIsConfigured) {
+  setAllRequired();
+  setenv("JITSI_URL", "https://jitsi.example.test", 1);
+  setenv("JITSI_APP_ID", "sessio", 1);
+  setenv("JITSI_APP_SECRET", "jitsi-secret", 1);
+
+  const auto config = pcm::tokenbackend::Config::fromEnv();
+
+  EXPECT_TRUE(config.jitsiConfigured());
+  EXPECT_EQ(config.jitsiUrl, "https://jitsi.example.test");
+  EXPECT_EQ(config.jitsiAppId, "sessio");
+  EXPECT_EQ(config.jitsiAppSecret, "jitsi-secret");
 }

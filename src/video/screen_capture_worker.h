@@ -24,6 +24,8 @@ public slots:
   void processFrame(const QVideoFrame &frame);
 
 signals:
+  // A frame reached the video source; the adapter treats the first as "started".
+  void frameDelivered();
   void captureFailed(QString reason);
 
 private:

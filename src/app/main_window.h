@@ -8,6 +8,7 @@
 #include "database.h"
 #include "client_info_card.h"
 #include "meeting_coordinator.h"
+#include "my_day_page.h"
 #include "settings_dialog.h"
 #include "tab_button.h"
 #include "token_backend_client.h"
@@ -47,7 +48,7 @@ public:
   /**
    * @brief Enum to identify the available pages in the application.
    */
-  enum class Pages { clientInfo, eventInfo, analytics, clientCard, clientNotes, calls, transcript, transcriptList };
+  enum class Pages { myDay, clientInfo, eventInfo, analytics, clientCard, clientNotes, calls, transcript, transcriptList };
 
   /**
    * @brief Constructor for the MainWindow class.
@@ -70,6 +71,8 @@ public:
    */
   void addEventInfoPage(QTimelineModel *model,
                         pcm::meeting::MeetingCoordinator *meetingCoordinator);
+  void addMyDayPage(std::shared_ptr<pcm::database::Database> db, QTimelineModel *model,
+                    pcm::meeting::SeriesCallService *seriesCalls);
   void addAnalyticsPage(std::shared_ptr<pcm::database::Database> db);
 
   /**
@@ -93,6 +96,9 @@ public:
   void openTranscriptListPage();
   void openTranscriptPage();
   void returnToEvent(int64_t eventId, qint64 dayMs);
+  void openClientCard(const std::optional<DuckClient> &client);
+  // Opens the card of the client with this id (no-op if the client no longer exists).
+  void openClientById(qint64 clientId);
   void setTranscriptionActiveProvider(std::function<bool()> provider) {
     mTranscriptionActive = std::move(provider);
   }
@@ -171,6 +177,7 @@ private:
   std::shared_ptr<pcm::database::Database> mDb{nullptr};
 
   // Navigation buttons
+  TabButton *mBtnMyDay{nullptr};
   TabButton *mBtnCalendar{nullptr};
   TabButton *mBtnClients{nullptr};
   TabButton *mBtnAnalytics{nullptr};
@@ -192,7 +199,7 @@ private:
   QMargins mGridMargins;
   bool mCallFullscreen{false};
   QHash<Pages, QWidget*> mPageCustomWidgets;
-  Pages mCurrentPage{Pages::eventInfo};
+  Pages mCurrentPage{Pages::myDay};
 
   /**
    * @brief Initializes default UI style (colors, fonts, etc.).

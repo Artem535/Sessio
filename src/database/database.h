@@ -24,6 +24,25 @@
 
 namespace pcm::database {
 
+struct NoteLinkKey {
+  std::optional<int64_t> event_id;
+  std::optional<int64_t> series_id;
+  std::optional<int64_t> occurrence_start_ms;
+};
+
+struct PrompterState {
+  int64_t revision = 0;
+  std::string json;
+};
+
+struct CallMaterialState {
+  int64_t id = 0;
+  int64_t revision = 0;
+  std::optional<int64_t> event_id;
+  std::string json;
+  int64_t created_at = 0;  // Epoch milliseconds.
+};
+
 struct ClientMonthlyStats {
   int year = 0;
   int month = 0;
@@ -95,6 +114,9 @@ public:
   std::vector<DuckEventChangeLog> get_event_change_log_for_client(int64_t client_id);
   int64_t add_client_note(const DuckClientNote &note);
   std::vector<DuckClientNote> get_client_notes(int64_t client_id);
+  // Returns, for each key in order, whether a ClientNote is linked to it by
+  // linked_event_id or by linked_series_id + linked_occurrence_start.
+  std::vector<bool> has_linked_notes(const std::vector<NoteLinkKey> &keys);
   int64_t add_client_note_attachment(const DuckClientNoteAttachment &attachment);
   std::vector<DuckClientNoteAttachment> get_note_attachments(int64_t note_id);
 
@@ -106,8 +128,39 @@ public:
   std::vector<DuckTranscript> get_transcripts_for_event(int64_t event_id);
   std::vector<DuckTranscript> get_transcripts_for_client(int64_t client_id);
   std::vector<DuckTranscript> get_transcripts();
+  // "My day" to-dos. Returns the new id, 0 on failure.
+  int64_t add_day_todo(const DuckDayTodo &todo);
+  bool update_day_todo_title(int64_t id, const std::string &title);
+  // nullopt marks the to-do as not done.
+  bool set_day_todo_done(int64_t id, std::optional<int64_t> doneAtMs);
+  bool delete_day_todo(int64_t id);
+  // dayStartMs/dayEndMs are the local day bounds. Today also carries over unfinished
+  // to-dos of earlier days; other days show to-dos dated that day (past: plus those
+  // finished that day).
+  std::vector<DuckDayTodo> get_day_todos(int64_t dayStartMs, int64_t dayEndMs, bool isToday);
   bool set_transcript_clients(int64_t transcript_id, const std::vector<int64_t> &client_ids);
   std::vector<int64_t> get_transcript_client_ids(int64_t transcript_id);
+  PrompterState get_prompter_state(int64_t transcript_id);
+  int64_t create_call_material(std::optional<int64_t> event_id);
+  // Adopts a late transcript event when unassociated, rejects conflicting
+  // events, and never clears an existing event for a standalone transcript.
+  bool link_call_material_transcript(int64_t material_id, int64_t transcript_id);
+  CallMaterialState get_call_material(int64_t material_id);
+  CallMaterialState get_call_material_for_transcript(int64_t transcript_id);
+  std::vector<CallMaterialState> get_call_materials();
+  // Call materials of one client, via the call's event or a linked transcript.
+  std::vector<CallMaterialState> get_call_materials_for_client(int64_t client_id);
+  std::vector<int64_t> get_call_material_transcript_ids(int64_t material_id);
+  // Compare-and-swap: initial revision is 0; every save or source invalidation
+  // increments it. JSON must be an object (maximum 4 MiB). manual_notes and
+  // manual_text, when present, are strings preserved on source invalidation.
+  // ended and idle statuses are preserved; nonempty non-idle string statuses
+  // become stale; null/empty statuses are omitted. Other fields are derived
+  // and cleared. Never changes old prompter JSON.
+  bool save_call_material(int64_t material_id, int64_t expected_revision, const std::string &json);
+  bool save_prompter_state(int64_t transcript_id, int64_t expected_revision, const std::string &json);
+  int64_t save_prompter_note(int64_t transcript_id, const std::string &card_id,
+                            int64_t client_id, const std::string &body);
   int64_t count_transcripts();
   int64_t count_transcript_phrases(int64_t transcript_id);
   // Callers of set_transcript_status, revoke_transcript_consent,
@@ -130,12 +183,18 @@ public:
   // Single writer thread invariant: ids are allocated as MAX(id)+1, so only
   // one thread may add phrases at a time. Rejects (returns 0) when the
   // transcript is not in "recording" status or its consent was revoked.
-  int64_t add_transcript_phrase(const DuckTranscriptPhrase &phrase);
+  // A track role renamed in that transcript (see rename_transcript_speaker)
+  // stores its new name instead of phrase.speaker_name; the stored name is
+  // reported through stored_speaker_name when given.
+  int64_t add_transcript_phrase(const DuckTranscriptPhrase &phrase,
+                                std::optional<std::string> *stored_speaker_name = nullptr);
   std::vector<DuckTranscriptPhrase> get_transcript_phrases(int64_t transcript_id);
+  std::optional<int64_t> get_transcript_id_for_phrase(int64_t phrase_id);
   bool update_transcript_phrase_text(int64_t phrase_id, const std::string &text);
   bool delete_transcript_phrase(int64_t phrase_id);
-  // Sets speaker_name on every phrase of the transcript with that track role
-  // (not a text edit: `edited` is untouched) and bumps updated_at. Returns true
+  // Sets speaker_name on every phrase of the transcript with that track role,
+  // and on phrases of that role added later (not a text edit: `edited` is
+  // untouched) and bumps updated_at. Returns true
   // iff the transcript exists, even when no phrase matched; false for an empty
   // name or an unknown transcript.
   bool rename_transcript_speaker(int64_t transcript_id, const std::string &track_role,
@@ -232,6 +291,9 @@ private:
   void add_demo_data();
   void init_tables();
   void apply_schema_migrations();
+  void init_prompter_schema();
+  void init_call_material_schema();
+  static bool invalidate_call_materials(duckdb::Connection &conn, int64_t transcript_id);
   void init_application_metadata();
   void init_payment_status_table();
   void init_event_status_table();

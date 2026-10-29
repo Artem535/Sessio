@@ -39,6 +39,17 @@ target_link_libraries(Sessio_database_transcript_tests PRIVATE
 )
 gtest_discover_tests(Sessio_database_transcript_tests)
 
+# "My day" to-do storage tests
+add_executable(Sessio_database_day_todo_tests database_day_todo_tests.cpp)
+target_link_libraries(Sessio_database_day_todo_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_config
+    Sessio_database
+    Poco::Foundation
+)
+gtest_discover_tests(Sessio_database_day_todo_tests)
+
 # Schedule identity / transactional outbox tests
 add_executable(Sessio_schedule_outbox_tests schedule_outbox_tests.cpp)
 target_link_libraries(Sessio_schedule_outbox_tests PRIVATE
@@ -362,6 +373,7 @@ gtest_discover_tests(Sessio_device_manager_tests)
 # plan's Task 9 lifecycle-stress acceptance criterion.
 add_executable(Sessio_video_capture_adapter_smoke_test
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture.h
     ${CMAKE_SOURCE_DIR}/src/video/screen_capture_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/video/screen_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_worker.cpp
@@ -376,6 +388,39 @@ target_link_libraries(Sessio_video_capture_adapter_smoke_test PRIVATE
 )
 add_test(NAME VideoCaptureAdapterSmokeTest COMMAND Sessio_video_capture_adapter_smoke_test)
 set_tests_properties(VideoCaptureAdapterSmokeTest PROPERTIES TIMEOUT 30)
+
+# Screen capture adapter: failure delivery must let the caller destroy the
+# capture safely (crash in libQt6Core when sharing via the Wayland portal).
+add_executable(Sessio_screen_capture_adapter_tests
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture.h
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture_worker.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/frame_convert.cpp
+    screen_capture_adapter_tests.cpp
+)
+target_include_directories(Sessio_screen_capture_adapter_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_screen_capture_adapter_tests PRIVATE
+    Qt6::Gui Qt6::Multimedia Qt6::Test GTest::gtest LiveKit::livekit)
+set_target_properties(Sessio_screen_capture_adapter_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_screen_capture_adapter_tests)
+
+# Screen share controller: a capture that fails (cancelled portal picker,
+# portal error) must never leave a published screen track behind.
+add_executable(Sessio_screen_share_controller_tests
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture.h
+    ${CMAKE_SOURCE_DIR}/src/video/screen_share_controller.cpp
+    fake_screen_capture.h
+    screen_share_controller_tests.cpp
+)
+target_include_directories(Sessio_screen_share_controller_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
+target_link_libraries(Sessio_screen_share_controller_tests PRIVATE Qt6::Gui Qt6::Multimedia Qt6::Test GTest::gtest)
+set_target_properties(Sessio_screen_share_controller_tests PROPERTIES AUTOMOC ON)
+gtest_discover_tests(Sessio_screen_share_controller_tests)
+
+# Manual probe for a real desktop (not a ctest test): share, stop and share
+# again in one process through the Wayland portal. See the file's header.
+add_executable(Sessio_screen_share_portal_probe screen_share_portal_probe.cpp)
+target_link_libraries(Sessio_screen_share_portal_probe PRIVATE Sessio_video Qt6::Gui)
 
 # Audio capture adapter smoke test (own main(), not GoogleTest — mirrors the
 # video capture adapter smoke test above). Proves repeated start/destroy
@@ -403,6 +448,58 @@ target_link_libraries(Sessio_audio_capture_lifecycle_tests PRIVATE
 add_test(NAME AudioCaptureLifecycleTests COMMAND Sessio_audio_capture_lifecycle_tests)
 set_tests_properties(AudioCaptureLifecycleTests PROPERTIES TIMEOUT 15)
 if(SESSIO_TRANSCRIPTION_ENABLED)
+add_executable(Sessio_call_prompter_controller_tests call_prompter_controller_tests.cpp)
+add_executable(Sessio_call_notes_controller_tests call_notes_controller_tests.cpp)
+target_link_libraries(Sessio_call_notes_controller_tests PRIVATE GTest::gtest Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_call_notes_controller_tests)
+add_executable(Sessio_agreement_calendar_tests agreement_calendar_tests.cpp)
+target_link_libraries(Sessio_agreement_calendar_tests PRIVATE GTest::gtest_main Sessio_transcription_ui)
+gtest_discover_tests(Sessio_agreement_calendar_tests)
+add_executable(Sessio_live_points_pipeline_tests live_points_pipeline_tests.cpp)
+target_link_libraries(Sessio_live_points_pipeline_tests PRIVATE GTest::gtest_main Sessio_call_prompter)
+gtest_discover_tests(Sessio_live_points_pipeline_tests)
+add_executable(Sessio_summary_pipeline_tests summary_pipeline_tests.cpp)
+target_link_libraries(Sessio_summary_pipeline_tests PRIVATE GTest::gtest_main Sessio_call_prompter)
+gtest_discover_tests(Sessio_summary_pipeline_tests)
+add_executable(Sessio_notes_widgets_tests notes_widgets_tests.cpp)
+target_link_libraries(Sessio_notes_widgets_tests PRIVATE GTest::gtest Qt6::Test Sessio_transcription_ui)
+target_include_directories(Sessio_notes_widgets_tests PRIVATE ${qlementine_SOURCE_DIR}/lib/include)
+gtest_discover_tests(Sessio_notes_widgets_tests)
+add_executable(Sessio_meeting_history_tests meeting_history_tests.cpp)
+target_link_libraries(Sessio_meeting_history_tests PRIVATE GTest::gtest Qt6::Test Sessio_transcription_ui)
+target_include_directories(Sessio_meeting_history_tests PRIVATE ${qlementine_SOURCE_DIR}/lib/include)
+gtest_discover_tests(Sessio_meeting_history_tests)
+add_executable(Sessio_call_notes_page_tests call_notes_page_tests.cpp)
+target_link_libraries(Sessio_call_notes_page_tests PRIVATE GTest::gtest Qt6::Test Sessio_transcription_ui)
+target_include_directories(Sessio_call_notes_page_tests PRIVATE ${qlementine_SOURCE_DIR}/lib/include)
+gtest_discover_tests(Sessio_call_notes_page_tests)
+
+add_executable(Sessio_client_notes_page_ui_tests client_notes_page_ui_tests.cpp)
+target_link_libraries(Sessio_client_notes_page_ui_tests PRIVATE GTest::gtest Qt6::Test Sessio_client_notes_page)
+gtest_discover_tests(Sessio_client_notes_page_ui_tests)
+add_executable(Sessio_call_prompter_pipeline_tests call_prompter_pipeline_tests.cpp)
+add_executable(Sessio_prompter_task_gate_tests prompter_task_gate_tests.cpp)
+target_include_directories(Sessio_prompter_task_gate_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/call_prompter/litert)
+target_link_libraries(Sessio_prompter_task_gate_tests PRIVATE GTest::gtest_main)
+gtest_discover_tests(Sessio_prompter_task_gate_tests)
+target_link_libraries(Sessio_call_prompter_pipeline_tests PRIVATE GTest::gtest_main Sessio_call_prompter)
+gtest_discover_tests(Sessio_call_prompter_pipeline_tests)
+if(SESSIO_LITERTLM_FOUND)
+  # Real Gemma smoke; skips itself unless SESSIO_PROMPTER_MODEL is set.
+  add_executable(Sessio_call_prompter_model_smoke_tests call_prompter_model_smoke_tests.cpp)
+  target_link_libraries(Sessio_call_prompter_model_smoke_tests PRIVATE GTest::gtest Sessio_call_prompter_engine)
+  gtest_discover_tests(Sessio_call_prompter_model_smoke_tests DISCOVERY_TIMEOUT 30)
+endif()
+add_executable(Sessio_prompter_worker_tests prompter_worker_tests.cpp)
+add_executable(Sessio_prompter_panel_tests prompter_panel_tests.cpp)
+target_link_libraries(Sessio_prompter_panel_tests PRIVATE GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui)
+target_include_directories(Sessio_prompter_panel_tests PRIVATE ${qlementine_SOURCE_DIR}/lib/include)
+target_compile_definitions(Sessio_prompter_panel_tests PRIVATE SESSIO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+gtest_discover_tests(Sessio_prompter_panel_tests)
+target_link_libraries(Sessio_prompter_worker_tests PRIVATE GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_prompter_worker_tests)
+target_link_libraries(Sessio_call_prompter_controller_tests PRIVATE GTest::gtest Qt6::Widgets Qt6::Test Sessio_transcription_ui)
+gtest_discover_tests(Sessio_call_prompter_controller_tests)
   add_executable(Sessio_microphone_switch_runtime_smoke microphone_switch_runtime_smoke.cpp)
   target_include_directories(Sessio_microphone_switch_runtime_smoke PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/transcription)
@@ -466,8 +563,10 @@ add_executable(Sessio_livekit_video_provider_smoke_test
     ${CMAKE_SOURCE_DIR}/src/video/participant_model.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_frame_source.cpp
     ${CMAKE_SOURCE_DIR}/src/video/livekit_video_provider.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_share_controller.cpp
     ${CMAKE_SOURCE_DIR}/src/video/livekit_video_frame_source.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_adapter.cpp
+    ${CMAKE_SOURCE_DIR}/src/video/screen_capture.h
     ${CMAKE_SOURCE_DIR}/src/video/screen_capture_adapter.cpp
     ${CMAKE_SOURCE_DIR}/src/video/screen_capture_worker.cpp
     ${CMAKE_SOURCE_DIR}/src/video/video_capture_worker.cpp
@@ -877,6 +976,7 @@ gtest_discover_tests(Sessio_device_check_widget_tests)
 find_package(Qt6 REQUIRED COMPONENTS StateMachine Test)
 add_executable(Sessio_call_page_tests
     call_page_tests.cpp
+    fake_screen_capture.h
     call_layout_strategy_tests.cpp
 )
 target_link_libraries(Sessio_call_page_tests PRIVATE
@@ -1126,3 +1226,86 @@ target_link_libraries(Sessio_call_event_resolver_tests PRIVATE
     Sessio_database Sessio_config Poco::Foundation)
 gtest_discover_tests(Sessio_call_event_resolver_tests)
 endif()
+
+# "My day" tile and timeline logic tests
+add_executable(Sessio_my_day_logic_tests my_day_logic_tests.cpp)
+target_link_libraries(Sessio_my_day_logic_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_my_day_page
+)
+gtest_discover_tests(Sessio_my_day_logic_tests)
+
+# "My day" bridge tests (real temp DB + real QTimelineModel)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
+add_executable(Sessio_my_day_bridge_tests my_day_bridge_tests.cpp)
+target_link_libraries(Sessio_my_day_bridge_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Qt6::Test
+    Sessio_my_day_page
+)
+gtest_discover_tests(Sessio_my_day_bridge_tests)
+
+# "My day" QML page (offscreen QQuickWidget, fails on QML warnings)
+add_executable(Sessio_my_day_page_tests my_day_page_tests.cpp)
+target_link_libraries(Sessio_my_day_page_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Qt6::Test
+    Qt6::QuickWidgets
+    Sessio_my_day_page
+)
+gtest_discover_tests(Sessio_my_day_page_tests)
+
+# Shared "join meeting" decision (inspector + My Day)
+add_executable(Sessio_meeting_join_tests meeting_join_tests.cpp)
+target_link_libraries(Sessio_meeting_join_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_meeting
+)
+gtest_discover_tests(Sessio_meeting_join_tests)
+
+# MainWindow «Мой день» start page tests
+add_executable(Sessio_main_window_my_day_tests main_window_my_day_tests.cpp)
+target_link_libraries(Sessio_main_window_my_day_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Widgets
+    Sessio_app
+    Sessio_my_day_page
+)
+gtest_discover_tests(Sessio_main_window_my_day_tests)
+# QtWebEngine smoke test (Jitsi web calls)
+add_executable(Sessio_webcall_smoke_tests webcall_smoke_tests.cpp)
+target_link_libraries(Sessio_webcall_smoke_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_webcall)
+gtest_discover_tests(Sessio_webcall_smoke_tests)
+
+# Local audio bridge for web calls
+add_executable(Sessio_audio_chunk_tests audio_chunk_tests.cpp)
+target_link_libraries(Sessio_audio_chunk_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_webcall)
+gtest_discover_tests(Sessio_audio_chunk_tests)
+
+add_executable(Sessio_audio_bridge_server_tests audio_bridge_server_tests.cpp)
+target_link_libraries(Sessio_audio_bridge_server_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_webcall)
+gtest_discover_tests(Sessio_audio_bridge_server_tests)
+
+# Web call bridge (page events -> VideoProvider signals / ParticipantModel)
+find_package(Qt6 REQUIRED COMPONENTS Test)
+add_executable(Sessio_web_call_bridge_tests web_call_bridge_tests.cpp)
+target_link_libraries(Sessio_web_call_bridge_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_webcall Sessio_video Qt6::Test)
+gtest_discover_tests(Sessio_web_call_bridge_tests)
+
+# WebCallProvider integration: real QtWebEngine (offscreen) running the fake adapter.
+# Own main(): the scheme must be registered before QApplication.
+add_executable(Sessio_web_call_provider_tests web_call_provider_tests.cpp)
+target_link_libraries(Sessio_web_call_provider_tests PRIVATE
+    GTest::gtest Sessio_webcall Sessio_video Qt6::Test Qt6::Widgets)
+gtest_discover_tests(Sessio_web_call_provider_tests
+    PROPERTIES LABELS webengine TIMEOUT 120
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

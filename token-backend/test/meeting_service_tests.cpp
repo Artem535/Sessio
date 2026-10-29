@@ -84,6 +84,9 @@ protected:
     config.liveKitApiKey = "test-key";
     config.liveKitApiSecret = "test-secret";
     config.tokenTtlSeconds = 600;
+    config.jitsiUrl = "https://jitsi.test";
+    config.jitsiAppId = "sessio";
+    config.jitsiAppSecret = "jitsi-secret";
 
     service = std::make_unique<pcm::tokenbackend::MeetingService>(
         *authorizer, *meetings, *invitations, config, "ws://livekit.test:7880");
@@ -488,4 +491,94 @@ TEST_F(MeetingServiceTest, ClosedWindowDoesNotBurnAPasscodeAttempt) {
   ASSERT_TRUE(invitation.has_value());
   EXPECT_EQ(invitation->passcodeAttempts, 0);
   EXPECT_EQ(invitation->status, "active");
+}
+
+// --- Jitsi meetings ---------------------------------------------------------
+
+namespace {
+std::string jwtClaim(const std::string &payload, const std::string &key) {
+  const auto at = payload.find("\"" + key + "\":");
+  if (at == std::string::npos) return {};
+  auto start = at + key.size() + 3;
+  if (payload[start] == '"') {
+    ++start;
+    return payload.substr(start, payload.find('"', start) - start);
+  }
+  return payload.substr(start, payload.find_first_of(",}", start) - start);
+}
+} // namespace
+
+TEST_F(MeetingServiceTest, CreatesJitsiMeeting) {
+  auto created = service->createMeeting(credential, windowStart, windowEnd, "jitsi");
+  ASSERT_TRUE(created.ok());
+  auto meeting = meetings->findByRef(created.value->meetingRef);
+  ASSERT_TRUE(meeting);
+  EXPECT_EQ(meeting->provider, "jitsi");
+}
+
+TEST_F(MeetingServiceTest, DefaultMeetingProviderIsLiveKit) {
+  auto created = service->createMeeting(credential, windowStart, windowEnd);
+  ASSERT_TRUE(created.ok());
+  EXPECT_EQ(meetings->findByRef(created.value->meetingRef)->provider, "livekit");
+  auto token = service->issueSpecialistToken(credential, created.value->meetingRef);
+  ASSERT_TRUE(token.ok());
+  EXPECT_EQ(token.value->provider, "livekit");
+}
+
+TEST_F(MeetingServiceTest, RejectsJitsiWhenUnconfigured) {
+  config.jitsiUrl.clear();
+  config.jitsiAppId.clear();
+  config.jitsiAppSecret.clear();
+  auto created = service->createMeeting(credential, windowStart, windowEnd, "jitsi");
+  EXPECT_FALSE(created.ok());
+  EXPECT_EQ(created.error, pcm::tokenbackend::ServiceError::JitsiNotConfigured);
+}
+
+TEST_F(MeetingServiceTest, RejectsUnknownProvider) {
+  auto created = service->createMeeting(credential, windowStart, windowEnd, "zoom");
+  EXPECT_FALSE(created.ok());
+  EXPECT_EQ(created.error, pcm::tokenbackend::ServiceError::InvalidProvider);
+}
+
+TEST_F(MeetingServiceTest, SpecialistTokenForJitsiIsJitsiJwt) {
+  auto created = service->createMeeting(credential, windowStart, windowEnd, "jitsi");
+  ASSERT_TRUE(created.ok());
+  auto token = service->issueSpecialistToken(credential, created.value->meetingRef, "Anna");
+  ASSERT_TRUE(token.ok());
+  EXPECT_EQ(token.value->provider, "jitsi");
+  EXPECT_EQ(token.value->endpointUrl, "https://jitsi.test");
+  const auto room = meetings->findByRef(created.value->meetingRef)->roomName;
+  std::string lower = room;
+  for (auto &c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  EXPECT_EQ(token.value->roomName, lower);
+  const auto payload = verifiedPayload(token.value->jwt, "jitsi-secret");
+  EXPECT_EQ(jwtClaim(payload, "room"), lower);
+  EXPECT_EQ(jwtClaim(payload, "moderator"), "true");
+  EXPECT_EQ(jwtClaim(payload, "iss"), "sessio");
+  EXPECT_NE(jwtClaim(payload, "id").find("practitioner-" + created.value->meetingRef + "-"), std::string::npos);
+  EXPECT_GT(token.value->expiresAtUnix, 0);
+}
+
+TEST_F(MeetingServiceTest, ClientTokenForJitsiIsJitsiJwt) {
+  auto created = service->createMeeting(credential, windowStart, windowEnd, "jitsi");
+  ASSERT_TRUE(created.ok());
+  auto wrong = service->issueClientToken(created.value->invitationCode, "000000");
+  EXPECT_EQ(wrong.error, pcm::tokenbackend::ServiceError::WrongPasscode);
+  auto token = service->issueClientToken(created.value->invitationCode, created.value->passcode, "Ivan");
+  ASSERT_TRUE(token.ok());
+  EXPECT_EQ(token.value->provider, "jitsi");
+  EXPECT_EQ(token.value->endpointUrl, "https://jitsi.test");
+  const auto payload = verifiedPayload(token.value->jwt, "jitsi-secret");
+  EXPECT_EQ(jwtClaim(payload, "moderator"), "false");
+  EXPECT_EQ(jwtClaim(payload, "room"), token.value->roomName);
+}
+
+TEST_F(MeetingServiceTest, ReissueKeepsJitsiProvider) {
+  auto created = service->createMeeting(credential, windowStart, windowEnd, "jitsi");
+  ASSERT_TRUE(created.ok());
+  auto reissued = service->reissueInvitation(credential, created.value->meetingRef);
+  ASSERT_TRUE(reissued.ok());
+  auto token = service->issueClientToken(reissued.value->invitationCode, reissued.value->passcode);
+  ASSERT_TRUE(token.ok());
+  EXPECT_EQ(token.value->provider, "jitsi");
 }

@@ -1,6 +1,9 @@
 #include "main_window.h"
+#include "my_day_bridge.h"
 #include "../widgets/app_settings.h"
 #include "ui/app/ui_mainwindow.h"
+#include "transcript_page.h"
+#include "transcript_list_page.h"
 
 #include <oclero/qlementine/widgets/AboutDialog.hpp>
 #include <oclero/qlementine/widgets/Switch.hpp>
@@ -46,6 +49,7 @@ MainWindow::MainWindow(QWidget *parent)
   mUi->label->deleteLater();
 
   // Create navigation buttons
+  mBtnMyDay = new TabButton(QIcon(":/icons/sun-solid-full.svg"), tr(": NAV_MY_DAY"), this);
   mBtnCalendar =
       new TabButton(QIcon(":/icons/calendar-solid-full.svg"), tr(": NAV_CALENDAR"), this);
   mBtnClients =
@@ -57,11 +61,12 @@ MainWindow::MainWindow(QWidget *parent)
   mBtnNotes =
       new TabButton(QIcon(":/icons/notes.svg"), tr("Notes"), this);
   mBtnCalls =
-      new TabButton(QIcon(":/icons/video-solid-full.svg"), tr("Calls"), this);
+      new TabButton(QIcon(":/icons/video-solid-full.svg"), tr("Meetings"), this);
   mBtnTranscripts = new TabButton(QIcon(":/icons/notes.svg"), tr("Transcripts"), this);
   mBtnTranscripts->hide();
 
   // Add buttons to the vertical layout
+  mUi->verticalLayout->addWidget(mBtnMyDay);
   mUi->verticalLayout->addWidget(mBtnCalendar);
   mUi->verticalLayout->addWidget(mBtnClients);
   mUi->verticalLayout->addWidget(mBtnAnalytics);
@@ -70,7 +75,7 @@ MainWindow::MainWindow(QWidget *parent)
   mUi->verticalLayout->addWidget(mBtnCalls);
   mUi->verticalLayout->addWidget(mBtnTranscripts);
   mBtnProfile->hide();
-  mBtnNotes->hide();
+  mBtnNotes->show();
 
   mBtnBackToClients = new QPushButton(tr("Back to clients"), this);
   mBtnBackToClients->setFlat(true);
@@ -124,6 +129,21 @@ void MainWindow::addClientInfoPage(std::shared_ptr<QClientModel> model) {
 }
 
 
+void MainWindow::addMyDayPage(std::shared_ptr<pcm::database::Database> db, QTimelineModel *model,
+                              pcm::meeting::SeriesCallService *seriesCalls) {
+  const auto page = new pcm::my_day::MyDayPage(std::move(db), model, seriesCalls, this);
+  mPages.insertOrAssign(Pages::myDay, page);
+
+  const int index = mUi->stackedWidget->addWidget(page);
+  mPagesIndex.insertOrAssign(Pages::myDay, index);
+  connect(page->bridge(), &pcm::my_day::MyDayBridge::openEventRequested, this,
+          &MainWindow::returnToEvent);
+  connect(page->bridge(), &pcm::my_day::MyDayBridge::openClientRequested, this,
+          &MainWindow::openClientById);
+  // Start page: lands here regardless of the order pages were added in.
+  showPage(Pages::myDay, mBtnMyDay);
+}
+
 void MainWindow::addEventInfoPage(QTimelineModel *model,
                                   pcm::meeting::MeetingCoordinator *meetingCoordinator) {
   const auto page = new QEventInfoPage(model, meetingCoordinator, this);
@@ -155,17 +175,20 @@ void MainWindow::addClientCardPage(std::shared_ptr<pcm::database::Database> db) 
 
 void MainWindow::addClientNotesPage(std::shared_ptr<pcm::database::Database> db) {
   const auto page = new ClientNotesPage(std::move(db), this);
+  page->enableQuickWorkspace();
+  setPageCustomWidget(Pages::clientNotes, page->headerControls());
   mPages.insertOrAssign(Pages::clientNotes, page);
 
   const int index = mUi->stackedWidget->addWidget(page);
   mPagesIndex.insertOrAssign(Pages::clientNotes, index);
-  setPageCustomWidget(Pages::clientNotes, mBtnBackToClients);
 }
 
 void MainWindow::addCallsPage(pcm::video::DeviceManager *deviceManager,
                               pcm::tokenclient::TokenBackendClient *tokenClient,
                               std::function<QString()> bearerCredentialProvider) {
   const auto page = new CallsPage(/*specialistMode=*/true, deviceManager, tokenClient, this);
+  page->enableQuickWorkspace();
+  setPageCustomWidget(Pages::calls, page->headerControls());
   page->setBearerCredentialProvider(std::move(bearerCredentialProvider));
   mPages.insertOrAssign(Pages::calls, page);
   connect(page, &CallsPage::fullscreenChanged, this, &MainWindow::setCallFullscreen);
@@ -207,12 +230,14 @@ void MainWindow::registerTranscriptPage(QWidget *page) {
   if (mPages.contains(Pages::transcript)) return;
   mPages.insertOrAssign(Pages::transcript, page);
   mPagesIndex.insertOrAssign(Pages::transcript, mUi->stackedWidget->addWidget(page));
+  if (auto *transcript = qobject_cast<TranscriptPage *>(page)) setPageCustomWidget(Pages::transcript, transcript->headerControls());
 }
 void MainWindow::openTranscriptPage() { showPage(Pages::transcript, mBtnCalendar); }
 void MainWindow::registerTranscriptListPage(QWidget *page) {
   if (mPages.contains(Pages::transcriptList)) return;
   mPages.insertOrAssign(Pages::transcriptList, page);
   mPagesIndex.insertOrAssign(Pages::transcriptList, mUi->stackedWidget->addWidget(page));
+  if (auto *library = qobject_cast<TranscriptListPage *>(page)) setPageCustomWidget(Pages::transcriptList, library->headerControls());
   mBtnTranscripts->show();
   connect(mBtnTranscripts, &QPushButton::clicked, this, &MainWindow::openTranscriptListPage);
 }
@@ -221,6 +246,22 @@ void MainWindow::returnToEvent(int64_t eventId, qint64 dayMs) {
   showPage(Pages::eventInfo, mBtnCalendar);
   if (auto *page = dynamic_cast<QEventInfoPage *>(getPage(Pages::eventInfo)))
     page->showEventOnDay(eventId, dayMs);
+}
+
+void MainWindow::openClientById(const qint64 clientId) {
+  if (!mDb) return;
+  auto *card = dynamic_cast<QClientInfoCardPage *>(mPages.value(Pages::clientCard, nullptr));
+  if (!card) return;
+  std::unique_ptr<DuckClient> client;
+  try {
+    client = mDb->get_client(clientId);
+  } catch (const std::exception &) {
+    return;
+  }
+  if (!client) return;
+  card->setClientInfo(*client);
+  setClientNavigationVisible(Pages::clientCard, true);
+  showPage(Pages::clientCard, mBtnProfile);
 }
 
 void MainWindow::setDatabase(std::shared_ptr<pcm::database::Database> db) {
@@ -239,6 +280,8 @@ void MainWindow::connectSignals() {
       dynamic_cast<QEventInfoPage *>(mPages[Pages::eventInfo]);
 
   // Connect navigation buttons to switch pages
+  connect(mBtnMyDay, &QPushButton::clicked,
+          [this]() { showPage(Pages::myDay, mBtnMyDay); });
   connect(mBtnCalendar, &QPushButton::clicked,
           [this]() { showPage(Pages::eventInfo, mBtnCalendar); });
 
@@ -312,7 +355,7 @@ void MainWindow::connectSignals() {
             emit provideClientEventPairSave(clientId, eventId);
           });
 
-  showPage(Pages::eventInfo, mBtnCalendar);
+  showPage(Pages::myDay, mBtnMyDay);
 }
 
 QWidget *MainWindow::getPage(const Pages page) { return mPages[page]; }
@@ -345,10 +388,11 @@ void MainWindow::openJoinLink(const QString &code, const QString &passcode) {
 }
 
 void MainWindow::initDefaultStyle() const {
-  checkButton(mBtnCalendar);
+  checkButton(mBtnMyDay);
 }
 
 void MainWindow::checkButton(QPushButton *btn) const {
+  mBtnMyDay->setChecked(false);
   mBtnCalendar->setChecked(false);
   mBtnClients->setChecked(false);
   mBtnAnalytics->setChecked(false);
@@ -402,7 +446,7 @@ void MainWindow::setClientNavigationVisible(const Pages page,
       break;
     case Pages::clientNotes:
       if (mBtnNotes) {
-        mBtnNotes->setVisible(visible);
+        mBtnNotes->show();
       }
       break;
     default:
@@ -472,6 +516,8 @@ void MainWindow::openAboutDialog() {
 
 QString MainWindow::pageTitle(const Pages page) const {
   switch (page) {
+    case Pages::myDay:
+      return tr("My day");
     case Pages::clientInfo:
       return tr("Clients");
     case Pages::eventInfo:
@@ -483,7 +529,7 @@ QString MainWindow::pageTitle(const Pages page) const {
     case Pages::clientNotes:
       return tr("Notes");
     case Pages::calls:
-      return tr("Calls");
+      return tr("Meetings");
     case Pages::transcript:
       return tr("Transcript");
     case Pages::transcriptList:

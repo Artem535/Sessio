@@ -13,6 +13,8 @@ public:
   void setTranscriptionAvailable(bool available);
   void showNotes();
   void showTranscript();
+  // Prompter suggestions live on the Notes page; badge its tab with their count.
+  void setPrompterPendingCount(int count);
   [[nodiscard]] bool transcriptShown() const;
 signals:
   void pageChanged(bool transcriptShown);

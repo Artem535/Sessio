@@ -1,0 +1,743 @@
+#include "call_notes_page.h"
+#include "agreements_widget.h"
+#include "ai_summary_widget.h"
+#include "call_notes_controller.h"
+#include "client_notes_page.h"
+#include "key_points_widget.h"
+#include "meeting_history_widgets.h"
+#include "notes_workspace_bridge.h"
+#include "meeting_history.h"
+#include <QQuickWidget>
+#include <QQuickItem>
+#include <QQuickTextDocument>
+#include <QTextDocument>
+#include <QTextCursor>
+#include <QTest>
+#include <QApplication>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QLabel>
+#include <QListWidget>
+#include <QScrollBar>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QSignalSpy>
+#include <QTemporaryDir>
+#include <oclero/qlementine/style/QlementineStyle.hpp>
+#include <gtest/gtest.h>
+
+// Produces a controller with one ready summary (made after the call) and one key point.
+struct NotesFixture {
+  QTemporaryDir dir;
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir.path().toStdString())}};
+  std::shared_ptr<pcm::database::Database> db = std::make_shared<pcm::database::Database>(conf);
+  CallNotesController controller{db};
+  DuckTranscriptPhrase phrase;
+  void generate(const QString &text = QStringLiteral("Prepare a short outline."),
+                const QString &pointText = QStringLiteral("Outline is due")) {
+    const auto id = db->add_transcript(std::nullopt, "live_local_v1");
+    controller.beginCall(); controller.attachTranscript(id); controller.setGenerationEnabled(true);
+    phrase.transcript_id = id; phrase.track_role = "participant";
+    phrase.speaker_name = "Participant"; phrase.text = "I will prepare a short outline.";
+    phrase.start_ms = 73000; phrase.end_ms = 76000;
+    phrase.id = db->add_transcript_phrase(phrase);
+    QSignalSpy requests(&controller, &CallNotesController::requestReady);
+    controller.addPhrase(phrase); controller.finishCall(); controller.requestFinal();
+    ASSERT_FALSE(requests.isEmpty());
+    ASSERT_TRUE(requests.last().first().toJsonObject()["final"].toBool());
+    auto reply = requests.last().first().toJsonObject();
+    const QJsonObject note{{"text", text}, {"evidence_ids", QJsonArray{QString::number(phrase.id)}}};
+    auto point = note; point["text"] = pointText;
+    auto task = note; task["text"] = QStringLiteral("Meet Thursday at 15:00");
+    task["meeting"] = true; task["date"] = "2026-11-05"; task["time"] = "15:00";
+    auto question = note; question["text"] = QStringLiteral("Which outline format?");
+    reply["notes"] = QJsonObject{{"format", 2}, {"overview", note}, {"key_points", QJsonArray{point}},
+                                 {"tasks", QJsonArray{task}}, {"open_questions", QJsonArray{question}}};
+    controller.handleResult(reply);
+    ASSERT_EQ(controller.draft()["text"].toString(), text);
+  }
+};
+
+class CallNotesPageTest : public ::testing::Test, public NotesFixture {};
+
+TEST_F(CallNotesPageTest, NarrowHeaderKeepsDateBelowWrappedHeading) {
+  generate();
+  CallNotesPage page(db, &controller);
+  page.resize(340, 800);
+  page.show();
+  QTest::qWait(80);
+  auto *quick = page.findChild<QQuickWidget *>();
+  ASSERT_NE(quick, nullptr);
+  bool found = false;
+  for (auto *item : quick->rootObject()->findChildren<QQuickItem *>()) {
+    if (item->property("text").toString() != "Meeting notes" || !item->isVisible()) continue;
+    auto *column = item->parentItem();
+    auto *row = column ? column->parentItem() : nullptr;
+    if (!row) continue;
+    auto *header = row->parentItem();
+    if (!header || header->parentItem() == nullptr) continue;
+    found = true;
+    EXPECT_GE(header->height(), row->implicitHeight() + 44);
+    break;
+  }
+  EXPECT_TRUE(found);
+}
+
+TEST_F(CallNotesPageTest, ReviewPaymentChangePersistsOnlyToLinkedWorkEvent) {
+  DuckEvent event;
+  event.name = "Session"; event.is_work_event = true;
+  event.event_stat_id = 1; event.payment_stat_id = 1;
+  event.start_date = QDateTime(QDate(2026, 10, 29), QTime(10, 0)).toMSecsSinceEpoch();
+  event.end_date = *event.start_date + 3600000;
+  const auto id = db->add_event(event);
+  ASSERT_GT(id, 0);
+  controller.beginCall(id); controller.finishCall();
+  NotesWorkspaceBridge bridge(db, &controller, nullptr);
+  bool saved = false;
+  ASSERT_TRUE(QMetaObject::invokeMethod(&bridge, "setPaymentStatus", Q_RETURN_ARG(bool, saved), Q_ARG(int, 2)));
+  EXPECT_TRUE(saved);
+  EXPECT_EQ(db->get_event(id)->payment_stat_id, 2);
+  EXPECT_EQ(bridge.state()["paymentStatus"].toInt(), 2);
+  EXPECT_TRUE(QMetaObject::invokeMethod(&bridge, "setPaymentStatus", Q_RETURN_ARG(bool, saved), Q_ARG(int, 99)));
+  EXPECT_FALSE(saved);
+  EXPECT_EQ(db->get_event(id)->payment_stat_id, 2);
+}
+
+TEST_F(CallNotesPageTest, ReviewDialogKeepsWorkspaceAndProtectsEditedSavedNotes) {
+  controller.beginCall();
+  const auto entry = controller.saveNoteEntry("Original");
+  controller.finishCall();
+  NotesEditorDialog dialog;
+  auto *page = new CallNotesPage(db, &controller, &dialog);
+  dialog.setPage(page, false);
+  auto *quick = page->findChild<QQuickWidget *>();
+  ASSERT_NE(quick, nullptr);
+  EXPECT_EQ(quick->rootObject()->objectName(), "qmlNotesWorkspace");
+  auto *bridge = page->findChild<NotesWorkspaceBridge *>();
+  ASSERT_NE(bridge, nullptr);
+  bridge->editNote(entry);
+  bridge->format(0, 8, "bold");
+  EXPECT_TRUE(page->editorDirty());
+  dialog.setDiscardConfirmation([] { return false; });
+  dialog.show(); dialog.reject();
+  EXPECT_TRUE(dialog.isVisible());
+}
+
+TEST_F(CallNotesPageTest, CallPanelHidesOnlyTheRunningCallsSummaryNotAnOldMeetingsInHistory) {
+  DuckClient client; client.name = "Synthetic"; client.id = db->add_client(client);
+  generate();
+  const auto old = controller.materialId();
+  ASSERT_GT(old, 0);
+  // History only lists this client's meetings.
+  ASSERT_TRUE(db->set_transcript_status(controller.transcriptId(), "draft"));
+  ASSERT_TRUE(db->set_transcript_clients(controller.transcriptId(), {client.id}));
+  controller.beginCall();
+  const auto running = controller.materialId();
+  ASSERT_NE(old, running);
+  CallNotesPage page(db, &controller); page.setClient(client);
+  page.setCallPanelMode();
+  page.show(); QApplication::processEvents();
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  ASSERT_NE(bridge, nullptr);
+  bridge->selectMaterial(QString::number(old));
+  ASSERT_EQ(bridge->state()["materialId"].toString(), QString::number(old));
+  QApplication::processEvents();
+  EXPECT_TRUE(quick->rootObject()->property("summaryShown").toBool());
+  bridge->selectMaterial(QString::number(running));
+  QApplication::processEvents();
+  EXPECT_FALSE(quick->rootObject()->property("summaryShown").toBool());
+}
+
+TEST_F(CallNotesPageTest, ReviewDialogProtectsADraftWhoseAutosaveFailed) {
+  controller.beginCall();
+  controller.finishCall();
+  NotesEditorDialog dialog;
+  auto *page = new CallNotesPage(db, &controller, &dialog);
+  dialog.setPage(page, false);
+  dialog.show(); QApplication::processEvents();
+  auto *quick = page->findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlNoteEditor");
+  auto *document = editor->property("textDocument").value<QQuickTextDocument *>();
+  QTextCursor cursor(document->textDocument()); cursor.insertText(QString(100001, 'x'));
+  ASSERT_TRUE(controller.manualText().isEmpty());
+  EXPECT_TRUE(page->editorDirty());
+  dialog.setDiscardConfirmation([] { return false; });
+  dialog.reject();
+  EXPECT_TRUE(dialog.isVisible());
+  EXPECT_EQ(document->textDocument()->toPlainText().size(), 100001);
+}
+
+TEST_F(CallNotesPageTest, ModalSessionBuffersChangesAndSavePreservesIndependentDraft) {
+  controller.beginCall();
+  const auto id = controller.saveNoteEntry("Saved note");
+  controller.setManualText("Independent draft");
+  NotesWorkspaceBridge bridge(db, &controller, nullptr);
+  bridge.beginEditorSession();
+  EXPECT_TRUE(bridge.editorNoteId().isEmpty());
+  ASSERT_TRUE(bridge.selectEditorNote(id));
+  bridge.format(0, 5, "bold");
+  EXPECT_TRUE(bridge.editorDirty());
+  EXPECT_EQ(controller.noteEntries().first().toObject()["body_markdown"].toString(), "Saved note");
+  EXPECT_FALSE(bridge.selectEditorNote({}));
+  ASSERT_TRUE(bridge.saveEditorSession());
+  EXPECT_EQ(controller.manualText(), "Independent draft");
+  EXPECT_TRUE(controller.noteEntries().first().toObject()["body_markdown"].toString().contains("**Saved**"));
+}
+
+TEST_F(CallNotesPageTest, ClosingAnUnsavedModalSessionLeavesStorageUntouched) {
+  controller.beginCall(); controller.setManualText("Original draft");
+  {
+    NotesWorkspaceBridge bridge(db, &controller, nullptr);
+    bridge.beginEditorSession(); bridge.format(0, 8, "bold");
+    EXPECT_TRUE(bridge.editorDirty());
+    EXPECT_EQ(controller.manualText(), "Original draft");
+  }
+  EXPECT_EQ(controller.manualText(), "Original draft");
+  EXPECT_TRUE(controller.noteEntries().isEmpty());
+}
+
+TEST_F(CallNotesPageTest, ModalNewNoteRefusesToClearAConcurrentlyChangedDraft) {
+  controller.beginCall(); controller.setManualText("Original draft");
+  NotesWorkspaceBridge bridge(db, &controller, nullptr); bridge.beginEditorSession();
+  bridge.format(0, 8, "bold");
+  controller.setManualText("Updated elsewhere");
+  EXPECT_FALSE(bridge.saveEditorSession());
+  EXPECT_EQ(controller.manualText(), "Updated elsewhere");
+  EXPECT_TRUE(bridge.editorDirty());
+  EXPECT_TRUE(controller.noteEntries().isEmpty());
+}
+
+TEST_F(CallNotesPageTest, ModalSaveRemainsBoundToTheMeetingWhenANewCallStarts) {
+  generate(); const auto originalMaterial = controller.materialId();
+  NotesWorkspaceBridge bridge(db, &controller, nullptr); bridge.beginEditorSession();
+  bridge.appendSummary();
+  ASSERT_TRUE(bridge.editorDirty());
+  controller.beginCall();
+  const auto nextMaterial = controller.materialId();
+  ASSERT_NE(nextMaterial, originalMaterial);
+  ASSERT_TRUE(bridge.saveEditorSession());
+  EXPECT_TRUE(controller.noteEntries().isEmpty());
+  CallNotesController stored(db); stored.openMaterial(originalMaterial);
+  EXPECT_EQ(stored.noteEntries().size(), 1);
+}
+
+TEST_F(CallNotesPageTest, ModalQmlUsesDedicatedEditorAndAllDismissalPathsGuardChanges) {
+  generate(); controller.setManualText("Buffered meeting note");
+  NotesEditorDialog dialog;
+  auto *page = new CallNotesPage(db, &controller, &dialog);
+  DuckClient client; client.name = "Synthetic"; page->setClient(client);
+  dialog.setPage(page); dialog.resize(1100, 800); dialog.show(); QTest::qWait(80);
+  auto *quick = page->findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  EXPECT_EQ(quick->rootObject()->objectName(), "qmlNotesEditorDialog");
+  EXPECT_EQ(quick->rootObject()->findChild<QQuickItem *>("qmlMeetingHistory"), nullptr);
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlModalNoteEditor");
+  ASSERT_NE(editor, nullptr);
+  auto *document = editor->property("textDocument").value<QQuickTextDocument *>()->textDocument();
+  QTextCursor cursor(document); cursor.movePosition(QTextCursor::End); cursor.insertText(" changed");
+  EXPECT_TRUE(page->editorDirty());
+  dialog.setDiscardConfirmation([] { return false; });
+  dialog.reject(); EXPECT_TRUE(dialog.isVisible());
+  dialog.close(); EXPECT_TRUE(dialog.isVisible());
+  if (qEnvironmentVariableIsSet("SESSIO_MODAL_SCREENSHOT")) {
+    QTest::qWait(80); dialog.grab().save(qEnvironmentVariable("SESSIO_MODAL_SCREENSHOT"));
+    dialog.resize(640, 700); QTest::qWait(80);
+    dialog.grab().save(qEnvironmentVariable("SESSIO_MODAL_SCREENSHOT") + "-narrow.png");
+  }
+  dialog.setDiscardConfirmation([] { return true; });
+  dialog.reject(); EXPECT_FALSE(dialog.isVisible());
+  EXPECT_EQ(controller.manualText(), "Buffered meeting note");
+}
+
+TEST_F(CallNotesPageTest, ModalSaveButtonPersistsAndAcceptsTheDialog) {
+  controller.beginCall(); controller.setManualText("Save this draft");
+  NotesEditorDialog dialog;
+  auto *page = new CallNotesPage(db, &controller, &dialog);
+  dialog.setPage(page); dialog.show(); QTest::qWait(30);
+  auto *quick = page->findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *save = quick->rootObject()->findChild<QQuickItem *>("qmlModalSaveNote");
+  ASSERT_NE(save, nullptr);
+  ASSERT_TRUE(QMetaObject::invokeMethod(save, "clicked"));
+  EXPECT_EQ(dialog.result(), QDialog::Accepted);
+  ASSERT_EQ(controller.noteEntries().size(), 1);
+  EXPECT_EQ(controller.noteEntries().first().toObject()["body_markdown"].toString(), "Save this draft");
+}
+
+TEST_F(CallNotesPageTest, ModalFailureKeepsTextAndTheDialogOpen) {
+  controller.beginCall();
+  NotesEditorDialog dialog; auto *page = new CallNotesPage(db, &controller, &dialog);
+  dialog.setPage(page); dialog.show(); QTest::qWait(30);
+  auto *quick = page->findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlModalNoteEditor");
+  auto *document = editor->property("textDocument").value<QQuickTextDocument *>()->textDocument();
+  QTextCursor cursor(document); cursor.insertText(QString(100001, 'x'));
+  auto *save = quick->rootObject()->findChild<QQuickItem *>("qmlModalSaveNote");
+  ASSERT_TRUE(QMetaObject::invokeMethod(save, "clicked"));
+  EXPECT_TRUE(dialog.isVisible()); EXPECT_TRUE(page->editorDirty());
+  EXPECT_EQ(document->toPlainText().size(), 100001);
+  EXPECT_TRUE(controller.noteEntries().isEmpty());
+  EXPECT_FALSE(page->findChild<NotesWorkspaceBridge *>()->saveStatus().isEmpty());
+  dialog.setDiscardConfirmation([] { return true; }); dialog.reject();
+}
+
+TEST_F(CallNotesPageTest, ModalSavedEntryConflictsWithAnIndependentStorageWriter) {
+  controller.beginCall(); const auto id = controller.saveNoteEntry("Original");
+  NotesWorkspaceBridge bridge(db, &controller, nullptr); bridge.beginEditorSession();
+  bridge.format(0, 8, "bold");
+  CallNotesController other(db); other.openMaterial(controller.materialId());
+  ASSERT_EQ(other.saveNoteEntry("External update", {}, id), id);
+  EXPECT_FALSE(bridge.saveEditorSession()); EXPECT_TRUE(bridge.editorDirty());
+  EXPECT_EQ(controller.noteEntries().first().toObject()["body_markdown"].toString(), "External update");
+}
+
+TEST_F(CallNotesPageTest, ModalSelectorShowsAllSavedNotesAndGuardsADirtySelection) {
+  controller.beginCall();
+  controller.saveNoteEntry("First saved note");
+  const auto latest = controller.saveNoteEntry("Latest saved note");
+  NotesEditorDialog dialog; auto *page = new CallNotesPage(db, &controller, &dialog);
+  dialog.setPage(page); dialog.show(); QTest::qWait(30);
+  auto *quick = page->findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *selector = quick->rootObject()->findChild<QQuickItem *>("qmlEditorNoteSelector");
+  ASSERT_NE(selector, nullptr);
+  EXPECT_EQ(selector->property("count").toInt(), 3);
+  EXPECT_EQ(selector->property("currentIndex").toInt(), 2);
+  auto *bridge = page->findChild<NotesWorkspaceBridge *>();
+  EXPECT_EQ(bridge->editorNoteId(), latest);
+  bridge->format(0, 6, "bold");
+  selector->setProperty("currentIndex", 0);
+  ASSERT_TRUE(QMetaObject::invokeMethod(selector, "activated", Q_ARG(int, 0)));
+  EXPECT_EQ(selector->property("currentIndex").toInt(), 2);
+  EXPECT_EQ(bridge->editorNoteId(), latest);
+  EXPECT_TRUE(bridge->editorDirty());
+  dialog.setDiscardConfirmation([] { return true; }); dialog.reject();
+}
+
+TEST_F(CallNotesPageTest, QmlEditorFormatsAndSavesMarkdownThroughTheRealController) {
+  controller.beginCall(); controller.setManualText(QString::fromUtf8("Привет мир"));
+  CallNotesPage page(db, &controller); page.resize(1280, 860); page.show(); QApplication::processEvents();
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_NE(quick, nullptr);
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlNoteEditor");
+  ASSERT_NE(editor, nullptr);
+  auto *quickDocument = editor->property("textDocument").value<QQuickTextDocument *>();
+  ASSERT_NE(quickDocument, nullptr);
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>(); ASSERT_NE(bridge, nullptr);
+  bridge->format(0, 6, "bold");
+  EXPECT_TRUE(controller.manualText().contains(QString::fromUtf8("**Привет**")));
+  ASSERT_TRUE(bridge->saveNote());
+  ASSERT_EQ(controller.noteEntries().size(), 1);
+  EXPECT_TRUE(controller.noteEntries().first().toObject()["body_markdown"].toString().contains(QString::fromUtf8("**Привет**")));
+  EXPECT_TRUE(quickDocument->textDocument()->toPlainText().isEmpty());
+}
+
+TEST_F(CallNotesPageTest, QmlEntryEditSurvivesAiUpdatesAndCancelRestoresDraftUndo) {
+  controller.beginCall();
+  const auto saved = controller.saveNoteEntry("Saved note");
+  controller.setManualText("New draft");
+  CallNotesPage page(db, &controller); page.show(); QApplication::processEvents();
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlNoteEditor");
+  auto *document = editor->property("textDocument").value<QQuickTextDocument *>();
+  auto *draft = document->textDocument();
+  QTextCursor cursor(draft); cursor.movePosition(QTextCursor::End); cursor.insertText(" plus");
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  bridge->editNote(saved);
+  QTextCursor edit(document->textDocument()); edit.movePosition(QTextCursor::End); edit.insertText(" buffered");
+  controller.setManualText(controller.manualText() + "\n\nAI addition");
+  EXPECT_EQ(document->textDocument()->toPlainText(), "Saved note buffered");
+  bridge->cancelEdit();
+  EXPECT_EQ(document->textDocument(), draft);
+  EXPECT_TRUE(draft->toPlainText().contains("New draft plus"));
+  EXPECT_TRUE(draft->isUndoAvailable());
+}
+
+TEST_F(CallNotesPageTest, QmlFailedSaveRetainsTheDocumentAndShowsFailure) {
+  controller.beginCall();
+  CallNotesPage page(db, &controller); page.show(); QApplication::processEvents();
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlNoteEditor");
+  auto *document = editor->property("textDocument").value<QQuickTextDocument *>();
+  QTextCursor cursor(document->textDocument()); cursor.insertText(QString(100001, 'x'));
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  EXPECT_FALSE(bridge->saveNote());
+  EXPECT_EQ(document->textDocument()->toPlainText().size(), 100001);
+  EXPECT_FALSE(bridge->saveStatus().isEmpty());
+  EXPECT_TRUE(controller.noteEntries().isEmpty());
+}
+
+TEST_F(CallNotesPageTest, QmlSavingAnEntryPreservesTheFailedNewDraftAndItsUndo) {
+  controller.beginCall();
+  const auto saved = controller.saveNoteEntry("Existing note");
+  CallNotesPage page(db, &controller); page.show(); QApplication::processEvents();
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace"); ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlNoteEditor");
+  auto *document = editor->property("textDocument").value<QQuickTextDocument *>();
+  auto *draft = document->textDocument();
+  QTextCursor cursor(draft); cursor.insertText(QString(100001, 'x'));
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  bridge->editNote(saved);
+  QTextCursor edit(document->textDocument()); edit.movePosition(QTextCursor::End); edit.insertText(" edited");
+  ASSERT_TRUE(bridge->saveNote());
+  EXPECT_EQ(document->textDocument(), draft);
+  EXPECT_EQ(draft->toPlainText().size(), 100001);
+  EXPECT_TRUE(draft->isUndoAvailable());
+}
+
+TEST_F(CallNotesPageTest, QmlOpeningAnotherSavedEntryKeepsTheUnfinishedEdit) {
+  controller.beginCall();
+  const auto first = controller.saveNoteEntry("First");
+  const auto second = controller.saveNoteEntry("Second");
+  CallNotesPage page(db, &controller); page.show(); QApplication::processEvents();
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace"); ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlNoteEditor");
+  auto *document = editor->property("textDocument").value<QQuickTextDocument *>();
+  bridge->editNote(first);
+  QTextCursor cursor(document->textDocument()); cursor.movePosition(QTextCursor::End); cursor.insertText(" buffered");
+  bridge->editNote(second);
+  EXPECT_EQ(document->textDocument()->toPlainText(), "First buffered");
+  EXPECT_FALSE(bridge->saveStatus().isEmpty());
+  EXPECT_TRUE(bridge->saveNote());
+  EXPECT_EQ(controller.noteEntries().first().toObject()["body_markdown"].toString().trimmed(), "First buffered");
+}
+
+TEST_F(CallNotesPageTest, QmlKeyboardInputPersistsAndUndoReturnsToTheEmptyDraft) {
+  controller.beginCall();
+  CallNotesPage page(db, &controller); page.resize(1000, 750); page.show(); QApplication::processEvents();
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace"); ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlNoteEditor"); ASSERT_NE(editor, nullptr);
+  quick->setFocus(); editor->forceActiveFocus();
+  QTest::keyClicks(quick, "Keyboard draft");
+  EXPECT_TRUE(controller.manualText().contains("Keyboard draft"));
+  QTest::keyClick(quick, Qt::Key_Z, Qt::ControlModifier);
+  auto *document = editor->property("textDocument").value<QQuickTextDocument *>();
+  EXPECT_TRUE(document->textDocument()->toPlainText().isEmpty());
+  EXPECT_TRUE(controller.manualText().trimmed().isEmpty());
+}
+
+TEST_F(CallNotesPageTest, QmlSourceNavigationClearsSearchBeforeRevealingThePhrase) {
+  generate();
+  CallNotesPage page(db, &controller); page.resize(1280, 860); page.show(); QApplication::processEvents();
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace"); ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *search = quick->rootObject()->findChild<QQuickItem *>("qmlPhraseSearch"); ASSERT_NE(search, nullptr);
+  search->setProperty("text", "no matching phrase");
+  ASSERT_TRUE(QMetaObject::invokeMethod(quick->rootObject(), "revealSource", Q_ARG(QVariant, QString::number(phrase.id))));
+  QApplication::processEvents();
+  EXPECT_TRUE(search->property("text").toString().isEmpty());
+  EXPECT_TRUE(quick->rootObject()->property("sourceOpen").toBool());
+  EXPECT_EQ(quick->rootObject()->property("highlightedSource").toString(), QString::number(phrase.id));
+}
+
+TEST_F(CallNotesPageTest, QmlHistoryDraftAndUndoStayBoundToTheOriginalMaterial) {
+  DuckClient client; client.name = "Synthetic"; client.id = db->add_client(client);
+  const auto transcript = db->add_transcript(std::nullopt, "live_local_v1");
+  ASSERT_TRUE(db->set_transcript_status(transcript, "draft"));
+  ASSERT_TRUE(db->set_transcript_clients(transcript, {client.id}));
+  controller.beginCall(); controller.attachTranscript(transcript);
+  const auto original = controller.materialId();
+  CallNotesPage page(db, &controller); page.setClient(client); page.show(); QApplication::processEvents();
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace"); ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlNoteEditor");
+  auto *document = editor->property("textDocument").value<QQuickTextDocument *>();
+  auto *firstDocument = document->textDocument();
+  QTextCursor cursor(firstDocument); cursor.insertText("Original material draft");
+  controller.finishCall(); controller.beginCall();
+  const auto current = controller.materialId(); ASSERT_NE(original, current);
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  ASSERT_FALSE(bridge->history().isEmpty());
+  bridge->selectMaterial(QString::number(original));
+  ASSERT_EQ(bridge->state()["materialId"].toString(), QString::number(original));
+  EXPECT_EQ(document->textDocument(), firstDocument);
+  EXPECT_TRUE(firstDocument->isUndoAvailable());
+  EXPECT_TRUE(bridge->saveNote());
+  EXPECT_EQ(controller.materialId(), current);
+  EXPECT_TRUE(controller.noteEntries().isEmpty());
+  CallNotesController stored(db); stored.openMaterial(original);
+  ASSERT_EQ(stored.noteEntries().size(), 1);
+  EXPECT_TRUE(stored.noteEntries().first().toObject()["body_markdown"].toString().contains("Original material draft"));
+}
+
+TEST_F(CallNotesPageTest, EmptyWidgetsAreHidden) {
+  controller.beginCall();
+  CallNotesPage page(db, &controller);
+  page.show();
+  EXPECT_FALSE(page.findChild<QWidget *>("meetingInfoCard")->isHidden());
+  EXPECT_FALSE(page.findChild<QWidget *>("myNotesCard")->isHidden());
+  EXPECT_TRUE(page.findChild<AiSummaryWidget *>()->isHidden());
+  EXPECT_TRUE(page.findChild<KeyPointsWidget *>()->isHidden());
+  EXPECT_TRUE(page.findChild<AgreementsWidget *>()->isHidden());
+  EXPECT_TRUE(page.findChild<QWidget *>("notesModeSwitch")->isHidden());
+  EXPECT_TRUE(page.findChild<PreviousMeetingWidget *>()->isHidden());
+}
+
+TEST_F(CallNotesPageTest, GeneratedSummaryAndAgreementsAppear) {
+  CallNotesPage page(db, &controller);
+  page.show();
+  generate();
+  EXPECT_FALSE(page.findChild<AiSummaryWidget *>()->isHidden());
+  EXPECT_FALSE(page.findChild<KeyPointsWidget *>()->isHidden());
+  page.setAgreements(QJsonArray{QJsonObject{{"text", "Sleep diary"}, {"active", true}}});
+  EXPECT_FALSE(page.findChild<AgreementsWidget *>()->isHidden());
+}
+
+TEST_F(CallNotesPageTest, ClientShowsSwitchAndHistoryModeExpandsMeeting) {
+  DuckClient client; client.name = std::string{"Test"}; client.last_name = std::string{"Client"};
+  client.id = db->add_client(client);
+  ASSERT_GT(client.id, 0);
+  const auto past = db->create_call_material(std::nullopt);
+  const auto transcript = db->add_transcript(std::nullopt, "live_local_v1");
+  ASSERT_TRUE(db->link_call_material_transcript(past, transcript));
+  ASSERT_TRUE(db->set_transcript_status(transcript, "draft"));
+  ASSERT_TRUE(db->set_transcript_clients(transcript, {client.id}));
+  ASSERT_TRUE(db->save_call_material(past, db->get_call_material(past).revision,
+      R"({"ended":true,"final":{"note":{"text":"Past summary"}}})"));
+  CallNotesPage page(db, &controller);
+  page.setControllerFactory([this](qint64 id, QObject *parent) {
+    auto *c = new CallNotesController(db, parent); c->openMaterial(id); return c;
+  });
+  page.setClient(client); page.show();
+  EXPECT_FALSE(page.findChild<QWidget *>("notesModeSwitch")->isHidden());
+  auto *previous = page.findChild<PreviousMeetingWidget *>();
+  EXPECT_FALSE(previous->isHidden());
+  previous->findChild<QPushButton *>("previousMeetingOpen")->click();
+  EXPECT_TRUE(page.historyMode());
+  EXPECT_FALSE(page.findChild<QWidget *>(QStringLiteral("historyBody_%1").arg(past))->isHidden());
+  page.findChild<QPushButton *>("notesModeCurrent")->click();
+  EXPECT_FALSE(page.historyMode());
+}
+
+TEST_F(CallNotesPageTest, EditorIsEmbedded) {
+  CallNotesPage page(db, &controller);
+  EXPECT_EQ(page.editor()->findChild<QScrollArea *>()->verticalScrollBarPolicy(), Qt::ScrollBarAlwaysOff);
+}
+
+TEST_F(CallNotesPageTest, ManyPastCallsScrollInsideHistoryWithoutStretchingTheDocument) {
+  DuckClient client; client.name = "Synthetic"; client.id = db->add_client(client);
+  for (int i = 0; i < 24; ++i) {
+    const auto material = db->create_call_material(std::nullopt);
+    const auto transcript = db->add_transcript(std::nullopt, "live_local_v1");
+    db->link_call_material_transcript(material, transcript); db->set_transcript_status(transcript, "draft");
+    db->set_transcript_clients(transcript, {client.id});
+    db->save_call_material(material, db->get_call_material(material).revision,
+        R"({"ended":true,"final":{"note":{"text":"Review the observations and plan the next meeting."}}})");
+  }
+  generate();
+  CallNotesPage page(db, &controller); page.setClient(client);
+  page.setMeeting("Consultation · 60 minutes", "ended");
+  page.resize(1280, 860); page.show(); QApplication::processEvents();
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *history = quick->rootObject()->findChild<QQuickItem *>("qmlMeetingHistory");
+  ASSERT_NE(history, nullptr);
+  EXPECT_EQ(history->property("count").toInt(), 24);
+  EXPECT_GT(history->property("contentHeight").toDouble(), history->height());
+  EXPECT_LE(page.height(), 860);
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlNoteEditor");
+  ASSERT_NE(editor, nullptr);
+  EXPECT_LT(editor->mapToScene(QPointF{}).x(), 350);
+  page.resize(2360, 1400); QTest::qWait(80);
+  auto *paper = quick->rootObject()->findChild<QQuickItem *>("qmlNotesPaper");
+  ASSERT_NE(paper, nullptr);
+  const auto center = paper->mapToScene(QPointF(paper->width() / 2, 0)).x();
+  EXPECT_NEAR(center, (320 + quick->width()) / 2.0, 3);
+  EXPECT_GT(paper->width(), quick->width() - 400);
+  EXPECT_GT(paper->height(), quick->height() - 240);
+  EXPECT_EQ(quick->rootObject()->property("paper").value<QColor>(), QApplication::palette().color(QPalette::Base));
+  EXPECT_EQ(quick->rootObject()->property("accent").value<QColor>(), QApplication::palette().color(QPalette::Highlight));
+  EXPECT_GE(editor->property("font").value<QFont>().pixelSize(), 17);
+  if (qEnvironmentVariableIsSet("SESSIO_CALL_NOTES_SCREENSHOT")) {
+    QTest::qWait(80);
+    page.grab().save(qEnvironmentVariable("SESSIO_CALL_NOTES_SCREENSHOT"));
+    quick->rootObject()->setProperty("sourceOpen", true); QTest::qWait(80);
+    page.grab().save(qEnvironmentVariable("SESSIO_CALL_NOTES_SCREENSHOT") + "-sources.png");
+    quick->rootObject()->setProperty("sourceOpen", false);
+    page.resize(680, 860); QTest::qWait(80);
+    page.grab().save(qEnvironmentVariable("SESSIO_CALL_NOTES_SCREENSHOT") + "-narrow.png");
+  }
+}
+
+// A material with one transcript, ended, without a summary.
+struct EndedMeeting {
+  std::shared_ptr<pcm::database::Database> db;
+  CallNotesController &controller;
+  qint64 transcript = 0;
+  void make() {
+    transcript = db->add_transcript(std::nullopt, "live_local_v1");
+    controller.beginCall(); controller.attachTranscript(transcript);
+    DuckTranscriptPhrase p; p.transcript_id = transcript; p.track_role = "participant";
+    p.text = "See you on Thursday at 15"; p.start_ms = 0; p.end_ms = 1000;
+    p.id = db->add_transcript_phrase(p); controller.addPhrase(p);
+    controller.finishCall();
+  }
+  QString addMeetingAgreement() {
+    const QJsonObject record{{"id", "r1"}, {"text", "Meet Thursday at 15:00"}, {"participants", QJsonArray{}},
+        {"active", true}, {"evidence_ids", QJsonArray{}}, {"meeting", true}, {"date", "2026-11-05"}, {"time", "15:00"}};
+    EXPECT_TRUE(appendMaterialAgreement(*db, controller.materialId(), record));
+    return "r1";
+  }
+};
+QVariantMap agreementEntry(NotesWorkspaceBridge &bridge, const QString &id) {
+  for (const auto &value : bridge.state()["agreements"].toList())
+    if (value.toMap()["id"].toString() == id) return value.toMap();
+  return {};
+}
+
+TEST_F(CallNotesPageTest, OfferedStateShowsSummarizeMeetingAndClickRequestsFinal) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  CallNotesPage page(db, &controller); page.show(); QApplication::processEvents();
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  ASSERT_NE(bridge, nullptr);
+  EXPECT_EQ(bridge->state()["summaryState"].toString(), "offered");
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace");
+  auto *button = quick->rootObject()->findChild<QQuickItem *>("qmlSummarizeMeeting");
+  ASSERT_NE(button, nullptr);
+  EXPECT_TRUE(button->isVisible());
+  controller.setGenerationEnabled(true);
+  QSignalSpy requests(&controller, &CallNotesController::requestReady);
+  bridge->summarizeMeeting();
+  ASSERT_EQ(requests.count(), 1);
+  EXPECT_EQ(requests[0][0].toJsonObject()["task"].toString(), "summary");
+}
+
+TEST_F(CallNotesPageTest, FourSectionsAndLivePointsRender) {
+  generate();
+  CallNotesPage page(db, &controller); page.resize(1200, 900); page.show(); QApplication::processEvents();
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  const auto state = bridge->state();
+  EXPECT_EQ(state["summary"].toString(), "Prepare a short outline.");
+  EXPECT_EQ(state["points"].toList().size(), 1);
+  EXPECT_EQ(state["tasks"].toList().size(), 1);
+  EXPECT_EQ(state["openQuestions"].toList().size(), 1);
+  EXPECT_TRUE(state.contains("livePoints"));
+  auto *root = page.findChild<QQuickWidget *>("notesQuickWorkspace")->rootObject();
+  for (const auto *name : {"qmlSummaryOverview", "qmlSummaryPoints", "qmlSummaryTasks", "qmlSummaryQuestions"}) {
+    auto *item = root->findChild<QQuickItem *>(name);
+    ASSERT_NE(item, nullptr) << name;
+    EXPECT_TRUE(item->isVisible()) << name;
+  }
+  EXPECT_NE(root->findChild<QQuickItem *>("qmlLivePoints"), nullptr);
+}
+
+TEST_F(CallNotesPageTest, AddToCalendarCallsOpenerWithTemplateAndStoresEventId) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  const auto id = meeting.addMeetingAgreement();
+  NotesWorkspaceBridge bridge(db, &controller, nullptr);
+  bridge.setAgreements(loadMaterialAgreements(*db, controller.materialId()));
+  EXPECT_TRUE(agreementEntry(bridge, id)["canAddToCalendar"].toBool());
+  std::optional<EventTemplate> opened;
+  DuckEvent created; created.name = "Next"; created.start_date = 1; created.end_date = 2;
+  const auto eventId = db->add_event(created, true);
+  bridge.setCalendarOpener([&](const EventTemplate &t) -> std::optional<int64_t> { opened = t; return eventId; });
+  bridge.addAgreementToCalendar(id);
+  ASSERT_TRUE(opened.has_value());
+  EXPECT_EQ(opened->date, QDate(2026, 11, 5));
+  EXPECT_EQ(opened->time, QTime(15, 0));
+  EXPECT_EQ(loadMaterialAgreements(*db, controller.materialId())[0].toObject()["event_id"].toInteger(), eventId);
+  const auto entry = agreementEntry(bridge, id);
+  EXPECT_TRUE(entry["inCalendar"].toBool());
+  EXPECT_FALSE(entry["canAddToCalendar"].toBool());
+  qint64 shown = 0;
+  bridge.setEventOpener([&](int64_t e) { shown = e; });
+  bridge.openAgreementEvent(id);
+  EXPECT_EQ(shown, eventId);
+}
+
+TEST_F(CallNotesPageTest, CancelledCalendarDialogStoresNothing) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  const auto id = meeting.addMeetingAgreement();
+  NotesWorkspaceBridge bridge(db, &controller, nullptr);
+  bridge.setAgreements(loadMaterialAgreements(*db, controller.materialId()));
+  int calls = 0;
+  bridge.setCalendarOpener([&](const EventTemplate &) -> std::optional<int64_t> { ++calls; return std::nullopt; });
+  bridge.addAgreementToCalendar(id);
+  EXPECT_EQ(calls, 1);
+  EXPECT_FALSE(loadMaterialAgreements(*db, controller.materialId())[0].toObject().contains("event_id"));
+  EXPECT_TRUE(agreementEntry(bridge, id)["canAddToCalendar"].toBool());
+}
+
+TEST_F(CallNotesPageTest, DeletedEventRestoresAddToCalendar) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  const auto id = meeting.addMeetingAgreement();
+  DuckEvent created; created.name = "Next"; created.start_date = 1; created.end_date = 2;
+  const auto eventId = db->add_event(created, true);
+  ASSERT_TRUE(setMaterialAgreementEvent(*db, controller.materialId(), id, eventId));
+  NotesWorkspaceBridge bridge(db, &controller, nullptr);
+  bridge.setAgreements(loadMaterialAgreements(*db, controller.materialId()));
+  EXPECT_TRUE(agreementEntry(bridge, id)["inCalendar"].toBool());
+  ASSERT_TRUE(db->remove_event(eventId));
+  EXPECT_FALSE(agreementEntry(bridge, id)["inCalendar"].toBool());
+  EXPECT_TRUE(agreementEntry(bridge, id)["canAddToCalendar"].toBool());
+}
+
+TEST_F(CallNotesPageTest, AcceptSummaryTaskMovesItIntoAgreements) {
+  generate();
+  NotesWorkspaceBridge bridge(db, &controller, nullptr);
+  ASSERT_EQ(bridge.state()["tasks"].toList().size(), 1);
+  EXPECT_FALSE(bridge.state()["tasks"].toList()[0].toMap()["accepted"].toBool());
+  ASSERT_TRUE(bridge.acceptSummaryTask(0));
+  const auto records = loadMaterialAgreements(*db, controller.materialId());
+  ASSERT_EQ(records.size(), 1);
+  const auto record = records[0].toObject();
+  EXPECT_EQ(record["text"].toString(), "Meet Thursday at 15:00");
+  EXPECT_TRUE(record["meeting"].toBool());
+  EXPECT_EQ(record["date"].toString(), "2026-11-05");
+  EXPECT_TRUE(bridge.state()["tasks"].toList()[0].toMap()["accepted"].toBool());
+  EXPECT_FALSE(bridge.acceptSummaryTask(0)); // already an agreement
+  EXPECT_FALSE(bridge.acceptSummaryTask(5));
+  EXPECT_TRUE(agreementEntry(bridge, record["id"].toString())["canAddToCalendar"].toBool());
+}
+
+int main(int argc, char **argv) {
+  qputenv("QT_QPA_PLATFORM", "offscreen");
+  QApplication app(argc, argv);
+  // QApplication owns and deletes the style; the static marks that it is not leaked.
+  static oclero::qlementine::QlementineStyle *style = nullptr;
+  style = new oclero::qlementine::QlementineStyle(&app);
+  if (qEnvironmentVariableIsSet("SESSIO_PREVIEW_THEME"))
+    style->setThemeJsonPath(qEnvironmentVariable("SESSIO_PREVIEW_THEME"));
+  app.setStyle(style);
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
+
+TEST_F(CallNotesPageTest, UnavailableSummaryShowsRetry) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  controller.setGenerationEnabled(false);
+  controller.requestFinal();
+  CallNotesPage page(db, &controller); page.resize(1200, 900); page.show(); QApplication::processEvents();
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  ASSERT_EQ(bridge->state()["summaryState"].toString(), "unavailable");
+  auto *retry = page.findChild<QQuickWidget *>("notesQuickWorkspace")->rootObject()->findChild<QQuickItem *>("qmlSummaryRetry");
+  ASSERT_NE(retry, nullptr);
+  EXPECT_TRUE(retry->isVisible());
+}
+
+TEST_F(CallNotesPageTest, CalendarOpenerThatDeletesTheControllerStillLinksTheEvent) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  const auto id = meeting.addMeetingAgreement();
+  const auto materialId = controller.materialId();
+  auto *viewed = new CallNotesController(db);
+  viewed->openMaterial(materialId);
+  NotesWorkspaceBridge bridge(db, viewed, nullptr);
+  bridge.setAgreements(loadMaterialAgreements(*db, materialId));
+  DuckEvent created; created.name = "Next"; created.start_date = 1; created.end_date = 2;
+  const auto eventId = db->add_event(created, true);
+  bridge.setCalendarOpener([&](const EventTemplate &) -> std::optional<int64_t> {
+    delete viewed;
+    // Reuse the freed block so a stale pointer reads garbage.
+    std::vector<char> filler(sizeof(CallNotesController) * 4, char(0x5a));
+    (void)filler;
+    return eventId;
+  });
+  bridge.addAgreementToCalendar(id);
+  EXPECT_EQ(loadMaterialAgreements(*db, materialId)[0].toObject()["event_id"].toInteger(), eventId);
+}

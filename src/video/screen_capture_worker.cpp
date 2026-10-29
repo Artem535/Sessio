@@ -28,6 +28,7 @@ void ScreenCaptureWorker::processFrame(const QVideoFrame &frame) {
   painter.end();
   try {
     mVideoSource->captureFrame(videoFrameToLiveKitRGBA(canvas), 0, livekit::VideoRotation::VIDEO_ROTATION_0);
+    emit frameDelivered();
   } catch (const std::exception &e) {
     emit captureFailed(QString::fromUtf8(e.what()));
   }

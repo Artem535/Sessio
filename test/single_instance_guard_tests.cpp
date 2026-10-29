@@ -65,6 +65,9 @@ int main(int argc, char **argv) {
   QTemporaryDir isolatedHome;
   qputenv("XDG_CONFIG_HOME", isolatedHome.path().toUtf8());
   qputenv("HOME", isolatedHome.path().toUtf8());
+  // The local server name is fixed; on Unix its socket lives in TMPDIR, so
+  // parallel test processes (and a running Sessio) would share one socket.
+  qputenv("TMPDIR", isolatedHome.path().toUtf8());
 
   QCoreApplication app(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);

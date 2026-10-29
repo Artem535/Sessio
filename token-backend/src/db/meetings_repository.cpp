@@ -25,15 +25,17 @@ Meeting readRow(sqlite3_stmt *stmt) {
   m.scheduledStart = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 4));
   m.scheduledEnd = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 5));
   m.status = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 6));
+  m.provider = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 7));
   return m;
 }
 
 constexpr const char *kSelectColumns =
-    "id, meeting_ref, account_id, room_name, scheduled_start, scheduled_end, status";
+    "id, meeting_ref, account_id, room_name, scheduled_start, scheduled_end, status, provider";
 } // namespace
 
 Meeting MeetingsRepository::create(AccountId accountId, const std::string &scheduledStart,
-                                    const std::string &scheduledEnd) {
+                                    const std::string &scheduledEnd,
+                                    const std::string &provider) {
   // Held for the whole body. Without it this INSERT can execute while another
   // thread's transaction is open, join that transaction, and be undone by its
   // rollback after this caller has already been handed the new meeting. The
@@ -48,7 +50,7 @@ Meeting MeetingsRepository::create(AccountId accountId, const std::string &sched
   sqlite3_stmt *stmt = nullptr;
   const char *sql = "INSERT INTO meetings "
                      "(meeting_ref, account_id, room_name, scheduled_start, scheduled_end, "
-                     "status, created_at) VALUES (?, ?, ?, ?, ?, 'active', ?);";
+                     "status, created_at, provider) VALUES (?, ?, ?, ?, ?, 'active', ?, ?);";
   if (sqlite3_prepare_v2(conn_.raw(), sql, -1, &stmt, nullptr) != SQLITE_OK) {
     throw std::runtime_error("failed to prepare meeting insert");
   }
@@ -58,6 +60,7 @@ Meeting MeetingsRepository::create(AccountId accountId, const std::string &sched
   sqlite3_bind_text(stmt, 4, scheduledStart.c_str(), -1, SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 5, scheduledEnd.c_str(), -1, SQLITE_TRANSIENT);
   sqlite3_bind_text(stmt, 6, createdAt.c_str(), -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 7, provider.c_str(), -1, SQLITE_TRANSIENT);
   if (sqlite3_step(stmt) != SQLITE_DONE) {
     sqlite3_finalize(stmt);
     throw std::runtime_error("failed to insert meeting");

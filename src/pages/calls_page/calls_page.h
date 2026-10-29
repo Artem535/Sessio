@@ -37,6 +37,9 @@ public:
 
   void setBearerCredentialProvider(std::function<QString()> provider); // specialist mode only
   void setUpcomingMeetings(const QList<UpcomingMeeting> &meetings);
+  void enableQuickWorkspace();
+  QWidget *headerControls();
+  void setMaterialHistory(const QVariantList &history);
   void preselectOwnMeeting(const QString &meetingRef);
   void prefillJoinCode(const QString &code, const QString &passcode);
   void setSidePanelWidget(QWidget *panel);
@@ -52,9 +55,15 @@ public:
   // (fix round 1: session->join() only fires once CallPage::joinConfirmed
   // arrives, not the instant a token arrives) can be verified deterministically,
   // without a real LiveKit SDK/network connection.
-  void setVideoProviderFactoryForTesting(std::function<pcm::video::VideoProvider *()> factory);
+  void setVideoProviderFactoryForTesting(std::function<pcm::video::VideoProvider *(const QString &provider)> factory);
+
+  // Whether the call that ended last actually joined (reached the room), as opposed to a
+  // cancelled device check or a failed join. Valid while handling callSessionEnded().
+  [[nodiscard]] bool lastCallConnected() const { return mLastCallConnected; }
 
 signals:
+  void materialRequested(qint64 id);
+  void transcriptRequested(qint64 id);
   void transcribeRequested();
   // The Calls tab was opened; the owner refreshes today's meetings so they are never stale.
   void upcomingMeetingsRefreshRequested();
@@ -69,7 +78,8 @@ private:
   // arrives, but (fix round 1) no longer calls session->join() itself —
   // that only happens once the user confirms on the device-check screen
   // (CallPage::joinConfirmed), via the constructor-time connection below.
-  void startJoin(const QString &url, const QString &token);
+  // Web-hosted providers (Jitsi) have no device-check screen and join at once.
+  void startJoin(const pcm::tokenclient::TokenResult &result);
   void endCallSession();
   // True while a call is in progress: a session exists and is past
   // NoMeeting but not yet Ended/Failed. preselectOwnMeeting()/
@@ -79,12 +89,14 @@ private:
   pcm::video::DeviceManager *mDeviceManager;
   pcm::tokenclient::TokenBackendClient *mTokenClient;
   std::function<QString()> mBearerCredentialProvider;
-  std::function<pcm::video::VideoProvider *()> mVideoProviderFactory;
+  std::function<pcm::video::VideoProvider *(const QString &provider)> mVideoProviderFactory;
   QStackedWidget *mStack{nullptr};
   CallEntryWidget *mEntryWidget{nullptr};
   CallPage *mCallPage{nullptr};
   std::unique_ptr<pcm::video::VideoSession> mSession;
   bool mSessionStarted{false};
+  bool mSessionConnected{false};
+  bool mLastCallConnected{false};
   QList<UpcomingMeeting> mUpcomingMeetings;
   std::optional<int64_t> mCurrentEventId;
   // The url/token from the most recent tokenReceived() are held here rather

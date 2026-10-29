@@ -1,4 +1,15 @@
 #include "transcript_panel.h"
+#include <gtest/gtest.h>
+TEST(TranscriptPanelPrompterTest, SourceFocusFindsOnlyAnExistingPhrase) {
+  TranscriptPanel panel;
+  DuckTranscriptPhrase phrase; phrase.id = 123; phrase.text = "Source";
+  phrase.track_role = "participant";
+  panel.addPhrase(phrase);
+  EXPECT_TRUE(panel.focusPhrase(123));
+  EXPECT_FALSE(panel.focusPhrase(456));
+  panel.clearPhrases();
+  EXPECT_FALSE(panel.focusPhrase(123));
+}
 #include <QApplication>
 #include <QLabel>
 #include <QPushButton>
@@ -41,6 +52,20 @@ TEST(TranscriptPanelTest, AddPhraseShowsTimeSpeakerAndText) {
   EXPECT_EQ(times[0]->text(), "01:05"); EXPECT_EQ(times[1]->text(), "1:02:05");
   EXPECT_EQ(panel.findChild<QLabel *>("phraseSpeaker")->text(), "Alex");
   EXPECT_EQ(panel.findChild<QLabel *>("phraseText")->text(), "A sample sentence.");
+}
+TEST(TranscriptPanelTest, ExportIsOfferedOnceThereArePhrases) {
+  TranscriptPanel panel;
+  auto *exportButton = panel.findChild<QPushButton *>("transcriptExport");
+  ASSERT_NE(exportButton, nullptr);
+  EXPECT_FALSE(exportButton->isEnabled());
+  DuckTranscriptPhrase phrase; phrase.text = "Hello"; phrase.track_role = "participant";
+  panel.addPhrase(phrase);
+  EXPECT_TRUE(exportButton->isEnabled());
+  QSignalSpy requests(&panel, &TranscriptPanel::exportRequested);
+  exportButton->click();
+  EXPECT_EQ(requests.count(), 1);
+  panel.clearPhrases();
+  EXPECT_FALSE(exportButton->isEnabled());
 }
 TEST(TranscriptPanelTest, SpeakerFallbackByRole) {
   TranscriptPanel panel; DuckTranscriptPhrase phrase;
@@ -120,6 +145,39 @@ TEST(TranscriptPanelTest, KeepsBottomWhenAtBottomButNotWhenScrolledUp) {
     phrase.text = "Let's look at what a typical week feels like."; panel.addPhrase(phrase);
     QApplication::processEvents(); panel.grab().save(qEnvironmentVariable("SESSIO_PANEL_SCREENSHOT"));
   }
+}
+TEST(TranscriptPanelTest, RenamingASpeakerAsksForANameAndRelabelsOnlyThatSpeaker) {
+  TranscriptPanel panel;
+  DuckTranscriptPhrase phrase; phrase.text = "Hi"; phrase.track_role = "participant";
+  phrase.id = 1; panel.addPhrase(phrase);
+  phrase.id = 2; phrase.track_role = "practitioner"; panel.addPhrase(phrase);
+  QString asked;
+  panel.setRenamePromptHook([&](const QString &current) { asked = current; return std::optional<QString>("  Anna "); });
+  QSignalSpy requested(&panel, &TranscriptPanel::speakerRenameRequested);
+  auto labels = panel.findChildren<QLabel *>("phraseSpeaker");
+  ASSERT_EQ(labels.size(), 2);
+  EXPECT_EQ(labels[0]->contextMenuPolicy(), Qt::CustomContextMenu);
+  panel.requestSpeakerRename("participant");
+  EXPECT_EQ(asked, "Participant");
+  ASSERT_EQ(requested.count(), 1);
+  EXPECT_EQ(requested[0][0].toString(), "participant");
+  EXPECT_EQ(requested[0][1].toString(), "Anna");
+  EXPECT_EQ(labels[0]->text(), "Participant");  // relabelled only once storage succeeded
+
+  panel.setSpeakerName("participant", "Anna");
+  EXPECT_EQ(labels[0]->text(), "Anna");
+  EXPECT_EQ(labels[1]->text(), "You");
+  phrase.id = 3; phrase.track_role = "participant"; panel.addPhrase(phrase);
+  EXPECT_EQ(panel.findChildren<QLabel *>("phraseSpeaker").at(2)->text(), "Anna");
+
+  panel.setRenamePromptHook([](const QString &) { return std::optional<QString>("  "); });
+  panel.requestSpeakerRename("participant");
+  panel.setRenamePromptHook([](const QString &) { return std::nullopt; });
+  panel.requestSpeakerRename("participant");
+  EXPECT_EQ(requested.count(), 1);
+  panel.clearPhrases();
+  phrase.id = 4; panel.addPhrase(phrase);
+  EXPECT_EQ(panel.findChild<QLabel *>("phraseSpeaker")->text(), "Participant");
 }
 int main(int argc, char **argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen"); QApplication app(argc, argv);

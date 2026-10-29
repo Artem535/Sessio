@@ -7,6 +7,7 @@
 
 #include <QAbstractButton>
 #include <QApplication>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -44,7 +45,7 @@ constexpr auto kCreateResponse = R"({
 })";
 
 QDateTime at(const int hour, const int minute) {
-  return QDateTime(QDate(2026, 10, 1), QTime(hour, minute), QTimeZone::systemTimeZone());
+  return QDateTime(QDate(2026, 10, 1), QTime(hour, minute), QTimeZone(QTimeZone::LocalTime));
 }
 
 // QEventDetailsWidget reports errors through modal QMessageBoxes, which would
@@ -137,6 +138,45 @@ std::unique_ptr<QEventItem> makeLiveKitEvent(const QString &meetingRef) {
 }
 
 } // namespace
+
+TEST(QEventDetailsWidgetTest, RetypingAnEventTitleUpdatesApplyAvailability) {
+  EventDetailsFixture fixture(nullptr);
+  auto event = std::make_unique<QEventItem>(7, "Original", at(10, 0), at(10, 50));
+  fixture.widget.startEditingEvent(event.get(), std::nullopt);
+  ASSERT_TRUE(fixture.apply->isEnabled());
+  fixture.title->clear();
+  EXPECT_FALSE(fixture.apply->isEnabled());
+  fixture.title->setText("Renamed");
+  EXPECT_TRUE(fixture.apply->isEnabled());
+  fixture.apply->click();
+  EXPECT_EQ(event->getTitle(), "Renamed");
+}
+
+TEST(QEventDetailsWidgetTest, JitsiDisabledForRecurringEvents) {
+  MeetingCoordinator coordinator("", "");
+  EventDetailsFixture fixture(&coordinator);
+  ASSERT_TRUE(fixture.allFound());
+  auto *repeat = static_cast<oclero::qlementine::SegmentedControl *>(
+      fixture.widget.findChild<QWidget *>("repeatTypeControl"));
+  ASSERT_NE(repeat, nullptr);
+  constexpr int kLiveKit = 1;
+  constexpr int kJitsi = 2;
+
+  EXPECT_TRUE(fixture.provider->isItemEnabled(kJitsi));
+  repeat->setCurrentData(QStringLiteral("weekly"));
+  EXPECT_FALSE(fixture.provider->isItemEnabled(kJitsi));
+  EXPECT_FALSE(fixture.provider->toolTip().isEmpty());
+
+  repeat->setCurrentData(QStringLiteral("none"));
+  EXPECT_TRUE(fixture.provider->isItemEnabled(kJitsi));
+  fixture.provider->setCurrentIndex(kJitsi);
+  repeat->setCurrentData(QStringLiteral("daily"));
+  EXPECT_EQ(fixture.provider->currentIndex(), kLiveKit);
+
+  repeat->setCurrentData(QStringLiteral("none"));
+  EXPECT_TRUE(fixture.provider->isItemEnabled(kJitsi));
+  EXPECT_TRUE(fixture.provider->toolTip().isEmpty());
+}
 
 TEST(QEventDetailsWidgetTest, NewLiveKitEventIsNotSavedUntilCreateCompletesAndNeverWhenItFails) {
   MeetingCoordinator coordinator("", "");
@@ -348,6 +388,23 @@ TEST(QEventDetailsWidgetTest, OpenOnLiveKitEventRequestsNativeJoinByMeetingRef) 
 
   ASSERT_EQ(openSpy.count(), 1);
   EXPECT_EQ(openSpy.at(0).at(0).toString(), QStringLiteral("ref-old"));
+}
+
+TEST(QEventDetailsWidgetTemplate, ApplyTemplateFillsTitleAndClient) {
+  QEventDetailsWidget widget;
+  widget.setDialogMode(true);
+  QObject::connect(&widget, &QEventDetailsWidget::provideFillClientComboBox, &widget, [](QComboBox *box) {
+    box->clear();
+    box->addItem("Другой", QVariant::fromValue<int64_t>(3));
+    box->addItem("Анна", QVariant::fromValue<int64_t>(7));
+  });
+  widget.startCreatingNewEvent(QDate(2026, 11, 5), QTime(15, 0), 50);
+  widget.applyTemplate("Сессия с Анной", 7);
+  EXPECT_TRUE(widget.isCreatingNewEvent());
+  EXPECT_EQ(widget.findChild<QLineEdit *>("mTitle")->text(), "Сессия с Анной");
+  EXPECT_EQ(widget.selectedClientId(), 7);
+  EXPECT_EQ(widget.findChild<QTimeEdit *>("mTimeFrom")->time(), QTime(15, 0));
+  EXPECT_EQ(widget.findChild<QTimeEdit *>("mTimeTo")->time(), QTime(15, 50));
 }
 
 int main(int argc, char **argv) {

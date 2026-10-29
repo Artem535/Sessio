@@ -141,7 +141,7 @@ QVector<DuckEvent> QTimelineModel::projectEvents(
     return {};
   }
 
-  const auto localTz = QTimeZone::systemTimeZone();
+  const auto localTz = QTimeZone(QTimeZone::LocalTime);
   const auto rangeStart = QDateTime(first, QTime(0, 0), localTz);
   const auto exclusiveEnd = QDateTime(last.addDays(1), QTime(0, 0), localTz);
   if (!rangeStart.isValid() || !exclusiveEnd.isValid()) {
@@ -328,7 +328,7 @@ bool QTimelineModel::updateEventSeries(const DuckEvent &event, const int64_t ser
 
   // A published series keeps the wall clock of its own timezone, not of the
   // machine it is edited on.
-  auto zone = QTimeZone::systemTimeZone();
+  auto zone = QTimeZone(QTimeZone::LocalTime);
   const auto identity = mDb->get_schedule_identity(seriesId);
   if (identity.has_value() && !identity->timezone.empty()) {
     const QTimeZone pinned(QByteArray::fromStdString(identity->timezone));

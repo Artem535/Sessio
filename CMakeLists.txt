@@ -8,8 +8,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Define the project
-project(Sessio VERSION 0.2.31 LANGUAGES CXX)
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Svg PrintSupport LinguistTools Multimedia MultimediaWidgets OpenGLWidgets)
+project(Sessio VERSION 0.2.37 LANGUAGES CXX)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Svg PrintSupport LinguistTools Multimedia MultimediaWidgets OpenGLWidgets Qml Quick QuickWidgets QuickControls2)
 include(GNUInstallDirs)
 include(FetchContent)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -55,6 +55,7 @@ livekit_sdk_setup(
 find_package(LiveKit CONFIG REQUIRED)
 option(PCM_BUILD_TESTS "Build project tests" OFF)
 include(cmake/Transcription.cmake)
+include(cmake/LiteRtLm.cmake)
 
 if(Qt6_VERSION VERSION_LESS 6.8.0)
   message(FATAL_ERROR "Qlementine requires Qt 6.8.0 or newer. Detected Qt ${Qt6_VERSION}.")
@@ -175,15 +176,18 @@ add_subdirectory(src/config)
 add_subdirectory(src/database)
 add_subdirectory(src/meeting)
 add_subdirectory(src/video)
+add_subdirectory(src/webcall)
 if(SESSIO_TRANSCRIPTION_ENABLED)
   add_subdirectory(src/transcription)
   add_subdirectory(src/call_transcription)
+  add_subdirectory(src/call_prompter)
   add_subdirectory(src/pages/transcript_page)
 endif()
 add_subdirectory(src/backup)
 add_subdirectory(src/client_model)
 add_subdirectory(src/pages/client_info_page)
 add_subdirectory(src/pages/event_info_page)
+add_subdirectory(src/pages/my_day_page)
 add_subdirectory(src/pages/detail_client_info_page)
 add_subdirectory(src/pages/client_notes_page)
 add_subdirectory(src/pages/analytics_page)
@@ -239,13 +243,16 @@ if(APPLE)
   # key/substitution behaves exactly as before this template was introduced.
   set_target_properties(Sessio PROPERTIES
       MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in"
+      # Libraries with an @rpath install name (the call prompter runtime) are
+      # installed into Contents/Frameworks.
+      INSTALL_RPATH "@executable_path/../Frameworks"
   )
 endif()
 
 add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_app)
 
 # Link with libs
-target_link_libraries(Sessio PUBLIC ${PROJECT_NAME}_app Qt6::Widgets)
+target_link_libraries(Sessio PUBLIC ${PROJECT_NAME}_app ${PROJECT_NAME}_webcall Qt6::Widgets)
 
 install(TARGETS Sessio
     BUNDLE DESTINATION .
@@ -303,6 +310,14 @@ if(SESSIO_TRANSCRIPTION_ENABLED)
       $<TARGET_FILE:sherpa-onnx-cxx-api>
       DESTINATION ${_sessio_ml_libs_dest})
   install(FILES ${SESSIO_ONNXRUNTIME_LIBS} DESTINATION ${_sessio_ml_libs_dest})
+  if(SESSIO_LITERTLM_FOUND)
+    install(IMPORTED_RUNTIME_ARTIFACTS sessio::litert_lm DESTINATION ${_sessio_ml_libs_dest})
+    if(SESSIO_LITERT_EXTRA_LIBS)
+      install(FILES ${SESSIO_LITERT_EXTRA_LIBS} DESTINATION ${_sessio_ml_libs_dest})
+    endif()
+    install(FILES ${SESSIO_LITERT_DIR}/LICENSE.litert-lm DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/sessio OPTIONAL)
+    install(FILES ${SESSIO_LITERT_DIR}/LICENSE.kissfft DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/sessio OPTIONAL)
+  endif()
   if(UNIX AND NOT APPLE)
     # The sherpa libs are linked in the build tree with an absolute RUNPATH into
     # the build dir; give the installed copies a clean $ORIGIN (they sit next to
@@ -392,18 +407,18 @@ elseif(UNIX AND NOT APPLE)
   set(CPACK_RPM_PACKAGE_URL "https://github.com/Artem535/Sessio")
   set(CPACK_RPM_PACKAGE_DESCRIPTION
       "Local-first desktop workspace for calendar scheduling, client management, and session tracking.")
-  # Qt and qtkeychain come from the distribution; nothing Qt-related is
+  # Qt, qtkeychain and PipeWire (Wayland screen sharing) come from the distribution; nothing Qt-related is
   # bundled (see SESSIO_BUNDLE_QT). Exact sonames/versions are added by rpm's
   # automatic dependency generator on top of these.
   set(CPACK_RPM_PACKAGE_REQUIRES
-      "qt6-qtbase >= 6.8, qt6-qtbase-gui, qt6-qtsvg, qt6-qtwayland, qt6-qtmultimedia, qtkeychain-qt6")
+      "qt6-qtbase >= 6.8, qt6-qtbase-gui, qt6-qtsvg, qt6-qtwayland, qt6-qtmultimedia, qt6-qtdeclarative, qt6-qtwebengine, qtkeychain-qt6, pipewire-libs")
   # The private /usr/lib/sessio directory (LiveKit and its curl/OpenSSL/...
   # chain) must neither advertise Provides for those sonames — that would
   # shadow the system packages — nor generate Requires for them.
   set(CPACK_RPM_SPEC_MORE_DEFINE
 "%global __provides_exclude_from ^/usr/lib(64)?/sessio/.*$
 %global __requires_exclude_from ^/usr/lib(64)?/sessio/.*$
-%global __requires_exclude ^(liblivekit(_ffi)?\\.so|libsherpa-onnx-.*\\.so|libonnxruntime\\.so.*)")
+%global __requires_exclude ^(liblivekit(_ffi)?\\.so|libsherpa-onnx-.*\\.so|libonnxruntime\\.so.*|libsessio_litert\\.so)")
   # Registers Sessio.desktop (via its MimeType=x-scheme-handler/sessio entry)
   # as the sessio:// URL handler and refreshes the desktop database on
   # install; see packaging/linux/register-sessio-scheme.sh. Uninstall uses a

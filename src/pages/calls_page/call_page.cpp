@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QMediaDevices>
 #include <QMenu>
+#include <QOpenGLWidget>
 #include <QPoint>
 #include <QPushButton>
 #include <QShortcut>
@@ -98,6 +99,21 @@ void VideoStage::setFeaturedScreen(const QString &key) {
   layoutChildren();
 }
 
+void VideoStage::setContentWidget(QWidget *widget) {
+  if (mContentWidget == widget)
+    return;
+  if (mContentWidget)
+    mContentWidget->setParent(nullptr);
+  mContentWidget = widget;
+  if (mContentWidget) {
+    mContentWidget->setParent(this);
+    mContentWidget->lower();
+    mContentWidget->show();
+  }
+  mTileHost->setVisible(!mContentWidget);
+  layoutChildren();
+}
+
 void VideoStage::setNotesToggleWidget(QWidget *widget) {
   if (mNotesToggleWidget == widget) {
     return;
@@ -127,6 +143,14 @@ constexpr int kBottomReserved = kControlBarBottomMargin + kControlBarHeight + 8;
 } // namespace
 
 void VideoStage::layoutChildren() {
+  const bool sharingStatus = mLayoutControls && mSharingBanner && !mSharingBanner->isHidden();
+  const int top = sharingStatus ? 104 : (mLayoutControls || (mNotesToggleWidget && !mNotesToggleWidget->isHidden())) ? 64 : 12;
+  if (mContentWidget) {
+    // The web page has its own toolbar along the bottom and the notes toggle sits at the top:
+    // keep the page clear of both bands so the native overlays never block its clicks.
+    mContentWidget->setGeometry(0, top, width(), std::max(0, height() - top - kBottomReserved));
+    mContentWidget->lower();
+  }
   while (auto *item = mTileGrid->takeAt(0))
     delete item;
   for (int column = 0; column < mTileGrid->columnCount(); ++column) {
@@ -137,10 +161,9 @@ void VideoStage::layoutChildren() {
     mTileGrid->setRowMinimumHeight(row, 0);
     mTileGrid->setRowStretch(row, 0);
   }
-  const bool sharingStatus = mLayoutControls && mSharingBanner && !mSharingBanner->isHidden();
-  const int top = sharingStatus ? 104 : (mLayoutControls || (mNotesToggleWidget && !mNotesToggleWidget->isHidden())) ? 64 : 12;
   QVector<ParticipantTile *> tiles;
   for (auto *tile : mTiles) {
+    if (mContentWidget) { tile->hide(); continue; }
     if (mViewLayout != CallViewLayout::Auto && tile->isScreen()) tile->hide();
     else tiles.append(tile);
   }
@@ -300,11 +323,18 @@ void VideoStage::layoutChildren() {
 
 namespace {
 constexpr int kSidePanelMinWidth = 200;
-constexpr int kSidePanelDefaultWidth = 320;
+constexpr int kSidePanelDefaultWidth = 440;
 } // namespace
 
 CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : QWidget(parent) {
   mDeviceManager = deviceManager;
+  // Since Qt 6.4 the first QOpenGLWidget added to a shown window recreates its
+  // native window (raster -> OpenGL surface), so joining a call from the
+  // preview made the whole window vanish and reappear. A hidden one created
+  // before the window is shown gives it the OpenGL surface from the start.
+  auto *glSurface = new QOpenGLWidget(this);
+  glSurface->setObjectName("glSurfaceAnchor");
+  glSurface->hide();
   auto *outer = new QVBoxLayout(this);
   outer->setContentsMargins(0, 0, 0, 0);
   mStack = new QStackedWidget(this);
@@ -347,7 +377,18 @@ CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : 
   outer->addWidget(mReconnectingBanner);
 
   mEndedScreen = new QWidget(this);
-  auto *endedLayout = new QVBoxLayout(mEndedScreen);
+  auto *endedSplit = new QHBoxLayout(mEndedScreen);
+  auto *endedContent = new QWidget(mEndedScreen);
+  endedSplit->addWidget(endedContent, 1);
+  auto *endedLayout = new QVBoxLayout(endedContent);
+  mEndedSidePanelHost = new QWidget(mEndedScreen);
+  mEndedSidePanelHost->setObjectName("endedSidePanelHost");
+  mEndedSidePanelHost->setMinimumWidth(kSidePanelMinWidth);
+  mEndedSidePanelHost->setMaximumWidth(520);
+  auto *endedPanelLayout = new QVBoxLayout(mEndedSidePanelHost);
+  endedPanelLayout->setContentsMargins(0, 0, 0, 0);
+  endedSplit->addWidget(mEndedSidePanelHost);
+  mEndedSidePanelHost->hide();
   endedLayout->addStretch();
   auto *endedHeadline = new QLabel(tr("Call ended."), mEndedScreen);
   endedHeadline->setAlignment(Qt::AlignCenter);
@@ -362,6 +403,10 @@ CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : 
   mEndedReasonLabel->setFont(QFont(QStringLiteral("Inter"), 16));
   mEndedReasonLabel->setVisible(false);
   endedLayout->addWidget(mEndedReasonLabel);
+  auto *backToCalls = new QPushButton(tr("Back to calls"), endedContent);
+  backToCalls->setObjectName("endedBackToCalls");
+  connect(backToCalls, &QPushButton::clicked, this, &CallPage::backToCallsRequested);
+  endedLayout->addWidget(backToCalls, 0, Qt::AlignCenter);
   endedLayout->addStretch();
   mStack->addWidget(mEndedScreen);
 
@@ -374,9 +419,36 @@ void CallPage::setSidePanelOpen(bool open) {
     // Default to a comfortable notes width the first time; after that, the splitter keeps the
     // width the user chose, even across hiding and showing the panel.
     mSidePanelSized = true;
-    const int total = std::max(mVideoSplitter->width(), kSidePanelDefaultWidth * 3);
+    const int total = std::max(mVideoSplitter->width(), kSidePanelDefaultWidth + kSidePanelMinWidth);
     mVideoSplitter->setSizes({total - kSidePanelDefaultWidth, kSidePanelDefaultWidth});
   }
+  arrangeNotesLayout();
+}
+
+void CallPage::setNotesFocused(bool focused) {
+  mNotesFocused = focused;
+  if (mNotesFocusButton) {
+    const QSignalBlocker blocker(mNotesFocusButton);
+    mNotesFocusButton->setChecked(focused);
+    mNotesFocusButton->setText(focused ? tr("Video and notes") : tr("Expand notes"));
+  }
+  arrangeNotesLayout();
+}
+
+void CallPage::arrangeNotesLayout() {
+  if (!mVideoSplitter || !mVideoStage) return;
+  const bool compact = width() < 760;
+  const bool smallVideo = !mSidePanelHost->isHidden() && (mNotesFocused || compact);
+  mVideoSplitter->setOrientation(smallVideo ? Qt::Vertical : Qt::Horizontal);
+  mVideoStage->setMaximumHeight(smallVideo ? 240 : QWIDGETSIZE_MAX);
+  mSidePanelHost->setMinimumWidth(compact ? 0 : kSidePanelMinWidth);
+  if (smallVideo) mVideoSplitter->setSizes({240, std::max(300, height() - 240)});
+  mVideoStage->refreshLayout();
+}
+
+void CallPage::resizeEvent(QResizeEvent *event) {
+  QWidget::resizeEvent(event);
+  arrangeNotesLayout();
 }
 
 void CallPage::setFullscreen(bool fullscreen) {
@@ -464,7 +536,16 @@ void CallPage::buildConnectedScreen() {
   // The notes panel can be dragged narrower, but never so narrow it becomes unusable.
   mSidePanelHost->setMinimumWidth(kSidePanelMinWidth);
   mSidePanelHost->setVisible(false);
-  new QVBoxLayout(mSidePanelHost);
+  auto *notesLayout = new QVBoxLayout(mSidePanelHost);
+  notesLayout->setContentsMargins(0, 0, 0, 0);
+  mNotesTools = new QWidget(mSidePanelHost);
+  auto *notesTools = new QHBoxLayout(mNotesTools); notesTools->setContentsMargins(8, 4, 8, 4);
+  mNotesFocusButton = new QToolButton(mNotesTools);
+  mNotesFocusButton->setObjectName("expandCallNotes"); mNotesFocusButton->setText(tr("Expand notes"));
+  mNotesFocusButton->setCheckable(true);
+  connect(mNotesFocusButton, &QToolButton::toggled, this, &CallPage::setNotesFocused);
+  notesTools->addWidget(mNotesFocusButton); notesTools->addStretch();
+  notesLayout->addWidget(mNotesTools);
   mVideoSplitter->addWidget(mVideoStage);
   mVideoSplitter->addWidget(mSidePanelHost);
   mVideoSplitter->setStretchFactor(0, 1);
@@ -555,6 +636,7 @@ void CallPage::buildConnectedScreen() {
   }
   layoutControls->show();
   mVideoStage->setLayoutControls(layoutControls);
+  mLayoutControls = layoutControls;
   mFullscreenToggleButton->setObjectName("fullscreenToggleButton");
   mFullscreenToggleButton->setCheckable(true);
   mFullscreenToggleButton->setIcon(pcm::widgets::fullscreenIcon(false));
@@ -679,9 +761,11 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
     disconnect(mSession.data(), nullptr, this, nullptr);
   }
   clearParticipants();
+  setWebView(nullptr);
   mSession = session;
   if (!session)
     return;
+  setWebView(session->provider()->callView());
   mLastFailureReason.clear();
   refreshEndedReason();
   connect(session, &pcm::video::VideoSession::stateChanged, this, &CallPage::onSessionStateChanged);
@@ -698,6 +782,9 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
   connect(session, &QObject::destroyed, this, [this] {
     mSession = nullptr;
     clearParticipants();
+    // The provider (a child of the session) is about to delete its view; take it out of the
+    // stage first so nothing here points at a dying widget.
+    setWebView(nullptr);
   });
   auto *model = session->provider()->participants();
   mParticipantConnections = {
@@ -711,6 +798,33 @@ void CallPage::attachSession(pcm::video::VideoSession *session) {
   syncParticipants();
   refreshMediaButtons();
   onSessionStateChanged(session->state());
+}
+
+void CallPage::setWebView(QWidget *view) {
+  const bool wasWeb = !mSavedControlVisibility.isEmpty();
+  mWebView = view;
+  mVideoStage->setContentWidget(view);
+  const bool native = view == nullptr;
+  // The web page has its own mic/camera/share/device controls (and Jitsi owns the devices).
+  // Visibility is touched only on a mode switch, so a native session keeps whatever the
+  // native flow chose, and leaving web mode restores exactly what was there before.
+  if (!native && !wasWeb) {
+    for (QWidget *widget : {static_cast<QWidget *>(mMicrophoneToggleButton), static_cast<QWidget *>(mCameraToggleButton),
+                            static_cast<QWidget *>(mScreenShareButton), static_cast<QWidget *>(mDevicesButton),
+                            mLayoutControls.data()})
+      if (widget) {
+        mSavedControlVisibility.append({widget, !widget->isHidden()});
+        widget->hide();
+      }
+  } else if (native && wasWeb) {
+    for (const auto &saved : std::as_const(mSavedControlVisibility))
+      if (saved.first)
+        saved.first->setVisible(saved.second);
+    mSavedControlVisibility.clear();
+  }
+  if (!native)
+    mWaitingBanner->hide();
+  mVideoStage->refreshLayout();
 }
 
 void CallPage::refreshMediaButtons() {
@@ -753,6 +867,11 @@ void CallPage::showScreenShareMenu() {
   auto *provider = mSession ? mSession->provider() : nullptr;
   if (!provider || !mScreenShareButton)
     return;
+  // On Wayland the desktop's own picker chooses the screen or window.
+  if (pcm::video::screenCaptureUsesSystemPicker()) {
+    provider->startScreenShare({QGuiApplication::primaryScreen(), {}});
+    return;
+  }
   auto *menu = new QMenu(this);
   menu->setAttribute(Qt::WA_DeleteOnClose);
   menu->setObjectName("screenShareMenu");
@@ -990,12 +1109,14 @@ void CallPage::refreshEndedReason() {
 
 void CallPage::setSidePanelWidget(QWidget *panel) {
   if (mSidePanel) {
-    mSidePanelHost->layout()->removeWidget(mSidePanel);
+    if (auto *host = mSidePanel->parentWidget(); host && host->layout()) host->layout()->removeWidget(mSidePanel);
     mSidePanel->setParent(nullptr);
   }
   mSidePanel = panel;
   if (panel) {
-    mSidePanelHost->layout()->addWidget(panel);
+    auto *host = mCallEnded ? mEndedSidePanelHost : mSidePanelHost;
+    host->layout()->addWidget(panel);
+    panel->show();
   }
 }
 
@@ -1066,7 +1187,7 @@ void CallPage::setTranscribeButtonState(bool active, const QString &tooltip) {
 
 void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) {
   using pcm::video::VideoSessionState;
-  mWaitingBanner->setVisible(state == VideoSessionState::WaitingForParticipants);
+  mWaitingBanner->setVisible(state == VideoSessionState::WaitingForParticipants && !mWebView);
   mReconnectingBanner->setVisible(state == VideoSessionState::Reconnecting);
 
   // Fullscreen belongs to the connected call screen only; never leave the app stuck in it
@@ -1074,6 +1195,18 @@ void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) 
   if (state != VideoSessionState::WaitingForParticipants && state != VideoSessionState::Connected &&
       state != VideoSessionState::Reconnecting) {
     leaveFullscreenIfActive();
+  }
+
+  // A web call has no device-check or native connecting screen: the page shows its own
+  // pre-join and connecting UI, so its view must be on screen from the first state.
+  const bool web = mWebView != nullptr;
+  const bool preJoin = state == VideoSessionState::NoMeeting || state == VideoSessionState::Provisioned ||
+                       state == VideoSessionState::PrejoinCheck || state == VideoSessionState::Joining;
+  if (web && preJoin) {
+    mCallEnded = false;
+    mConnectedView->setObjectName("connectedView");
+    mStack->setCurrentWidget(mConnectedView);
+    return;
   }
 
   switch (state) {
@@ -1089,6 +1222,13 @@ void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) 
   case VideoSessionState::WaitingForParticipants:
   case VideoSessionState::Connected:
   case VideoSessionState::Reconnecting:
+    mCallEnded = false;
+    if (mSidePanel && mSidePanel->parentWidget() == mEndedSidePanelHost) {
+      mEndedSidePanelHost->layout()->removeWidget(mSidePanel);
+      mSidePanelHost->layout()->addWidget(mSidePanel);
+      mSidePanel->show();
+    }
+    mEndedSidePanelHost->hide();
     mConnectedView->setObjectName("connectedView");
     mStack->setCurrentWidget(mConnectedView);
     break;
@@ -1096,7 +1236,17 @@ void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) 
     break;
   case VideoSessionState::Ended:
   case VideoSessionState::Failed:
+    mCallEnded = true;
     refreshEndedReason();
+    // The page is done: take the view off the stage so the native controls come back. It stays
+    // alive, owned by the provider, whose leave()/destruction is what stops the page.
+    if (mWebView)
+      setWebView(nullptr);
+    if (mSidePanel && mNotesToggleButton) {
+      if (auto *host = mSidePanel->parentWidget(); host && host->layout()) host->layout()->removeWidget(mSidePanel);
+      mEndedSidePanelHost->layout()->addWidget(mSidePanel);
+      mSidePanel->show(); mEndedSidePanelHost->show();
+    }
     mStack->setCurrentWidget(mEndedScreen);
     emit callEnded();
     break;

@@ -1,0 +1,97 @@
+= Следующая модель для CPU spike: Phi-4-mini-instruct
+
+Дата проверки источников: 2026-10-12. Это выбор кандидата, а не
+результат замера.
+
+== Выбор
+
+Предлагается *Microsoft Phi-4-mini-instruct, 3.8B*, через CPU llama.cpp,
+сначала *GGUF Q4++_++K++_++M*. Это другое семейство после Gemma и Qwen;
+официальный список поддерживаемых языков включает русский. Microsoft
+описывает модель как dense decoder-only Transformer с grouped-query
+attention, общими входными/выходными embedding и контекстом 128K. В
+spike остаётся прежний ограниченный контекст: заявленный максимум не
+означает приемлемую CPU задержку.
+https://huggingface.co/microsoft/Phi-4-mini-instruct/blob/cfbefacb99257ffa30c83adab238a50856ac3083/README.md[Официальная
+карточка].
+
+Выбор Q4++_++K++_++M обусловлен текущим ограничением доступной памяти
+ноутбука. Это проверка практического кандидата, а не сравнение
+одинаковой квантизации: предыдущий Qwen GGUF был Q8++_++0, Gemma LiteRT
+использовала смешанную mobile QAT. Если Phi пройдёт смысловую проверку,
+Q8++_++0 позволит отдельно проверить влияние квантизации. Нельзя обещать
+улучшение качества по размеру модели или официальным общим benchmark.
+
+== Зафиксированные артефакты
+
+Исходная модель: `microsoft/Phi-4-mini-instruct`, revision
+`cfbefacb99257ffa30c83adab238a50856ac3083`. Tokenizer и chat template
+следует брать из этой версии.
+https://huggingface.co/microsoft/Phi-4-mini-instruct/tree/cfbefacb99257ffa30c83adab238a50856ac3083[Дерево
+исходной модели].
+
+GGUF предоставлен автором квантизации bartowski, *не Microsoft*.
+Revision: `7ff82c2aaa4dde30121698a973765f39be5288c0`. Размеры и SHA ниже
+получены непосредственно из Hugging Face model API с `blobs=true`; это
+SHA содержимого LFS, а не Git blob.
+https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/tree/7ff82c2aaa4dde30121698a973765f39be5288c0[Дерево
+GGUF],
+https://huggingface.co/api/models/bartowski/microsoft_Phi-4-mini-instruct-GGUF?blobs=true[API].
+
+[cols=",,>,",options="header",]
+|===
+|Вариант |Файл |Размер, байт |SHA256
+|Первый запуск |`microsoft++_++Phi-4-mini-instruct-Q4++_++K++_++M.gguf`
+|2491874688
+|`01999f17c39cc3074afae5e9c539bc82d45f2dd7faa3917c66cbef76fce8c0c2`
+
+|Контроль квантизации |`microsoft++_++Phi-4-mini-instruct-Q8++_++0.gguf`
+|4084611456
+|`a12f242c4ee379b9da91673e5d78b30bfacfe4fd86a0b2259d2ecad5d93cb6c7`
+|===
+
+Прямая ссылка первого файла:
+https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/7ff82c2aaa4dde30121698a973765f39be5288c0/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf[Q4++_++K++_++M
+GGUF].
+
+== Совместимость и формат
+
+В официальном `config.json` архитектура `Phi3ForCausalLM`,
+`model++_++type=phi3`, hidden size 3072, 32 слоя, 24 attention heads, 8
+KV heads, vocabulary 200064.
+https://huggingface.co/microsoft/Phi-4-mini-instruct/blob/cfbefacb99257ffa30c83adab238a50856ac3083/config.json[Конфигурация].
+
+В установленном checkout llama.cpp найдена регистрация `Phi3ForCausalLM`
+в `conversion/phi.py` и реализация графа `src/models/phi3.cpp`. Это
+подтверждает наличие поддержки архитектуры в исходном коде; загрузка
+конкретного GGUF и tokenizer parity ещё должны быть подтверждены
+запуском.
+https://github.com/ggml-org/llama.cpp/blob/master/conversion/phi.py[Конвертер
+llama.cpp],
+https://github.com/ggml-org/llama.cpp/blob/master/src/models/phi3.cpp[Реализация
+Phi3].
+
+Официальный chat format использует `++<|++system++|>++`,
+`++<|++user++|>++`, `++<|++assistant++|>++` и `++<|++end++|>++`. Нельзя
+переносить Gemma BOS или Qwen thinking block. Следует сравнить токены
+исходного tokenizer и GGUF до измерений.
+https://huggingface.co/microsoft/Phi-4-mini-instruct/blob/cfbefacb99257ffa30c83adab238a50856ac3083/README.md[Формат
+и языки].
+
+== Что проверять
+
+CPU, один слот, один активный запрос, прежние синтетические тексты и
+смысловые prompts. Отдельно измерять первый текст, полный ответ и RSS;
+сначала короткие отрицательные/положительные примеры, затем длинную
+историю и неизменные rolling windows. Особые критерии: отказ не
+превращается в договорённость; встреча и отправка записей остаются
+отдельными; отмена записей сохраняет перенесённую встречу. JSON parsing
+и допустимые evidence IDs не доказывают правильность этих переходов.
+
+Официальная карточка предупреждает о худшем качестве вне английского и
+дрейфе длинных разговоров. Это непосредственно relevant для русского
+суфлёра и требует наших fixture, а не заключения по общему multilingual
+benchmark. Настоящий realtime звонок, ASR и полезность подсказки этим
+выбором пока не проверены.
+https://huggingface.co/microsoft/Phi-4-mini-instruct/blob/cfbefacb99257ffa30c83adab238a50856ac3083/README.md[Ограничения
+Microsoft].

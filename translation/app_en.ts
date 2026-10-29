@@ -2,6 +2,88 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="en_US">
 <context>
+    <name>AgreementsWidget</name>
+    <message>
+        <source>Agreements</source>
+        <translation>Agreements</translation>
+    </message>
+</context>
+<context>
+    <name>AiSummaryWidget</name>
+    <message>
+        <source>AI summary</source>
+        <translation>AI summary</translation>
+    </message>
+    <message>
+        <source>Delete AI summary</source>
+        <translation>Delete AI summary</translation>
+    </message>
+    <message>
+        <source>Delete the AI summary of this meeting? Your own notes are kept.</source>
+        <translation>Delete the AI summary of this meeting? Your own notes are kept.</translation>
+    </message>
+    <message>
+        <source>Edit AI summary</source>
+        <translation>Edit AI summary</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Edit</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Save</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Retry</translation>
+    </message>
+    <message>
+        <source>Create again</source>
+        <translation>Create again</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Delete</translation>
+    </message>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Could not save — keep this page open</translation>
+    </message>
+    <message>
+        <source>updating…</source>
+        <translation>updating…</translation>
+    </message>
+    <message>
+        <source>ready</source>
+        <translation>ready</translation>
+    </message>
+    <message>
+        <source>outdated</source>
+        <translation>outdated</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>failed</translation>
+    </message>
+    <message>
+        <source>The transcript changed after this summary.</source>
+        <translation>The transcript changed after this summary.</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Update</translation>
+    </message>
+    <message>
+        <source>Turn on transcription to get a summary</source>
+        <translation>Turn on transcription to get a summary</translation>
+    </message>
+</context>
+<context>
     <name>AnalyticsPage</name>
     <message>
         <source>Total clients</source>
@@ -160,6 +242,147 @@
         <source>Join</source>
         <translation>Join</translation>
     </message>
+    <message>
+        <source>Meetings</source>
+        <translation>Meetings</translation>
+    </message>
+</context>
+<context>
+    <name>CallNotesController</name>
+    <message>
+        <source>Could not save call materials. Reopen the call and try again.</source>
+        <translation>Could not save call materials. Reopen the call and try again.</translation>
+    </message>
+    <message>
+        <source>Waiting for local processing</source>
+        <translation>Waiting for local processing</translation>
+    </message>
+    <message>
+        <source>Summarizing the meeting…</source>
+        <translation>Summarizing the meeting…</translation>
+    </message>
+    <message>
+        <source>Updating key points…</source>
+        <translation>Updating key points…</translation>
+    </message>
+    <message>
+        <source>Meeting summary saved with this call</source>
+        <translation>Meeting summary saved with this call</translation>
+    </message>
+    <message>
+        <source>Key points updated through %1</source>
+        <translation>Key points updated through %1</translation>
+    </message>
+    <message>
+        <source>The model&apos;s reply could not be used for this transcript. Write the note yourself or edit the transcript and retry.</source>
+        <translation>The model&apos;s reply could not be used for this transcript. Write the note yourself or edit the transcript and retry.</translation>
+    </message>
+    <message>
+        <source>The model&apos;s reply could not be used. Retry once more of the conversation is transcribed.</source>
+        <translation>The model&apos;s reply could not be used. Retry once more of the conversation is transcribed.</translation>
+    </message>
+    <message>
+        <source>The transcript is too long for local notes.</source>
+        <translation>The transcript is too long for local notes.</translation>
+    </message>
+    <message>
+        <source>Could not save the generated notes. Try again.</source>
+        <translation>Could not save the generated notes. Try again.</translation>
+    </message>
+    <message>
+        <source>The local model took too long. Try again.</source>
+        <translation>The local model took too long. Try again.</translation>
+    </message>
+    <message>
+        <source>The local model did not respond. Try again.</source>
+        <translation>The local model did not respond. Try again.</translation>
+    </message>
+    <message>
+        <source>The transcript changed. Generate the note again.</source>
+        <translation>The transcript changed. Generate the note again.</translation>
+    </message>
+    <message>
+        <source>Processing cancelled. Your notes are saved.</source>
+        <translation>Processing cancelled. Your notes are saved.</translation>
+    </message>
+    <message>
+        <source>Processing was interrupted. You can retry.</source>
+        <translation>Processing was interrupted. You can retry.</translation>
+    </message>
+    <message>
+        <source>A saved transcript and a local model are required.</source>
+        <translation>A saved transcript and a local model are required.</translation>
+    </message>
+    <message>
+        <source>Summarize the whole meeting when you are ready.</source>
+        <translation>Summarize the whole meeting when you are ready.</translation>
+    </message>
+    <message>
+        <source>Notes are saved with this call. A client is optional.</source>
+        <translation>Notes are saved with this call. A client is optional.</translation>
+    </message>
+</context>
+<context>
+    <name>CallNotesPage</name>
+    <message>
+        <source>This meeting</source>
+        <translation>This meeting</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>History</translation>
+    </message>
+    <message>
+        <source>Meeting</source>
+        <translation>Meeting</translation>
+    </message>
+    <message>
+        <source>My notes</source>
+        <translation>My notes</translation>
+    </message>
+    <message>
+        <source>Back to document</source>
+        <translation>Back to document</translation>
+    </message>
+    <message>
+        <source>Prompter</source>
+        <translation>Prompter</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n new</source>
+        <translation>
+            <numerusform>%n new</numerusform>
+            <numerusform>%n new</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>CallNotesSources</name>
+    <message numerus="yes">
+        <source>%1 · %n phrases</source>
+        <translation>
+            <numerusform>%1 · %n phrase</numerusform>
+            <numerusform>%1 · %n phrases</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Source · %1</source>
+        <translation>Source · %1</translation>
+    </message>
+    <message numerus="yes">
+        <source>whole meeting · %n phrases</source>
+        <translation>
+            <numerusform>whole meeting · %n phrase</numerusform>
+            <numerusform>whole meeting · %n phrases</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>through %1 · %n phrases</source>
+        <translation>
+            <numerusform>through %1 · %n phrase</numerusform>
+            <numerusform>through %1 · %n phrases</numerusform>
+        </translation>
+    </message>
 </context>
 <context>
     <name>CallPage</name>
@@ -174,6 +397,18 @@
     <message>
         <source>Call ended.</source>
         <translation>Call ended.</translation>
+    </message>
+    <message>
+        <source>Back to calls</source>
+        <translation>Back to calls</translation>
+    </message>
+    <message>
+        <source>Video and notes</source>
+        <translation>Video and notes</translation>
+    </message>
+    <message>
+        <source>Expand notes</source>
+        <translation>Expand notes</translation>
     </message>
     <message>
         <source>Waiting for others to join</source>
@@ -262,6 +497,85 @@
     <message>
         <source>Transcribe</source>
         <translation>Transcribe</translation>
+    </message>
+</context>
+<context>
+    <name>CallPrompterController</name>
+    <message>
+        <source>Prompter is off</source>
+        <translation>Prompter is off</translation>
+    </message>
+    <message>
+        <source>Could not save prompter changes. Reopen the transcript and try again.</source>
+        <translation>Could not save prompter changes. Reopen the transcript and try again.</translation>
+    </message>
+    <message>
+        <source>Transcript unavailable</source>
+        <translation>Transcript unavailable</translation>
+    </message>
+    <message>
+        <source>Prompter is paused</source>
+        <translation>Prompter is paused</translation>
+    </message>
+    <message>
+        <source>Could not open prompter data</source>
+        <translation>Could not open prompter data</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Participant</translation>
+    </message>
+    <message>
+        <source>Start transcription first</source>
+        <translation>Start transcription first</translation>
+    </message>
+    <message>
+        <source>Waiting for completed phrases</source>
+        <translation>Waiting for completed phrases</translation>
+    </message>
+    <message>
+        <source>Local prompter failed. Check its settings and retry.</source>
+        <translation>Local prompter failed. Check its settings and retry.</translation>
+    </message>
+    <message>
+        <source>Retrying a smaller part of the conversation</source>
+        <translation>Retrying a smaller part of the conversation</translation>
+    </message>
+    <message>
+        <source>Skipped a phrase the local model could not process</source>
+        <translation>Skipped a phrase the local model could not process</translation>
+    </message>
+    <message>
+        <source>A phrase is too long. Review it in the transcript.</source>
+        <translation>A phrase is too long. Review it in the transcript.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Processing conversation · %n phrases waiting</source>
+        <translation>
+            <numerusform>Processing conversation · %n phrase waiting</numerusform>
+            <numerusform>Processing conversation · %n phrases waiting</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed through %1:%2 · %n phrases waiting</source>
+        <translation>
+            <numerusform>Processed through %1:%2 · %n phrase waiting</numerusform>
+            <numerusform>Processed through %1:%2 · %n phrases waiting</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Call agreement (transcript #%1):
+%2%3</source>
+        <translation>Call agreement (transcript #%1):
+%2%3</translation>
+    </message>
+    <message>
+        <source>Cancelled: </source>
+        <translation>Cancelled: </translation>
+    </message>
+    <message>
+        <source>Could not save the agreement to client notes</source>
+        <translation>Could not save the agreement to client notes</translation>
     </message>
 </context>
 <context>
@@ -515,8 +829,12 @@
         <translation>No client selected</translation>
     </message>
     <message>
-        <source>%1 → Notes</source>
-        <translation>%1 → Notes</translation>
+        <source>Meeting notes</source>
+        <translation>Meeting notes</translation>
+    </message>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Could not save — keep this page open</translation>
     </message>
     <message>
         <source>Note saved</source>
@@ -551,6 +869,38 @@
         <translation>Write a note in Markdown...</translation>
     </message>
     <message>
+        <source>Bold</source>
+        <translation>Bold</translation>
+    </message>
+    <message>
+        <source>Italic</source>
+        <translation>Italic</translation>
+    </message>
+    <message>
+        <source>List</source>
+        <translation>List</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Preview</translation>
+    </message>
+    <message>
+        <source>Cancel edit</source>
+        <translation>Cancel edit</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Edit</translation>
+    </message>
+    <message>
+        <source>Draft saved</source>
+        <translation>Draft saved</translation>
+    </message>
+    <message>
+        <source>Save changes</source>
+        <translation>Save changes</translation>
+    </message>
+    <message>
         <source>Canceled</source>
         <translation>Canceled</translation>
     </message>
@@ -579,6 +929,14 @@
         <translation>Attach files</translation>
     </message>
     <message>
+        <source>Unsaved changes</source>
+        <translation>Unsaved changes</translation>
+    </message>
+    <message>
+        <source>Discard the unsaved note and change participant?</source>
+        <translation>Discard the unsaved note and change participant?</translation>
+    </message>
+    <message>
         <source>Add note</source>
         <translation>Add note</translation>
     </message>
@@ -589,6 +947,10 @@
     <message>
         <source>Link to a session</source>
         <translation>Link to a session</translation>
+    </message>
+    <message>
+        <source>My notes</source>
+        <translation>My notes</translation>
     </message>
     <message>
         <source>Select a client to open notes.</source>
@@ -621,6 +983,10 @@
     <message>
         <source>Unknown time</source>
         <translation>Unknown time</translation>
+    </message>
+    <message>
+        <source>✦ AI summary</source>
+        <translation>✦ AI summary</translation>
     </message>
     <message>
         <source>Image: %1</source>
@@ -685,6 +1051,217 @@
     <message>
         <source>Rescheduled from %1 to %2</source>
         <translation>Rescheduled from %1 to %2</translation>
+    </message>
+    <message>
+        <source>All materials</source>
+        <translation>All materials</translation>
+    </message>
+    <message>
+        <source>Sessions and protocols</source>
+        <translation>Sessions and protocols</translation>
+    </message>
+    <message>
+        <source>Free notes</source>
+        <translation>Free notes</translation>
+    </message>
+    <message>
+        <source>Agreements</source>
+        <translation>Agreements</translation>
+    </message>
+    <message>
+        <source>Search notes and summaries…</source>
+        <translation>Search notes and summaries…</translation>
+    </message>
+    <message>
+        <source>New note</source>
+        <translation>New note</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Export</translation>
+    </message>
+    <message>
+        <source>Export journal</source>
+        <translation>Export journal</translation>
+    </message>
+    <message>
+        <source>Markdown (*.md)</source>
+        <translation>Markdown (*.md)</translation>
+    </message>
+    <message>
+        <source>Could not save the journal file.</source>
+        <translation>Could not save the journal file.</translation>
+    </message>
+    <message>
+        <source>Call materials</source>
+        <translation>Call materials</translation>
+    </message>
+    <message>
+        <source>Note with attachments</source>
+        <translation>Note with attachments</translation>
+    </message>
+    <message>
+        <source>Free note</source>
+        <translation>Free note</translation>
+    </message>
+    <message>
+        <source>No matching materials</source>
+        <translation>No matching materials</translation>
+    </message>
+    <message>
+        <source>Print</source>
+        <translation>Print</translation>
+    </message>
+    <message>
+        <source>Export note</source>
+        <translation>Export note</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Open transcript</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>More actions</translation>
+    </message>
+    <message>
+        <source>AI summary</source>
+        <translation>AI summary</translation>
+    </message>
+    <message>
+        <source>Agreements and homework</source>
+        <translation>Agreements and homework</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Key points</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Participant</translation>
+    </message>
+    <message>
+        <source>Client card</source>
+        <translation>Client card</translation>
+    </message>
+    <message>
+        <source>Select participant</source>
+        <translation>Select participant</translation>
+    </message>
+</context>
+<context>
+    <name>ClientNotesWorkspace</name>
+    <message>
+        <source>Notes</source>
+        <translation>Notes</translation>
+    </message>
+    <message>
+        <source>Select participant</source>
+        <translation>Select participant</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Participant</translation>
+    </message>
+    <message>
+        <source>Client card</source>
+        <translation>Client card</translation>
+    </message>
+    <message>
+        <source>New note</source>
+        <translation>New note</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Export</translation>
+    </message>
+    <message>
+        <source>Search notes and summaries…</source>
+        <translation>Search notes and summaries…</translation>
+    </message>
+    <message>
+        <source>All materials</source>
+        <translation>All materials</translation>
+    </message>
+    <message>
+        <source>Sessions and protocols</source>
+        <translation>Sessions and protocols</translation>
+    </message>
+    <message>
+        <source>Free notes</source>
+        <translation>Free notes</translation>
+    </message>
+    <message>
+        <source>Agreements</source>
+        <translation>Agreements</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation>Session</translation>
+    </message>
+    <message>
+        <source>Free note</source>
+        <translation>Free note</translation>
+    </message>
+    <message>
+        <source>No notes found</source>
+        <translation>No notes found</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>History</translation>
+    </message>
+    <message>
+        <source>Read</source>
+        <translation>Read</translation>
+    </message>
+    <message>
+        <source>Open meeting</source>
+        <translation>Open meeting</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Open transcript</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
+    <message>
+        <source>Select a note or create a new one.</source>
+        <translation>Select a note or create a new one.</translation>
+    </message>
+    <message>
+        <source>Select a participant to view their notes.</source>
+        <translation>Select a participant to view their notes.</translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation>Editor</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Preview</translation>
+    </message>
+    <message>
+        <source>Write a note in Markdown…</source>
+        <translation>Write a note in Markdown…</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Attach files</translation>
+    </message>
+    <message>
+        <source>Link to a session</source>
+        <translation>Link to a session</translation>
+    </message>
+    <message>
+        <source>Add note</source>
+        <translation>Add note</translation>
     </message>
 </context>
 <context>
@@ -820,6 +1397,13 @@
     </message>
 </context>
 <context>
+    <name>KeyPointsWidget</name>
+    <message>
+        <source>Key points</source>
+        <translation>Key points</translation>
+    </message>
+</context>
+<context>
     <name>MainWindow</name>
     <message>
         <source>: APP_TITLE</source>
@@ -846,6 +1430,10 @@
         <translation>Notes</translation>
     </message>
     <message>
+        <source>Meetings</source>
+        <translation>Meetings</translation>
+    </message>
+    <message>
         <source>Search clients</source>
         <translation>Search clients</translation>
     </message>
@@ -858,8 +1446,8 @@
         <translation>Show inactive</translation>
     </message>
     <message>
-        <source>Calls</source>
-        <translation>Calls</translation>
+        <source>: NAV_MY_DAY</source>
+        <translation>My day</translation>
     </message>
     <message>
         <source>Transcripts</source>
@@ -890,6 +1478,10 @@
         <translation>Built with Qt, DuckDB, and Qlementine.</translation>
     </message>
     <message>
+        <source>My day</source>
+        <translation>My day</translation>
+    </message>
+    <message>
         <source>Clients</source>
         <translation>Clients</translation>
     </message>
@@ -911,6 +1503,138 @@
     </message>
 </context>
 <context>
+    <name>MeetingHistory</name>
+    <message>
+        <source>%1 · %2 min</source>
+        <translation>%1 · %2 min</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n note(s)</source>
+        <translation>
+            <numerusform>%n note</numerusform>
+            <numerusform>%n notes</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>AI summary · %1</source>
+        <translation>AI summary · %1</translation>
+    </message>
+    <message>
+        <source>AI summary</source>
+        <translation>AI summary</translation>
+    </message>
+</context>
+<context>
+    <name>MeetingHistoryList</name>
+    <message>
+        <source>Show</source>
+        <translation>Show</translation>
+    </message>
+    <message>
+        <source>Without a meeting</source>
+        <translation>Without a meeting</translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation>Hide</translation>
+    </message>
+</context>
+<context>
+    <name>MeetingsWorkspace</name>
+    <message>
+        <source>Meetings</source>
+        <translation>Meetings</translation>
+    </message>
+    <message>
+        <source>Join a meeting</source>
+        <translation>Join a meeting</translation>
+    </message>
+    <message>
+        <source>Meeting history</source>
+        <translation>Meeting history</translation>
+    </message>
+    <message>
+        <source>Your calls today</source>
+        <translation>Your calls today</translation>
+    </message>
+    <message>
+        <source>Search meetings…</source>
+        <translation>Search meetings…</translation>
+    </message>
+    <message>
+        <source>Scheduled</source>
+        <translation>Scheduled</translation>
+    </message>
+    <message>
+        <source>Call materials</source>
+        <translation>Call materials</translation>
+    </message>
+    <message>
+        <source>No meetings to show</source>
+        <translation>No meetings to show</translation>
+    </message>
+    <message>
+        <source>Scheduled online meetings appear here.</source>
+        <translation>Scheduled online meetings appear here.</translation>
+    </message>
+    <message>
+        <source>Materials appear here after a call.</source>
+        <translation>Materials appear here after a call.</translation>
+    </message>
+    <message>
+        <source>Before joining, check your name. Camera and microphone settings are shown on the next screen.</source>
+        <translation>Before joining, check your name. Camera and microphone settings are shown on the next screen.</translation>
+    </message>
+    <message>
+        <source>Name in calls</source>
+        <translation>Name in calls</translation>
+    </message>
+    <message>
+        <source>Check devices and join</source>
+        <translation>Check devices and join</translation>
+    </message>
+    <message>
+        <source>Meeting summary</source>
+        <translation>Meeting summary</translation>
+    </message>
+    <message>
+        <source>Open notes and materials</source>
+        <translation>Open notes and materials</translation>
+    </message>
+    <message>
+        <source>Transcripts</source>
+        <translation>Transcripts</translation>
+    </message>
+    <message>
+        <source>Join a Sessio or Jitsi call using the invitation from its organizer.</source>
+        <translation>Join a Sessio or Jitsi call using the invitation from its organizer.</translation>
+    </message>
+    <message>
+        <source>Paste the Sessio invitation link, or enter its code and passcode. The invitation selects Jitsi automatically.</source>
+        <translation>Paste the Sessio invitation link, or enter its code and passcode. The invitation selects Jitsi automatically.</translation>
+    </message>
+    <message>
+        <source>To host a Jitsi call: create an event in Calendar, enable Online, select Jitsi, and save. Use Copy invite to send the invitation to participants.</source>
+        <translation>To host a Jitsi call: create an event in Calendar, enable Online, select Jitsi, and save. Use Copy invite to send the invitation to participants.</translation>
+    </message>
+    <message>
+        <source>Invitation code or link</source>
+        <translation>Invitation code or link</translation>
+    </message>
+    <message>
+        <source>Passcode</source>
+        <translation>Passcode</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Continue</translation>
+    </message>
+</context>
+<context>
     <name>MonthCalendarWidget</name>
     <message>
         <source>+%1 more</source>
@@ -926,6 +1650,457 @@
     <message>
         <source>Next year</source>
         <translation>Next year</translation>
+    </message>
+</context>
+<context>
+    <name>MyDay</name>
+    <message>
+        <source>Morning</source>
+        <translation>Morning</translation>
+    </message>
+    <message>
+        <source>Afternoon</source>
+        <translation>Afternoon</translation>
+    </message>
+    <message>
+        <source>Evening</source>
+        <translation>Evening</translation>
+    </message>
+    <message>
+        <source>My day</source>
+        <translation>My day</translation>
+    </message>
+    <message>
+        <source>Previous day</source>
+        <translation>Previous day</translation>
+    </message>
+    <message>
+        <source>Today</source>
+        <translation>Today</translation>
+    </message>
+    <message>
+        <source>Next day</source>
+        <translation>Next day</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n meeting(s)</source>
+        <translation>
+            <numerusform>%n meeting</numerusform>
+            <numerusform>%n meetings</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>planned income</source>
+        <translation>planned income</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n unpaid</source>
+        <translation>
+            <numerusform>%n unpaid</numerusform>
+            <numerusform>%n unpaid</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>All paid</source>
+        <translation>All paid</translation>
+    </message>
+    <message>
+        <source>open</source>
+        <translation>open</translation>
+    </message>
+    <message>
+        <source>Unpaid</source>
+        <translation>Unpaid</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n without notes</source>
+        <translation>
+            <numerusform>%n without notes</numerusform>
+            <numerusform>%n without notes</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>All notes written</source>
+        <translation>All notes written</translation>
+    </message>
+    <message>
+        <source>this week</source>
+        <translation>this week</translation>
+    </message>
+    <message>
+        <source>Without notes</source>
+        <translation>Without notes</translation>
+    </message>
+    <message>
+        <source>No meetings</source>
+        <translation>No meetings</translation>
+    </message>
+</context>
+<context>
+    <name>NotesEditor</name>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Meeting notes</translation>
+    </message>
+    <message>
+        <source>Close editor</source>
+        <translation>Close editor</translation>
+    </message>
+    <message>
+        <source>New note</source>
+        <translation>New note</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>Note</translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation>Editor</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Preview</translation>
+    </message>
+    <message>
+        <source>What is important to keep from this meeting?</source>
+        <translation>What is important to keep from this meeting?</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Attach files</translation>
+    </message>
+    <message>
+        <source>Meeting context</source>
+        <translation>Meeting context</translation>
+    </message>
+    <message>
+        <source>Meeting summary</source>
+        <translation>Meeting summary</translation>
+    </message>
+    <message>
+        <source>No summary yet</source>
+        <translation>No summary yet</translation>
+    </message>
+    <message>
+        <source>Add to my notes</source>
+        <translation>Add to my notes</translation>
+    </message>
+    <message>
+        <source>For the next meeting</source>
+        <translation>For the next meeting</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Key points</translation>
+    </message>
+    <message>
+        <source>AI suggestions help recall the meeting. The note on the left is your own text.</source>
+        <translation>AI suggestions help recall the meeting. The note on the left is your own text.</translation>
+    </message>
+    <message>
+        <source>Unsaved changes</source>
+        <translation>Unsaved changes</translation>
+    </message>
+    <message>
+        <source>No unsaved changes</source>
+        <translation>No unsaved changes</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Save note</source>
+        <translation>Save note</translation>
+    </message>
+</context>
+<context>
+    <name>NotesEditorDialog</name>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Meeting notes</translation>
+    </message>
+    <message>
+        <source>Unsaved changes</source>
+        <translation>Unsaved changes</translation>
+    </message>
+    <message>
+        <source>Close without saving your changes?</source>
+        <translation>Close without saving your changes?</translation>
+    </message>
+</context>
+<context>
+    <name>NotesWidgetFrame</name>
+    <message>
+        <source>More actions</source>
+        <translation>More actions</translation>
+    </message>
+</context>
+<context>
+    <name>NotesWorkspace</name>
+    <message>
+        <source>Add to calendar</source>
+        <translation>Add to calendar</translation>
+    </message>
+    <message>
+        <source>In calendar</source>
+        <translation>In calendar</translation>
+    </message>
+    <message>
+        <source>View source</source>
+        <translation>View source</translation>
+    </message>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Meeting notes</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>History</translation>
+    </message>
+    <message>
+        <source>More</source>
+        <translation>More</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Export</translation>
+    </message>
+    <message>
+        <source>Advanced view</source>
+        <translation>Advanced view</translation>
+    </message>
+    <message>
+        <source>Search meetings…</source>
+        <translation>Search meetings…</translation>
+    </message>
+    <message>
+        <source>This meeting</source>
+        <translation>This meeting</translation>
+    </message>
+    <message>
+        <source>Meeting materials</source>
+        <translation>Meeting materials</translation>
+    </message>
+    <message>
+        <source>Close transcript</source>
+        <translation>Close transcript</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Open transcript</translation>
+    </message>
+    <message>
+        <source>Payment status</source>
+        <translation>Payment status</translation>
+    </message>
+    <message>
+        <source>Pending</source>
+        <translation>Pending</translation>
+    </message>
+    <message>
+        <source>Paid</source>
+        <translation>Paid</translation>
+    </message>
+    <message>
+        <source>Canceled</source>
+        <translation>Canceled</translation>
+    </message>
+    <message>
+        <source>Refunded</source>
+        <translation>Refunded</translation>
+    </message>
+    <message>
+        <source>Skipped</source>
+        <translation>Skipped</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Edit</translation>
+    </message>
+    <message>
+        <source>Edit note</source>
+        <translation>Edit note</translation>
+    </message>
+    <message>
+        <source>My notes</source>
+        <translation>My notes</translation>
+    </message>
+    <message>
+        <source>Write a note…</source>
+        <translation>Write a note…</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Attach files</translation>
+    </message>
+    <message>
+        <source>Cancel edit</source>
+        <translation>Cancel edit</translation>
+    </message>
+    <message>
+        <source>Save note</source>
+        <translation>Save note</translation>
+    </message>
+    <message>
+        <source>Prompter</source>
+        <translation>Prompter</translation>
+    </message>
+    <message>
+        <source>Private suggestions. Check the source before saving.</source>
+        <translation>Private suggestions. Check the source before saving.</translation>
+    </message>
+    <message>
+        <source>Start</source>
+        <translation>Start</translation>
+    </message>
+    <message>
+        <source>Pause</source>
+        <translation>Pause</translation>
+    </message>
+    <message>
+        <source>You could clarify</source>
+        <translation>You could clarify</translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation>Hide</translation>
+    </message>
+    <message>
+        <source>Needs source check</source>
+        <translation>Needs source check</translation>
+    </message>
+    <message>
+        <source>Earlier: %1</source>
+        <translation>Earlier: %1</translation>
+    </message>
+    <message>
+        <source>Source</source>
+        <translation>Source</translation>
+    </message>
+    <message>
+        <source>Accept</source>
+        <translation>Accept</translation>
+    </message>
+    <message>
+        <source>Choose the agreement</source>
+        <translation>Choose the agreement</translation>
+    </message>
+    <message>
+        <source>Saved to notes</source>
+        <translation>Saved to notes</translation>
+    </message>
+    <message>
+        <source>To notes</source>
+        <translation>To notes</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>Dismiss</translation>
+    </message>
+    <message>
+        <source>Meeting summary</source>
+        <translation>Meeting summary</translation>
+    </message>
+    <message>
+        <source>Summarize the whole meeting: overview, key points, agreements and tasks, open questions.</source>
+        <translation>Summarize the whole meeting: overview, key points, agreements and tasks, open questions.</translation>
+    </message>
+    <message>
+        <source>Summarize meeting</source>
+        <translation>Summarize meeting</translation>
+    </message>
+    <message>
+        <source>Prepared by AI</source>
+        <translation>Prepared by AI</translation>
+    </message>
+    <message>
+        <source>Add to my notes</source>
+        <translation>Add to my notes</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Retry</translation>
+    </message>
+    <message>
+        <source>Create again</source>
+        <translation>Create again</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Key points</translation>
+    </message>
+    <message>
+        <source>Agreements and tasks</source>
+        <translation>Agreements and tasks</translation>
+    </message>
+    <message>
+        <source>Open questions</source>
+        <translation>Open questions</translation>
+    </message>
+    <message>
+        <source>For the next meeting</source>
+        <translation>For the next meeting</translation>
+    </message>
+    <message>
+        <source>From the call</source>
+        <translation>From the call</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
+    <message>
+        <source>Search transcript…</source>
+        <translation>Search transcript…</translation>
+    </message>
+    <message>
+        <source>Edit transcript</source>
+        <translation>Edit transcript</translation>
+    </message>
+</context>
+<context>
+    <name>NotesWorkspaceBridge</name>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Could not save — keep this page open</translation>
+    </message>
+    <message>
+        <source>Draft saved</source>
+        <translation>Draft saved</translation>
+    </message>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Meeting notes</translation>
+    </message>
+    <message>
+        <source>Save or cancel the current edit before opening another note.</source>
+        <translation>Save or cancel the current edit before opening another note.</translation>
+    </message>
+    <message>
+        <source>This note changed in another window. Keep this editor open and copy your changes.</source>
+        <translation>This note changed in another window. Keep this editor open and copy your changes.</translation>
+    </message>
+    <message>
+        <source>Note saved</source>
+        <translation>Note saved</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Attach files</translation>
+    </message>
+    <message>
+        <source>Could not update payment status.</source>
+        <translation>Could not update payment status.</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Export</translation>
+    </message>
+    <message>
+        <source>Markdown (*.md)</source>
+        <translation>Markdown (*.md)</translation>
     </message>
 </context>
 <context>
@@ -953,6 +2128,140 @@
     <message>
         <source>Client: %1</source>
         <translation>Client: %1</translation>
+    </message>
+</context>
+<context>
+    <name>PreviousMeetingWidget</name>
+    <message>
+        <source>Last time</source>
+        <translation>Last time</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>Open</translation>
+    </message>
+</context>
+<context>
+    <name>PrompterPanel</name>
+    <message>
+        <source>Start prompter</source>
+        <translation>Start prompter</translation>
+    </message>
+    <message>
+        <source>Pause</source>
+        <translation>Pause</translation>
+    </message>
+    <message>
+        <source>You could clarify</source>
+        <translation>You could clarify</translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation>Hide</translation>
+    </message>
+    <message>
+        <source>For review</source>
+        <translation>For review</translation>
+    </message>
+    <message>
+        <source>New agreements will appear here after completed phrases.</source>
+        <translation>New agreements will appear here after completed phrases.</translation>
+    </message>
+    <message>
+        <source>Accepted agreements</source>
+        <translation>Accepted agreements</translation>
+    </message>
+    <message>
+        <source>Private suggestions. Check the source before saving.</source>
+        <translation>Private suggestions. Check the source before saving.</translation>
+    </message>
+    <message>
+        <source>The source was changed or deleted. Review the transcript.</source>
+        <translation>The source was changed or deleted. Review the transcript.</translation>
+    </message>
+    <message>
+        <source>Source · %1:%2</source>
+        <translation>Source · %1:%2</translation>
+    </message>
+    <message>
+        <source>Accept</source>
+        <translation>Accept</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Edit</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>Dismiss</translation>
+    </message>
+    <message>
+        <source>To notes</source>
+        <translation>To notes</translation>
+    </message>
+    <message>
+        <source>Choose the agreement</source>
+        <translation>Choose the agreement</translation>
+    </message>
+    <message>
+        <source>New agreement</source>
+        <translation>New agreement</translation>
+    </message>
+    <message>
+        <source>Review the target</source>
+        <translation>Review the target</translation>
+    </message>
+    <message>
+        <source>Agreement to change or cancel</source>
+        <translation>Agreement to change or cancel</translation>
+    </message>
+    <message>
+        <source>Review agreement</source>
+        <translation>Review agreement</translation>
+    </message>
+    <message>
+        <source>Agreement</source>
+        <translation>Agreement</translation>
+    </message>
+    <message>
+        <source>Needs clarification</source>
+        <translation>Needs clarification</translation>
+    </message>
+    <message>
+        <source>Proposed cancellation</source>
+        <translation>Proposed cancellation</translation>
+    </message>
+    <message>
+        <source>Proposed change</source>
+        <translation>Proposed change</translation>
+    </message>
+    <message>
+        <source>Previous agreement: %1</source>
+        <translation>Previous agreement: %1</translation>
+    </message>
+    <message>
+        <source>Saved to notes</source>
+        <translation>Saved to notes</translation>
+    </message>
+    <message>
+        <source>Agreement kept as a draft</source>
+        <translation>Agreement kept as a draft</translation>
+    </message>
+    <message>
+        <source>Attach a client to this transcript to save the agreement in client notes.</source>
+        <translation>Attach a client to this transcript to save the agreement in client notes.</translation>
+    </message>
+    <message>
+        <source>%1 · #%2</source>
+        <translation>%1 · #%2</translation>
+    </message>
+    <message>
+        <source>Save to client notes</source>
+        <translation>Save to client notes</translation>
+    </message>
+    <message>
+        <source>Client</source>
+        <translation>Client</translation>
     </message>
 </context>
 <context>
@@ -1075,6 +2384,10 @@
         <translation>LiveKit</translation>
     </message>
     <message>
+        <source>Jitsi</source>
+        <translation>Jitsi</translation>
+    </message>
+    <message>
         <source>Scheduled</source>
         <translation>Scheduled</translation>
     </message>
@@ -1171,6 +2484,10 @@
         <translation>In person</translation>
     </message>
     <message>
+        <source>Online (Jitsi)</source>
+        <translation>Online (Jitsi)</translation>
+    </message>
+    <message>
         <source>Online (LiveKit)</source>
         <translation>Online (LiveKit)</translation>
     </message>
@@ -1213,6 +2530,10 @@
     <message>
         <source>Failed to create the LiveKit meeting: %1</source>
         <translation>Failed to create the LiveKit meeting: %1</translation>
+    </message>
+    <message>
+        <source>Recurring meetings use LiveKit for now</source>
+        <translation>Recurring meetings use LiveKit for now</translation>
     </message>
     <message>
         <source>Overlaps with an existing event, %1.</source>
@@ -1713,6 +3034,10 @@ See you!</translation>
     <message>
         <source> s</source>
         <translation> s</translation>
+    </message>
+    <message>
+        <source>General</source>
+        <translation>General</translation>
     </message>
 </context>
 <context>
@@ -2508,6 +3833,107 @@ See you!</translation>
     </message>
 </context>
 <context>
+    <name>SpeakerRename</name>
+    <message>
+        <source>Rename speaker</source>
+        <translation>Rename speaker</translation>
+    </message>
+    <message>
+        <source>Name shown for this speaker in the whole transcript:</source>
+        <translation>Name shown for this speaker in the whole transcript:</translation>
+    </message>
+    <message>
+        <source>Right-click to rename this speaker</source>
+        <translation>Right-click to rename this speaker</translation>
+    </message>
+    <message>
+        <source>Rename speaker…</source>
+        <translation>Rename speaker…</translation>
+    </message>
+</context>
+<context>
+    <name>TimelineCard</name>
+    <message>
+        <source>Canceled</source>
+        <translation>Canceled</translation>
+    </message>
+    <message>
+        <source>unpaid</source>
+        <translation>unpaid</translation>
+    </message>
+    <message>
+        <source>no note</source>
+        <translation>no note</translation>
+    </message>
+    <message>
+        <source>in person</source>
+        <translation>in person</translation>
+    </message>
+    <message>
+        <source>personal</source>
+        <translation>personal</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Join</translation>
+    </message>
+</context>
+<context>
+    <name>TodoColumn</name>
+    <message>
+        <source>No client</source>
+        <translation>No client</translation>
+    </message>
+    <message>
+        <source>No meeting</source>
+        <translation>No meeting</translation>
+    </message>
+    <message>
+        <source>To-dos for today</source>
+        <translation>To-dos for today</translation>
+    </message>
+    <message>
+        <source>To-dos</source>
+        <translation>To-dos</translation>
+    </message>
+    <message>
+        <source>Clients</source>
+        <translation>Clients</translation>
+    </message>
+    <message>
+        <source>Meetings</source>
+        <translation>Meetings</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Rename</translation>
+    </message>
+    <message>
+        <source>from %1</source>
+        <translation>from %1</translation>
+    </message>
+    <message>
+        <source>No to-dos</source>
+        <translation>No to-dos</translation>
+    </message>
+    <message>
+        <source>Add to-do</source>
+        <translation>Add to-do</translation>
+    </message>
+    <message>
+        <source>What needs to be done?</source>
+        <translation>What needs to be done?</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Add</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Done</translation>
+    </message>
+</context>
+<context>
     <name>TranscriptClientDialog</name>
     <message>
         <source>Attach clients</source>
@@ -2519,10 +3945,37 @@ See you!</translation>
     </message>
 </context>
 <context>
-    <name>TranscriptListPage</name>
+    <name>TranscriptLibrary</name>
     <message>
         <source>Transcripts</source>
         <translation>Transcripts</translation>
+    </message>
+    <message>
+        <source>Search recordings and participants…</source>
+        <translation>Search recordings and participants…</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>More actions</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Delete transcript</translation>
+    </message>
+    <message>
+        <source>No recordings found</source>
+        <translation>No recordings found</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptListPage</name>
+    <message>
+        <source>Call materials</source>
+        <translation>Call materials</translation>
     </message>
     <message>
         <source>No transcripts yet.
@@ -2577,12 +4030,28 @@ They appear here after a call with transcription turned on.</translation>
         <source>Delete</source>
         <translation>Delete</translation>
     </message>
+    <message>
+        <source>Call notes · %1</source>
+        <translation>Call notes · %1</translation>
+    </message>
     <message numerus="yes">
         <source>%n transcripts</source>
         <translation>
             <numerusform>%n transcript</numerusform>
             <numerusform>%n transcripts</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Transcripts</source>
+        <translation>Transcripts</translation>
+    </message>
+    <message>
+        <source>Search recordings and participants…</source>
+        <translation>Search recordings and participants…</translation>
+    </message>
+    <message>
+        <source>Call notes</source>
+        <translation>Call notes</translation>
     </message>
     <message>
         <source>Could not load transcripts. Please try again.</source>
@@ -2616,16 +4085,12 @@ They appear here after a call with transcription turned on.</translation>
         <translation>Export text</translation>
     </message>
     <message>
-        <source>Export transcript</source>
-        <translation>Export transcript</translation>
-    </message>
-    <message>
-        <source>Text files (*.txt)</source>
-        <translation>Text files (*.txt)</translation>
-    </message>
-    <message>
         <source>More actions</source>
         <translation>More actions</translation>
+    </message>
+    <message>
+        <source>Call notes</source>
+        <translation>Call notes</translation>
     </message>
     <message>
         <source>Delete this transcript and all its phrases?</source>
@@ -2703,6 +4168,10 @@ They appear here after a call with transcription turned on.</translation>
         <translation>Edit</translation>
     </message>
     <message>
+        <source>Search transcript…</source>
+        <translation>Search transcript…</translation>
+    </message>
+    <message>
         <source>Delete</source>
         <translation>Delete</translation>
     </message>
@@ -2717,6 +4186,18 @@ They appear here after a call with transcription turned on.</translation>
     <message>
         <source>Phrase text cannot be empty.</source>
         <translation>Phrase text cannot be empty.</translation>
+    </message>
+    <message>
+        <source>Read transcript</source>
+        <translation>Read transcript</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>History</translation>
+    </message>
+    <message>
+        <source>Edit transcript</source>
+        <translation>Edit transcript</translation>
     </message>
 </context>
 <context>
@@ -2758,6 +4239,10 @@ They appear here after a call with transcription turned on.</translation>
         <translation>Revoke consent</translation>
     </message>
     <message>
+        <source>Export text</source>
+        <translation>Export text</translation>
+    </message>
+    <message>
         <source>Transcription is off</source>
         <translation>Transcription is off</translation>
     </message>
@@ -2788,6 +4273,73 @@ They appear here after a call with transcription turned on.</translation>
     <message>
         <source>Participant</source>
         <translation>Participant</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptReader</name>
+    <message>
+        <source>Back to transcripts</source>
+        <translation>Back to transcripts</translation>
+    </message>
+    <message>
+        <source>Recordings</source>
+        <translation>Recordings</translation>
+    </message>
+    <message>
+        <source>Find a recording</source>
+        <translation>Find a recording</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Transcript</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>History</translation>
+    </message>
+    <message>
+        <source>Call notes</source>
+        <translation>Call notes</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>More actions</translation>
+    </message>
+    <message>
+        <source>Export text</source>
+        <translation>Export text</translation>
+    </message>
+    <message>
+        <source>Attach clients</source>
+        <translation>Attach clients</translation>
+    </message>
+    <message>
+        <source>Mark reviewed</source>
+        <translation>Mark reviewed</translation>
+    </message>
+    <message>
+        <source>Edit transcript</source>
+        <translation>Edit transcript</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Delete transcript</translation>
+    </message>
+    <message>
+        <source>Search transcript…</source>
+        <translation>Search transcript…</translation>
+    </message>
+    <message>
+        <source>All speakers</source>
+        <translation>All speakers</translation>
+    </message>
+    <message>
+        <source>Rename speaker…</source>
+        <translation>Rename speaker…</translation>
+    </message>
+    <message>
+        <source>No matching phrases</source>
+        <translation>No matching phrases</translation>
     </message>
 </context>
 <context>
@@ -2853,6 +4405,54 @@ They appear here after a call with transcription turned on.</translation>
     <message>
         <source>Enable call transcription</source>
         <translation>Enable call transcription</translation>
+    </message>
+    <message>
+        <source>Start transcription automatically when joining a call</source>
+        <translation>Start transcription automatically when joining a call</translation>
+    </message>
+    <message>
+        <source>Start the prompter automatically</source>
+        <translation>Start the prompter automatically</translation>
+    </message>
+    <message>
+        <source>Local prompter (experimental)</source>
+        <translation>Local prompter (experimental)</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>Browse…</translation>
+    </message>
+    <message>
+        <source>Select a local file</source>
+        <translation>Select a local file</translation>
+    </message>
+    <message>
+        <source>Gemma model (.litertlm)</source>
+        <translation>Gemma model (.litertlm)</translation>
+    </message>
+    <message>
+        <source>Automatic (GPU, otherwise CPU)</source>
+        <translation>Automatic (GPU, otherwise CPU)</translation>
+    </message>
+    <message>
+        <source>GPU only</source>
+        <translation>GPU only</translation>
+    </message>
+    <message>
+        <source>CPU only</source>
+        <translation>CPU only</translation>
+    </message>
+    <message>
+        <source>The GPU is several times faster and uses less memory, but on an integrated GPU it can make the desktop stutter. The CPU needs about 10 GB of RAM. Applies the next time the model starts.</source>
+        <translation>The GPU is several times faster and uses less memory, but on an integrated GPU it can make the desktop stutter. The CPU needs about 10 GB of RAM. Applies the next time the model starts.</translation>
+    </message>
+    <message>
+        <source>Acceleration</source>
+        <translation>Acceleration</translation>
+    </message>
+    <message>
+        <source>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</source>
+        <translation>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</translation>
     </message>
     <message>
         <source>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</source>
@@ -2960,6 +4560,10 @@ They appear here after a call with transcription turned on.</translation>
 <context>
     <name>pcm::Application</name>
     <message>
+        <source>Call materials</source>
+        <translation>Call materials</translation>
+    </message>
+    <message>
         <source>Encrypted Backup</source>
         <translation>Encrypted Backup</translation>
     </message>
@@ -3022,6 +4626,14 @@ Your previous data was kept.</translation>
         <translation>Quit</translation>
     </message>
     <message>
+        <source>Export transcript</source>
+        <translation>Export transcript</translation>
+    </message>
+    <message>
+        <source>Could not save the transcript file.</source>
+        <translation>Could not save the transcript file.</translation>
+    </message>
+    <message>
         <source>Consent withdrawn</source>
         <translation>Consent withdrawn</translation>
     </message>
@@ -3036,6 +4648,18 @@ Your previous data was kept.</translation>
     <message>
         <source>Keep as draft</source>
         <translation>Keep as draft</translation>
+    </message>
+    <message>
+        <source>live</source>
+        <translation>live</translation>
+    </message>
+    <message>
+        <source>ended</source>
+        <translation>ended</translation>
+    </message>
+    <message>
+        <source>Meeting review</source>
+        <translation>Meeting review</translation>
     </message>
     <message>
         <source>Transcript</source>
@@ -3086,7 +4710,33 @@ Your previous data was kept.</translation>
     </message>
 </context>
 <context>
+    <name>pcm::my_day::MyDayBridge</name>
+    <message numerus="yes">
+        <source>next in %n min</source>
+        <translation>
+            <numerusform>next in %n min</numerusform>
+            <numerusform>next in %n min</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>next at %1</source>
+        <translation>next at %1</translation>
+    </message>
+    <message>
+        <source>All done for today</source>
+        <translation>All done for today</translation>
+    </message>
+    <message>
+        <source>first at %1</source>
+        <translation>first at %1</translation>
+    </message>
+</context>
+<context>
     <name>pcm::transcriptionui::CallTranscriptionController</name>
+    <message>
+        <source>The speaker could not be renamed. Please try again.</source>
+        <translation>The speaker could not be renamed. Please try again.</translation>
+    </message>
     <message>
         <source>Transcription is turned off in Settings</source>
         <translation>Transcription is turned off in Settings</translation>
@@ -3169,6 +4819,25 @@ Your previous data was kept.</translation>
     <message>
         <source>Screen sharing stopped</source>
         <translation>Screen sharing stopped</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::webcall::WebCallProvider</name>
+    <message>
+        <source>The call page stopped unexpectedly</source>
+        <translation>The call page stopped unexpectedly</translation>
+    </message>
+    <message>
+        <source>Invalid call address</source>
+        <translation>Invalid call address</translation>
+    </message>
+    <message>
+        <source>Could not start the local audio bridge</source>
+        <translation>Could not start the local audio bridge</translation>
+    </message>
+    <message>
+        <source>The call page failed to load</source>
+        <translation>The call page failed to load</translation>
     </message>
 </context>
 </TS>

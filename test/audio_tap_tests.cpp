@@ -88,6 +88,9 @@ TEST(AudioTapTest, TapSurvivesConcurrentSetCallback) {
         }
         ++calls;
       });
+      // Keep the callback installed until push() reaches it once; clearing it
+      // immediately left that window so small that a loaded machine saw no calls.
+      for (const auto seen = calls.load(); !done && calls == seen;) std::this_thread::yield();
       tap.setCallback({});
       std::this_thread::yield();
     }

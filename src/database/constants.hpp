@@ -212,6 +212,27 @@ CREATE TABLE IF NOT EXISTS TranscriptPhrase (
     text TEXT NOT NULL,
     edited BOOLEAN DEFAULT FALSE
 );
+-- Name a speaker (one track role of a transcript) was given by a rename. It wins over
+-- the recogniser's name for later phrases of that role. Cleared with the transcript.
+CREATE TABLE IF NOT EXISTS TranscriptSpeaker (
+    transcript_id INTEGER NOT NULL,
+    track_role TEXT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (transcript_id, track_role)
+);
+-- Simple day to-dos for the "My day" screen. `day` is the local calendar date the
+-- to-do was planned for. No foreign keys: links are cleared by Database on delete.
+CREATE TABLE IF NOT EXISTS DayTodo (
+    id INTEGER PRIMARY KEY,
+    title VARCHAR NOT NULL,
+    day DATE NOT NULL,
+    client_id INTEGER,
+    event_id INTEGER,
+    series_id INTEGER,
+    occurrence_start TIMESTAMP,
+    done_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL
+);
 )duckdb";
 
 constexpr auto kSchemaMigrations = R"duckdb(
@@ -275,6 +296,20 @@ ALTER TABLE EventSeriesException ADD COLUMN IF NOT EXISTS reason TEXT;
 ALTER TABLE ClientNote ADD COLUMN IF NOT EXISTS linked_event_id INTEGER;
 ALTER TABLE ClientNote ADD COLUMN IF NOT EXISTS linked_series_id INTEGER;
 ALTER TABLE ClientNote ADD COLUMN IF NOT EXISTS linked_occurrence_start TIMESTAMP;
+
+-- Simple day to-dos for the "My day" screen. `day` is the local calendar date the
+-- to-do was planned for. No foreign keys: links are cleared by Database on delete.
+CREATE TABLE IF NOT EXISTS DayTodo (
+    id INTEGER PRIMARY KEY,
+    title VARCHAR NOT NULL,
+    day DATE NOT NULL,
+    client_id INTEGER,
+    event_id INTEGER,
+    series_id INTEGER,
+    occurrence_start TIMESTAMP,
+    done_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL
+);
 )duckdb";
 
 constexpr auto kSelectScheduleIdentityBySeriesQuery = R"duckdb(
@@ -554,6 +589,57 @@ SET active = FALSE,
 WHERE id = $1
 )duckdb";
 
+constexpr auto kInsertDayTodoQuery = R"duckdb(
+INSERT INTO DayTodo (
+    id, title, day, client_id, event_id, series_id, occurrence_start, done_at, created_at
+)
+SELECT COALESCE(MAX(id), 0) + 1, $1, CAST($2 AS DATE), $3, $4, $5, $6, $7, $8
+FROM DayTodo
+RETURNING id
+)duckdb";
+
+// Today: unfinished to-dos of today and earlier (carry-over) plus those finished today.
+constexpr auto kSelectDayTodosTodayQuery = R"duckdb(
+SELECT id, title, CAST(day AS VARCHAR), client_id, event_id, series_id,
+       occurrence_start, done_at, created_at
+FROM DayTodo
+WHERE (day <= CAST($1 AS DATE) AND done_at IS NULL)
+   OR (done_at >= $2 AND done_at < $3)
+ORDER BY (done_at IS NOT NULL), created_at, id
+)duckdb";
+
+// Past day: unfinished to-dos dated that day plus those finished that day.
+constexpr auto kSelectDayTodosPastQuery = R"duckdb(
+SELECT id, title, CAST(day AS VARCHAR), client_id, event_id, series_id,
+       occurrence_start, done_at, created_at
+FROM DayTodo
+WHERE (day = CAST($1 AS DATE) AND done_at IS NULL)
+   OR (done_at >= $2 AND done_at < $3)
+ORDER BY (done_at IS NOT NULL), created_at, id
+)duckdb";
+
+// Future day: only to-dos dated that day.
+constexpr auto kSelectDayTodosFutureQuery = R"duckdb(
+SELECT id, title, CAST(day AS VARCHAR), client_id, event_id, series_id,
+       occurrence_start, done_at, created_at
+FROM DayTodo
+WHERE day = CAST($1 AS DATE)
+ORDER BY (done_at IS NOT NULL), created_at, id
+)duckdb";
+
+constexpr auto kDetachDayTodosOfEventQuery =
+    "UPDATE DayTodo SET event_id = NULL WHERE event_id = $1";
+
+constexpr auto kDetachDayTodosOfSeriesOverridesQuery = R"duckdb(
+UPDATE DayTodo SET event_id = NULL
+WHERE event_id IN (
+    SELECT id FROM Event
+    WHERE series_id = $1 AND original_occurrence_start >= $2)
+)duckdb";
+
+constexpr auto kDetachDayTodosOfClientQuery =
+    "UPDATE DayTodo SET client_id = NULL WHERE client_id = $1";
+
 constexpr auto kDetachTranscriptsOfEventQuery =
     "UPDATE Transcript SET event_id = NULL WHERE event_id = $1";
 
@@ -737,9 +823,11 @@ constexpr auto kInsertTranscriptPhraseQuery = R"duckdb(
 INSERT INTO TranscriptPhrase (
     id, transcript_id, track_role, speaker_name, start_ms, end_ms, text, edited
 )
-SELECT COALESCE(MAX(id), 0) + 1, $1, $2, $3, $4, $5, $6, FALSE
+SELECT COALESCE(MAX(id), 0) + 1, $1, $2,
+       COALESCE((SELECT name FROM TranscriptSpeaker WHERE transcript_id = $1 AND track_role = $2), $3),
+       $4, $5, $6, FALSE
 FROM TranscriptPhrase
-RETURNING id
+RETURNING id, speaker_name
 )duckdb";
 
 constexpr auto kSelectTranscriptPhrasesQuery = R"duckdb(
@@ -791,6 +879,12 @@ constexpr auto kRenameTranscriptSpeakerQuery = R"duckdb(
 UPDATE TranscriptPhrase SET speaker_name = $1
 WHERE transcript_id = $2 AND track_role = $3
 )duckdb";
+constexpr auto kUpsertTranscriptSpeakerQuery = R"duckdb(
+INSERT INTO TranscriptSpeaker VALUES ($1, $2, $3)
+ON CONFLICT (transcript_id, track_role) DO UPDATE SET name = excluded.name
+)duckdb";
+constexpr auto kDeleteSpeakersByTranscriptIdQuery =
+    "DELETE FROM TranscriptSpeaker WHERE transcript_id = $1";
 
 constexpr auto kInsertClientNoteQuery = R"duckdb(
 INSERT INTO ClientNote (

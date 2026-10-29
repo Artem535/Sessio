@@ -46,6 +46,8 @@ inline const char *serviceErrorName(ServiceError err) {
   case ServiceError::AmbiguousOccurrence: return "ambiguous_occurrence";
   case ServiceError::ScheduleUnavailable: return "schedule_resolution_unavailable";
   case ServiceError::InvitationRevoked: return "invitation_revoked";
+  case ServiceError::JitsiNotConfigured: return "jitsi_not_configured";
+  case ServiceError::InvalidProvider: return "invalid_provider";
   }
   return "unknown_error";
 }

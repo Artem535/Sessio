@@ -17,6 +17,7 @@ TabButton::TabButton(const QIcon &icon, const QString &text, QWidget *parent)
 }
 
 void TabButton::init() {
+  setAccessibleName(mText);
   setCheckable(true);
   setFlat(true); // removes native border
   setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);

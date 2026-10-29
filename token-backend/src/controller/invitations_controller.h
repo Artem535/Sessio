@@ -82,6 +82,7 @@ public:
     dto->roomName = result.value->roomName;
     dto->token = result.value->jwt;
     dto->expiresAt = result.value->expiresAtUnix;
+    dto->provider = result.value->provider;
     auto response = createDtoResponse(Status::CODE_200, dto); response->putHeader("Cache-Control", "no-store"); return response;
   }
 

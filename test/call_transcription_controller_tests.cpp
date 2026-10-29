@@ -132,6 +132,48 @@ TEST_F(ControllerTest, ConsentRejectedCreatesNoTranscriptAndNoSink) {
   EXPECT_EQ(provider->audioSink(), nullptr);
   EXPECT_EQ(resolutions, 0);
 }
+TEST_F(ControllerTest, AutoStartRequestsConsentOnceAndKeepsSelectedPage) {
+  hooks.autoStartEnabled = [] { return true; };
+  make();
+  side->showNotes();
+  emit video->stateChanged(pcm::video::VideoSessionState::Connected);
+  EXPECT_EQ(consents, 1);
+  EXPECT_EQ(db->count_transcripts(), 1);
+  EXPECT_FALSE(side->transcriptShown());
+  panel->stopRequested();
+  ASSERT_TRUE(pump([this] { return !controller->active(); }));
+  emit video->stateChanged(pcm::video::VideoSessionState::Connected);
+  EXPECT_EQ(consents, 1);
+  EXPECT_FALSE(controller->active());
+}
+TEST_F(ControllerTest, AutoStartRejectedConsentDoesNotRetryOnReconnect) {
+  hooks.autoStartEnabled = [] { return true; };
+  consent = false;
+  make();
+  emit video->stateChanged(pcm::video::VideoSessionState::Connected);
+  emit video->stateChanged(pcm::video::VideoSessionState::Reconnecting);
+  emit video->stateChanged(pcm::video::VideoSessionState::Connected);
+  EXPECT_EQ(consents, 1);
+  EXPECT_EQ(db->count_transcripts(), 0);
+}
+TEST_F(ControllerTest, AutoStartDetachDuringConsentCannotStartOldCall) {
+  hooks.autoStartEnabled = [] { return true; };
+  hooks.askConsent = [this] { ++consents; controller->detachCall(); return true; };
+  make();
+  emit video->stateChanged(pcm::video::VideoSessionState::Connected);
+  EXPECT_EQ(consents, 1);
+  EXPECT_EQ(db->count_transcripts(), 0);
+}
+TEST_F(ControllerTest, AutoStartMakesNewAttemptForANewCall) {
+  hooks.autoStartEnabled = [] { return true; };
+  consent = false;
+  make();
+  emit video->stateChanged(pcm::video::VideoSessionState::Connected);
+  controller->detachCall();
+  controller->attachCall(video.get(), eventId);
+  emit video->stateChanged(pcm::video::VideoSessionState::Connected);
+  EXPECT_EQ(consents, 2);
+}
 TEST_F(ControllerTest, AudioGapNoticeFollowsSessionWithoutOverwritingErrors) {
   start();
   ASSERT_TRUE(pump([this] { return provider->audioSink() != nullptr; }));
@@ -246,6 +288,7 @@ TEST_F(ControllerTest, StopFinishesAsDraftAndEmitsReady) {
 }
 TEST_F(ControllerTest, RevokeAskedChoiceDelete) {
   start();
+  QSignalSpy deleted(controller.get(), SIGNAL(transcriptDeleted(qint64)));
   phrase();
   const auto id = transcriptId();
   panel->revokeRequested();
@@ -253,6 +296,7 @@ TEST_F(ControllerTest, RevokeAskedChoiceDelete) {
   EXPECT_EQ(db->get_transcript(id), nullptr);
   EXPECT_EQ(db->count_transcript_phrases(id), 0);
   EXPECT_EQ(panel->phraseCount(), 0);
+  EXPECT_EQ(deleted.count(), 1);
 }
 TEST_F(ControllerTest, RevokeAskedChoiceKeep) {
   deleteRecorded = false;
@@ -435,6 +479,24 @@ TEST_F(ControllerTest, SecondStartWhileFinishingIsRejected) {
   EXPECT_EQ(consents, 1);
   EXPECT_FALSE(label("transcriptNotice").isEmpty());
   release->set_value();
+}
+TEST_F(ControllerTest, RenamingASpeakerDuringTheCallPersistsAndNamesLaterPhrases) {
+  start();
+  phrase();
+  const auto id = transcriptId();
+  QSignalSpy renamed(controller.get(), &CallTranscriptionController::speakersRenamed);
+  QSignalSpy added(controller.get(), &CallTranscriptionController::phraseAdded);
+  emit panel->speakerRenameRequested("participant", "Anna");
+  ASSERT_EQ(renamed.count(), 1);
+  EXPECT_EQ(renamed[0][0].toLongLong(), id);
+  EXPECT_EQ(panel->findChild<QLabel *>("phraseSpeaker")->text(), "Anna");
+  EXPECT_EQ(db->get_transcript_phrases(id).at(0).speaker_name.value_or(""), "Anna");
+
+  provider->simulateAudio("remote", concat({speech(1000), silence(800)}));
+  ASSERT_TRUE(pump([this] { return panel->phraseCount() == 2; }));
+  ASSERT_EQ(added.count(), 1);
+  EXPECT_EQ(added[0][0].value<DuckTranscriptPhrase>().speaker_name.value_or(""), "Anna");
+  EXPECT_EQ(db->get_transcript_phrases(id).at(1).speaker_name.value_or(""), "Anna");
 }
 TEST_F(ControllerTest, ShutdownDoesNotBlock) {
   auto release = std::make_shared<std::promise<void>>();
