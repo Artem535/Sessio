@@ -6,6 +6,7 @@
 #include "key_points_widget.h"
 #include "meeting_history_widgets.h"
 #include "notes_workspace_bridge.h"
+#include "meeting_history.h"
 #include <QQuickWidget>
 #include <QQuickItem>
 #include <QQuickTextDocument>
@@ -25,7 +26,7 @@
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 #include <gtest/gtest.h>
 
-// Produces a controller with one ready live draft and one key point.
+// Produces a controller with one ready summary (made after the call) and one key point.
 struct NotesFixture {
   QTemporaryDir dir;
   pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir.path().toStdString())}};
@@ -41,12 +42,17 @@ struct NotesFixture {
     phrase.start_ms = 73000; phrase.end_ms = 76000;
     phrase.id = db->add_transcript_phrase(phrase);
     QSignalSpy requests(&controller, &CallNotesController::requestReady);
-    controller.addPhrase(phrase); controller.flush();
+    controller.addPhrase(phrase); controller.finishCall(); controller.requestFinal();
     ASSERT_FALSE(requests.isEmpty());
+    ASSERT_TRUE(requests.last().first().toJsonObject()["final"].toBool());
     auto reply = requests.last().first().toJsonObject();
     const QJsonObject note{{"text", text}, {"evidence_ids", QJsonArray{QString::number(phrase.id)}}};
     auto point = note; point["text"] = pointText;
-    reply["notes"] = QJsonObject{{"note", note}, {"key_points", QJsonArray{point}}};
+    auto task = note; task["text"] = QStringLiteral("Meet Thursday at 15:00");
+    task["meeting"] = true; task["date"] = "2026-11-05"; task["time"] = "15:00";
+    auto question = note; question["text"] = QStringLiteral("Which outline format?");
+    reply["notes"] = QJsonObject{{"format", 2}, {"overview", note}, {"key_points", QJsonArray{point}},
+                                 {"tasks", QJsonArray{task}}, {"open_questions", QJsonArray{question}}};
     controller.handleResult(reply);
     ASSERT_EQ(controller.draft()["text"].toString(), text);
   }
@@ -449,6 +455,137 @@ TEST_F(CallNotesPageTest, ManyPastCallsScrollInsideHistoryWithoutStretchingTheDo
   }
 }
 
+// A material with one transcript, ended, without a summary.
+struct EndedMeeting {
+  std::shared_ptr<pcm::database::Database> db;
+  CallNotesController &controller;
+  qint64 transcript = 0;
+  void make() {
+    transcript = db->add_transcript(std::nullopt, "live_local_v1");
+    controller.beginCall(); controller.attachTranscript(transcript);
+    DuckTranscriptPhrase p; p.transcript_id = transcript; p.track_role = "participant";
+    p.text = "See you on Thursday at 15"; p.start_ms = 0; p.end_ms = 1000;
+    p.id = db->add_transcript_phrase(p); controller.addPhrase(p);
+    controller.finishCall();
+  }
+  QString addMeetingAgreement() {
+    const QJsonObject record{{"id", "r1"}, {"text", "Meet Thursday at 15:00"}, {"participants", QJsonArray{}},
+        {"active", true}, {"evidence_ids", QJsonArray{}}, {"meeting", true}, {"date", "2026-11-05"}, {"time", "15:00"}};
+    EXPECT_TRUE(appendMaterialAgreement(*db, controller.materialId(), record));
+    return "r1";
+  }
+};
+QVariantMap agreementEntry(NotesWorkspaceBridge &bridge, const QString &id) {
+  for (const auto &value : bridge.state()["agreements"].toList())
+    if (value.toMap()["id"].toString() == id) return value.toMap();
+  return {};
+}
+
+TEST_F(CallNotesPageTest, OfferedStateShowsSummarizeMeetingAndClickRequestsFinal) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  CallNotesPage page(db, &controller); page.show(); QApplication::processEvents();
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  ASSERT_NE(bridge, nullptr);
+  EXPECT_EQ(bridge->state()["summaryState"].toString(), "offered");
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace");
+  auto *button = quick->rootObject()->findChild<QQuickItem *>("qmlSummarizeMeeting");
+  ASSERT_NE(button, nullptr);
+  EXPECT_TRUE(button->isVisible());
+  controller.setGenerationEnabled(true);
+  QSignalSpy requests(&controller, &CallNotesController::requestReady);
+  bridge->summarizeMeeting();
+  ASSERT_EQ(requests.count(), 1);
+  EXPECT_EQ(requests[0][0].toJsonObject()["task"].toString(), "summary");
+}
+
+TEST_F(CallNotesPageTest, FourSectionsAndLivePointsRender) {
+  generate();
+  CallNotesPage page(db, &controller); page.resize(1200, 900); page.show(); QApplication::processEvents();
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  const auto state = bridge->state();
+  EXPECT_EQ(state["summary"].toString(), "Prepare a short outline.");
+  EXPECT_EQ(state["points"].toList().size(), 1);
+  EXPECT_EQ(state["tasks"].toList().size(), 1);
+  EXPECT_EQ(state["openQuestions"].toList().size(), 1);
+  EXPECT_TRUE(state.contains("livePoints"));
+  auto *root = page.findChild<QQuickWidget *>("notesQuickWorkspace")->rootObject();
+  for (const auto *name : {"qmlSummaryOverview", "qmlSummaryPoints", "qmlSummaryTasks", "qmlSummaryQuestions"}) {
+    auto *item = root->findChild<QQuickItem *>(name);
+    ASSERT_NE(item, nullptr) << name;
+    EXPECT_TRUE(item->isVisible()) << name;
+  }
+  EXPECT_NE(root->findChild<QQuickItem *>("qmlLivePoints"), nullptr);
+}
+
+TEST_F(CallNotesPageTest, AddToCalendarCallsOpenerWithTemplateAndStoresEventId) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  const auto id = meeting.addMeetingAgreement();
+  NotesWorkspaceBridge bridge(db, &controller, nullptr);
+  bridge.setAgreements(loadMaterialAgreements(*db, controller.materialId()));
+  EXPECT_TRUE(agreementEntry(bridge, id)["canAddToCalendar"].toBool());
+  std::optional<EventTemplate> opened;
+  DuckEvent created; created.name = "Next"; created.start_date = 1; created.end_date = 2;
+  const auto eventId = db->add_event(created, true);
+  bridge.setCalendarOpener([&](const EventTemplate &t) -> std::optional<int64_t> { opened = t; return eventId; });
+  bridge.addAgreementToCalendar(id);
+  ASSERT_TRUE(opened.has_value());
+  EXPECT_EQ(opened->date, QDate(2026, 11, 5));
+  EXPECT_EQ(opened->time, QTime(15, 0));
+  EXPECT_EQ(loadMaterialAgreements(*db, controller.materialId())[0].toObject()["event_id"].toInteger(), eventId);
+  const auto entry = agreementEntry(bridge, id);
+  EXPECT_TRUE(entry["inCalendar"].toBool());
+  EXPECT_FALSE(entry["canAddToCalendar"].toBool());
+  qint64 shown = 0;
+  bridge.setEventOpener([&](int64_t e) { shown = e; });
+  bridge.openAgreementEvent(id);
+  EXPECT_EQ(shown, eventId);
+}
+
+TEST_F(CallNotesPageTest, CancelledCalendarDialogStoresNothing) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  const auto id = meeting.addMeetingAgreement();
+  NotesWorkspaceBridge bridge(db, &controller, nullptr);
+  bridge.setAgreements(loadMaterialAgreements(*db, controller.materialId()));
+  int calls = 0;
+  bridge.setCalendarOpener([&](const EventTemplate &) -> std::optional<int64_t> { ++calls; return std::nullopt; });
+  bridge.addAgreementToCalendar(id);
+  EXPECT_EQ(calls, 1);
+  EXPECT_FALSE(loadMaterialAgreements(*db, controller.materialId())[0].toObject().contains("event_id"));
+  EXPECT_TRUE(agreementEntry(bridge, id)["canAddToCalendar"].toBool());
+}
+
+TEST_F(CallNotesPageTest, DeletedEventRestoresAddToCalendar) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  const auto id = meeting.addMeetingAgreement();
+  DuckEvent created; created.name = "Next"; created.start_date = 1; created.end_date = 2;
+  const auto eventId = db->add_event(created, true);
+  ASSERT_TRUE(setMaterialAgreementEvent(*db, controller.materialId(), id, eventId));
+  NotesWorkspaceBridge bridge(db, &controller, nullptr);
+  bridge.setAgreements(loadMaterialAgreements(*db, controller.materialId()));
+  EXPECT_TRUE(agreementEntry(bridge, id)["inCalendar"].toBool());
+  ASSERT_TRUE(db->remove_event(eventId));
+  EXPECT_FALSE(agreementEntry(bridge, id)["inCalendar"].toBool());
+  EXPECT_TRUE(agreementEntry(bridge, id)["canAddToCalendar"].toBool());
+}
+
+TEST_F(CallNotesPageTest, AcceptSummaryTaskMovesItIntoAgreements) {
+  generate();
+  NotesWorkspaceBridge bridge(db, &controller, nullptr);
+  ASSERT_EQ(bridge.state()["tasks"].toList().size(), 1);
+  EXPECT_FALSE(bridge.state()["tasks"].toList()[0].toMap()["accepted"].toBool());
+  ASSERT_TRUE(bridge.acceptSummaryTask(0));
+  const auto records = loadMaterialAgreements(*db, controller.materialId());
+  ASSERT_EQ(records.size(), 1);
+  const auto record = records[0].toObject();
+  EXPECT_EQ(record["text"].toString(), "Meet Thursday at 15:00");
+  EXPECT_TRUE(record["meeting"].toBool());
+  EXPECT_EQ(record["date"].toString(), "2026-11-05");
+  EXPECT_TRUE(bridge.state()["tasks"].toList()[0].toMap()["accepted"].toBool());
+  EXPECT_FALSE(bridge.acceptSummaryTask(0)); // already an agreement
+  EXPECT_FALSE(bridge.acceptSummaryTask(5));
+  EXPECT_TRUE(agreementEntry(bridge, record["id"].toString())["canAddToCalendar"].toBool());
+}
+
 int main(int argc, char **argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QApplication app(argc, argv);
@@ -460,4 +597,37 @@ int main(int argc, char **argv) {
   app.setStyle(style);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+
+TEST_F(CallNotesPageTest, UnavailableSummaryShowsRetry) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  controller.setGenerationEnabled(false);
+  controller.requestFinal();
+  CallNotesPage page(db, &controller); page.resize(1200, 900); page.show(); QApplication::processEvents();
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  ASSERT_EQ(bridge->state()["summaryState"].toString(), "unavailable");
+  auto *retry = page.findChild<QQuickWidget *>("notesQuickWorkspace")->rootObject()->findChild<QQuickItem *>("qmlSummaryRetry");
+  ASSERT_NE(retry, nullptr);
+  EXPECT_TRUE(retry->isVisible());
+}
+
+TEST_F(CallNotesPageTest, CalendarOpenerThatDeletesTheControllerStillLinksTheEvent) {
+  EndedMeeting meeting{db, controller}; meeting.make();
+  const auto id = meeting.addMeetingAgreement();
+  const auto materialId = controller.materialId();
+  auto *viewed = new CallNotesController(db);
+  viewed->openMaterial(materialId);
+  NotesWorkspaceBridge bridge(db, viewed, nullptr);
+  bridge.setAgreements(loadMaterialAgreements(*db, materialId));
+  DuckEvent created; created.name = "Next"; created.start_date = 1; created.end_date = 2;
+  const auto eventId = db->add_event(created, true);
+  bridge.setCalendarOpener([&](const EventTemplate &) -> std::optional<int64_t> {
+    delete viewed;
+    // Reuse the freed block so a stale pointer reads garbage.
+    std::vector<char> filler(sizeof(CallNotesController) * 4, char(0x5a));
+    (void)filler;
+    return eventId;
+  });
+  bridge.addAgreementToCalendar(id);
+  EXPECT_EQ(loadMaterialAgreements(*db, materialId)[0].toObject()["event_id"].toInteger(), eventId);
 }

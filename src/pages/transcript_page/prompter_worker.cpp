@@ -13,7 +13,8 @@
 #include <utility>
 
 #include "prompter_pipeline.h"
-#include "call_notes_pipeline.h"
+#include "live_points_pipeline.h"
+#include "summary_pipeline.h"
 #include "app_settings.h"
 
 Q_LOGGING_CATEGORY(logPrompterWorker, "pcm.prompter.worker")
@@ -191,6 +192,15 @@ void PrompterWorker::progress(int generation, int serial) {
     mTimeout.start(mCallTimeoutMs);
 }
 
+namespace {
+// Live points and the meeting summary: background work that queues behind
+// agreement extraction and may be cancelled per material.
+bool isNotesTask(const QJsonObject &request) {
+  const auto task = request["task"].toString();
+  return task == "live_points" || task == "summary";
+}
+} // namespace
+
 void PrompterWorker::send(const QJsonObject &request) {
   if (mStopped) { emit failed(); return; }
   if ((!mReady && !mPending.isEmpty()) || (mReady && !mExpected.isEmpty())) {
@@ -199,7 +209,7 @@ void PrompterWorker::send(const QJsonObject &request) {
       emit resultReady(rejected); return;
     }
     // Agreement extraction stays ahead of background note updates.
-    if (request["task"] != "notes") mQueue.prepend(request); else mQueue.enqueue(request);
+    if (!isNotesTask(request)) mQueue.prepend(request); else mQueue.enqueue(request);
     return;
   }
   if (!mReady) {
@@ -207,7 +217,7 @@ void PrompterWorker::send(const QJsonObject &request) {
   }
   if (QJsonDocument(request).toJson(QJsonDocument::Compact).size() > kMaxRequestBytes) { fail(); return; }
   mExpected = request;
-  mCallTimeoutMs = request["task"] == "notes" ? kNotesCallTimeoutMs : mAgreementsCallMs;
+  mCallTimeoutMs = isNotesTask(request) ? kNotesCallTimeoutMs : mAgreementsCallMs;
   mTimeout.start(mCallTimeoutMs);
   const int generation = mGeneration;
   const int serial = mSerial = ++mShared->requestSerial;
@@ -217,7 +227,7 @@ void PrompterWorker::send(const QJsonObject &request) {
     QJsonObject result;
     QList<QByteArray> cached; // replies cached by this request; dropped if it fails
     try {
-      auto generate = [&engine, &cached, shared, generation, serial, notes = request["task"] == "notes"](const QString &system, const QByteArray &payload, const QByteArray &schema) {
+      auto generate = [&engine, &cached, shared, generation, serial, notes = isNotesTask(request)](const QString &system, const QByteArray &payload, const QByteArray &schema) {
         if (shared->generation != generation || shared->requestSerial != serial)
           throw pcm::prompter::PipelineError("cancelled");
         const auto key = QCryptographicHash::hash(system.toUtf8() + QByteArray(1, '\0') + payload + QByteArray(1, '\0') + schema, QCryptographicHash::Sha256);
@@ -232,8 +242,20 @@ void PrompterWorker::send(const QJsonObject &request) {
         }
         return value;
       };
-      if (request["task"] == "notes") {
-        result = {{"protocol_version", 1}, {"notes", pcm::prompter::processNotes(request["utterances"].toArray(), generate)}};
+      if (isNotesTask(request)) {
+        QJsonObject notes;
+        if (request["task"] == "live_points") {
+          QStringList known;
+          for (const auto &text : request["known_points"].toArray()) known << text.toString();
+          notes = pcm::prompter::processLivePoints(request["utterances"].toArray(), known, generate);
+        } else if (request["task"] == "summary") {
+          pcm::prompter::SummaryContext context{QDate::fromString(request["call_date"].toString(), Qt::ISODate), {}};
+          for (const auto &text : request["agreements"].toArray()) context.agreements << text.toString();
+          notes = pcm::prompter::processSummary(request["utterances"].toArray(), context, generate);
+        } else {
+          throw pcm::prompter::PipelineError("unsupported notes task");
+        }
+        result = {{"protocol_version", 1}, {"notes", notes}};
         for (const char *key : {"request_id", "session_generation", "ledger_revision", "task", "material_id", "final", "request_token"})
           result.insert(key, request.value(key));
       } else result = pcm::prompter::processRequest(request, generate);
@@ -280,7 +302,7 @@ void PrompterWorker::finish(int generation, const QJsonObject &result) {
 
 void PrompterWorker::cancelNotes(qint64 materialId, const QString &requestToken) {
   const auto matches = [materialId, &requestToken](const QJsonObject &request) {
-    return request["task"] == "notes" && request["material_id"].toInteger() == materialId &&
+    return isNotesTask(request) && request["material_id"].toInteger() == materialId &&
         (requestToken.isEmpty() || request["request_token"].toString() == requestToken);
   };
   for (qsizetype i = mQueue.size(); i > 0; --i)

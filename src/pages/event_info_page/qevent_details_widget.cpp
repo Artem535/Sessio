@@ -901,6 +901,17 @@ void QEventDetailsWidget::startCreatingNewEvent(const QDate &date,
   initEditStyle();
 }
 
+void QEventDetailsWidget::applyTemplate(const QString &title, const std::optional<int64_t> clientId) {
+  if (!title.trimmed().isEmpty()) mUI->mTitle->setText(title.trimmed());
+  if (!clientId) return;
+  mEventTypeSwitch->setChecked(true);
+  onEventTypeToggled(true);
+  emit provideFillClientComboBox(mUI->mClientComboBox);
+  if (const int index = mUI->mClientComboBox->findData(QVariant::fromValue(*clientId)); index != -1)
+    mUI->mClientComboBox->setCurrentIndex(index);
+  updateButtonState();
+}
+
 void QEventDetailsWidget::setDialogMode(bool enabled) {
   mDialogMode = enabled;
   initDefaultStyle();

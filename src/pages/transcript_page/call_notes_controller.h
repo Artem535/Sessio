@@ -1,8 +1,10 @@
 #pragma once
 
 #include "database.h"
+#include <QDate>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QSet>
 #include <QObject>
 #include <QTimer>
 #include <QStringList>
@@ -43,8 +45,17 @@ public:
   bool editDraft(const QString &text);
   bool appendAgreement(const QString &id, const QString &text);
   QString manualText() const;
+  // The meeting summary: {format:2, overview, key_points, tasks, open_questions,
+  // sources}, a format-1 view of a summary saved before format 2, or {} when
+  // there is none or it was dismissed.
+  QJsonObject summary() const;
+  // The summary's overview item ({text, evidence_ids}).
   QJsonObject draft() const;
   QJsonArray keyPoints() const;
+  // Key points found during the call, oldest first (at most 40).
+  QJsonArray livePoints() const;
+  // Day of the call: its event's start, else when the material was created.
+  QDate callDate() const;
   QJsonObject source(const QString &id) const;
   bool sourcesCurrent() const;
   QString liveStatus() const;
@@ -72,6 +83,7 @@ private:
   void fail(const QString &reason);
   void retryLater();
   void stopRetrying();
+  void appendLivePoints(const QJsonObject &notes, const QJsonArray &inputs, const QSet<QString> &allowed);
   std::shared_ptr<pcm::database::Database> mDb;
   QString mAttachmentRoot;
   QTimer mBatch, mRetry;

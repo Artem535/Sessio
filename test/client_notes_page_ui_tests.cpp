@@ -491,6 +491,22 @@ TEST_F(ClientNotesUiTest, EmbeddedPageShowsOnlyThisMeetingWithoutOwnScroll) {
 }
 } // namespace
 
+TEST(ClientNotesJournal, JournalPreviewUsesOverviewText) {
+  QTemporaryDir temp;
+  pcm::config::Config config{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(temp.path().toStdString())}};
+  auto db = std::make_shared<pcm::database::Database>(config);
+  DuckClient client; client.name = "Synthetic"; client.id = db->add_client(client);
+  DuckEvent event; event.name = "Session"; event.start_date = 1000000000000;
+  event.end_date = *event.start_date + 3600000; event.duration = 3600;
+  event.event_stat_id = 1; event.payment_stat_id = 1;
+  event.id = db->add_event(event); ASSERT_GT(db->add_event_client(event.id, client.id), 0);
+  const auto material = db->create_call_material(event.id);
+  ASSERT_TRUE(db->save_call_material(material, db->get_call_material(material).revision,
+      R"({"ended":true,"final":{"format":2,"overview":{"text":"Full meeting overview","evidence_ids":[]},"key_points":[],"tasks":[],"open_questions":[]}})"));
+  ClientNotesPage page(db); page.setClientInfo(client);
+  EXPECT_TRUE(page.journalMarkdown().contains("Full meeting overview"));
+}
+
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
   // QApplication owns and deletes the style; the static marks that it is not leaked.

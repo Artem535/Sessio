@@ -1,4 +1,5 @@
 #include "client_notes_page.h"
+#include "../transcript_page/material_summary.h"
 
 #include "change_log_text.h"
 #include "../../widgets/app_settings.h"
@@ -113,9 +114,8 @@ std::vector<AiSummaryFeedItem> loadAiSummaries(pcm::database::Database &db, int6
   try {
     for (const auto &material : db.get_call_materials_for_client(clientId)) {
       const auto state = QJsonDocument::fromJson(QByteArray::fromStdString(material.json)).object();
-      const auto final = state["final"].toObject();
-      const auto text = final["note"].toObject()["text"].toString().trimmed();
-      if (!state["ended"].toBool(true) || final["dismissed"].toBool() || text.isEmpty()) continue;
+      const auto text = materialSummaryText(state);
+      if (!state["ended"].toBool(true) || text.isEmpty()) continue;
       AiSummaryFeedItem item{material.created_at, material.event_id, text};
       if (material.event_id)
         if (const auto event = db.get_event(*material.event_id); event && event->end_date)

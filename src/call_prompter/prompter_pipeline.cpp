@@ -3,10 +3,15 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QSet>
 #include <QStringList>
 #include <algorithm>
 #include <cmath>
+#include <rfl.hpp>
+#include <rfl/json.hpp>
+#include <string>
+#include <vector>
 
 namespace pcm::prompter {
 namespace {
@@ -24,7 +29,45 @@ const QString kSuggestPrompt = QStringLiteral(
     "Никаких вопросов, пояснений, рекомендаций или Markdown.\n");
 
 const QString kDeadlineQuestion = QStringLiteral("К какому сроку вы договорились это выполнить?");
-const QStringList kEventKeyOrder{"kind", "participants", "action", "evidence_ids", "target_id", "unresolved"};
+const QStringList kEventKeyOrder{"kind", "participants", "action", "evidence_ids", "meeting", "date", "time",
+                                 "target_id", "unresolved"};
+// The prompt lists three weeks of dates; the schema accepts two months, for
+// "через месяц". The list costs prompt tokens, the enum does not.
+constexpr int kPromptCalendarDays = 21;
+constexpr int kSchemaCalendarDays = 60;
+
+// Reply shapes for constrained decoding. Rules a schema cannot carry stay in
+// processRequest()'s validation.
+struct EventSchema {
+  std::string kind;
+  std::vector<std::string> participants;
+  rfl::Validator<std::string, rfl::Size<rfl::Maximum<2000>>> action;
+  std::vector<std::string> evidence_ids;
+  bool meeting;
+  std::string date;
+  std::string time;
+};
+struct ExtractSchema {
+  rfl::Validator<std::vector<EventSchema>, rfl::Size<rfl::Maximum<12>>> events;
+};
+struct MatchSchema {
+  rfl::Validator<std::vector<std::string>, rfl::Size<rfl::Maximum<32>>> matches;
+};
+struct DeadlineSchema {
+  bool missing_deadline;
+  std::vector<std::string> evidence_ids;
+};
+
+template <typename T> QByteArray baseSchema() {
+  static const auto schema = closeObjects(QByteArray::fromStdString(rfl::json::to_schema<T>()));
+  return schema;
+}
+
+QStringList sorted(const QSet<QString> &set) {
+  auto list = QStringList(set.begin(), set.end());
+  list.sort();
+  return list;
+}
 const QStringList kIdentityKeys{"protocol_version", "request_id", "session_generation", "ledger_revision"};
 
 QString prompt(const char *name) {
@@ -78,6 +121,11 @@ QString normalize(const QString &text) {
   auto value = text.toCaseFolded().simplified();
   while (!value.isEmpty() && QStringLiteral(".!?").contains(value.back())) value.chop(1);
   return value;
+}
+
+bool validTime(const QString &time) {
+  static const QRegularExpression pattern(QStringLiteral("^([01][0-9]|2[0-3]):[0-5][0-9]$"));
+  return pattern.match(time).hasMatch();
 }
 
 void appendEscaped(QByteArray &out, const QString &text) {
@@ -204,6 +252,31 @@ QByteArray dumpPayload(const Payload &payload) {
   return out + '}';
 }
 
+QJsonArray calendarDays(const QDate &from, int days) {
+  static const QStringList names{QStringLiteral("понедельник"), QStringLiteral("вторник"), QStringLiteral("среда"),
+                                 QStringLiteral("четверг"), QStringLiteral("пятница"), QStringLiteral("суббота"),
+                                 QStringLiteral("воскресенье")};
+  QJsonArray out;
+  for (int i = 0; i < days; ++i) {
+    const auto day = from.addDays(i);
+    out.append(QJsonObject{{"date", day.toString(Qt::ISODate)}, {"weekday", names[day.dayOfWeek() - 1]}});
+  }
+  return out;
+}
+
+QByteArray restrictStrings(QByteArray schema, const QString &key, const QStringList &values) {
+  const auto names = QJsonDocument(QJsonArray::fromStringList(values)).toJson(QJsonDocument::Compact);
+  const auto field = '"' + key.toUtf8() + "\":{";
+  schema.replace(field + R"("type":"string")", field + R"("type":"string","enum":)" + names);
+  schema.replace(field + R"("type":"array","items":{"type":"string")",
+                 field + R"("type":"array","items":{"type":"string","enum":)" + names);
+  return schema;
+}
+
+QByteArray closeObjects(QByteArray schema) {
+  return schema.replace(R"("type":"object",)", R"("type":"object","additionalProperties":false,)");
+}
+
 QJsonValue parseModelReply(const QString &raw) {
   auto value = raw.trimmed();
   if (value.startsWith("```")) {
@@ -302,22 +375,42 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
                                                u.value("text").toString());
   }
   const QString window = lines.join('\n');
-  const auto call = [&generate](const QString &system, const Payload &payload) {
-    return generate(system, dumpPayload(payload), {});
+  const auto call = [&generate](const QString &system, const Payload &payload, const QByteArray &schema) {
+    return generate(system, dumpPayload(payload), schema);
   };
   // Matching and the deadline hint only refine extracted events. When the
   // model fails on them (overflowing context, unusable reply), the event stays
   // unresolved or without a hint. Cancellation still ends the request.
-  const auto refine = [&call](const QString &system, const Payload &payload) {
+  const auto refine = [&call](const QString &system, const Payload &payload, const QByteArray &schema) {
     try {
-      return call(system, payload);
+      return call(system, payload, schema);
     } catch (const PipelineError &error) {
       if (QLatin1String(error.what()) == QLatin1String("cancelled")) throw;
       return QJsonValue(QJsonValue::Undefined);
     }
   };
 
-  const auto extracted = call(prompt("extract.txt"), {{"new_utterances", window}});
+  // Meeting dates resolve against the day of the call, never the day this
+  // request happens to run.
+  auto callDate = QDate::fromString(request.value("call_date").toString(), Qt::ISODate);
+  if (!callDate.isValid()) callDate = QDate::currentDate();
+  QStringList promptDays, schemaDays{QString()};
+  for (const auto &day : calendarDays(callDate, kSchemaCalendarDays)) {
+    const auto date = day.toObject()["date"].toString();
+    schemaDays << date;
+    if (promptDays.size() < kPromptCalendarDays) promptDays << date + ' ' + day.toObject()["weekday"].toString();
+  }
+  auto extractSchema = baseSchema<ExtractSchema>();
+  extractSchema = restrictStrings(extractSchema, "kind", {"accept", "cancel"});
+  extractSchema = restrictStrings(extractSchema, "participants", sorted(speakers));
+  extractSchema = restrictStrings(extractSchema, "evidence_ids", sorted(ids));
+  extractSchema = restrictStrings(extractSchema, "date", schemaDays);
+  extractSchema.replace(R"("time":{"type":"string"})",
+                        R"("time":{"type":"string","pattern":"^(([01][0-9]|2[0-3]):[0-5][0-9])?$"})");
+  const auto extracted = call(prompt("extract.txt"),
+                              {{"new_utterances", window}, {"call_date", promptDays.first()},
+                               {"calendar", QJsonArray::fromStringList(promptDays)}},
+                              extractSchema);
   if (!extracted.isObject() || !extracted.toObject().value("events").isArray())
     throw PipelineError("invalid extraction");
   const auto extractedEvents = extracted.toObject().value("events").toArray();
@@ -335,6 +428,12 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
       rejected.append(QStringLiteral("invalid event source/schema"));
       continue;
     }
+    // A wrong date or time only loses that detail; the agreement stays.
+    auto checked = event;
+    const auto date = event.value("date").toString(), time = event.value("time").toString();
+    checked.insert("meeting", event.value("meeting").toBool(false));
+    checked.insert("date", schemaDays.contains(date) ? date : QString());
+    checked.insert("time", validTime(time) ? time : QString());
     const auto parties = stringSet(event.value("participants").toArray());
     QJsonArray candidates;
     for (const auto &record : records) {
@@ -347,11 +446,12 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
         matches << record.toObject().value("id").toString();
     bool invalidMatch = false;
     if (!candidates.isEmpty() && matches.isEmpty()) {
-      const auto result = refine(prompt("match.txt"),
-                               {{"event", event}, {"records", candidates}, {"new_utterances", window}});
-      const auto value = result.isObject() ? result.toObject().value("matches") : QJsonValue(QJsonValue::Undefined);
       QSet<QString> validIds;
       for (const auto &record : candidates) validIds.insert(record.toObject().value("id").toString());
+      const auto result = refine(prompt("match.txt"),
+                                 {{"event", event}, {"records", candidates}, {"new_utterances", window}},
+                                 restrictStrings(baseSchema<MatchSchema>(), "matches", sorted(validIds)));
+      const auto value = result.isObject() ? result.toObject().value("matches") : QJsonValue(QJsonValue::Undefined);
       invalidMatch = !value.isArray() || value.toArray().size() > 32;
       if (!invalidMatch) {
         QSet<QString> seen;
@@ -365,7 +465,7 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
       if (invalidMatch) matches.clear();
     }
     const bool unresolved = invalidMatch || matches.size() > 1 || (kind == "cancel" && matches.isEmpty());
-    auto resolved = event;
+    auto resolved = checked;
     resolved.insert("target_id", matches.size() == 1 && !unresolved ? matches.first() : QString());
     resolved.insert("unresolved", unresolved);
     events.append(resolved);
@@ -382,7 +482,8 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
   }
   QJsonArray suggestions;
   if (!accepted.isEmpty()) {
-    const auto hint = refine(kSuggestPrompt, {{"new_utterances", window}, {"accepted_events", accepted}});
+    const auto hint = refine(kSuggestPrompt, {{"new_utterances", window}, {"accepted_events", accepted}},
+                             restrictStrings(baseSchema<DeadlineSchema>(), "evidence_ids", sorted(acceptedIds)));
     const auto object = hint.toObject();
     if (hint.isObject() && object.value("missing_deadline").isBool() && object.value("missing_deadline").toBool() &&
         boundedStrings(object.value("evidence_ids"), acceptedIds))

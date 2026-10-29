@@ -11,6 +11,7 @@ namespace pcm::prompter {
 namespace {
 
 constexpr qsizetype kMaxReplyChars = 48000;
+constexpr int kSchemaOutputTokens = 1024;
 
 class GemmaEngine final : public PrompterEngine {
 public:
@@ -22,6 +23,10 @@ public:
     sessio::litert::GenerateOptions options;
     options.reusePrefix = mReusePrefix;
     options.jsonSchema = schema.toStdString();
+    // A schema bounds the reply by its own lengths; the meeting summary's
+    // overview needs more than the default 384 tokens. Pipelines budget their
+    // input for this reserve (notes::kContextInputBytes).
+    if (!schema.isEmpty()) options.maxOutputTokens = kSchemaOutputTokens;
     sessio::litert::GenerateStats stats;
     QElapsedTimer timer;
     timer.start();

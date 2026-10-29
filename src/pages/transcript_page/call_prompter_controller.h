@@ -2,6 +2,7 @@
 #include "database.h"
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QDate>
 #include <QObject>
 #include <QTimer>
 #include <QHash>
@@ -16,6 +17,12 @@ public:
   void resume();
   void pause();
   void endCall();
+  // Meeting dates in agreements resolve against this day (default: today).
+  void setCallDate(const QDate &date) { mCallDate = date; }
+  // Reloads cards and records written by another view (an agreement added from
+  // the summary, a calendar link). False when nothing changed or a request is
+  // in flight.
+  bool refreshFromStorage();
   void transcriptDeleted(qint64 transcriptId);
   bool evidenceAvailable(const QString &cardId) const;
   void flush();
@@ -54,4 +61,5 @@ private:
   QHash<QString, QJsonObject> mSources;
   QJsonObject mRequest;
   QString mStatus;
+  QDate mCallDate;
 };

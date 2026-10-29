@@ -626,6 +626,49 @@ void QEventInfoPage::openQuickEventDialog(const QTime &startTime,
   mActiveEventDetailsWidget.clear();
 }
 
+std::optional<int64_t> QEventInfoPage::createEventFromTemplate(const EventTemplate &t) {
+  auto dialog = QDialog(this);
+  dialog.setModal(true);
+  dialog.setWindowTitle(tr(": EVENT_ADD_BUTTON"));
+
+  auto layout = QVBoxLayout(&dialog);
+  layout.setContentsMargins(0, 0, 0, 0);
+
+  auto *detailsWidget = new QEventDetailsWidget(&dialog);
+  detailsWidget->setMeetingCoordinator(mMeetingCoordinator);
+  detailsWidget->setDialogMode(true);
+  detailsWidget->setConflictChecker(
+      [this](const DuckEvent &event) { return checkEventConflict(event); });
+  layout.addWidget(detailsWidget);
+
+  mActiveEventDetailsWidget = detailsWidget;
+  mLastCreatedEventId = 0;
+
+  connect(detailsWidget, &QEventDetailsWidget::provideEventSave, this,
+          &QEventInfoPage::onEventSaved);
+  connect(detailsWidget, &QEventDetailsWidget::provideEditingCanceled, this,
+          &QEventInfoPage::onEditingCanceled);
+  connect(detailsWidget, &QEventDetailsWidget::provideDialogAccept, &dialog,
+          &QDialog::accept);
+  connect(detailsWidget, &QEventDetailsWidget::provideEditingCanceled, &dialog,
+          &QDialog::reject);
+  connect(detailsWidget, &QEventDetailsWidget::provideFillClientComboBox, this,
+          [this](QComboBox *comboBox) {
+            emit provideFillClientComboBox(comboBox);
+          });
+
+  detailsWidget->startCreatingNewEvent(t.date, t.time, t.durationMinutes);
+  detailsWidget->applyTemplate(t.title, t.clientId);
+
+  dialog.resize(560, 700);
+  const bool saved = dialog.exec() == QDialog::Accepted;
+
+  mActiveEventDetailsWidget.clear();
+  const auto created = std::exchange(mLastCreatedEventId, 0);
+  if (!saved || created <= 0) return std::nullopt;
+  return created;
+}
+
 void QEventInfoPage::openEventDialog(const std::optional<DuckEvent> &event,
                                      const std::optional<int64_t> clientId) {
   auto dialog = QDialog(this);
@@ -817,6 +860,7 @@ void QEventInfoPage::onEventSaved(QEventItem *event) {
     }
     eventDetails.id = id;
     event->setId(id);
+    mLastCreatedEventId = id;
   } else if (eventDetails.is_virtual_occurrence) {
     const auto scope = eventDetails.series_id.has_value()
                            ? askRecurringEditScope(this)

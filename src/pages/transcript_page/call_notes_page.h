@@ -1,10 +1,12 @@
 #pragma once
 
+#include "../event_info_page/event_template.h"
 #include "meeting_history_widgets.h"
 #include <QJsonArray>
 #include <QPointer>
 #include <QWidget>
 #include <QDialog>
+#include <functional>
 #include <memory>
 #include <optional>
 
@@ -35,6 +37,9 @@ public:
   void setMeeting(const QString &details, const QString &status);
   void setAgreements(const QJsonArray &records);
   void setControllerFactory(MeetingControllerFactory factory);
+  // «Add to calendar» on an agreement opens the pre-filled new-event dialog; «In calendar» opens the event.
+  void setCalendarOpener(std::function<std::optional<int64_t>(const EventTemplate &)> opener);
+  void setEventOpener(std::function<void(int64_t)> opener);
   // Shows the live prompter as a card after «My notes»; the page owns it.
   void setPrompterPanel(PrompterPanel *panel);
   void showHistory(qint64 materialId);

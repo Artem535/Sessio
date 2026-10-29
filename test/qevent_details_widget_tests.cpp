@@ -7,6 +7,7 @@
 
 #include <QAbstractButton>
 #include <QApplication>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -348,6 +349,23 @@ TEST(QEventDetailsWidgetTest, OpenOnLiveKitEventRequestsNativeJoinByMeetingRef) 
 
   ASSERT_EQ(openSpy.count(), 1);
   EXPECT_EQ(openSpy.at(0).at(0).toString(), QStringLiteral("ref-old"));
+}
+
+TEST(QEventDetailsWidgetTemplate, ApplyTemplateFillsTitleAndClient) {
+  QEventDetailsWidget widget;
+  widget.setDialogMode(true);
+  QObject::connect(&widget, &QEventDetailsWidget::provideFillClientComboBox, &widget, [](QComboBox *box) {
+    box->clear();
+    box->addItem("Другой", QVariant::fromValue<int64_t>(3));
+    box->addItem("Анна", QVariant::fromValue<int64_t>(7));
+  });
+  widget.startCreatingNewEvent(QDate(2026, 11, 5), QTime(15, 0), 50);
+  widget.applyTemplate("Сессия с Анной", 7);
+  EXPECT_TRUE(widget.isCreatingNewEvent());
+  EXPECT_EQ(widget.findChild<QLineEdit *>("mTitle")->text(), "Сессия с Анной");
+  EXPECT_EQ(widget.selectedClientId(), 7);
+  EXPECT_EQ(widget.findChild<QTimeEdit *>("mTimeFrom")->time(), QTime(15, 0));
+  EXPECT_EQ(widget.findChild<QTimeEdit *>("mTimeTo")->time(), QTime(15, 50));
 }
 
 int main(int argc, char **argv) {

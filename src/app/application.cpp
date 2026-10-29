@@ -583,7 +583,6 @@ void Application::refreshUpcomingMeetings() {
   try {
     for (const auto &material : mDb->get_call_materials()) {
       const auto state = QJsonDocument::fromJson(QByteArray::fromStdString(material.json)).object();
-      const auto packet = state[state["final"].isObject() ? "final" : "live"].toObject();
       QString title = tr("Call materials");
       if (material.event_id)
         if (const auto event = mDb->get_event(*material.event_id)) title = QString::fromStdString(event->name.value_or(""));
@@ -592,7 +591,7 @@ void Application::refreshUpcomingMeetings() {
         transcripts.append(QVariantMap{{"id", QString::number(id)}, {"title", tr("Transcript") + " " + QString::number(id)}});
       history.append(QVariantMap{{"id", QString::number(material.id)}, {"title", title},
         {"date", QDateTime::fromMSecsSinceEpoch(material.created_at).toLocalTime().toString("dd.MM.yyyy · HH:mm")},
-        {"summary", packet["dismissed"].toBool() ? QString{} : packet["note"].toObject()["text"].toString()},
+        {"summary", materialSummaryText(state)},
         {"transcripts", transcripts}});
     }
   } catch (...) { history.clear(); }
@@ -1170,6 +1169,20 @@ void Application::connectSignals() {
     auto *notes = new CallNotesController(mDb, this);
     auto *notesPage = new CallNotesPage(mDb, notes, callsPage);
     mCallNotesPanel = notesPage->editor();
+    // Agreement → calendar: the pre-filled dialog lives on the Calendar page; «In calendar» jumps there.
+    const auto wireCalendar = [this, eventPage](CallNotesPage *page) {
+      page->setCalendarOpener([eventPage](const EventTemplate &t) {
+        return eventPage ? eventPage->createEventFromTemplate(t) : std::nullopt;
+      });
+      page->setEventOpener([this](int64_t eventId) {
+        qint64 dayMs = QDateTime::currentMSecsSinceEpoch();
+        try {
+          if (const auto event = mDb->get_event(eventId); event && event->start_date) dayMs = *event->start_date;
+        } catch (...) {}
+        mMainWindow->returnToEvent(eventId, dayMs);
+      });
+    };
+    wireCalendar(notesPage);
     auto bindNotesEditor = [](ClientNotesPage *page, CallNotesController *storage) {
       const QPointer<CallNotesController> guard(storage);
       auto boundMaterial = std::make_shared<qint64>(-1);
@@ -1337,6 +1350,7 @@ void Application::connectSignals() {
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptStarted, prompter,
             [prompter, worker, notes, startPrompter, manualPrompterRequested](qint64 id) {
       worker->stop(); prompter->beginTranscript(id); notes->attachTranscript(id);
+      prompter->setCallDate(notes->callDate());  // «в четверг» resolves against the call's day, even past midnight
       if (*manualPrompterRequested || pcm::app_settings::prompterAutoStart()) startPrompter();
       *manualPrompterRequested = false;
     });
@@ -1387,7 +1401,6 @@ void Application::connectSignals() {
               refreshButton();
             });
     connect(callsPage, &CallsPage::callSessionEnded, this, [this, controller, refreshButton, prompter, worker, notes, finals, notesWanted, notesPage, meetingDetails] {
-      const bool finishingTranscript = controller->active();
       controller->detachCall();
       prompter->endCall(); worker->stop();
       notes->setGenerationEnabled(false);
@@ -1396,8 +1409,6 @@ void Application::connectSignals() {
       if (mCurrentCallEventId) {
         try { notesPage->setClient(mDb->get_client_by_event(*mCurrentCallEventId)); } catch (...) {}
       }
-      if (*notesWanted && notes->transcriptId() > 0)
-        finals->enqueue(notes->materialId(), finishingTranscript ? notes->transcriptId() : 0);
       finals->setCallActive(false);
       mCurrentCallEventId.reset();
       refreshButton();
@@ -1434,7 +1445,7 @@ void Application::connectSignals() {
       mMainWindow->openTranscriptPage();
       reviewPage->focusPhrase(id);
     });
-    auto openMaterials = [this, notes, prompter, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting](qint64 materialId, qint64 transcriptId) {
+    auto openMaterials = [this, notes, prompter, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting, wireCalendar](qint64 materialId, qint64 transcriptId) {
       auto *dialog = new NotesEditorDialog(mMainWindow.get());
       dialog->setAttribute(Qt::WA_DeleteOnClose);
       CallNotesController *saved = notes;
@@ -1467,6 +1478,7 @@ void Application::connectSignals() {
       } catch (...) {}
       page->setAgreements(saved == notes ? prompter->records() : loadMaterialAgreements(*mDb, saved->materialId()));
       page->setControllerFactory(meetingControllers);
+      wireCalendar(page);
       connect(page->editor(), &ClientNotesPage::openEventRequested, mMainWindow.get(), &MainWindow::returnToEvent);
       if (saved == notes)
         connect(page, &CallNotesPage::retryRequested, prompterPanel, &PrompterPanel::startRequested);
@@ -1489,7 +1501,7 @@ void Application::connectSignals() {
     };
     auto reviewNotesViews = std::make_shared<QHash<qint64, QPointer<QWidget>>>();
     auto bindReviewNotes = [this, reviewPage, reviewNotesViews, notes, finals, controller,
-                            bindNotesEditor, meetingControllers, describeMeeting](qint64 transcriptId) {
+                            bindNotesEditor, meetingControllers, describeMeeting, wireCalendar](qint64 transcriptId) {
       reviewPage->setNotesView(nullptr);
       // Keep buffered saved-entry/AI edits alive across transcript selection.
       // Hidden hosts stay owned by the page rather than becoming top-level windows.
@@ -1525,6 +1537,7 @@ void Application::connectSignals() {
         finals->cancel(saved->materialId());
       });
       auto *page = new CallNotesPage(mDb, saved, host);
+      wireCalendar(page);
       const auto transcript = mDb->get_transcript(transcriptId);
       page->setEnabled(transcript && transcript->status != "recording");
       connect(notes, &CallNotesController::changed, saved, [this, notes, saved, page, transcriptId] {
@@ -1567,6 +1580,7 @@ void Application::connectSignals() {
       connect(page, &CallNotesPage::sourceRequested, reviewPage, focusSource, Qt::QueuedConnection);
       auto *reviewPrompter = new CallPrompterController(mDb, host);
       reviewPrompter->beginTranscript(transcriptId);
+      reviewPrompter->setCallDate(saved->callDate());
       auto *reviewSuggestions = new PrompterPanel(reviewPrompter, mDb, page);
       reviewSuggestions->setCallNoteSaver([saved](const QString &cardId, const QString &text) {
         return saved->appendAgreement(cardId, text);

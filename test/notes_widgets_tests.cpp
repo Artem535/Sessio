@@ -34,7 +34,7 @@ TEST(NotesWidgetFrameTest, ShowsTitleStatusChipAndLabelledActions) {
   frame.setStatus({}); EXPECT_TRUE(chip->isHidden());
 }
 
-// Produces a controller with one ready live draft and one key point.
+// Produces a controller with one ready summary (made after the call) and one key point.
 struct NotesFixture {
   QTemporaryDir dir;
   pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir.path().toStdString())}};
@@ -50,12 +50,14 @@ struct NotesFixture {
     phrase.start_ms = 73000; phrase.end_ms = 76000;
     phrase.id = db->add_transcript_phrase(phrase);
     QSignalSpy requests(&controller, &CallNotesController::requestReady);
-    controller.addPhrase(phrase); controller.flush();
+    controller.addPhrase(phrase); controller.finishCall(); controller.requestFinal();
     ASSERT_FALSE(requests.isEmpty());
+    ASSERT_TRUE(requests.last().first().toJsonObject()["final"].toBool());
     auto reply = requests.last().first().toJsonObject();
     const QJsonObject note{{"text", text}, {"evidence_ids", QJsonArray{QString::number(phrase.id)}}};
     auto point = note; point["text"] = pointText;
-    reply["notes"] = QJsonObject{{"note", note}, {"key_points", QJsonArray{point}}};
+    reply["notes"] = QJsonObject{{"format", 2}, {"overview", note}, {"key_points", QJsonArray{point}},
+                                 {"tasks", QJsonArray{}}, {"open_questions", QJsonArray{}}};
     controller.handleResult(reply);
     ASSERT_EQ(controller.draft()["text"].toString(), text);
   }
@@ -104,20 +106,21 @@ TEST_F(AiSummaryTest, DeletingSummaryAsksForConfirmation) {
 TEST_F(AiSummaryTest, AiSummaryErrorShowsReasonAndRetryInsideCard) {
   generate();
   QSignalSpy requests(&controller, &CallNotesController::requestReady);
-  controller.addPhrase(phrase); controller.flush();
+  controller.requestFinal(); // "Create again" after the call
   ASSERT_FALSE(requests.isEmpty());
   auto failed = requests.last().first().toJsonObject();
-  // Transient live failures retry by themselves; this one needs the user.
   failed["error"] = "x"; failed["reason"] = "too_long";
   controller.handleResult(failed);
   AiSummaryWidget widget(&controller);
   widget.show();
-  QSignalSpy retry(&widget, &AiSummaryWidget::retryRequested);
   auto *problem = widget.findChild<QLabel *>("aiSummaryProblem");
   EXPECT_FALSE(problem->isHidden());
   EXPECT_TRUE(problem->text().contains("too long"));
+  const auto before = requests.count();
+  controller.setGenerationEnabled(true);
   widget.findChild<QPushButton *>("aiSummaryRetry")->click();
-  EXPECT_EQ(retry.count(), 1);
+  EXPECT_EQ(requests.count(), before + 1);
+  EXPECT_TRUE(requests.last().first().toJsonObject()["final"].toBool());
 }
 
 TEST_F(AiSummaryTest, SourceLinkRequestsThePhrase) {

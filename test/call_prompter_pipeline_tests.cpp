@@ -181,10 +181,10 @@ TEST_F(PipelineTest, ModelInputMatchesTheValidatedPythonSerialisation) {
   const QByteArray window = R"("[1] Анна: Отправлю документ в пятницу.\n[2] Борис: Хорошо, жду в пятницу.")";
   const QByteArray eventJson = R"({"kind": "accept", "participants": ["Анна"], "action": "Документ \"А\"", "evidence_ids": ["1"])";
   ASSERT_EQ(payloads.size(), 3u);
-  EXPECT_EQ(payloads[0], "{\"new_utterances\": " + window + "}");
+  EXPECT_TRUE(payloads[0].startsWith("{\"new_utterances\": " + window + ", \"call_date\": \""));
   EXPECT_EQ(payloads[1], "{\"event\": " + eventJson + R"(}, "records": [{"id": "r1", "participants": ["Анна"], "text": "Документ"}], "new_utterances": )" + window + "}");
   EXPECT_EQ(payloads[2], "{\"new_utterances\": " + window + ", \"accepted_events\": [" + eventJson +
-                             R"(, "target_id": "", "unresolved": false}]})");
+                             R"(, "meeting": false, "date": "", "time": "", "target_id": "", "unresolved": false}]})");
 }
 
 TEST(PipelineFormatTest, DumpEscapesControlCharactersLikePython) {
@@ -219,4 +219,118 @@ TEST(PipelineFailureReasonTest, GroupsFixedErrorCodesForTheUser) {
   EXPECT_EQ(failureReason("invalid notes source"), "runtime");
   EXPECT_EQ(failureReason("cancelled"), "cancelled");
   EXPECT_EQ(failureReason("unexpected"), "runtime");
+}
+
+namespace {
+struct Call {
+  QString system;
+  QByteArray payload, schema;
+};
+QJsonObject parsed(const QByteArray &bytes) { return QJsonDocument::fromJson(bytes).object(); }
+// Walks "properties" down a JSON schema, following array "items" and
+// reflect-cpp's "$ref" into "$defs".
+QJsonObject schemaAt(const QJsonObject &root, const QStringList &path) {
+  const auto defs = root["$defs"].toObject();
+  const auto deref = [&defs](QJsonObject node) {
+    while (node.contains("$ref")) node = defs[node["$ref"].toString().section('/', -1)].toObject();
+    return node;
+  };
+  auto schema = deref(root);
+  for (const auto &key : path) {
+    if (schema["type"] == "array") schema = deref(schema["items"].toObject());
+    schema = deref(schema["properties"].toObject()[key].toObject());
+  }
+  return schema;
+}
+} // namespace
+
+TEST(CalendarDays, StartsAtTheGivenDateWithRussianWeekdays) {
+  const auto days = calendarDays(QDate(2026, 10, 29), 21);
+  ASSERT_EQ(days.size(), 21);
+  EXPECT_EQ(days.first().toObject(), (QJsonObject{{"date", "2026-10-29"}, {"weekday", "четверг"}}));
+  EXPECT_EQ(days.last().toObject()["date"].toString(), "2026-11-18");
+  EXPECT_EQ(days.last().toObject()["weekday"].toString(), "среда");
+}
+
+TEST_F(PipelineTest, ExtractCallPassesSchemaWithDateEnumFromCallDate) {
+  request["call_date"] = "2026-10-29";
+  std::vector<Call> calls;
+  processRequest(request, [&](const QString &system, const QByteArray &payload, const QByteArray &schema) -> QJsonValue {
+    calls.push_back({system, payload, schema});
+    return calls.size() == 1 ? QJsonValue(events(event())) : QJsonValue(json(R"({"missing_deadline":false,"evidence_ids":[]})"));
+  });
+  ASSERT_FALSE(calls.empty());
+  const auto &extract = calls.front();
+  ASSERT_FALSE(extract.schema.isEmpty());
+  EXPECT_TRUE(extract.payload.contains("\"calendar\""));
+  EXPECT_TRUE(extract.payload.contains("2026-10-29 четверг"));
+  EXPECT_TRUE(extract.payload.contains("2026-11-18 среда"));
+  EXPECT_FALSE(extract.payload.contains("2026-11-19"));
+  const auto dates = schemaAt(parsed(extract.schema), {"events", "date"})["enum"].toArray();
+  EXPECT_TRUE(dates.contains("2026-11-05"));
+  EXPECT_TRUE(dates.contains("2026-12-27")); // 60 days in the schema, 21 in the prompt
+  EXPECT_TRUE(dates.contains(""));
+  EXPECT_FALSE(dates.contains("2026-12-31"));
+  const auto ids = schemaAt(parsed(extract.schema), {"events", "evidence_ids"})["items"].toObject()["enum"].toArray();
+  EXPECT_EQ(ids, (QJsonArray{"1", "2"}));
+}
+
+TEST_F(PipelineTest, ExtractPayloadFitsTheAgreementInputBudget) {
+  QJsonArray window;
+  for (int i = 0; i < 24; ++i)
+    window.append(QJsonObject{{"id", QString::number(1000 + i)}, {"speaker", i % 2 ? "Борис" : "Анна"},
+                              {"text", QString(500, QChar(u'ж'))}});
+  request["utterances"] = window;
+  request["call_date"] = "2026-10-29";
+  QByteArray payload;
+  processRequest(request, [&](const QString &, const QByteArray &p, const QByteArray &) -> QJsonValue {
+    if (payload.isEmpty()) payload = p;
+    return json(R"({"events":[]})");
+  });
+  // 24 x 500 characters is the controller's largest window (12000-character cap);
+  // the calendar adds about 0.5 KB of UTF-8 on top of it.
+  EXPECT_LT(payload.size() - 24 * 1000, 2600);
+}
+
+TEST_F(PipelineTest, MatchAndDeadlineCallsAreSchemaConstrained) {
+  request["candidates"] = json(R"([{"id":"a","text":"Документ","participants":["Анна","Борис"]},
+                                   {"id":"b","text":"Встреча","participants":["Анна","Борис"]}])");
+  std::vector<Call> calls;
+  processRequest(request, [&](const QString &system, const QByteArray &payload, const QByteArray &schema) -> QJsonValue {
+    calls.push_back({system, payload, schema});
+    if (calls.size() == 1) return events(event());
+    if (calls.size() == 2) return json(R"({"matches":["a"]})");
+    return json(R"({"missing_deadline":false,"evidence_ids":[]})");
+  });
+  ASSERT_EQ(calls.size(), 3u);
+  for (const auto &call : calls) EXPECT_FALSE(call.schema.isEmpty());
+  EXPECT_EQ(schemaAt(parsed(calls[1].schema), {"matches"})["items"].toObject()["enum"].toArray(), (QJsonArray{"a", "b"}));
+  EXPECT_EQ(schemaAt(parsed(calls[2].schema), {"evidence_ids"})["items"].toObject()["enum"].toArray(), (QJsonArray{"1", "2"}));
+}
+
+TEST_F(PipelineTest, MeetingFieldsSurviveIntoEvents) {
+  request["call_date"] = "2026-10-29";
+  const auto out = run({events(event({{"meeting", true}, {"date", "2026-11-05"}, {"time", "15:00"}})),
+                        json(R"({"missing_deadline":false,"evidence_ids":[]})")});
+  const auto e = out["events"][0].toObject();
+  EXPECT_TRUE(e["meeting"].toBool());
+  EXPECT_EQ(e["date"].toString(), "2026-11-05");
+  EXPECT_EQ(e["time"].toString(), "15:00");
+  EXPECT_TRUE(dumpJson(e).startsWith(R"({"kind": "accept", "participants": ["Анна", "Борис"], "action": "Анна отправит документ в пятницу", "evidence_ids": ["1", "2"], "meeting": true, "date": "2026-11-05", "time": "15:00")"));
+}
+
+TEST_F(PipelineTest, InvalidMeetingFieldsDropOnlyThoseFields) {
+  request["call_date"] = "2026-10-29";
+  const auto out = run({json(R"({"events":[
+      {"kind":"accept","participants":["Анна","Борис"],"action":"Встреча","evidence_ids":["1","2"],"meeting":true,"date":"2027-01-01","time":"25:00"},
+      {"kind":"accept","participants":["Анна","Борис"],"action":"Документ","evidence_ids":["1","2"]}]})"),
+                        json(R"({"missing_deadline":false,"evidence_ids":[]})")});
+  ASSERT_EQ(out["events"].toArray().size(), 2);
+  const auto bad = out["events"][0].toObject(), missing = out["events"][1].toObject();
+  EXPECT_TRUE(bad["meeting"].toBool());
+  EXPECT_EQ(bad["date"].toString(), "");
+  EXPECT_EQ(bad["time"].toString(), "");
+  EXPECT_FALSE(missing["meeting"].toBool());
+  EXPECT_EQ(missing["date"].toString(), "");
+  EXPECT_EQ(missing["time"].toString(), "");
 }

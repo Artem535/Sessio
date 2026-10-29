@@ -80,12 +80,54 @@ TEST_F(PrompterWorkerTest, CancellingColdNotesDrainsTheOtherQueuedRequest) {
   QSignalSpy replies(&worker, &PrompterWorker::resultReady);
   ASSERT_TRUE(worker.start(model));
   ASSERT_TRUE(entered->tryAcquire(1, 5000));
-  auto one = request(1); one["task"] = "notes"; one["material_id"] = 1; one["request_token"] = "one";
+  auto one = request(1); one["task"] = "live_points"; one["material_id"] = 1; one["request_token"] = "one";
   worker.send(one);
-  auto two = request(2); two["task"] = "notes"; two["material_id"] = 2; two["request_token"] = "two";
+  auto two = request(2); two["task"] = "live_points"; two["material_id"] = 2; two["request_token"] = "two";
   worker.send(two); worker.cancelNotes(1, "one"); gate->release();
   ASSERT_TRUE(replies.wait(5000)); ASSERT_EQ(replies.count(), 1);
   EXPECT_EQ(replies[0][0].toJsonObject()["request_id"].toInt(), 2);
+}
+
+TEST_F(PrompterWorkerTest, LivePointsAndSummaryAreBackgroundTasks) {
+  auto entered = std::make_shared<QSemaphore>();
+  auto gate = std::make_shared<QSemaphore>();
+  PrompterWorker worker([probe = probe, entered, gate](const QString &) -> std::unique_ptr<pcm::prompter::PrompterEngine> {
+    entered->release(); gate->acquire(); return std::make_unique<FakeEngine>(probe);
+  });
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.start(model));
+  ASSERT_TRUE(entered->tryAcquire(1, 5000));
+  worker.send(request(1)); // waits for the model
+  for (const auto &[id, task] : {std::pair{2, "live_points"}, std::pair{3, "summary"}, std::pair{4, "live_points"}}) {
+    auto background = request(id); background["task"] = task; background["material_id"] = 7;
+    background["request_token"] = QString::number(id);
+    worker.send(background);
+  }
+  worker.send(request(5)); // agreements jump ahead of background work
+  worker.cancelNotes(7, "4");
+  gate->release();
+  for (int i = 0; i < 4 && replies.count() < 4; ++i) replies.wait(5000);
+  ASSERT_EQ(replies.count(), 4);
+  QList<int> order;
+  for (const auto &reply : replies) order << reply[0].toJsonObject()["request_id"].toInt();
+  EXPECT_EQ(order, (QList<int>{1, 5, 2, 3}));
+  EXPECT_EQ(replies[2][0].toJsonObject()["task"].toString(), "live_points");
+}
+
+TEST_F(PrompterWorkerTest, SummaryRequestRunsTheSummaryPipeline) {
+  PrompterWorker worker(factory(probe));
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.start(model));
+  auto summary = request(1); summary["task"] = "summary"; summary["material_id"] = 7; summary["final"] = true;
+  summary["call_date"] = "2026-10-29"; summary["agreements"] = QJsonArray{};
+  summary["utterances"] = QJsonArray{QJsonObject{{"id", "1"}, {"speaker", "A"}, {"text", "Привет"},
+                                                 {"start_ms", 0}, {"end_ms", 1000}}};
+  worker.send(summary);
+  ASSERT_TRUE(replies.wait(5000));
+  // The fake model's {"events":[]} is not a summary leaf: the pipeline ran and rejected it.
+  const auto reply = replies[0][0].toJsonObject();
+  EXPECT_EQ(reply["task"].toString(), "summary");
+  EXPECT_EQ(reply["reason"].toString(), "invalid_output");
 }
 
 TEST_F(PrompterWorkerTest, MissingModelFailsWithoutLoading) {
