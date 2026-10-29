@@ -64,6 +64,7 @@
   - Add `{"calendar", calendarDays(callDate)}` and `{"call_date", …}` to the extract payload.
   - Extend `extract.txt` with the meeting/date/time rules: `meeting=true` only for a planned meeting or call between participants; pick `date` only from `calendar`; otherwise use `""`. Update examples A and B with `"meeting":true,"date":…,"time":…`.
   - Validate the fields after parsing, as the last test describes.
+  - **Token budget (review note):** the schema enum costs no prompt tokens, but the payload list does. The payload carries `call_date` with its weekday and a compact list of the next 21 days only (`"2026-10-29 чт"` strings via `calendarDays(from, 21)`). The schema `date` enum keeps 60 days. In the test, measure the extract payload's byte size with a 24-utterance window and assert that it stays within the existing input budget. Record the result in the commit message.
 - [ ] **Step 4: Run, expect PASS** (whole suite)
 - [ ] **Step 5: Commit** `feat(prompter): schema-constrained agreement calls with meeting date/time`
 
