@@ -87,10 +87,8 @@ std::vector<MeetingRecord> loadMeetingHistory(pcm::database::Database &db, int64
       }
     }
     const auto packet = shownPacket(state);
-    if (!packet["dismissed"].toBool()) {
-      record.summary = packet["note"].toObject()["text"].toString().trimmed();
-      record.keyPoints = packet["key_points"].toArray();
-    }
+    record.summary = materialSummaryText(state);
+    if (!packet["dismissed"].toBool()) record.keyPoints = packet["key_points"].toArray();
     const auto entries = state["manual_entries"].toArray();
     record.noteCount = static_cast<int>(entries.size());
     if (!entries.isEmpty()) record.firstNote = entries.first().toObject()["body_markdown"].toString().trimmed();

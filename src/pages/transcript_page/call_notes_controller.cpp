@@ -1,5 +1,6 @@
 #include "call_notes_controller.h"
 #include "app_settings.h"
+#include "meeting_history.h"
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -15,12 +16,28 @@ constexpr qsizetype kMaxLivePoints = 40;
 QString timeLabel(qint64 ms) {
   return QStringLiteral("%1:%2").arg(ms / 60000).arg(ms / 1000 % 60, 2, 10, QLatin1Char('0'));
 }
+// A format-2 summary list: at most `max` items, each a validItem with text.
+bool validList(const QJsonValue &list, qsizetype max, const QSet<QString> &ids, bool tasks = false);
 bool validItem(const QJsonObject &item, const QSet<QString> &ids) {
   const auto text = item["text"].toString();
   if (text.size() > 6000 || !item["evidence_ids"].isArray()) return false;
   const auto evidence = item["evidence_ids"].toArray();
   if (!text.trimmed().isEmpty() && evidence.isEmpty()) return false;
   for (const auto &id : evidence) if (!id.isString() || !ids.contains(id.toString())) return false;
+  return true;
+}
+bool validList(const QJsonValue &list, qsizetype max, const QSet<QString> &ids, bool tasks) {
+  if (!list.isArray() || list.toArray().size() > max) return false;
+  for (const auto &value : list.toArray()) {
+    const auto item = value.toObject();
+    if (!value.isObject() || item["text"].toString().trimmed().isEmpty()) return false;
+    if (tasks) {
+      if (!item["meeting"].isBool() || !item["date"].isString() || !item["time"].isString()) return false;
+      if (!validItem({{"text", item["text"]}, {"evidence_ids", item["evidence_ids"]}}, ids)) return false;
+    } else if (!validItem(item, ids)) {
+      return false;
+    }
+  }
   return true;
 }
 void removeDraftFiles(const QJsonArray &attachments, const QString &root, qint64 materialId) {
@@ -164,9 +181,10 @@ void CallNotesController::setGenerationEnabled(bool enabled) {
   if (!enabled) { mBatch.stop(); stopRetrying(); return; }
   if (mDirty && !mInFlight) mBatch.start();
 }
+// The meeting summary is offered, never started: finalStatus() reports
+// "offered" until the user asks for it.
 void CallNotesController::finishCall() {
   mEnded = true; mState["ended"] = true;
-  if (mEnabled) { mFinalPending = true; mState["final_status"] = "queued"; mBatch.start(); }
   persist(); emit changed();
 }
 void CallNotesController::requestFinal() {
@@ -217,6 +235,17 @@ void CallNotesController::dispatch(bool final) {
       {"request_id", ++mRequestId}, {"session_generation", mGeneration}, {"ledger_revision", mRevision},
       {"final", final}, {"utterances", inputs}};
   if (!final) mRequest["known_points"] = known;
+  else {
+    mRequest["task"] = "summary";
+    mRequest["call_date"] = callDate().toString(Qt::ISODate);
+    QJsonArray agreements;
+    for (const auto &value : loadMaterialAgreements(*mDb, mMaterialId)) {
+      const auto record = value.toObject();
+      if (record["active"].toBool(true) && !record["text"].toString().trimmed().isEmpty())
+        agreements.append(record["text"].toString().trimmed());
+    }
+    mRequest["agreements"] = agreements;
+  }
   mState[final ? "final_status" : "live_status"] = "running";
   mState.remove("error_reason");
   if (!persist()) return;
@@ -286,11 +315,10 @@ void CallNotesController::handleResult(const QJsonObject &result) {
   }
   auto notes = result["notes"].toObject();
   if (!final) { appendLivePoints(notes, inputs, allowed); return; }
-  if (!notes["note"].isObject() || !validItem(notes["note"].toObject(), allowed) ||
-      !notes["key_points"].isArray() || notes["key_points"].toArray().size() > 8) { fail(QStringLiteral("invalid_output")); return; }
-  for (const auto &point : notes["key_points"].toArray())
-    if (!point.isObject() || !validItem(point.toObject(), allowed)) { fail(QStringLiteral("invalid_output")); return; }
-  if (final && current != inputs) {
+  if (notes["format"].toInt() != 2 || !notes["overview"].isObject() || !validItem(notes["overview"].toObject(), allowed) ||
+      !validList(notes["key_points"], 10, allowed) || !validList(notes["tasks"], 8, allowed, true) ||
+      !validList(notes["open_questions"], 5, allowed)) { fail(QStringLiteral("invalid_output")); return; }
+  if (current != inputs) {
     mInFlight = false; mFinalPending = true; flush(); return;
   }
   // Another view may have saved manual text while inference was running.
@@ -505,16 +533,28 @@ bool CallNotesController::removeNoteEntry(const QString &entryId) {
   }
   return false;
 }
-QJsonObject CallNotesController::draft() const {
-  // Live notes keep only key points; a note left by older versions is ignored.
-  if (!mState["final"].isObject()) return {};
-  const auto packet = mState["final"].toObject();
-  if (packet["dismissed"].toBool()) return {};
-  auto note = packet["note"].toObject();
-  return note;
+QJsonObject CallNotesController::summary() const {
+  const auto final = mState["final"].toObject();
+  if (final.isEmpty() || final["dismissed"].toBool()) return {};
+  if (final["format"].toInt() == 2) return final;
+  // Saved before format 2: a short note and its points.
+  return {{"format", 1}, {"overview", final["note"]}, {"key_points", final["key_points"]},
+          {"tasks", QJsonArray{}}, {"open_questions", QJsonArray{}}, {"sources", final["sources"]}};
 }
+// Live notes keep only key points; a note left by older versions is ignored.
+QJsonObject CallNotesController::draft() const { return summary()["overview"].toObject(); }
 QJsonArray CallNotesController::keyPoints() const {
-  return mState[mState["final"].isObject() ? "final" : "live"].toObject()["key_points"].toArray();
+  return mState["final"].isObject() ? summary()["key_points"].toArray() : livePoints();
+}
+QDate CallNotesController::callDate() const {
+  try {
+    const auto material = mDb->get_call_material(mMaterialId);
+    if (material.event_id)
+      if (const auto event = mDb->get_event(*material.event_id); event && event->start_date)
+        return QDateTime::fromMSecsSinceEpoch(*event->start_date).toLocalTime().date();
+    if (material.created_at > 0) return QDateTime::fromMSecsSinceEpoch(material.created_at).toLocalTime().date();
+  } catch (...) {}
+  return QDate::currentDate();
 }
 QJsonArray CallNotesController::livePoints() const { return mState["live"].toObject()["key_points"].toArray(); }
 QJsonObject CallNotesController::source(const QString &id) const {
@@ -550,15 +590,18 @@ bool CallNotesController::setManualText(const QString &text) {
   emit changed(); return true;
 }
 bool CallNotesController::editDraft(const QString &text) {
-  if (!sourcesCurrent() || text.trimmed().isEmpty() || text.size() > 6000) return false;
-  const auto before = mState; const auto key = mState["final"].isObject() ? "final" : "live";
-  auto packet = mState[key].toObject(); auto note = packet["note"].toObject(); note["text"] = text;
-  packet["note"] = note; mState[key] = packet;
+  if (!mState["final"].isObject() || !sourcesCurrent() || text.trimmed().isEmpty() || text.size() > 6000) return false;
+  const auto before = mState;
+  auto packet = mState["final"].toObject();
+  const auto field = packet["format"].toInt() == 2 ? "overview" : "note";
+  auto note = packet[field].toObject(); note["text"] = text;
+  packet[field] = note; mState["final"] = packet;
   if (!persist()) { mState = before; return false; } emit changed(); return true;
 }
 bool CallNotesController::dismissDraft() {
-  const auto before = mState; const auto key = mState["final"].isObject() ? "final" : "live";
-  auto packet = mState[key].toObject(); packet["dismissed"] = true; mState[key] = packet;
+  if (!mState["final"].isObject()) return false;
+  const auto before = mState;
+  auto packet = mState["final"].toObject(); packet["dismissed"] = true; mState["final"] = packet;
   if (!persist()) { mState = before; return false; } emit changed(); return true;
 }
 // Agreements live in the prompter state and are shown by their own widget;
@@ -575,14 +618,18 @@ bool CallNotesController::appendAgreement(const QString &id, const QString &text
 QString CallNotesController::liveStatus() const { return mState["live_status"].toString("idle"); }
 QString CallNotesController::finalStatus() const {
   if (mState["final"].isObject() && !sourcesCurrent()) return QStringLiteral("stale");
-  return mState["final_status"].toString("idle");
+  const auto status = mState["final_status"].toString("idle");
+  // An ended meeting with a transcript and no summary offers one.
+  if (mEnded && !mState["final"].isObject() && mTranscriptId > 0 && status == "idle")
+    return QStringLiteral("offered");
+  return status;
 }
 QString CallNotesController::statusText() const {
   if (mState["storage_error"].toBool()) return tr("Could not save call materials. Reopen the call and try again.");
   const auto status = mEnded ? finalStatus() : liveStatus();
-  if (status == "running") return mEnded ? tr("Forming the final meeting note…") : tr("Updating conversation notes…");
+  if (status == "running") return mEnded ? tr("Summarizing the meeting…") : tr("Updating key points…");
   if (status == "queued") return tr("Waiting for local processing");
-  if (status == "ready") return mEnded ? tr("Final note saved with this call") : tr("Notes updated through %1").arg(timeLabel(mState["processed_ms"].toInteger()));
+  if (status == "ready") return mEnded ? tr("Meeting summary saved with this call") : tr("Key points updated through %1").arg(timeLabel(mState["processed_ms"].toInteger()));
   if (status == "error") {
     const auto reason = mState["error_reason"].toString();
     // Decoding is greedy: the same transcript gives the same reply, so a retry
@@ -599,5 +646,6 @@ QString CallNotesController::statusText() const {
   if (status == "cancelled") return tr("Processing cancelled. Your notes are saved.");
   if (status == "interrupted") return tr("Processing was interrupted. You can retry.");
   if (status == "unavailable") return tr("A saved transcript and a local model are required.");
+  if (status == "offered") return tr("Summarize the whole meeting when you are ready.");
   return tr("Notes are saved with this call. A client is optional.");
 }

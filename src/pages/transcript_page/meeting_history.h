@@ -1,5 +1,6 @@
 #pragma once
 #include "database.h"
+#include "material_summary.h"
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QString>
@@ -12,7 +13,7 @@ struct MeetingRecord {
   qint64 materialId = 0;
   qint64 startMs = 0;        // event start, else material created_at
   qint64 durationMs = 0;     // event duration, 0 when unknown
-  QString summary;           // AI summary text (final, else live; dismissed -> empty)
+  QString summary;           // meeting summary text (materialSummaryText)
   QString firstNote;         // first own note entry, Markdown source
   int noteCount = 0;         // own note entries
   QStringList agreements;    // active prompter records of linked transcripts

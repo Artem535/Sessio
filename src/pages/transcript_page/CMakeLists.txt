@@ -15,7 +15,7 @@ qt_add_library(${TARGET_NAME} STATIC
     notes_workspace_bridge.h notes_workspace_bridge.cpp
     qml/NotesWorkspace.qml
     qml/NotesEditor.qml
-    meeting_history.h meeting_history.cpp
+    meeting_history.h meeting_history.cpp material_summary.h
     meeting_history_widgets.h meeting_history_widgets.cpp
     notes_widget_frame.h notes_widget_frame.cpp
     call_notes_sources.h call_notes_sources.cpp

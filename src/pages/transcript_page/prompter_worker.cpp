@@ -13,7 +13,6 @@
 #include <utility>
 
 #include "prompter_pipeline.h"
-#include "call_notes_pipeline.h"
 #include "live_points_pipeline.h"
 #include "summary_pipeline.h"
 #include "app_settings.h"
@@ -194,11 +193,11 @@ void PrompterWorker::progress(int generation, int serial) {
 }
 
 namespace {
-// Live points, the meeting summary and legacy notes: background work that
-// queues behind agreement extraction and may be cancelled per material.
+// Live points and the meeting summary: background work that queues behind
+// agreement extraction and may be cancelled per material.
 bool isNotesTask(const QJsonObject &request) {
   const auto task = request["task"].toString();
-  return task == "notes" || task == "live_points" || task == "summary";
+  return task == "live_points" || task == "summary";
 }
 } // namespace
 
@@ -253,8 +252,6 @@ void PrompterWorker::send(const QJsonObject &request) {
           pcm::prompter::SummaryContext context{QDate::fromString(request["call_date"].toString(), Qt::ISODate), {}};
           for (const auto &text : request["agreements"].toArray()) context.agreements << text.toString();
           notes = pcm::prompter::processSummary(request["utterances"].toArray(), context, generate);
-        } else if (request["task"] == "notes") {
-          notes = pcm::prompter::processNotes(request["utterances"].toArray(), generate);
         } else {
           throw pcm::prompter::PipelineError("unsupported notes task");
         }

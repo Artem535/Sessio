@@ -3,7 +3,7 @@
 //   L=~/.cache/sessio-litert-lm-gpu/install/lib
 //   g++ -std=c++20 -O2 -pthread -Isrc/call_prompter/litert test/litert_backend_bench.cpp \
 //     -L$L -lsessio_litert -Wl,-rpath-link,$L -Wl,-rpath,$L -o litert_backend_bench
-//   ./litert_backend_bench model.litertlm gpu|cpu CACHE_DIR src/call_prompter/prompts/notes.txt 3
+//   ./litert_backend_bench model.litertlm gpu|cpu CACHE_DIR src/call_prompter/prompts/live_points.txt 3
 #include "sessio_litert.h"
 #include <chrono>
 #include <cstdio>
@@ -52,7 +52,7 @@ struct Scenario {
 
 int main(int argc, char **argv) {
   if (argc < 5) {
-    std::cerr << "usage: bench model cpu|gpu cacheDir notes.txt [runs]\n";
+    std::cerr << "usage: bench model cpu|gpu cacheDir prompt.txt [runs]\n";
     return 2;
   }
   const std::string mode = argv[2];

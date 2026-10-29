@@ -41,13 +41,14 @@ struct NotesFixture {
     phrase.start_ms = 73000; phrase.end_ms = 76000;
     phrase.id = db->add_transcript_phrase(phrase);
     QSignalSpy requests(&controller, &CallNotesController::requestReady);
-    controller.addPhrase(phrase); controller.finishCall(); controller.flush();
+    controller.addPhrase(phrase); controller.finishCall(); controller.requestFinal();
     ASSERT_FALSE(requests.isEmpty());
     ASSERT_TRUE(requests.last().first().toJsonObject()["final"].toBool());
     auto reply = requests.last().first().toJsonObject();
     const QJsonObject note{{"text", text}, {"evidence_ids", QJsonArray{QString::number(phrase.id)}}};
     auto point = note; point["text"] = pointText;
-    reply["notes"] = QJsonObject{{"note", note}, {"key_points", QJsonArray{point}}};
+    reply["notes"] = QJsonObject{{"format", 2}, {"overview", note}, {"key_points", QJsonArray{point}},
+                                 {"tasks", QJsonArray{}}, {"open_questions", QJsonArray{}}};
     controller.handleResult(reply);
     ASSERT_EQ(controller.draft()["text"].toString(), text);
   }

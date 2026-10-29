@@ -1,4 +1,5 @@
 #include "client_notes_page.h"
+#include "../transcript_page/material_summary.h"
 #include "surface_paint_filter.h"
 #include <oclero/qlementine/widgets/SegmentedControl.hpp>
 #include <QComboBox>
@@ -30,9 +31,7 @@ QJsonObject packet(const QJsonObject &state) {
   return state[state["final"].isObject() ? "final" : "live"].toObject();
 }
 QString summary(const QJsonObject &state) {
-  if (!state["ended"].toBool(true) || !state["final"].isObject()) return {};
-  const auto shown = state["final"].toObject();
-  return shown["dismissed"].toBool() ? QString{} : shown["note"].toObject()["text"].toString();
+  return state["ended"].toBool(true) ? materialSummaryText(state) : QString{};
 }
 QString plainPreview(const QString &markdown) {
   QTextDocument document;

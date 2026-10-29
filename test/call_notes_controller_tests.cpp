@@ -1,7 +1,9 @@
 #include "call_notes_controller.h"
 #include "call_notes_finalizer.h"
+#include "meeting_history.h"
 #include <QApplication>
 #include <QFile>
+#include <QDateTime>
 #include <QJsonDocument>
 #include <QDir>
 #include <QSignalSpy>
@@ -32,7 +34,8 @@ protected:
   QJsonObject reply(QJsonObject req, const DuckTranscriptPhrase &p, const QString &text = "Rehearsal discussed") {
     const QJsonObject item{{"text", text}, {"evidence_ids", QJsonArray{QString::number(p.id)}}};
     if (req["task"] == "live_points") req["notes"] = QJsonObject{{"key_points", QJsonArray{item}}};
-    else req["notes"] = QJsonObject{{"note", item}, {"key_points", QJsonArray{}}};
+    else req["notes"] = QJsonObject{{"format", 2}, {"overview", item}, {"key_points", QJsonArray{}},
+                                    {"tasks", QJsonArray{}}, {"open_questions", QJsonArray{}}};
     return req;
   }
   QStringList liveTexts() const {
@@ -165,7 +168,7 @@ TEST_F(CallNotesTest, EditingEvidenceMakesSummaryStale) {
 }
 TEST_F(CallNotesTest, FinalStatusIsIndependentAndFinishesOnlyForMatchingRequest) {
   const auto p = phrase(); c->setGenerationEnabled(true); c->finishCall();
-  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->requestFinal();
   ASSERT_EQ(requests.count(), 1); EXPECT_EQ(c->finalStatus(), "running");
   c->handleResult(reply(requests[0][0].toJsonObject(), p));
   EXPECT_EQ(c->finalStatus(), "ready"); EXPECT_TRUE(c->ended());
@@ -182,14 +185,14 @@ TEST_F(CallNotesTest, TwoViewsCannotAcceptEachOthersOldReplyAfterSourceCorrectio
   const auto stale = reply(first[0][0].toJsonObject(), p);
   ASSERT_TRUE(db->update_transcript_phrase_text(p.id, "I declined the rehearsal"));
   CallNotesController other(db); other.openTranscript(transcript); other.setGenerationEnabled(true);
-  QSignalSpy second(&other, &CallNotesController::requestReady); other.finishCall(); other.flush();
+  QSignalSpy second(&other, &CallNotesController::requestReady); other.finishCall(); other.requestFinal();
   ASSERT_EQ(second.count(), 1);
   other.handleResult(stale);
   EXPECT_TRUE(other.draft().isEmpty()); EXPECT_TRUE(other.busy());
 }
 TEST_F(CallNotesTest, FinalCanBeRetriedAfterEditingAnExistingSourceWithoutReopening) {
   const auto p = phrase(); c->setGenerationEnabled(true); c->finishCall();
-  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->requestFinal();
   ASSERT_EQ(requests.count(), 1); c->handleResult(reply(requests[0][0].toJsonObject(), p));
   ASSERT_TRUE(db->update_transcript_phrase_text(p.id, "Corrected source"));
   c->requestFinal(); ASSERT_EQ(requests.count(), 2); EXPECT_TRUE(c->busy());
@@ -201,12 +204,117 @@ TEST_F(CallNotesTest, AcceptedAgreementDoesNotChangeMyNotes) {
   ASSERT_TRUE(c->appendAgreement("a1", "Send documents"));
   EXPECT_EQ(c->manualText(), "Mine");
 }
-TEST_F(CallNotesTest, FinalSummaryStartsAutomaticallyWhenCallEnds) {
+TEST_F(CallNotesTest, FinishCallOffersInsteadOfQueuing) {
   phrase(); c->setGenerationEnabled(true);
   QSignalSpy requests(c.get(), &CallNotesController::requestReady);
   c->finishCall(); c->flush();
+  EXPECT_TRUE(requests.isEmpty());
+  EXPECT_EQ(c->finalStatus(), "offered");
+  EXPECT_FALSE(c->statusText().isEmpty());
+  c->requestFinal();
   ASSERT_EQ(requests.count(), 1);
   EXPECT_TRUE(requests[0][0].toJsonObject()["final"].toBool());
+}
+TEST_F(CallNotesTest, CallWithoutTranscriptIsNotOffered) {
+  CallNotesController plain(db); plain.beginCall(); plain.finishCall();
+  EXPECT_NE(plain.finalStatus(), "offered");
+}
+TEST_F(CallNotesTest, RequestFinalSendsSummaryTaskWithAgreements) {
+  phrase(); c->setGenerationEnabled(true); c->finishCall();
+  QJsonObject prompter{{"records", QJsonArray{
+      QJsonObject{{"id", "r1"}, {"text", "Meet Thursday"}, {"active", true}},
+      QJsonObject{{"id", "r2"}, {"text", "Cancelled one"}, {"active", false}}}}};
+  ASSERT_TRUE(db->save_prompter_state(transcript, 0, QJsonDocument(prompter).toJson().toStdString()));
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->requestFinal();
+  ASSERT_EQ(requests.count(), 1);
+  const auto request = requests[0][0].toJsonObject();
+  EXPECT_EQ(request["task"].toString(), "summary");
+  EXPECT_EQ(request["agreements"].toArray(), (QJsonArray{"Meet Thursday"}));
+  EXPECT_EQ(request["call_date"].toString(), QDate::currentDate().toString(Qt::ISODate));
+}
+TEST_F(CallNotesTest, SummaryRequestCarriesCallDateNotToday) {
+  DuckEvent event; event.name = "Session";
+  event.start_date = QDateTime(QDate(2026, 10, 1), QTime(10, 0)).toMSecsSinceEpoch();
+  event.end_date = QDateTime(QDate(2026, 10, 1), QTime(11, 0)).toMSecsSinceEpoch();
+  const auto eventId = db->add_event(event, true);
+  ASSERT_GT(eventId, 0);
+  CallNotesController notes(db); notes.beginCall(eventId);
+  const auto own = db->add_transcript(std::nullopt, "live_local_v1");
+  notes.attachTranscript(own); notes.setGenerationEnabled(true);
+  DuckTranscriptPhrase p; p.transcript_id = own; p.track_role = "participant";
+  p.text = "See you"; p.start_ms = 0; p.end_ms = 1000; p.id = db->add_transcript_phrase(p);
+  notes.finishCall();
+  QSignalSpy requests(&notes, &CallNotesController::requestReady); notes.requestFinal();
+  ASSERT_EQ(requests.count(), 1);
+  EXPECT_EQ(requests[0][0].toJsonObject()["call_date"].toString(), "2026-10-01");
+}
+TEST_F(CallNotesTest, Format2ResultValidatedAndStored) {
+  const auto p = phrase(); c->setGenerationEnabled(true); c->finishCall();
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->requestFinal();
+  auto bad = reply(requests[0][0].toJsonObject(), p);
+  auto notes = bad["notes"].toObject();
+  notes["tasks"] = QJsonArray{QJsonObject{{"text", "Send plan"}, {"evidence_ids", QJsonArray{"foreign"}},
+                                          {"meeting", false}, {"date", ""}, {"time", ""}}};
+  bad["notes"] = notes; c->handleResult(bad);
+  EXPECT_EQ(c->finalStatus(), "error");
+  c->setGenerationEnabled(true); c->requestFinal();
+  auto good = reply(requests.last()[0].toJsonObject(), p);
+  notes = good["notes"].toObject();
+  const auto id = QString::number(p.id);
+  notes["key_points"] = QJsonArray{QJsonObject{{"text", "Point"}, {"evidence_ids", QJsonArray{id}}}};
+  notes["tasks"] = QJsonArray{QJsonObject{{"text", "Meet Thursday"}, {"evidence_ids", QJsonArray{id}},
+                                          {"meeting", true}, {"date", "2026-11-05"}, {"time", "15:00"}}};
+  notes["open_questions"] = QJsonArray{QJsonObject{{"text", "Which day?"}, {"evidence_ids", QJsonArray{id}}}};
+  good["notes"] = notes; c->handleResult(good);
+  ASSERT_EQ(c->finalStatus(), "ready");
+  const auto summary = c->summary();
+  EXPECT_EQ(summary["format"].toInt(), 2);
+  EXPECT_EQ(summary["overview"].toObject()["text"].toString(), "Rehearsal discussed");
+  EXPECT_EQ(c->draft()["text"].toString(), "Rehearsal discussed");
+  EXPECT_EQ(summary["tasks"].toArray()[0].toObject()["date"].toString(), "2026-11-05");
+  EXPECT_EQ(summary["open_questions"].toArray().size(), 1);
+  EXPECT_EQ(c->keyPoints().size(), 1);
+}
+TEST_F(CallNotesTest, LegacyFinalIsShownAndNotOffered) {
+  const auto p = phrase(); c->finishCall();
+  auto state = QJsonDocument::fromJson(QByteArray::fromStdString(db->get_call_material(c->materialId()).json)).object();
+  const QJsonObject note{{"text", "Old short note"}, {"evidence_ids", QJsonArray{QString::number(p.id)}}};
+  const QJsonObject phraseSource{{"id", QString::number(p.id)}, {"speaker", "participant"}, {"text", QString::fromStdString(p.text)},
+                                 {"start_ms", 1000}, {"end_ms", 2000}, {"transcript_id", transcript}};
+  state["final"] = QJsonObject{{"note", note}, {"key_points", QJsonArray{note}}, {"sources", QJsonArray{phraseSource}}};
+  state["final_status"] = "ready";
+  const auto stored = db->get_call_material(c->materialId());
+  ASSERT_TRUE(db->save_call_material(c->materialId(), stored.revision, QJsonDocument(state).toJson().toStdString()));
+  CallNotesController reopened(db); reopened.openMaterial(c->materialId());
+  EXPECT_EQ(reopened.summary()["format"].toInt(), 1);
+  EXPECT_EQ(reopened.draft()["text"].toString(), "Old short note");
+  EXPECT_EQ(reopened.keyPoints().size(), 1);
+  EXPECT_TRUE(reopened.summary()["tasks"].toArray().isEmpty());
+  EXPECT_NE(reopened.finalStatus(), "offered");
+  ASSERT_TRUE(reopened.editDraft("Edited old note"));
+  EXPECT_EQ(reopened.draft()["text"].toString(), "Edited old note");
+  reopened.setGenerationEnabled(true);
+  QSignalSpy requests(&reopened, &CallNotesController::requestReady); reopened.requestFinal();
+  ASSERT_EQ(requests.count(), 1);
+  reopened.handleResult(reply(requests[0][0].toJsonObject(), p));
+  EXPECT_EQ(reopened.summary()["format"].toInt(), 2);
+}
+TEST_F(CallNotesTest, EndedMeetingWithoutSummaryIsOffered) {
+  phrase(); c->finishCall();
+  CallNotesController reopened(db); reopened.openMaterial(c->materialId());
+  EXPECT_EQ(reopened.finalStatus(), "offered");
+  CallNotesController byTranscript(db); byTranscript.openTranscript(transcript);
+  EXPECT_EQ(byTranscript.finalStatus(), "offered");
+}
+TEST_F(CallNotesTest, EditedSourceMarksSummaryStale) {
+  const auto p = phrase(); c->setGenerationEnabled(true); c->finishCall();
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->requestFinal();
+  c->handleResult(reply(requests[0][0].toJsonObject(), p));
+  ASSERT_EQ(c->finalStatus(), "ready");
+  ASSERT_TRUE(db->update_transcript_phrase_text(p.id, "Corrected source"));
+  CallNotesController reopened(db); reopened.openMaterial(c->materialId());
+  EXPECT_EQ(reopened.finalStatus(), "stale");
+  EXPECT_FALSE(reopened.editDraft("Changed"));
 }
 TEST_F(CallNotesTest, BackgroundFinalCanWaitForAnActiveCallAndBeCancelled) {
   phrase(); c->finishCall();
@@ -221,7 +329,7 @@ TEST_F(CallNotesTest, BackgroundFinalCanWaitForAnActiveCallAndBeCancelled) {
 }
 TEST_F(CallNotesTest, FinalMergesWithManualTextEditedInAnotherView) {
   const auto p = phrase(); c->setGenerationEnabled(true); c->finishCall();
-  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->flush();
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady); c->requestFinal();
   ASSERT_EQ(requests.count(), 1);
   CallNotesController editor(db); editor.openMaterial(c->materialId());
   ASSERT_TRUE(editor.setManualText("Written while the final was running"));
@@ -419,7 +527,7 @@ TEST_F(CallNotesTest, BrokenWorkerOrFinalNoteStillWaitForTheUser) {
   c->workerFailed();
   EXPECT_EQ(c->liveStatus(), "error");
   EXPECT_FALSE(c->retryPending());
-  c->setGenerationEnabled(true); c->finishCall(); c->flush();
+  c->setGenerationEnabled(true); c->finishCall(); c->requestFinal();
   ASSERT_EQ(requests.count(), 2);
   auto failed = requests.last()[0].toJsonObject();
   ASSERT_TRUE(failed["final"].toBool());
@@ -430,6 +538,14 @@ TEST_F(CallNotesTest, BrokenWorkerOrFinalNoteStillWaitForTheUser) {
   QTest::qWait(50);
   EXPECT_EQ(requests.count(), 2);
 }
+TEST(MaterialSummaryText, ReadsOverviewOrLegacyNoteNeverLive) {
+  const QJsonObject overview{{"text", "Overview text"}, {"evidence_ids", QJsonArray{}}};
+  EXPECT_EQ(materialSummaryText({{"final", QJsonObject{{"format", 2}, {"overview", overview}}}}), "Overview text");
+  EXPECT_EQ(materialSummaryText({{"final", QJsonObject{{"note", QJsonObject{{"text", "Old note"}}}}}}), "Old note");
+  EXPECT_EQ(materialSummaryText({{"final", QJsonObject{{"format", 2}, {"overview", overview}, {"dismissed", true}}}}), "");
+  EXPECT_EQ(materialSummaryText({{"live", QJsonObject{{"note", QJsonObject{{"text", "Running"}}}}}}), "");
+}
+
 int main(int argc, char **argv) {
   QApplication app(argc, argv); ::testing::InitGoogleTest(&argc, argv); return RUN_ALL_TESTS();
 }

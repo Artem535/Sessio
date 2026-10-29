@@ -3,7 +3,8 @@
 // points to gemma-4-E4B-it.litertlm. Uses no user settings or transcripts.
 #include "prompter_engine.h"
 #include "prompter_pipeline.h"
-#include "call_notes_pipeline.h"
+#include "live_points_pipeline.h"
+#include "summary_pipeline.h"
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QJsonArray>
@@ -75,6 +76,9 @@ protected:
   static inline QTemporaryDir sCacheDir;
   static inline std::unique_ptr<PrompterEngine> sEngine;
   int mId = 0;
+
+public:
+  static PrompterEngine *engine() { return sEngine.get(); }
 };
 
 constexpr const char *kMeetingAndNotes = R"([
@@ -150,41 +154,78 @@ TEST_F(ModelSmokeTest, CancellationStopsAnActiveNativeRequest) {
   EXPECT_TRUE(request.get());
 }
 
-TEST_F(ModelSmokeTest, CallNotesPreserveCorrectionAndCiteOriginalSources) {
-  const QJsonArray sources{
-    QJsonObject{{"id", "n1"}, {"speaker", "Анна"}, {"text", "Обсудили подготовку к выступлению. Я сначала попробую репетицию перед одним знакомым."}, {"start_ms", 0}, {"end_ms", 1000}},
-    QJsonObject{{"id", "n2"}, {"speaker", "Анна"}, {"text", "Я отправлю план во вторник. Нет, поправка: в четверг."}, {"start_ms", 1000}, {"end_ms", 2000}},
-    QJsonObject{{"id", "n3"}, {"speaker", "Борис"}, {"text", "Хорошо, ждём план в четверг."}, {"start_ms", 2000}, {"end_ms", 3000}}};
-  const auto out = processNotes(sources, [](const QString &system, const QByteArray &payload, const QByteArray &schema) {
-    const auto value = sEngine->generate(system, payload, schema);
-    std::cout << "synthetic notes stage: " << dumpJson(value).toStdString() << '\n';
+namespace {
+Generate printing(const char *stage, int *calls = nullptr) {
+  return [stage, calls](const QString &system, const QByteArray &payload, const QByteArray &schema) {
+    if (calls) ++*calls;
+    const auto value = ModelSmokeTest::engine()->generate(system, payload, schema);
+    std::cout << stage << ": " << dumpJson(value).toStdString() << '\n';
     return value;
-  });
+  };
+}
+QJsonObject phrase(const QString &id, const QString &speaker, const QString &text, int index) {
+  return {{"id", id}, {"speaker", speaker}, {"text", text}, {"start_ms", index * 1000}, {"end_ms", (index + 1) * 1000}};
+}
+QJsonArray longCall() {
+  QJsonArray sources;
+  for (int i = 0; i < 6; ++i)
+    sources.append(phrase(QStringLiteral("long%1").arg(i), "Анна",
+        "Обсуждаем организацию встречи. Выберем тихое помещение, проверим микрофон и проектор. Подготовим материалы для участников. Пока только обсуждаем варианты, точного решения нет.", i));
+  sources.append(phrase("last", "Борис", "Окончательная поправка: встреча отменена. Подготовка больше не нужна.", 6));
+  return sources;
+}
+} // namespace
+
+TEST_F(ModelSmokeTest, SummaryPreservesCorrectionAndCitesOriginalSources) {
+  const QJsonArray sources{
+    phrase("n1", "Анна", "Обсудили подготовку к выступлению. Я сначала попробую репетицию перед одним знакомым.", 0),
+    phrase("n2", "Анна", "Я отправлю план во вторник. Нет, поправка: в четверг.", 1),
+    phrase("n3", "Борис", "Хорошо, ждём план в четверг.", 2)};
+  const auto out = processSummary(sources, {QDate(2026, 10, 29), {}}, printing("summary stage"));
   const auto json = QString::fromUtf8(QJsonDocument(out).toJson(QJsonDocument::Compact));
-  std::cout << "synthetic call notes: " << json.toStdString() << '\n';
-  EXPECT_FALSE(out["note"].toObject()["text"].toString().isEmpty());
+  std::cout << "synthetic summary: " << json.toStdString() << '\n';
+  EXPECT_FALSE(out["overview"].toObject()["text"].toString().isEmpty());
   EXPECT_FALSE(json.contains(QStringLiteral("вторник"), Qt::CaseInsensitive));
   EXPECT_TRUE(json.contains(QStringLiteral("четверг"), Qt::CaseInsensitive));
 }
 
-TEST_F(ModelSmokeTest, LongCallNotesIncludeTheLateCancellation) {
-  QJsonArray sources;
-  for (int i = 0; i < 6; ++i) {
-    sources.append(QJsonObject{{"id", QStringLiteral("long%1").arg(i)}, {"speaker", "Анна"},
-      {"text", "Обсуждаем организацию встречи. Выберем тихое помещение, проверим микрофон и проектор. Подготовим материалы для участников. Пока только обсуждаем варианты, точного решения нет."},
-      {"start_ms", i * 1000}, {"end_ms", (i + 1) * 1000}});
-  }
-  sources.append(QJsonObject{{"id", "last"}, {"speaker", "Борис"}, {"text", "Окончательная поправка: встреча отменена. Подготовка больше не нужна."}, {"start_ms", 6000}, {"end_ms", 7000}});
+TEST_F(ModelSmokeTest, SummaryOnLongCallIncludesTheLateCancellation) {
   int calls = 0;
-  const auto out = processNotes(sources, [&calls](const QString &system, const QByteArray &payload, const QByteArray &schema) {
-    ++calls; const auto value = sEngine->generate(system, payload, schema);
-    std::cout << "synthetic long notes stage: " << dumpJson(value).toStdString() << '\n';
-    return value;
-  });
+  const auto out = processSummary(longCall(), {QDate(2026, 10, 29), {}}, printing("long summary stage", &calls));
   const auto json = QString::fromUtf8(QJsonDocument(out).toJson(QJsonDocument::Compact));
-  std::cout << "synthetic long call notes (" << calls << " calls): " << json.toStdString() << '\n';
-  EXPECT_GT(calls, 1); EXPECT_TRUE(json.contains(QStringLiteral("отмен"), Qt::CaseInsensitive));
+  std::cout << "synthetic long summary (" << calls << " calls): " << json.toStdString() << '\n';
+  EXPECT_GT(calls, 2);
+  EXPECT_TRUE(json.contains(QStringLiteral("отмен"), Qt::CaseInsensitive));
   EXPECT_TRUE(json.contains(QStringLiteral("last")));
+}
+
+TEST_F(ModelSmokeTest, LivePointsOnSyntheticLongCall) {
+  const auto sources = longCall();
+  QJsonArray first, second;
+  for (qsizetype i = 0; i < sources.size(); ++i) (i < 4 ? first : second).append(sources[i]);
+  const auto a = processLivePoints(first, {}, printing("live points 1"));
+  QStringList known;
+  for (const auto &p : a["key_points"].toArray()) known << p.toObject()["text"].toString();
+  const auto b = processLivePoints(second, known, printing("live points 2"));
+  std::cout << "live points: " << QJsonDocument(a).toJson(QJsonDocument::Compact).toStdString() << " then "
+            << QJsonDocument(b).toJson(QJsonDocument::Compact).toStdString() << '\n';
+  EXPECT_FALSE(a["key_points"].toArray().isEmpty());
+  EXPECT_FALSE(b["key_points"].toArray().isEmpty());
+  for (const auto &p : b["key_points"].toArray()) EXPECT_FALSE(known.contains(p.toObject()["text"].toString()));
+}
+
+TEST_F(ModelSmokeTest, NextMeetingDateResolvedFromWeekday) {
+  const QJsonObject request{{"protocol_version", 1}, {"request_id", 1}, {"session_generation", 1},
+      {"ledger_revision", 0}, {"call_date", "2026-10-29"}, {"candidates", QJsonArray{}},
+      {"utterances", QJsonArray{
+        QJsonObject{{"id", "m1"}, {"speaker", "Анна"}, {"text", "Давайте встретимся в следующий четверг в 15:00."}},
+        QJsonObject{{"id", "m2"}, {"speaker", "Борис"}, {"text", "Да, встречаемся в четверг в 15:00."}}}}};
+  const auto out = processRequest(request, printing("next meeting"));
+  ASSERT_FALSE(out["events"].toArray().isEmpty());
+  const auto event = out["events"][0].toObject();
+  EXPECT_TRUE(event["meeting"].toBool());
+  EXPECT_EQ(event["date"].toString(), "2026-11-05");
+  EXPECT_EQ(event["time"].toString(), "15:00");
 }
 
 int main(int argc, char **argv) {

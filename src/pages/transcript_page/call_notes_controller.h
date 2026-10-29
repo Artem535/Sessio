@@ -1,6 +1,7 @@
 #pragma once
 
 #include "database.h"
+#include <QDate>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QSet>
@@ -44,6 +45,11 @@ public:
   bool editDraft(const QString &text);
   bool appendAgreement(const QString &id, const QString &text);
   QString manualText() const;
+  // The meeting summary: {format:2, overview, key_points, tasks, open_questions,
+  // sources}, a format-1 view of a summary saved before format 2, or {} when
+  // there is none or it was dismissed.
+  QJsonObject summary() const;
+  // The summary's overview item ({text, evidence_ids}).
   QJsonObject draft() const;
   QJsonArray keyPoints() const;
   // Key points found during the call, oldest first (at most 40).
@@ -71,6 +77,8 @@ private:
   bool syncStored(bool force = false);
   void load(qint64 materialId);
   QJsonArray phrases() const;
+  // Day of the call: its event's start, else when the material was created.
+  QDate callDate() const;
   void dispatch(bool final);
   void fail(const QString &reason);
   void retryLater();

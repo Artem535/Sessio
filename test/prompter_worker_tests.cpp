@@ -80,9 +80,9 @@ TEST_F(PrompterWorkerTest, CancellingColdNotesDrainsTheOtherQueuedRequest) {
   QSignalSpy replies(&worker, &PrompterWorker::resultReady);
   ASSERT_TRUE(worker.start(model));
   ASSERT_TRUE(entered->tryAcquire(1, 5000));
-  auto one = request(1); one["task"] = "notes"; one["material_id"] = 1; one["request_token"] = "one";
+  auto one = request(1); one["task"] = "live_points"; one["material_id"] = 1; one["request_token"] = "one";
   worker.send(one);
-  auto two = request(2); two["task"] = "notes"; two["material_id"] = 2; two["request_token"] = "two";
+  auto two = request(2); two["task"] = "live_points"; two["material_id"] = 2; two["request_token"] = "two";
   worker.send(two); worker.cancelNotes(1, "one"); gate->release();
   ASSERT_TRUE(replies.wait(5000)); ASSERT_EQ(replies.count(), 1);
   EXPECT_EQ(replies[0][0].toJsonObject()["request_id"].toInt(), 2);

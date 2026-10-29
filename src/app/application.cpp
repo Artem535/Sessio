@@ -583,7 +583,6 @@ void Application::refreshUpcomingMeetings() {
   try {
     for (const auto &material : mDb->get_call_materials()) {
       const auto state = QJsonDocument::fromJson(QByteArray::fromStdString(material.json)).object();
-      const auto packet = state[state["final"].isObject() ? "final" : "live"].toObject();
       QString title = tr("Call materials");
       if (material.event_id)
         if (const auto event = mDb->get_event(*material.event_id)) title = QString::fromStdString(event->name.value_or(""));
@@ -592,7 +591,7 @@ void Application::refreshUpcomingMeetings() {
         transcripts.append(QVariantMap{{"id", QString::number(id)}, {"title", tr("Transcript") + " " + QString::number(id)}});
       history.append(QVariantMap{{"id", QString::number(material.id)}, {"title", title},
         {"date", QDateTime::fromMSecsSinceEpoch(material.created_at).toLocalTime().toString("dd.MM.yyyy · HH:mm")},
-        {"summary", packet["dismissed"].toBool() ? QString{} : packet["note"].toObject()["text"].toString()},
+        {"summary", materialSummaryText(state)},
         {"transcripts", transcripts}});
     }
   } catch (...) { history.clear(); }
@@ -1387,7 +1386,6 @@ void Application::connectSignals() {
               refreshButton();
             });
     connect(callsPage, &CallsPage::callSessionEnded, this, [this, controller, refreshButton, prompter, worker, notes, finals, notesWanted, notesPage, meetingDetails] {
-      const bool finishingTranscript = controller->active();
       controller->detachCall();
       prompter->endCall(); worker->stop();
       notes->setGenerationEnabled(false);
@@ -1396,8 +1394,6 @@ void Application::connectSignals() {
       if (mCurrentCallEventId) {
         try { notesPage->setClient(mDb->get_client_by_event(*mCurrentCallEventId)); } catch (...) {}
       }
-      if (*notesWanted && notes->transcriptId() > 0)
-        finals->enqueue(notes->materialId(), finishingTranscript ? notes->transcriptId() : 0);
       finals->setCallActive(false);
       mCurrentCallEventId.reset();
       refreshButton();
