@@ -117,6 +117,13 @@ cc_import(
 )
 
 DEPS = [
+    "//runtime/components/constrained_decoding:constraint",
+    "//runtime/components/constrained_decoding:constraint_provider",
+    "//runtime/components/constrained_decoding:constraint_provider_config",
+    "//runtime/components/constrained_decoding:constraint_provider_factory",
+    "//runtime/components/constrained_decoding:external_constraint_config",
+    "//runtime/components/constrained_decoding:fst_constraint_config",
+    "//runtime/components/constrained_decoding:llg_constraint_config",
     "//runtime/engine:engine_factory",
     "//runtime/engine:engine_impl_selected",
     "//runtime/engine:engine_interface",
