@@ -71,6 +71,7 @@ public:
   Q_INVOKABLE void retrySummary();
   // Runs the meeting summary of an ended meeting (the «Summarize meeting» offer).
   Q_INVOKABLE void summarizeMeeting();
+  Q_INVOKABLE bool setPaymentStatus(int status);
   // Opens the pre-filled new-event dialog for an accepted meeting agreement and
   // links the saved event to it. Nothing is stored when the dialog is cancelled.
   Q_INVOKABLE void addAgreementToCalendar(const QString &recordId);
@@ -89,6 +90,7 @@ signals:
   void documentActivated();
   void sourceRequested(qint64 phraseId);
   void retryRequested();
+  void paymentChanged();
 private:
   struct Context;
   Context *context() const;
@@ -109,6 +111,7 @@ private:
   qint64 mSelected = 0;
   std::optional<DuckClient> mClient;
   QString mMeeting, mMeetingStatus, mSaveStatus;
+  QString mPaymentError;
   QJsonArray mAgreements;
   bool mLoading = false, mMutating = false;
   QTextDocument *mSessionDocument = nullptr;

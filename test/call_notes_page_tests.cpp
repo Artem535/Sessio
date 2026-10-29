@@ -60,6 +60,116 @@ struct NotesFixture {
 
 class CallNotesPageTest : public ::testing::Test, public NotesFixture {};
 
+TEST_F(CallNotesPageTest, NarrowHeaderKeepsDateBelowWrappedHeading) {
+  generate();
+  CallNotesPage page(db, &controller);
+  page.resize(340, 800);
+  page.show();
+  QTest::qWait(80);
+  auto *quick = page.findChild<QQuickWidget *>();
+  ASSERT_NE(quick, nullptr);
+  bool found = false;
+  for (auto *item : quick->rootObject()->findChildren<QQuickItem *>()) {
+    if (item->property("text").toString() != "Meeting notes" || !item->isVisible()) continue;
+    auto *column = item->parentItem();
+    auto *row = column ? column->parentItem() : nullptr;
+    if (!row) continue;
+    auto *header = row->parentItem();
+    if (!header || header->parentItem() == nullptr) continue;
+    found = true;
+    EXPECT_GE(header->height(), row->implicitHeight() + 44);
+    break;
+  }
+  EXPECT_TRUE(found);
+}
+
+TEST_F(CallNotesPageTest, ReviewPaymentChangePersistsOnlyToLinkedWorkEvent) {
+  DuckEvent event;
+  event.name = "Session"; event.is_work_event = true;
+  event.event_stat_id = 1; event.payment_stat_id = 1;
+  event.start_date = QDateTime(QDate(2026, 10, 29), QTime(10, 0)).toMSecsSinceEpoch();
+  event.end_date = *event.start_date + 3600000;
+  const auto id = db->add_event(event);
+  ASSERT_GT(id, 0);
+  controller.beginCall(id); controller.finishCall();
+  NotesWorkspaceBridge bridge(db, &controller, nullptr);
+  bool saved = false;
+  ASSERT_TRUE(QMetaObject::invokeMethod(&bridge, "setPaymentStatus", Q_RETURN_ARG(bool, saved), Q_ARG(int, 2)));
+  EXPECT_TRUE(saved);
+  EXPECT_EQ(db->get_event(id)->payment_stat_id, 2);
+  EXPECT_EQ(bridge.state()["paymentStatus"].toInt(), 2);
+  EXPECT_TRUE(QMetaObject::invokeMethod(&bridge, "setPaymentStatus", Q_RETURN_ARG(bool, saved), Q_ARG(int, 99)));
+  EXPECT_FALSE(saved);
+  EXPECT_EQ(db->get_event(id)->payment_stat_id, 2);
+}
+
+TEST_F(CallNotesPageTest, ReviewDialogKeepsWorkspaceAndProtectsEditedSavedNotes) {
+  controller.beginCall();
+  const auto entry = controller.saveNoteEntry("Original");
+  controller.finishCall();
+  NotesEditorDialog dialog;
+  auto *page = new CallNotesPage(db, &controller, &dialog);
+  dialog.setPage(page, false);
+  auto *quick = page->findChild<QQuickWidget *>();
+  ASSERT_NE(quick, nullptr);
+  EXPECT_EQ(quick->rootObject()->objectName(), "qmlNotesWorkspace");
+  auto *bridge = page->findChild<NotesWorkspaceBridge *>();
+  ASSERT_NE(bridge, nullptr);
+  bridge->editNote(entry);
+  bridge->format(0, 8, "bold");
+  EXPECT_TRUE(page->editorDirty());
+  dialog.setDiscardConfirmation([] { return false; });
+  dialog.show(); dialog.reject();
+  EXPECT_TRUE(dialog.isVisible());
+}
+
+TEST_F(CallNotesPageTest, CallPanelHidesOnlyTheRunningCallsSummaryNotAnOldMeetingsInHistory) {
+  DuckClient client; client.name = "Synthetic"; client.id = db->add_client(client);
+  generate();
+  const auto old = controller.materialId();
+  ASSERT_GT(old, 0);
+  // History only lists this client's meetings.
+  ASSERT_TRUE(db->set_transcript_status(controller.transcriptId(), "draft"));
+  ASSERT_TRUE(db->set_transcript_clients(controller.transcriptId(), {client.id}));
+  controller.beginCall();
+  const auto running = controller.materialId();
+  ASSERT_NE(old, running);
+  CallNotesPage page(db, &controller); page.setClient(client);
+  page.setCallPanelMode();
+  page.show(); QApplication::processEvents();
+  auto *quick = page.findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  ASSERT_NE(bridge, nullptr);
+  bridge->selectMaterial(QString::number(old));
+  ASSERT_EQ(bridge->state()["materialId"].toString(), QString::number(old));
+  QApplication::processEvents();
+  EXPECT_TRUE(quick->rootObject()->property("summaryShown").toBool());
+  bridge->selectMaterial(QString::number(running));
+  QApplication::processEvents();
+  EXPECT_FALSE(quick->rootObject()->property("summaryShown").toBool());
+}
+
+TEST_F(CallNotesPageTest, ReviewDialogProtectsADraftWhoseAutosaveFailed) {
+  controller.beginCall();
+  controller.finishCall();
+  NotesEditorDialog dialog;
+  auto *page = new CallNotesPage(db, &controller, &dialog);
+  dialog.setPage(page, false);
+  dialog.show(); QApplication::processEvents();
+  auto *quick = page->findChild<QQuickWidget *>("notesQuickWorkspace");
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *editor = quick->rootObject()->findChild<QQuickItem *>("qmlNoteEditor");
+  auto *document = editor->property("textDocument").value<QQuickTextDocument *>();
+  QTextCursor cursor(document->textDocument()); cursor.insertText(QString(100001, 'x'));
+  ASSERT_TRUE(controller.manualText().isEmpty());
+  EXPECT_TRUE(page->editorDirty());
+  dialog.setDiscardConfirmation([] { return false; });
+  dialog.reject();
+  EXPECT_TRUE(dialog.isVisible());
+  EXPECT_EQ(document->textDocument()->toPlainText().size(), 100001);
+}
+
 TEST_F(CallNotesPageTest, ModalSessionBuffersChangesAndSavePreservesIndependentDraft) {
   controller.beginCall();
   const auto id = controller.saveNoteEntry("Saved note");

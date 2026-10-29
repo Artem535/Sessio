@@ -266,6 +266,15 @@ void CallsPage::startJoin(const pcm::tokenclient::TokenResult &result) {
     emit eventKnownForCurrentCall(*mCurrentEventId);
   }
   mSessionStarted = true;
+  mSessionConnected = false;
+  // Joined means the room was actually reached; Joining, a cancelled check or a failure is not.
+  connect(mSession.get(), &pcm::video::VideoSession::stateChanged, this,
+          [this](pcm::video::VideoSessionState state) {
+            using pcm::video::VideoSessionState;
+            if (state == VideoSessionState::WaitingForParticipants || state == VideoSessionState::Connected ||
+                state == VideoSessionState::Reconnecting)
+              mSessionConnected = true;
+          });
   emit callSessionStarted(mSession.get());
   // A web call has no device-check step; join after the session hooks (transcription,
   // prompter) have attached.
@@ -277,6 +286,8 @@ void CallsPage::startJoin(const pcm::tokenclient::TokenResult &result) {
 void CallsPage::endCallSession() {
   if (mSessionStarted) {
     mSessionStarted = false;
+    mLastCallConnected = mSessionConnected;
+    mSessionConnected = false;
     emit callSessionEnded();
   }
 }

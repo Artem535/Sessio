@@ -84,6 +84,28 @@ TEST(LivePointsPipeline, AcceptsValidPointsAndTrimsText) {
   EXPECT_EQ(out["key_points"].toArray(), (QJsonArray{point(QStringLiteral("Проект согласован"), {"u1"})}));
 }
 
+TEST(LivePointsPipeline, RepeatedKnownAndSameBatchPointsAreNotReturned) {
+  const auto out = processLivePoints({source("u1"), source("u2")}, {"Звук записывается нормально."},
+      [](const QString &, const QByteArray &, const QByteArray &) {
+        return QJsonValue(points({point(" звук  записывается нормально! ", {"u1"}),
+                                 point("Для записи выбран OBS", {"u1"}),
+                                 point("Для записи выбран OBS.", {"u2"})}));
+      });
+  EXPECT_EQ(out["key_points"].toArray(), (QJsonArray{point("Для записи выбран OBS", {"u1"})}));
+}
+
+TEST(LivePointsPipeline, LaterChunksKnowPointsFoundEarlierInTheSameRun) {
+  int calls = 0;
+  const auto out = processLivePoints(longWindow(2), {}, [&](const QString &, const QByteArray &payload, const QByteArray &) {
+    const auto input = parsed(payload);
+    if (++calls == 2) EXPECT_TRUE(input["known_points"].toArray().contains("Решение принято"));
+    const auto id = input["utterances"][0].toObject()["id"].toString();
+    return QJsonValue(points({point("Решение принято", {id})}));
+  });
+  EXPECT_EQ(calls, 2);
+  EXPECT_EQ(out["key_points"].toArray().size(), 1);
+}
+
 TEST(LivePointsPipeline, CitingKnownOrForeignIdRejectsThatChunk) {
   for (const auto &ids : {QJsonArray{"old"}, QJsonArray{}, QJsonArray{"u1", "u1"}}) {
     EXPECT_THROW(processLivePoints({source("u1")}, {QStringLiteral("old")},

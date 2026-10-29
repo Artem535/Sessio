@@ -67,6 +67,66 @@ bool validTime(const QString &time) {
   return pattern.match(time).hasMatch();
 }
 
+// The words of an item, for telling a repeat from a different statement. A
+// cut-off variant of the same statement shares its stems with the fuller one;
+// a negation or a different number makes it another statement.
+struct Words {
+  QString key;
+  QSet<QString> stems, numbers;
+  bool negated = false;
+};
+
+Words wordsOf(const QString &text) {
+  static const QSet<QString> negations{QStringLiteral("не"), QStringLiteral("нет"), QStringLiteral("без"),
+                                       QStringLiteral("ни"), QStringLiteral("нельзя")};
+  static const QRegularExpression separator(QStringLiteral(R"([^\p{L}\p{N}]+)"));
+  Words out;
+  out.key = normalized(text);
+  for (const auto &word : out.key.split(separator, Qt::SkipEmptyParts)) {
+    if (negations.contains(word)) out.negated = true;
+    else if (word.front().isDigit()) out.numbers.insert(word);
+    else if (word.size() > 2) out.stems.insert(word.left(5)); // crude stem: endings differ, roots do not
+  }
+  return out;
+}
+
+bool similar(const Words &a, const Words &b) {
+  if (a.key == b.key) return true;
+  if (a.negated != b.negated) return false;
+  if (!a.numbers.isEmpty() && !b.numbers.isEmpty() && a.numbers != b.numbers) return false;
+  const auto smaller = std::min(a.stems.size(), b.stems.size());
+  if (smaller < 2) return false;
+  const auto common = QSet<QString>(a.stems).intersect(b.stems).size();
+  const auto united = a.stems.size() + b.stems.size() - common;
+  return common * 10 >= smaller * 8 || common * 10 >= united * 7;
+}
+
+// Source ids belong in evidence_ids; the model sometimes copies them into the prose too.
+QString withoutSourceIds(QString text, const QSet<QString> &ids) {
+  QStringList numeric;
+  for (const auto &id : ids)
+    if (id.size() >= 3 && std::all_of(id.begin(), id.end(), [](QChar c) { return c.isDigit(); }))
+      numeric << QRegularExpression::escape(id);
+  if (numeric.isEmpty()) return text;
+  const auto any = numeric.join(QLatin1Char('|'));
+  constexpr auto options = QRegularExpression::UseUnicodePropertiesOption | QRegularExpression::CaseInsensitiveOption;
+  const QRegularExpression wrapped(QStringLiteral(R"(\s*[(\[][^)\]]*\b(?:%1)\b[^)\]]*[)\]])").arg(any), options);
+  const QRegularExpression bare(QStringLiteral(R"(\s*(?:реплик\w*|сообщени\w*|id)?\s*[№#]?\s*\b(?:%1)\b)").arg(any), options);
+  const QRegularExpression beforePunctuation(QStringLiteral(R"(\s+([,.;:!?]))"));
+  text.replace(wrapped, QString()).replace(bare, QString()).replace(beforePunctuation, QStringLiteral("\\1"));
+  // Cutting an id at the end leaves the separator that preceded it.
+  static const QRegularExpression dangling(QStringLiteral(R"([\s,;:\-–—]+$)"));
+  return text.remove(dangling).simplified();
+}
+
+// Drops an item whose prose was nothing but source ids.
+std::optional<QJsonObject> cleanedItem(QJsonObject item, const QSet<QString> &allowed) {
+  const auto text = withoutSourceIds(item["text"].toString(), allowed);
+  if (text.isEmpty()) return std::nullopt;
+  item["text"] = text;
+  return item;
+}
+
 QJsonObject emptySummary() {
   return {{"format", 2}, {"overview", QJsonObject{{"text", ""}, {"evidence_ids", QJsonArray{}}}},
           {"key_points", QJsonArray{}}, {"tasks", QJsonArray{}}, {"open_questions", QJsonArray{}}};
@@ -86,9 +146,15 @@ Leaf checkedLeaf(const QJsonValue &value, const QSet<QString> &allowed, const QS
     throw PipelineError("invalid notes output schema/budget");
   Leaf leaf;
   leaf.note = checkedItem(object["note"], kLeafNoteLength, true, allowed);
-  for (const auto &p : object["key_points"].toArray()) leaf.points.append(checkedItem(p, kPointLength, false, allowed));
+  if (!leaf.note["text"].toString().isEmpty()) {
+    if (const auto note = cleanedItem(leaf.note, allowed)) leaf.note = *note;
+    else leaf.note = QJsonObject{{"text", ""}, {"evidence_ids", QJsonArray{}}};
+  }
+  for (const auto &p : object["key_points"].toArray())
+    if (const auto point = cleanedItem(checkedItem(p, kPointLength, false, allowed), allowed)) leaf.points.append(*point);
   for (const auto &q : object["open_questions"].toArray())
-    leaf.questions.append(checkedItem(q, kQuestionLength, false, allowed));
+    if (const auto question = cleanedItem(checkedItem(q, kQuestionLength, false, allowed), allowed))
+      leaf.questions.append(*question);
   for (const auto &t : object["tasks"].toArray()) {
     const auto task = t.toObject();
     if (!t.isObject() || task.size() != 5 || !task["meeting"].isBool() || !task["date"].isString() ||
@@ -100,27 +166,9 @@ Leaf checkedLeaf(const QJsonValue &value, const QSet<QString> &allowed, const QS
     out["meeting"] = task["meeting"];
     out["date"] = dates.contains(task["date"].toString()) ? task["date"].toString() : QString();
     out["time"] = validTime(task["time"].toString()) ? task["time"].toString() : QString();
-    leaf.tasks.append(out);
+    if (const auto cleaned = cleanedItem(out, allowed)) leaf.tasks.append(*cleaned);
   }
   return leaf;
-}
-
-// Call order, repeats removed, then at most `limit` items spread evenly over
-// the whole call so late facts are kept.
-QJsonArray mergedList(const QList<QJsonArray> &lists, qsizetype limit, const QSet<QString> &excluded = {}) {
-  QJsonArray all;
-  QSet<QString> seen = excluded;
-  for (const auto &list : lists)
-    for (const auto &item : list) {
-      const auto key = normalized(item.toObject()["text"].toString());
-      if (seen.contains(key)) continue;
-      seen.insert(key);
-      all.append(item);
-    }
-  if (all.size() <= limit) return all;
-  QJsonArray out;
-  for (qsizetype i = 0; i < limit; ++i) out.append(all[i * (all.size() - 1) / (limit - 1)]);
-  return out;
 }
 
 QJsonArray evidenceUnion(const QJsonArray &items) {
@@ -131,10 +179,53 @@ QJsonArray evidenceUnion(const QJsonArray &items) {
   return ids;
 }
 
+// Call order, repeats removed, then at most `limit` items spread evenly over
+// the whole call so late facts are kept. A repeat is the same statement said
+// again or a cut-off variant of it: the fuller wording is kept and cites both.
+// Anything like an `excluded` text is dropped.
+QJsonArray mergedList(const QList<QJsonArray> &lists, qsizetype limit, const QStringList &excluded = {}) {
+  QList<Words> blocked;
+  for (const auto &text : excluded) blocked.append(wordsOf(text));
+  QJsonArray all;
+  QList<Words> kept;
+  for (const auto &list : lists)
+    for (const auto &value : list) {
+      const auto item = value.toObject();
+      const auto words = wordsOf(item["text"].toString());
+      if (std::any_of(blocked.begin(), blocked.end(), [&](const Words &b) { return similar(words, b); })) continue;
+      qsizetype twin = -1;
+      for (qsizetype i = 0; i < kept.size() && twin < 0; ++i)
+        if (similar(words, kept[i])) twin = i;
+      if (twin < 0) {
+        all.append(item);
+        kept.append(words);
+        continue;
+      }
+      const auto first = all[twin].toObject();
+      auto fuller = item["text"].toString().size() > first["text"].toString().size() ? item : first;
+      fuller["evidence_ids"] = evidenceUnion(QJsonArray{first, item});
+      all[twin] = fuller;
+      kept[twin] = wordsOf(fuller["text"].toString());
+    }
+  if (all.size() <= limit) return all;
+  QJsonArray out;
+  for (qsizetype i = 0; i < limit; ++i) out.append(all[i * (all.size() - 1) / (limit - 1)]);
+  return out;
+}
+
 // The notes' texts in order, cut at a word boundary within `limit`.
 QJsonObject joinedNotes(const QJsonArray &notes, qsizetype limit) {
+  // The parts often say the same thing; each sentence is kept once.
+  static const QRegularExpression sentenceEnd(QStringLiteral(R"((?<=[.!?])\s+)"));
   QStringList parts;
-  for (const auto &note : notes) parts << note.toObject()["text"].toString();
+  QList<Words> kept;
+  for (const auto &note : notes)
+    for (const auto &sentence : note.toObject()["text"].toString().split(sentenceEnd, Qt::SkipEmptyParts)) {
+      const auto words = wordsOf(sentence);
+      if (std::any_of(kept.begin(), kept.end(), [&](const Words &w) { return similar(words, w); })) continue;
+      kept.append(words);
+      parts << sentence;
+    }
   auto text = parts.join(' ');
   if (text.size() > limit) {
     text.truncate(limit);
@@ -162,10 +253,8 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
     if (promptDays.size() < kPromptCalendarDays) promptDays << day["date"].toString() + ' ' + day["weekday"].toString();
   }
   QJsonArray agreements;
-  QSet<QString> accepted;
   qsizetype agreementBytes = 0;
   for (const auto &text : ctx.agreements) {
-    accepted.insert(normalized(text));
     agreementBytes += text.toUtf8().size() + 3;
     if (agreementBytes <= kAgreementBytes) agreements.append(text);
   }
@@ -244,7 +333,9 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
     try {
       const auto reply = call(overviewPrompt, serialize({{"notes", group}}), schema).toObject();
       if (reply.size() != 1) throw PipelineError("invalid notes output schema/budget");
-      return checkedItem(reply["overview"], limit, false, allowed);
+      const auto overview = checkedItem(reply["overview"], limit, false, allowed);
+      if (const auto cleaned = cleanedItem(overview, allowed)) return *cleaned;
+      return joinedNotes(group, limit);
     } catch (const PipelineError &error) {
       if (!usable(error)) throw;
       return joinedNotes(group, limit);
@@ -274,7 +365,7 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
   auto out = emptySummary();
   out["overview"] = overview;
   out["key_points"] = mergedList(points, kMaxPoints);
-  out["tasks"] = mergedList(tasks, kMaxTasks, accepted);
+  out["tasks"] = mergedList(tasks, kMaxTasks, ctx.agreements);
   out["open_questions"] = mergedList(questions, kMaxQuestions);
   return out;
 }

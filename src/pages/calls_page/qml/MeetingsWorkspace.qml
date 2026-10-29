@@ -215,7 +215,9 @@ Rectangle {
         background: Rectangle { radius: 12; color: theme.base; border.color: theme.mid }
         contentItem: ColumnLayout {
             spacing: 16
-            Copy { text: qsTr("Use a Sessio invitation code or invitation link."); Layout.fillWidth: true }
+            Copy { text: qsTr("Join a Sessio or Jitsi call using the invitation from its organizer."); Layout.fillWidth: true }
+            Copy { text: qsTr("Paste the Sessio invitation link, or enter its code and passcode. The invitation selects Jitsi automatically."); color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
+            Copy { text: qsTr("To host a Jitsi call: create an event in Calendar, enable Online, select Jitsi, and save. Use Copy invite to send the invitation to participants."); color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
             TextField {
                 Layout.fillWidth: true
                 text: root.callerName

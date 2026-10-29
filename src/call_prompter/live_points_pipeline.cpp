@@ -43,9 +43,11 @@ QJsonObject processLivePoints(const QJsonArray &newUtterances, const QStringList
                               const Generate &generate) {
   if (newUtterances.isEmpty()) return {{"key_points", QJsonArray{}}};
   const auto system = prompt("live_points.txt");
-  const auto known = QJsonArray::fromStringList(knownPoints.mid(std::max<qsizetype>(0, knownPoints.size() - kKnownPoints)));
-  const auto reference = serialize({{"known_points", known}}).size();
-  const auto budget = std::min(kPayloadBytes, kContextInputBytes - system.toUtf8().size()) - reference;
+  auto known = QJsonArray::fromStringList(knownPoints.mid(std::max<qsizetype>(0, knownPoints.size() - kKnownPoints)));
+  QSet<QString> seen;
+  for (const auto &text : knownPoints) seen.insert(pointKey(text));
+  const auto limit = std::min(kPayloadBytes, kContextInputBytes - system.toUtf8().size());
+  const auto budget = limit - serialize({{"known_points", QJsonArray{}}}).size();
   if (budget <= 0) throw PipelineError("notes generation budget exceeded");
   const auto inputs = chunks(newUtterances, budget);
   if (!generate) throw PipelineError("notes generator missing");
@@ -54,10 +56,22 @@ QJsonObject processLivePoints(const QJsonArray &newUtterances, const QStringList
   for (const auto &input : inputs) {
     const auto allowed = ids(input);
     // known_points first, as the prompt describes the payload.
-    const QByteArray payload = "{\"known_points\":" + QJsonDocument(known).toJson(QJsonDocument::Compact) +
-                               ",\"utterances\":" + QJsonDocument(input).toJson(QJsonDocument::Compact) + "}";
+    auto reference = known;
+    const auto pack = [&] {
+      return "{\"known_points\":" + QJsonDocument(reference).toJson(QJsonDocument::Compact) +
+             ",\"utterances\":" + QJsonDocument(input).toJson(QJsonDocument::Compact) + "}";
+    };
+    while (!reference.isEmpty() && pack().size() > limit) reference.removeAt(0);
+    const QByteArray payload = pack();
     try {
-      for (const auto &point : checkedPoints(generate(system, payload, schemaFor(allowed)), allowed)) found.append(point);
+      for (const auto &point : checkedPoints(generate(system, payload, schemaFor(allowed)), allowed)) {
+        const auto text = point.toObject()["text"].toString();
+        if (seen.contains(pointKey(text))) continue;
+        seen.insert(pointKey(text));
+        found.append(point);
+        known.append(text);
+        if (known.size() > kKnownPoints) known.removeAt(0);
+      }
       anyUsable = true;
     } catch (const PipelineError &error) {
       if (failureReason(QString::fromLatin1(error.what())) != QLatin1String("invalid_output")) throw;

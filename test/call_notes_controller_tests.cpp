@@ -57,6 +57,19 @@ TEST_F(CallNotesTest, AiSummaryIsStoredWithCallWithoutAcceptStep) {
   EXPECT_EQ(reopened.livePoints()[0].toObject()["text"].toString(), "Rehearsal discussed");
   EXPECT_EQ(reopened.manualText(), "My own text");
 }
+
+TEST_F(CallNotesTest, DuplicateLivePointDoesNotAccumulateAcrossUpdates) {
+  const auto first = phrase(); c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady);
+  c->flush();
+  c->handleResult(reply(requests.last()[0].toJsonObject(), first, "Звук записывается нормально."));
+  const auto second = phrase("Sound still works");
+  c->flush();
+  c->handleResult(reply(requests.last()[0].toJsonObject(), second, " звук  записывается нормально! "));
+  EXPECT_EQ(c->livePoints().size(), 1);
+  CallNotesController reopened(db); reopened.openMaterial(c->materialId());
+  EXPECT_EQ(reopened.livePoints().size(), 1);
+}
 TEST_F(CallNotesTest, SeparateMarkdownEntriesAndAttachmentsSurviveReopeningWithoutAClient) {
   const auto root = dir.path() + "/attachments";
   CallNotesController notes(db, nullptr, root);

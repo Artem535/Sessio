@@ -173,6 +173,7 @@ CallNotesPage::CallNotesPage(std::shared_ptr<pcm::database::Database> db, CallNo
   connect(backToDocument, &QPushButton::clicked, this, [legacy, this] { legacy->hide(); mQuick->show(); });
   connect(mWorkspace, &NotesWorkspaceBridge::sourceRequested, this, &CallNotesPage::sourceRequested);
   connect(mWorkspace, &NotesWorkspaceBridge::retryRequested, this, &CallNotesPage::retryRequested);
+  connect(mWorkspace, &NotesWorkspaceBridge::paymentChanged, this, &CallNotesPage::paymentChanged);
 }
 
 void CallNotesPage::changeEvent(QEvent *event) {
@@ -200,6 +201,10 @@ void CallNotesPage::setEditorMode() {
 
 bool CallNotesPage::editorDirty() const { return mWorkspace && mWorkspace->editorDirty(); }
 
+void CallNotesPage::setCallPanelMode() {
+  if (auto *root = mQuick->rootObject()) root->setProperty("callPanel", true);
+}
+
 NotesEditorDialog::NotesEditorDialog(QWidget *parent) : QDialog(parent) {
   setWindowTitle(tr("Meeting notes"));
   setModal(true);
@@ -207,8 +212,10 @@ NotesEditorDialog::NotesEditorDialog(QWidget *parent) : QDialog(parent) {
   resize(area.width() - 32, area.height() - 32);
   auto *body = new QVBoxLayout(this); body->setContentsMargins(0, 0, 0, 0);
 }
-void NotesEditorDialog::setPage(CallNotesPage *page) {
-  mPage = page; page->setEditorMode(); layout()->addWidget(page);
+void NotesEditorDialog::setPage(CallNotesPage *page, bool editorMode) {
+  mPage = page;
+  if (editorMode) page->setEditorMode();
+  layout()->addWidget(page);
   connect(page, &CallNotesPage::editorCloseRequested, this, &NotesEditorDialog::reject);
   connect(page, &CallNotesPage::editorSaved, this, &QDialog::accept);
 }

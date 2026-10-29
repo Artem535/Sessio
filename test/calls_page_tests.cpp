@@ -700,7 +700,32 @@ TEST(CallsPageTest, CallSessionEndsExactlyOnceOnCancellationOrJoinFailure) {
     ASSERT_TRUE(QTest::qWaitFor([&]() { return ended.count() == 1; }, 2000));
     call->callEnded();
     EXPECT_EQ(ended.count(), 1);
+    // Neither a cancelled device check nor a failed join was a real call.
+    EXPECT_FALSE(page.lastCallConnected());
   }
+}
+
+TEST(CallsPageTest, LastCallConnectedIsTrueOnlyAfterTheCallActuallyJoined) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, R"({"endpointUrl":"wss://x", "roomName":"r", "token":"t", "expiresAt":999})");
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager devices;
+  CallsPage page(false, &devices, &client);
+  FakeVideoProvider *provider = nullptr;
+  page.setVideoProviderFactoryForTesting([&](const QString &) -> pcm::video::VideoProvider * { return provider = new FakeVideoProvider; });
+  QSignalSpy ended(&page, &CallsPage::callSessionEnded);
+  page.prefillJoinCode("code", "123456");
+  page.findChild<QPushButton *>("joinByCodeButton")->click();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return provider != nullptr; }, 2000));
+  page.findChild<QPushButton *>("joinButton")->click();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return provider->mJoinCallCount == 1; }, 2000));
+  EXPECT_FALSE(page.lastCallConnected());
+  provider->simulateJoined();
+  page.findChild<CallPage *>()->leaveRequested();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return provider->mLeaveCallCount == 1; }, 2000));
+  provider->simulateLeft();
+  ASSERT_TRUE(QTest::qWaitFor([&]() { return ended.count() == 1; }, 2000));
+  EXPECT_TRUE(page.lastCallConnected());
 }
 
 int main(int argc, char **argv) {
