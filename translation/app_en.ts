@@ -1442,6 +1442,10 @@
         <translation>Show inactive</translation>
     </message>
     <message>
+        <source>: NAV_MY_DAY</source>
+        <translation>My day</translation>
+    </message>
+    <message>
         <source>Transcripts</source>
         <translation>Transcripts</translation>
     </message>
@@ -1468,6 +1472,10 @@
     <message>
         <source>Built with Qt, DuckDB, and Qlementine.</source>
         <translation>Built with Qt, DuckDB, and Qlementine.</translation>
+    </message>
+    <message>
+        <source>My day</source>
+        <translation>My day</translation>
     </message>
     <message>
         <source>Clients</source>
@@ -1630,6 +1638,90 @@
     <message>
         <source>Next year</source>
         <translation>Next year</translation>
+    </message>
+</context>
+<context>
+    <name>MyDay</name>
+    <message>
+        <source>Morning</source>
+        <translation>Morning</translation>
+    </message>
+    <message>
+        <source>Afternoon</source>
+        <translation>Afternoon</translation>
+    </message>
+    <message>
+        <source>Evening</source>
+        <translation>Evening</translation>
+    </message>
+    <message>
+        <source>My day</source>
+        <translation>My day</translation>
+    </message>
+    <message>
+        <source>Previous day</source>
+        <translation>Previous day</translation>
+    </message>
+    <message>
+        <source>Today</source>
+        <translation>Today</translation>
+    </message>
+    <message>
+        <source>Next day</source>
+        <translation>Next day</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n meeting(s)</source>
+        <translation>
+            <numerusform>%n meeting</numerusform>
+            <numerusform>%n meetings</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>planned income</source>
+        <translation>planned income</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n unpaid</source>
+        <translation>
+            <numerusform>%n unpaid</numerusform>
+            <numerusform>%n unpaid</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>All paid</source>
+        <translation>All paid</translation>
+    </message>
+    <message>
+        <source>open</source>
+        <translation>open</translation>
+    </message>
+    <message>
+        <source>Unpaid</source>
+        <translation>Unpaid</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n without notes</source>
+        <translation>
+            <numerusform>%n without notes</numerusform>
+            <numerusform>%n without notes</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>All notes written</source>
+        <translation>All notes written</translation>
+    </message>
+    <message>
+        <source>this week</source>
+        <translation>this week</translation>
+    </message>
+    <message>
+        <source>Without notes</source>
+        <translation>Without notes</translation>
+    </message>
+    <message>
+        <source>No meetings</source>
+        <translation>No meetings</translation>
     </message>
 </context>
 <context>
@@ -2855,6 +2947,10 @@ See you!</translation>
         <source> s</source>
         <translation> s</translation>
     </message>
+    <message>
+        <source>General</source>
+        <translation>General</translation>
+    </message>
 </context>
 <context>
     <name>QShortcut</name>
@@ -3649,6 +3745,84 @@ See you!</translation>
     </message>
 </context>
 <context>
+    <name>TimelineCard</name>
+    <message>
+        <source>Canceled</source>
+        <translation>Canceled</translation>
+    </message>
+    <message>
+        <source>unpaid</source>
+        <translation>unpaid</translation>
+    </message>
+    <message>
+        <source>no note</source>
+        <translation>no note</translation>
+    </message>
+    <message>
+        <source>in person</source>
+        <translation>in person</translation>
+    </message>
+    <message>
+        <source>personal</source>
+        <translation>personal</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Join</translation>
+    </message>
+</context>
+<context>
+    <name>TodoColumn</name>
+    <message>
+        <source>No client</source>
+        <translation>No client</translation>
+    </message>
+    <message>
+        <source>No meeting</source>
+        <translation>No meeting</translation>
+    </message>
+    <message>
+        <source>To-dos for today</source>
+        <translation>To-dos for today</translation>
+    </message>
+    <message>
+        <source>To-dos</source>
+        <translation>To-dos</translation>
+    </message>
+    <message>
+        <source>Clients</source>
+        <translation>Clients</translation>
+    </message>
+    <message>
+        <source>Meetings</source>
+        <translation>Meetings</translation>
+    </message>
+    <message>
+        <source>from %1</source>
+        <translation>from %1</translation>
+    </message>
+    <message>
+        <source>No to-dos</source>
+        <translation>No to-dos</translation>
+    </message>
+    <message>
+        <source>Add to-do</source>
+        <translation>Add to-do</translation>
+    </message>
+    <message>
+        <source>What needs to be done?</source>
+        <translation>What needs to be done?</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Add</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Done</translation>
+    </message>
+</context>
+<context>
     <name>TranscriptClientDialog</name>
     <message>
         <source>Attach clients</source>
@@ -4414,6 +4588,28 @@ Your previous data was kept.</translation>
     <message>
         <source>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</source>
         <translation>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::my_day::MyDayBridge</name>
+    <message numerus="yes">
+        <source>next in %n min</source>
+        <translation>
+            <numerusform>next in %n min</numerusform>
+            <numerusform>next in %n min</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>next at %1</source>
+        <translation>next at %1</translation>
+    </message>
+    <message>
+        <source>All done for today</source>
+        <translation>All done for today</translation>
+    </message>
+    <message>
+        <source>first at %1</source>
+        <translation>first at %1</translation>
     </message>
 </context>
 <context>

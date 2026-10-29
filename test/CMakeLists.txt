@@ -39,6 +39,17 @@ target_link_libraries(Sessio_database_transcript_tests PRIVATE
 )
 gtest_discover_tests(Sessio_database_transcript_tests)
 
+# "My day" to-do storage tests
+add_executable(Sessio_database_day_todo_tests database_day_todo_tests.cpp)
+target_link_libraries(Sessio_database_day_todo_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_config
+    Sessio_database
+    Poco::Foundation
+)
+gtest_discover_tests(Sessio_database_day_todo_tests)
+
 # Schedule identity / transactional outbox tests
 add_executable(Sessio_schedule_outbox_tests schedule_outbox_tests.cpp)
 target_link_libraries(Sessio_schedule_outbox_tests PRIVATE
@@ -1209,3 +1220,54 @@ target_link_libraries(Sessio_call_event_resolver_tests PRIVATE
     Sessio_database Sessio_config Poco::Foundation)
 gtest_discover_tests(Sessio_call_event_resolver_tests)
 endif()
+
+# "My day" tile and timeline logic tests
+add_executable(Sessio_my_day_logic_tests my_day_logic_tests.cpp)
+target_link_libraries(Sessio_my_day_logic_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_my_day_page
+)
+gtest_discover_tests(Sessio_my_day_logic_tests)
+
+# "My day" bridge tests (real temp DB + real QTimelineModel)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
+add_executable(Sessio_my_day_bridge_tests my_day_bridge_tests.cpp)
+target_link_libraries(Sessio_my_day_bridge_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Qt6::Test
+    Sessio_my_day_page
+)
+gtest_discover_tests(Sessio_my_day_bridge_tests)
+
+# "My day" QML page (offscreen QQuickWidget, fails on QML warnings)
+add_executable(Sessio_my_day_page_tests my_day_page_tests.cpp)
+target_link_libraries(Sessio_my_day_page_tests PRIVATE
+    GTest::gtest
+    Qt6::Widgets
+    Qt6::Test
+    Qt6::QuickWidgets
+    Sessio_my_day_page
+)
+gtest_discover_tests(Sessio_my_day_page_tests)
+
+# Shared "join meeting" decision (inspector + My Day)
+add_executable(Sessio_meeting_join_tests meeting_join_tests.cpp)
+target_link_libraries(Sessio_meeting_join_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Sessio_meeting
+)
+gtest_discover_tests(Sessio_meeting_join_tests)
+
+# MainWindow «Мой день» start page tests
+add_executable(Sessio_main_window_my_day_tests main_window_my_day_tests.cpp)
+target_link_libraries(Sessio_main_window_my_day_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Widgets
+    Sessio_app
+    Sessio_my_day_page
+)
+gtest_discover_tests(Sessio_main_window_my_day_tests)

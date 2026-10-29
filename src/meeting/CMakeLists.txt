@@ -15,6 +15,8 @@ qt_add_library(${TARGET_NAME} STATIC
         external_url_meeting_provider.cpp
         livekit_meeting_provider.h
         livekit_meeting_provider.cpp
+        meeting_join.h
+        meeting_join.cpp
         meeting_coordinator.h
         meeting_coordinator.cpp
         schedule_snapshot.h

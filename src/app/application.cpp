@@ -1,4 +1,5 @@
 #include "application.h"
+#include "my_day_bridge.h"
 #include "file_log.h"
 #include "app_lock_dialog.h"
 #include "role_selection_dialog.h"
@@ -392,6 +393,7 @@ int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) 
           mMainWindow->getPage(MainWindow::Pages::eventInfo))) {
     eventPage->setSeriesCallService(mSeriesCalls.get());
   }
+  mMainWindow->addMyDayPage(mDb, timelineModel, mSeriesCalls.get());
   mMainWindow->addClientInfoPage(mClientModel);
   mMainWindow->addAnalyticsPage(mDb);
   mMainWindow->addClientCardPage(mDb);
@@ -1144,6 +1146,16 @@ void Application::connectSignals() {
             &Application::refreshUpcomingMeetings);
     connect(page, &QEventInfoPage::openLiveKitMeetingRequested, mMainWindow.get(),
             &MainWindow::preselectLiveKitMeeting);
+  }
+
+  // «Мой день» start page: "Join" runs the same two steps as the Calendar's Open Meeting.
+  // (openEventRequested / openClientRequested are wired inside MainWindow::addMyDayPage.)
+  if (auto *myDay = dynamic_cast<pcm::my_day::MyDayPage *>(
+          mMainWindow->getPage(MainWindow::Pages::myDay))) {
+    connect(myDay->bridge(), &pcm::my_day::MyDayBridge::openLiveKitMeetingRequested, this,
+            &Application::refreshUpcomingMeetings);
+    connect(myDay->bridge(), &pcm::my_day::MyDayBridge::openLiveKitMeetingRequested,
+            mMainWindow.get(), &MainWindow::preselectLiveKitMeeting);
   }
 
   // Specialist Calls tab: when a call for one of the specialist's own events
