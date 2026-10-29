@@ -12,8 +12,9 @@ JoinAction resolveJoinAction(const DuckEvent &event, const std::optional<QString
     }
     return {JoinAction::Kind::LiveKit, *seriesJoinTarget};
   }
+  // Jitsi meetings also join through the token backend, which names the provider.
   if (event.provider_kind && event.meeting_ref && !event.meeting_ref->empty() &&
-      providerKindFromString(*event.provider_kind) == ProviderKind::LiveKit) {
+      isBackendHosted(providerKindFromString(*event.provider_kind))) {
     return {JoinAction::Kind::LiveKit, QString::fromStdString(*event.meeting_ref)};
   }
   if (!event.meeting_url.empty()) {

@@ -39,7 +39,8 @@ public:
   void requestOccurrenceSpecialistToken(const QString &bearerCredential, const QString &seriesUid,
                                         qint64 originalStartMs, const QString &displayName = {});
   void requestCreateMeeting(const QString &bearerCredential, const QString &scheduledStartIso,
-                            const QString &scheduledEndIso);
+                            const QString &scheduledEndIso,
+                            const QString &provider = QStringLiteral("livekit"));
   void requestInvalidateMeeting(const QString &bearerCredential, const QString &meetingRef);
 
   // --- Recurring schedule series ---

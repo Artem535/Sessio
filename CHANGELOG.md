@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.37] - 2026-10-28
+
+- Added Jitsi as a provider for one-off online meetings. The token backend
+  stores the selected provider and issues short-lived Jitsi credentials while
+  keeping the signing secret on the server; recurring meetings remain on LiveKit.
+- Added an embedded Jitsi call view with browser-managed camera and microphone
+  controls. Per-participant audio continues through the existing transcription,
+  call notes and prompter pipeline, including audio-bridge reconnection and
+  renderer-failure handling.
+- Added QtWebEngine to Linux, Windows and macOS builds and installer checks.
+- Documented Jitsi meeting creation and joining in the calls setup guide.
+- Kept the Linux CI Qt SDK outside the source tree to prevent accidental static
+  QML plugin imports and their incompatible Qt private-API RPM dependencies.
+  Added a packaging check that rejects Qt private-API requirements.
+
 ## [0.2.35] - 2026-10-27
 
 - Moved Notes, Meetings and transcript controls into the shared application

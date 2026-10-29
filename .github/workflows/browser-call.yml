@@ -1,7 +1,7 @@
 name: Browser call
 on:
   pull_request:
-    paths: ['web/call-client/**', '.github/workflows/browser-call.yml']
+    paths: ['web/call-client/**', 'web/jitsi-call/**', '.github/workflows/browser-call.yml']
   workflow_dispatch:
 jobs:
   browser:
@@ -21,3 +21,17 @@ jobs:
       - run: npm test
       - run: ./node_modules/.bin/playwright install --with-deps chromium
       - run: npm run test:e2e
+  jitsi-call-page:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/jitsi-call
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/jitsi-call/package-lock.json
+      - run: npm ci
+      - run: npm test

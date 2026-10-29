@@ -11,6 +11,8 @@ class CreateMeetingRequestDto : public oatpp::DTO {
   DTO_INIT(CreateMeetingRequestDto, DTO)
   DTO_FIELD(String, scheduledStart);
   DTO_FIELD(String, scheduledEnd);
+  // Optional: "livekit" (default) or "jitsi".
+  DTO_FIELD(String, provider);
 };
 
 class CreateMeetingResponseDto : public oatpp::DTO {
@@ -39,6 +41,7 @@ class TokenResponseDto : public oatpp::DTO {
   DTO_FIELD(String, roomName);
   DTO_FIELD(String, token);
   DTO_FIELD(Int64, expiresAt);
+  DTO_FIELD(String, provider);
 };
 
 class ClientTokenRequestDto : public oatpp::DTO {

@@ -32,7 +32,7 @@ bool isOnline(const DuckEvent &e) {
   }
   const auto kind =
       e.provider_kind ? meeting::providerKindFromString(*e.provider_kind) : std::nullopt;
-  return kind == meeting::ProviderKind::LiveKit;
+  return meeting::isBackendHosted(kind);
 }
 
 bool endedBefore(const DuckEvent &e, const QDateTime &now) { return endOf(e) <= now; }

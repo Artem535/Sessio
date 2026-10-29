@@ -1,6 +1,7 @@
 #include "calls_page.h"
 #include "livekit_video_provider.h"
 #include "series_join_target.h"
+#include "web_call_provider.h"
 
 #include <QStackedWidget>
 #include <QUrl>
@@ -44,7 +45,11 @@ std::pair<QString, QString> joinCredentialsFromInput(const QString &codeOrLink,
 CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *deviceManager,
                      pcm::tokenclient::TokenBackendClient *tokenClient, QWidget *parent)
     : QWidget(parent), mDeviceManager(deviceManager), mTokenClient(tokenClient),
-      mVideoProviderFactory([]() -> pcm::video::VideoProvider * {
+      mVideoProviderFactory([this](const QString &provider) -> pcm::video::VideoProvider * {
+        if (provider == QStringLiteral("jitsi")) {
+          return new pcm::webcall::WebCallProvider({.adapter = QStringLiteral("jitsi"),
+                                                    .displayName = mEntryWidget->displayName()});
+        }
         return new pcm::video::LiveKitVideoProvider();
       }) {
   auto *layout = new QVBoxLayout(this);
@@ -71,7 +76,7 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
   // started N joins).
   connect(mTokenClient, &pcm::tokenclient::TokenBackendClient::tokenReceived, this,
           [this](const pcm::tokenclient::TokenResult &result) {
-            startJoin(result.endpointUrl, result.token);
+            startJoin(result);
           });
   connect(mTokenClient, &pcm::tokenclient::TokenBackendClient::tokenRequestFailed, mEntryWidget,
           &CallEntryWidget::showError);
@@ -208,11 +213,12 @@ void CallsPage::setSidePanelWidget(QWidget *panel) { mCallPage->setSidePanelWidg
 
 void CallsPage::setSidePanelExpandedByDefault(bool expanded) { mCallPage->setSidePanelExpandedByDefault(expanded); }
 
-void CallsPage::setVideoProviderFactoryForTesting(std::function<pcm::video::VideoProvider *()> factory) {
+void CallsPage::setVideoProviderFactoryForTesting(
+    std::function<pcm::video::VideoProvider *(const QString &provider)> factory) {
   mVideoProviderFactory = std::move(factory);
 }
 
-void CallsPage::startJoin(const QString &url, const QString &token) {
+void CallsPage::startJoin(const pcm::tokenclient::TokenResult &result) {
   // Bug 2 (fixwave group 5): a rapid double-click, or a stale/delayed token
   // response arriving after a call is already under way, must not destroy
   // the in-progress VideoSession/provider out from under it. preselectOwnMeeting()/
@@ -226,9 +232,17 @@ void CallsPage::startJoin(const QString &url, const QString &token) {
   // CallPage::joinConfirmed connection in the constructor), matching the
   // design spec's PrejoinCheck gate and Task 12's original note that this is
   // where the real join flow was meant to be triggered from.
-  mPendingUrl = url;
-  mPendingToken = token;
-  auto *provider = mVideoProviderFactory();
+  const bool jitsi = result.provider == QStringLiteral("jitsi");
+  if (jitsi) {
+    // The backend may configure JITSI_URL with a trailing slash.
+    QString base = result.endpointUrl;
+    while (base.endsWith(QLatin1Char('/'))) base.chop(1);
+    mPendingUrl = base + QLatin1Char('/') + result.roomName;
+  } else {
+    mPendingUrl = result.endpointUrl;
+  }
+  mPendingToken = result.token;
+  auto *provider = mVideoProviderFactory(result.provider);
   endCallSession();
   mSession = std::make_unique<pcm::video::VideoSession>(provider);
   // CallPage shows the failure reason on its ended screen, but callEnded
@@ -253,6 +267,11 @@ void CallsPage::startJoin(const QString &url, const QString &token) {
   }
   mSessionStarted = true;
   emit callSessionStarted(mSession.get());
+  // A web call has no device-check step; join after the session hooks (transcription,
+  // prompter) have attached.
+  if (provider->callView()) {
+    mSession->join(mPendingUrl, mPendingToken);
+  }
 }
 
 void CallsPage::endCallSession() {

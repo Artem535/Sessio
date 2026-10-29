@@ -16,6 +16,7 @@ struct Meeting {
   std::string scheduledStart;
   std::string scheduledEnd;
   std::string status;
+  std::string provider; // "livekit" or "jitsi"
 };
 
 // Thread safety: every public method below takes SqliteConnection::lock() for
@@ -27,7 +28,7 @@ public:
   SqliteConnection &connection() { return conn_; }
 
   Meeting create(AccountId accountId, const std::string &scheduledStart,
-                  const std::string &scheduledEnd);
+                  const std::string &scheduledEnd, const std::string &provider = "livekit");
   std::optional<Meeting> findByRef(const std::string &meetingRef);
   std::optional<Meeting> findById(int64_t meetingId);
   void invalidate(int64_t meetingId);

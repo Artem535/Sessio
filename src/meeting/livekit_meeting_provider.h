@@ -14,7 +14,8 @@ class LiveKitMeetingProvider final : public MeetingProvider {
 
 public:
   LiveKitMeetingProvider(QString tokenBackendBaseUrl, QString bearerCredential,
-                         QObject *parent = nullptr);
+                         QObject *parent = nullptr,
+                         QString backendProvider = QStringLiteral("livekit"));
 
   void create(const MeetingCreateRequest &request) override;
   void cancel(const QString &meetingRef) override;
@@ -28,6 +29,7 @@ public:
 private:
   std::unique_ptr<pcm::tokenclient::TokenBackendClient> mClient;
   QString mBearerCredential;
+  QString mBackendProvider; // "livekit" | "jitsi", as the backend names it
 };
 
 } // namespace pcm::meeting

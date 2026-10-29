@@ -28,6 +28,12 @@
 	<string>${MACOSX_BUNDLE_BUNDLE_VERSION}</string>
 	<key>CSResourcesFileMapped</key>
 	<true/>
+	<!-- Chromium (QtWebEngine, Jitsi calls) requests camera and microphone
+	     access; without these keys macOS terminates the app on first use. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Sessio uses the camera for video calls.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Sessio uses the microphone for video calls.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>${MACOSX_BUNDLE_COPYRIGHT}</string>
 	<!-- Registers the sessio:// URL scheme (Task 19): a click on a

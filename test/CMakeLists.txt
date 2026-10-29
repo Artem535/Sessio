@@ -1277,3 +1277,35 @@ target_link_libraries(Sessio_main_window_my_day_tests PRIVATE
     Sessio_my_day_page
 )
 gtest_discover_tests(Sessio_main_window_my_day_tests)
+# QtWebEngine smoke test (Jitsi web calls)
+add_executable(Sessio_webcall_smoke_tests webcall_smoke_tests.cpp)
+target_link_libraries(Sessio_webcall_smoke_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_webcall)
+gtest_discover_tests(Sessio_webcall_smoke_tests)
+
+# Local audio bridge for web calls
+add_executable(Sessio_audio_chunk_tests audio_chunk_tests.cpp)
+target_link_libraries(Sessio_audio_chunk_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_webcall)
+gtest_discover_tests(Sessio_audio_chunk_tests)
+
+add_executable(Sessio_audio_bridge_server_tests audio_bridge_server_tests.cpp)
+target_link_libraries(Sessio_audio_bridge_server_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_webcall)
+gtest_discover_tests(Sessio_audio_bridge_server_tests)
+
+# Web call bridge (page events -> VideoProvider signals / ParticipantModel)
+find_package(Qt6 REQUIRED COMPONENTS Test)
+add_executable(Sessio_web_call_bridge_tests web_call_bridge_tests.cpp)
+target_link_libraries(Sessio_web_call_bridge_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_webcall Sessio_video Qt6::Test)
+gtest_discover_tests(Sessio_web_call_bridge_tests)
+
+# WebCallProvider integration: real QtWebEngine (offscreen) running the fake adapter.
+# Own main(): the scheme must be registered before QApplication.
+add_executable(Sessio_web_call_provider_tests web_call_provider_tests.cpp)
+target_link_libraries(Sessio_web_call_provider_tests PRIVATE
+    GTest::gtest Sessio_webcall Sessio_video Qt6::Test Qt6::Widgets)
+gtest_discover_tests(Sessio_web_call_provider_tests
+    PROPERTIES LABELS webengine TIMEOUT 120
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

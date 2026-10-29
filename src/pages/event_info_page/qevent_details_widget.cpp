@@ -180,6 +180,37 @@ QHash<QString, QString> parseRRule(const QString &rule) {
 }
 }
 
+namespace {
+// Segment order of mProviderKindControl; kept explicit so it cannot drift
+// from ProviderKind's enum values.
+constexpr int providerKindIndex(const pcm::meeting::ProviderKind kind) {
+  switch (kind) {
+  case pcm::meeting::ProviderKind::LiveKit:
+    return 1;
+  case pcm::meeting::ProviderKind::Jitsi:
+    return 2;
+  case pcm::meeting::ProviderKind::ExternalUrl:
+    break;
+  }
+  return 0;
+}
+
+constexpr pcm::meeting::ProviderKind providerKindAt(const int index) {
+  switch (index) {
+  case 1:
+    return pcm::meeting::ProviderKind::LiveKit;
+  case 2:
+    return pcm::meeting::ProviderKind::Jitsi;
+  default:
+    return pcm::meeting::ProviderKind::ExternalUrl;
+  }
+}
+} // namespace
+
+pcm::meeting::ProviderKind QEventDetailsWidget::selectedProviderKind() const {
+  return providerKindAt(mProviderKindControl->currentIndex());
+}
+
 QEventDetailsWidget::QEventDetailsWidget(QWidget *parent)
     : QWidget(parent), mUI(std::make_unique<Ui::EventDetails>()) {
   mUI->setupUi(this);
@@ -230,9 +261,11 @@ void QEventDetailsWidget::initUi() {
   mProviderKindControl->addItem(tr("External link"), {}, {},
                                 QStringLiteral("external_url"));
   mProviderKindControl->addItem(tr("LiveKit"), {}, {}, QStringLiteral("livekit"));
+  mProviderKindControl->addItem(tr("Jitsi"), {}, {}, QStringLiteral("jitsi"));
   mProviderKindControl->setItemsShouldExpand(true);
   mProviderKindControl->setCurrentIndex(0);
   mRepeatTypeControl = new oclero::qlementine::SegmentedControl(this);
+  mRepeatTypeControl->setObjectName(QStringLiteral("repeatTypeControl"));
   mRepeatTypeControl->addItem(tr("None"), {}, {}, QStringLiteral("none"));
   mRepeatTypeControl->addItem(tr("Day"), {}, {}, QStringLiteral("daily"));
   mRepeatTypeControl->addItem(tr("Week"), {}, {}, QStringLiteral("weekly"));
@@ -586,7 +619,9 @@ void QEventDetailsWidget::refreshInspector() {
   const auto start = mCurrentEvent->getStartTime().toLocalTime();
   const auto end = mCurrentEvent->getEndTime().toLocalTime();
   const QString format = !event.is_online ? tr("In person")
-      : mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit
+      : mCurrentEvent->providerKind() == std::optional{pcm::meeting::ProviderKind::Jitsi}
+          ? tr("Online (Jitsi)")
+      : mCurrentEvent->providerKind() == std::optional{pcm::meeting::ProviderKind::LiveKit}
           ? tr("Online (LiveKit)") : tr("Online (external link)");
   const QString client = event.client_name ? QString::fromStdString(*event.client_name) : QString{};
   mFieldClient.value->setText(client);
@@ -804,8 +839,7 @@ void QEventDetailsWidget::loadEvent(QEventItem *event,
   const bool isWorkItem = event->isWorkItem();
   mEventTypeSwitch->setChecked(isWorkItem);
   mOnlineSessionSwitch->setChecked(event->isOnline());
-  mProviderKindControl->setCurrentIndex(
-      event->providerKind() == pcm::meeting::ProviderKind::LiveKit ? 1 : 0);
+  mProviderKindControl->setCurrentIndex(providerKindIndex(event->providerKind().value_or(pcm::meeting::ProviderKind::ExternalUrl)));
   mMeetingUrlEdit->setText(event->meetingUrl());
   mUI->mCostSpinBox->setValue(
       event->cost().value_or(pcm::app_settings::defaultWorkEventCost()));
@@ -944,7 +978,7 @@ QString QEventDetailsWidget::selectedClientName() const {
 
 bool QEventDetailsWidget::wantsNewLiveKitSeries() const {
   return mCreatingNewEvent && isRecurring() && mOnlineSessionSwitch->isChecked() &&
-         mProviderKindControl->currentIndex() == 1 && !mLegacyMigratable;
+         pcm::meeting::isBackendHosted(selectedProviderKind()) && !mLegacyMigratable;
 }
 
 bool QEventDetailsWidget::isRecurring() const {
@@ -1299,8 +1333,23 @@ void QEventDetailsWidget::onRecurrenceTypeChanged() {
       selectedWeekdayRule().isEmpty()) {
     selectWeekday(mUI->mEventDate->date().dayOfWeek(), true);
   }
+  updateProviderAvailability();
   updateRecurringControls();
   updateButtonState();
+}
+
+void QEventDetailsWidget::updateProviderAvailability() {
+  // Recurring series are LiveKit-only, so Jitsi cannot be chosen once a
+  // repeat rule is set on an event that is not yet series-backed.
+  const bool jitsiBlocked = isRecurring() && !mSeriesBacked;
+  const int jitsiIndex = providerKindIndex(pcm::meeting::ProviderKind::Jitsi);
+  mProviderKindControl->setItemEnabled(jitsiIndex, !jitsiBlocked);
+  mProviderKindControl->setToolTip(jitsiBlocked ? tr("Recurring meetings use LiveKit for now")
+                                                : QString{});
+  if (jitsiBlocked && mProviderKindControl->currentIndex() == jitsiIndex) {
+    mProviderKindControl->setCurrentIndex(
+        providerKindIndex(pcm::meeting::ProviderKind::LiveKit));
+  }
 }
 
 void QEventDetailsWidget::onMeetingUrlChanged(const QString &url) {
@@ -1401,7 +1450,7 @@ void QEventDetailsWidget::updateButtonState() const {
   }
 
   if (mCurrentEvent &&
-      mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit) {
+      pcm::meeting::isBackendHosted(mCurrentEvent->providerKind())) {
     // Open joins a LiveKit meeting natively by its meetingRef. Its invitation
     // URL is still shareable with the participant; the passcode is delivered
     // through the separate channel kept in invitationState.
@@ -1480,7 +1529,7 @@ bool QEventDetailsWidget::validateInput() {
   }
   // The meeting link only applies to the external-link provider; a LiveKit
   // meeting is created by the backend and has no link to enter.
-  const bool wantsLiveKit = mProviderKindControl->currentIndex() == 1;
+  const bool wantsLiveKit = pcm::meeting::isBackendHosted(selectedProviderKind());
   if (mOnlineSessionSwitch->isChecked() && !wantsLiveKit) {
     const auto meetingUrl = mMeetingUrlEdit->text().trimmed();
     if (meetingUrl.isEmpty()) {
@@ -1521,7 +1570,9 @@ bool QEventDetailsWidget::updateMeetingViaCoordinator() {
     return true;
   }
 
-  const bool wantsSeriesLiveKit = mProviderKindControl->currentIndex() == 1;
+  // Recurring series are LiveKit-only: a Jitsi selection on a new recurring
+  // event creates a LiveKit series (the series path never reads the combo).
+  const bool wantsSeriesLiveKit = pcm::meeting::isBackendHosted(selectedProviderKind());
   if (mSeriesBacked ||
       (wantsSeriesLiveKit && mCreatingNewEvent && isRecurring() && !mLegacyMigratable)) {
     // The call belongs to a recurring SERIES (existing, or about to be created
@@ -1542,15 +1593,19 @@ bool QEventDetailsWidget::updateMeetingViaCoordinator() {
     return true;
   }
 
+  const auto selectedKind = selectedProviderKind();
+  // A meeting on the other backend provider cannot be kept for the new choice.
   const bool hasLiveKitMeeting =
-      mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit &&
+      pcm::meeting::isBackendHosted(mCurrentEvent->providerKind()) &&
       !mCurrentEvent->meetingRef().isEmpty();
-  const bool wantsLiveKit = mProviderKindControl->currentIndex() == 1;
+  const bool hasMatchingMeeting =
+      hasLiveKitMeeting && mCurrentEvent->providerKind() == std::optional{selectedKind};
+  const bool wantsLiveKit = pcm::meeting::isBackendHosted(selectedKind);
   if (wantsLiveKit) {
     // onApplyClicked has already written the form's schedule to mCurrentEvent.
     const auto start = mCurrentEvent->getStartTime();
     const auto end = mCurrentEvent->getEndTime();
-    if (hasLiveKitMeeting && start == mMeetingScheduledStart && end == mMeetingScheduledEnd) {
+    if (hasMatchingMeeting && start == mMeetingScheduledStart && end == mMeetingScheduledEnd) {
       // Nothing meeting-relevant changed (e.g. only the title was edited):
       // keep the existing meeting, so the invitation already sent to the
       // client stays valid and no backend meeting is orphaned.
@@ -1568,7 +1623,7 @@ bool QEventDetailsWidget::updateMeetingViaCoordinator() {
     // correctly even if a provider ever delivered it synchronously.
     mPendingMeetingCreation = true;
     mMeetingCoordinator->createMeeting(
-        pcm::meeting::ProviderKind::LiveKit,
+        selectedKind,
         {.scheduledStartIso = start.toUTC().toString(Qt::ISODate),
          .scheduledEndIso = end.toUTC().toString(Qt::ISODate)});
     return false;
@@ -1591,7 +1646,7 @@ bool QEventDetailsWidget::updateMeetingViaCoordinator() {
 
 void QEventDetailsWidget::supersedeCurrentLiveKitMeeting() {
   if (!mCurrentEvent ||
-      mCurrentEvent->providerKind() != pcm::meeting::ProviderKind::LiveKit ||
+      !pcm::meeting::isBackendHosted(mCurrentEvent->providerKind()) ||
       mCurrentEvent->meetingRef().isEmpty()) {
     return;
   }
@@ -1599,6 +1654,7 @@ void QEventDetailsWidget::supersedeCurrentLiveKitMeeting() {
   // event still references.
   if (mSupersededLiveKitMeetingRef.isEmpty()) {
     mSupersededLiveKitMeetingRef = mCurrentEvent->meetingRef();
+    mSupersededMeetingKind = *mCurrentEvent->providerKind();
   }
 }
 
@@ -1609,13 +1665,13 @@ void QEventDetailsWidget::cancelSupersededLiveKitMeeting() {
   }
   // A failed replacement leaves the old meeting as the event's meeting.
   if (mCurrentEvent &&
-      mCurrentEvent->providerKind() == pcm::meeting::ProviderKind::LiveKit &&
+      mCurrentEvent->providerKind() == std::optional{mSupersededMeetingKind} &&
       mCurrentEvent->meetingRef() == supersededRef) {
     return;
   }
   // Fire-and-forget: the event no longer references this meeting, and a
   // failed invalidate carries no state the UI needs to react to.
-  mMeetingCoordinator->cancelMeeting(pcm::meeting::ProviderKind::LiveKit, supersededRef);
+  mMeetingCoordinator->cancelMeeting(mSupersededMeetingKind, supersededRef);
 }
 
 DuckEvent QEventDetailsWidget::collectEventData() const {
@@ -1787,6 +1843,7 @@ void QEventDetailsWidget::setSeriesCall(pcm::meeting::SeriesCallService *service
   mSeriesId = seriesId;
   mSeriesJoinTarget = joinTarget;
   mSeriesBacked = service != nullptr && seriesId > 0;
+  updateProviderAvailability();
   mLegacyMigratable = false;
   if (mSeriesCalls) {
     connect(mSeriesCalls, &pcm::meeting::SeriesCallService::statusChanged, this,

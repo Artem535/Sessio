@@ -10,6 +10,8 @@
 #include "screen_capture_target.h"
 #include "video_frame_source.h"
 
+class QWidget;
+
 namespace pcm::video {
 
 // Abstraction over the actual in-call media session: connecting to the
@@ -76,6 +78,9 @@ public:
   // transcription. Only set while a consented session exists.
   virtual void setAudioSink(std::shared_ptr<AudioSink> sink) { Q_UNUSED(sink); }
   [[nodiscard]] virtual qint64 callElapsedMs() const { return 0; }
+  // A widget that renders the whole call (video, controls) for providers that
+  // host a web page; nullptr when the host draws the call itself.
+  [[nodiscard]] virtual QWidget *callView() { return nullptr; }
   // During a call this is the confirmed capture device, including recovery.
   // A null device means that no microphone source is active.
   [[nodiscard]] virtual QAudioDevice selectedMicrophone() const { return {}; }

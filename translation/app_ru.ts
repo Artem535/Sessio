@@ -2359,6 +2359,10 @@
         <translation>LiveKit</translation>
     </message>
     <message>
+        <source>Jitsi</source>
+        <translation>Jitsi</translation>
+    </message>
+    <message>
         <source>Scheduled</source>
         <translation>Запланирована</translation>
     </message>
@@ -2455,6 +2459,10 @@
         <translation>Очно</translation>
     </message>
     <message>
+        <source>Online (Jitsi)</source>
+        <translation>Онлайн (Jitsi)</translation>
+    </message>
+    <message>
         <source>Online (LiveKit)</source>
         <translation>Онлайн (LiveKit)</translation>
     </message>
@@ -2497,6 +2505,10 @@
     <message>
         <source>Failed to create the LiveKit meeting: %1</source>
         <translation>Не удалось создать встречу LiveKit: %1</translation>
+    </message>
+    <message>
+        <source>Recurring meetings use LiveKit for now</source>
+        <translation>Регулярные встречи пока используют LiveKit</translation>
     </message>
     <message>
         <source>Overlaps with an existing event, %1.</source>
@@ -4780,6 +4792,25 @@ Your previous data was kept.</source>
     <message>
         <source>Screen sharing stopped</source>
         <translation>Показ экрана остановлен</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::webcall::WebCallProvider</name>
+    <message>
+        <source>The call page stopped unexpectedly</source>
+        <translation>Страница звонка неожиданно остановилась</translation>
+    </message>
+    <message>
+        <source>Invalid call address</source>
+        <translation>Некорректный адрес звонка</translation>
+    </message>
+    <message>
+        <source>Could not start the local audio bridge</source>
+        <translation>Не удалось запустить локальный аудиомост</translation>
+    </message>
+    <message>
+        <source>The call page failed to load</source>
+        <translation>Не удалось загрузить страницу звонка</translation>
     </message>
 </context>
 </TS>

@@ -29,6 +29,13 @@ TEST(MeetingJoinTest, liveKitUsesMeetingRef) {
   EXPECT_EQ(a.target, QStringLiteral("ref-1"));
 }
 
+TEST(MeetingJoinTest, jitsiJoinsThroughBackendByMeetingRef) {
+  const auto e = makeEvent("Jitsi", "ref-2", "https://x.invalid/a");
+  const JoinAction a = resolveJoinAction(e, std::nullopt);
+  EXPECT_EQ(a.kind, JoinAction::Kind::LiveKit);
+  EXPECT_EQ(a.target, QStringLiteral("ref-2"));
+}
+
 TEST(MeetingJoinTest, externalUsesUrl) {
   const auto e = makeEvent("ExternalUrl", "", "https://x.invalid/a");
   const JoinAction a = resolveJoinAction(e, std::nullopt);

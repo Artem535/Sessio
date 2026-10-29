@@ -29,6 +29,10 @@ public:
 
   VideoFrameSource *frameSource(const QString &id) override { return mSources.value(id); }
 
+  // Set to make this fake behave like a web-hosted provider (WebCallProvider).
+  [[nodiscard]] QWidget *callView() override { return mCallView; }
+  QWidget *mCallView{nullptr};
+
   void startScreenShare(const ScreenCaptureTarget &target) override {
     mLastScreenTarget = target;
     ++mStartScreenShareCallCount;

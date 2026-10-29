@@ -20,6 +20,7 @@ struct TokenResult {
   std::string roomName;
   std::string jwt;
   int64_t expiresAtUnix;
+  std::string provider = "livekit";
 };
 
 enum class ServiceError {
@@ -37,6 +38,8 @@ enum class ServiceError {
   AmbiguousOccurrence,
   ScheduleUnavailable,
   InvitationRevoked,
+  JitsiNotConfigured,
+  InvalidProvider,
 };
 
 template <typename T> struct Result {
@@ -62,7 +65,8 @@ public:
   };
   Result<CreateMeetingOutcome> createMeeting(const std::string &bearerCredential,
                                               const std::string &scheduledStart,
-                                              const std::string &scheduledEnd);
+                                              const std::string &scheduledEnd,
+                                              const std::string &provider = "livekit");
 
   // Retires every invitation on an existing meeting and mints a fresh one.
   // The escape hatch from ADR-12's permanent 5-failed-attempt lockout: without
@@ -88,6 +92,9 @@ public:
                                             const std::string &meetingRef);
 
 private:
+  Result<TokenResult> jitsiToken(const Meeting &meeting, const std::string &identity,
+                                  const std::string &name, bool moderator);
+
   Authorizer &authorizer_;
   MeetingsRepository &meetings_;
   InvitationsRepository &invitations_;

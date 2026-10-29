@@ -177,7 +177,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  QCoreApplication::setApplicationVersion("0.2.36");
+  QCoreApplication::setApplicationVersion("0.2.37");
   // Before anything that can log: on Windows this file and the crash dump are
   // the only trace a hang or crash leaves.
   const QString logDir =
@@ -559,7 +559,7 @@ void Application::refreshUpcomingMeetings() {
       }
     }
     const auto kind = pcm::meeting::providerKindFromString(event.provider_kind.value_or(""));
-    if (kind != pcm::meeting::ProviderKind::LiveKit) {
+    if (!kind || !pcm::meeting::isBackendHosted(*kind)) {
       continue;
     }
     if (!event.meeting_ref.has_value() || event.meeting_ref->empty() ||

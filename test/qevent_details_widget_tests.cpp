@@ -139,6 +139,32 @@ std::unique_ptr<QEventItem> makeLiveKitEvent(const QString &meetingRef) {
 
 } // namespace
 
+TEST(QEventDetailsWidgetTest, JitsiDisabledForRecurringEvents) {
+  MeetingCoordinator coordinator("", "");
+  EventDetailsFixture fixture(&coordinator);
+  ASSERT_TRUE(fixture.allFound());
+  auto *repeat = static_cast<oclero::qlementine::SegmentedControl *>(
+      fixture.widget.findChild<QWidget *>("repeatTypeControl"));
+  ASSERT_NE(repeat, nullptr);
+  constexpr int kLiveKit = 1;
+  constexpr int kJitsi = 2;
+
+  EXPECT_TRUE(fixture.provider->isItemEnabled(kJitsi));
+  repeat->setCurrentData(QStringLiteral("weekly"));
+  EXPECT_FALSE(fixture.provider->isItemEnabled(kJitsi));
+  EXPECT_FALSE(fixture.provider->toolTip().isEmpty());
+
+  repeat->setCurrentData(QStringLiteral("none"));
+  EXPECT_TRUE(fixture.provider->isItemEnabled(kJitsi));
+  fixture.provider->setCurrentIndex(kJitsi);
+  repeat->setCurrentData(QStringLiteral("daily"));
+  EXPECT_EQ(fixture.provider->currentIndex(), kLiveKit);
+
+  repeat->setCurrentData(QStringLiteral("none"));
+  EXPECT_TRUE(fixture.provider->isItemEnabled(kJitsi));
+  EXPECT_TRUE(fixture.provider->toolTip().isEmpty());
+}
+
 TEST(QEventDetailsWidgetTest, NewLiveKitEventIsNotSavedUntilCreateCompletesAndNeverWhenItFails) {
   MeetingCoordinator coordinator("", "");
   EventDetailsFixture form(&coordinator);
