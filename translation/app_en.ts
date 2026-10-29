@@ -1265,6 +1265,239 @@
     </message>
 </context>
 <context>
+    <name>CloudConsentDialog</name>
+    <message>
+        <source>Use a cloud AI model</source>
+        <translation>Use a cloud AI model</translation>
+    </message>
+    <message>
+        <source>The text will be sent to: %1</source>
+        <translation>The text will be sent to: %1</translation>
+    </message>
+    <message>
+        <source>What is sent: phrases of the call transcript, the agreements found so far and the notes used for key points and the meeting summary. Audio and video are never sent.</source>
+        <translation>What is sent: phrases of the call transcript, the agreements found so far and the notes used for key points and the meeting summary. Audio and video are never sent.</translation>
+    </message>
+    <message>
+        <source>These texts can contain personal data, including health information. They may be processed in another country, under the provider&apos;s terms and not under Sessio&apos;s control.</source>
+        <translation>These texts can contain personal data, including health information. They may be processed in another country, under the provider&amp;apos;s terms and not under Sessio&amp;apos;s control.</translation>
+    </message>
+    <message>
+        <source>Names, phone numbers and e-mail addresses of the client and of you are replaced by labels before sending. Other details said aloud, such as third parties or places, are not hidden.</source>
+        <translation>Names, phone numbers and e-mail addresses of the client and of you are replaced by labels before sending. Other details said aloud, such as third parties or places, are not hidden.</translation>
+    </message>
+    <message>
+        <source>Hiding names and contact details is turned off: the text is sent as it is.</source>
+        <translation>Hiding names and contact details is turned off: the text is sent as it is.</translation>
+    </message>
+    <message>
+        <source>You choose the provider and are responsible for having the right to send this data to it. Consent applies to this address only: a different address asks again. You can withdraw consent at any time.</source>
+        <translation>You choose the provider and are responsible for having the right to send this data to it. Consent applies to this address only: a different address asks again. You can withdraw consent at any time.</translation>
+    </message>
+    <message>
+        <source>I understand and accept</source>
+        <translation>I understand and accept</translation>
+    </message>
+    <message>
+        <source>Enable cloud models</source>
+        <translation>Enable cloud models</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+</context>
+<context>
+    <name>CloudFailure</name>
+    <message>
+        <source>Cloud unavailable</source>
+        <translation>Cloud unavailable</translation>
+    </message>
+    <message>
+        <source>the API key was rejected</source>
+        <translation>the API key was rejected</translation>
+    </message>
+    <message>
+        <source>the model was not found</source>
+        <translation>the model was not found</translation>
+    </message>
+    <message>
+        <source>no API key is set</source>
+        <translation>no API key is set</translation>
+    </message>
+    <message>
+        <source>the provider does not support structured output</source>
+        <translation>the provider does not support structured output</translation>
+    </message>
+    <message>
+        <source>the provider is limiting requests, try again later</source>
+        <translation>the provider is limiting requests, try again later</translation>
+    </message>
+    <message>
+        <source>the provider reported an error</source>
+        <translation>the provider reported an error</translation>
+    </message>
+    <message>
+        <source>no connection to the provider</source>
+        <translation>no connection to the provider</translation>
+    </message>
+    <message>
+        <source>the provider took too long to answer</source>
+        <translation>the provider took too long to answer</translation>
+    </message>
+    <message>
+        <source>the provider rejected the request</source>
+        <translation>the provider rejected the request</translation>
+    </message>
+</context>
+<context>
+    <name>CloudSettingsPanel</name>
+    <message>
+        <source>No API key is set.</source>
+        <translation>No API key is set.</translation>
+    </message>
+    <message>
+        <source>The provider rejected the API key.</source>
+        <translation>The provider rejected the API key.</translation>
+    </message>
+    <message>
+        <source>The provider does not know this model.</source>
+        <translation>The provider does not know this model.</translation>
+    </message>
+    <message>
+        <source>The provider does not support strict JSON schema output (response_format json_schema), which Sessio requires.</source>
+        <translation>The provider does not support strict JSON schema output (response_format json_schema), which Sessio requires.</translation>
+    </message>
+    <message>
+        <source>The provider is limiting requests. Try again later.</source>
+        <translation>The provider is limiting requests. Try again later.</translation>
+    </message>
+    <message>
+        <source>The provider reported an error.</source>
+        <translation>The provider reported an error.</translation>
+    </message>
+    <message>
+        <source>No connection to the provider.</source>
+        <translation>No connection to the provider.</translation>
+    </message>
+    <message>
+        <source>The provider took too long to answer.</source>
+        <translation>The provider took too long to answer.</translation>
+    </message>
+    <message>
+        <source>The provider rejected the request.</source>
+        <translation>The provider rejected the request.</translation>
+    </message>
+    <message>
+        <source>Optional. Cloud models write the meeting summary, key points and agreements much faster than the local model. Call text is sent to the provider you choose below, so cloud models are off until you accept the terms.</source>
+        <translation>Optional. Cloud models write the meeting summary, key points and agreements much faster than the local model. Call text is sent to the provider you choose below, so cloud models are off until you accept the terms.</translation>
+    </message>
+    <message>
+        <source>Provider (OpenAI-compatible)</source>
+        <translation>Provider (OpenAI-compatible)</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Address</translation>
+    </message>
+    <message>
+        <source>Model</source>
+        <translation>Model</translation>
+    </message>
+    <message>
+        <source>API key</source>
+        <translation>API key</translation>
+    </message>
+    <message>
+        <source>Remove key</source>
+        <translation>Remove key</translation>
+    </message>
+    <message>
+        <source>The model&apos;s context window. Recorded for future use; summaries currently use small parts of the call.</source>
+        <translation>The model&amp;apos;s context window. Recorded for future use; summaries currently use small parts of the call.</translation>
+    </message>
+    <message>
+        <source>Context size (tokens)</source>
+        <translation>Context size (tokens)</translation>
+    </message>
+    <message>
+        <source>Test connection</source>
+        <translation>Test connection</translation>
+    </message>
+    <message>
+        <source>Privacy</source>
+        <translation>Privacy</translation>
+    </message>
+    <message>
+        <source>Hide names, phone numbers and e-mail addresses before sending</source>
+        <translation>Hide names, phone numbers and e-mail addresses before sending</translation>
+    </message>
+    <message>
+        <source>Enable cloud models…</source>
+        <translation>Enable cloud models…</translation>
+    </message>
+    <message>
+        <source>Withdraw consent</source>
+        <translation>Withdraw consent</translation>
+    </message>
+    <message>
+        <source>Where each task runs</source>
+        <translation>Where each task runs</translation>
+    </message>
+    <message>
+        <source>Local model</source>
+        <translation>Local model</translation>
+    </message>
+    <message>
+        <source>Cloud model</source>
+        <translation>Cloud model</translation>
+    </message>
+    <message>
+        <source>Agreements during the call</source>
+        <translation>Agreements during the call</translation>
+    </message>
+    <message>
+        <source>Key points during the call</source>
+        <translation>Key points during the call</translation>
+    </message>
+    <message>
+        <source>Meeting summary after the call</source>
+        <translation>Meeting summary after the call</translation>
+    </message>
+    <message>
+        <source>If the cloud is unavailable, Sessio says so and does not switch to the local model on its own.</source>
+        <translation>If the cloud is unavailable, Sessio says so and does not switch to the local model on its own.</translation>
+    </message>
+    <message>
+        <source>Enter the provider address and the model first.</source>
+        <translation>Enter the provider address and the model first.</translation>
+    </message>
+    <message>
+        <source>Cloud models are enabled for %1.</source>
+        <translation>Cloud models are enabled for %1.</translation>
+    </message>
+    <message>
+        <source>Cloud models are off. Nothing is sent anywhere.</source>
+        <translation>Cloud models are off. Nothing is sent anywhere.</translation>
+    </message>
+    <message>
+        <source>No key stored.</source>
+        <translation>No key stored.</translation>
+    </message>
+    <message>
+        <source>A key is stored in the system keychain.</source>
+        <translation>A key is stored in the system keychain.</translation>
+    </message>
+    <message>
+        <source>Testing…</source>
+        <translation>Testing…</translation>
+    </message>
+    <message>
+        <source>Connected. The provider supports strict JSON schema output.</source>
+        <translation>Connected. The provider supports strict JSON schema output.</translation>
+    </message>
+</context>
+<context>
     <name>DaySummaryWidget</name>
     <message>
         <source>Free all day</source>
@@ -1327,6 +1560,21 @@
     <message>
         <source>Join</source>
         <translation>Join</translation>
+    </message>
+</context>
+<context>
+    <name>Engine</name>
+    <message>
+        <source>Local model</source>
+        <translation>Local model</translation>
+    </message>
+    <message>
+        <source>Cloud</source>
+        <translation>Cloud</translation>
+    </message>
+    <message>
+        <source>Cloud · %1</source>
+        <translation>Cloud · %1</translation>
     </message>
 </context>
 <context>
@@ -1982,6 +2230,10 @@
     <message>
         <source>Prepared by AI</source>
         <translation>Prepared by AI</translation>
+    </message>
+    <message>
+        <source>Prepared by AI · %1</source>
+        <translation>Prepared by AI · %1</translation>
     </message>
     <message>
         <source>Add to my notes</source>
@@ -3630,6 +3882,10 @@ See you!</translation>
     <message>
         <source>Unable to delete transcripts.</source>
         <translation>Unable to delete transcripts.</translation>
+    </message>
+    <message>
+        <source>Cloud models</source>
+        <translation>Cloud models</translation>
     </message>
     <message>
         <source>Backup Encryption</source>

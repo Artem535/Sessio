@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.38] - 2026-10-29
+
+- Added optional cloud models for the meeting summary, the key points during a
+  call and the agreement prompter, chosen per task. One OpenAI-compatible
+  client with a user-chosen address, model and key; the key is kept in the
+  system keychain. Replies must follow a strict JSON schema
+  (`response_format: json_schema`); the Settings page tests this and rejects
+  providers that do not support it.
+- Cloud use needs accepted terms bound to the provider address; withdrawing
+  consent returns every task to the local model. Names, phone numbers and
+  e-mail addresses are replaced by labels before sending (on by default) and
+  restored in the reply.
+- A cloud failure is shown as "Cloud unavailable" with its reason and never
+  falls back to the local model silently. Summaries and key points show which
+  engine wrote them.
+- The cloud summary reads parts of the call in parallel.
+
 ## [0.2.37] - 2026-10-28
 
 - Added Jitsi as a provider for one-off online meetings. The token backend

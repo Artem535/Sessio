@@ -1271,6 +1271,239 @@
     </message>
 </context>
 <context>
+    <name>CloudConsentDialog</name>
+    <message>
+        <source>Use a cloud AI model</source>
+        <translation>Использовать облачную модель ИИ</translation>
+    </message>
+    <message>
+        <source>The text will be sent to: %1</source>
+        <translation>Текст будет отправлен: %1</translation>
+    </message>
+    <message>
+        <source>What is sent: phrases of the call transcript, the agreements found so far and the notes used for key points and the meeting summary. Audio and video are never sent.</source>
+        <translation>Что отправляется: реплики транскрипта звонка, найденные договорённости и заметки, по которым строятся ключевые пункты и итог встречи. Аудио и видео не отправляются.</translation>
+    </message>
+    <message>
+        <source>These texts can contain personal data, including health information. They may be processed in another country, under the provider&apos;s terms and not under Sessio&apos;s control.</source>
+        <translation>Эти тексты могут содержать персональные данные, в том числе сведения о здоровье. Они могут обрабатываться в другой стране, по правилам провайдера и вне контроля Sessio.</translation>
+    </message>
+    <message>
+        <source>Names, phone numbers and e-mail addresses of the client and of you are replaced by labels before sending. Other details said aloud, such as third parties or places, are not hidden.</source>
+        <translation>Имена, телефоны и адреса электронной почты клиента и ваши заменяются метками перед отправкой. Другие детали из разговора, например третьи лица или места, не скрываются.</translation>
+    </message>
+    <message>
+        <source>Hiding names and contact details is turned off: the text is sent as it is.</source>
+        <translation>Скрытие имён и контактов отключено: текст отправляется как есть.</translation>
+    </message>
+    <message>
+        <source>You choose the provider and are responsible for having the right to send this data to it. Consent applies to this address only: a different address asks again. You can withdraw consent at any time.</source>
+        <translation>Провайдера выбираете вы и отвечаете за наличие права передавать ему эти данные. Согласие действует только для этого адреса: при смене адреса оно будет запрошено снова. Согласие можно отозвать в любой момент.</translation>
+    </message>
+    <message>
+        <source>I understand and accept</source>
+        <translation>Я понимаю и принимаю</translation>
+    </message>
+    <message>
+        <source>Enable cloud models</source>
+        <translation>Включить облачные модели</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+</context>
+<context>
+    <name>CloudFailure</name>
+    <message>
+        <source>Cloud unavailable</source>
+        <translation>Облако недоступно</translation>
+    </message>
+    <message>
+        <source>the API key was rejected</source>
+        <translation>ключ API отклонён</translation>
+    </message>
+    <message>
+        <source>the model was not found</source>
+        <translation>модель не найдена</translation>
+    </message>
+    <message>
+        <source>no API key is set</source>
+        <translation>ключ API не задан</translation>
+    </message>
+    <message>
+        <source>the provider does not support structured output</source>
+        <translation>провайдер не поддерживает структурированный вывод</translation>
+    </message>
+    <message>
+        <source>the provider is limiting requests, try again later</source>
+        <translation>провайдер ограничивает запросы, попробуйте позже</translation>
+    </message>
+    <message>
+        <source>the provider reported an error</source>
+        <translation>провайдер сообщил об ошибке</translation>
+    </message>
+    <message>
+        <source>no connection to the provider</source>
+        <translation>нет связи с провайдером</translation>
+    </message>
+    <message>
+        <source>the provider took too long to answer</source>
+        <translation>провайдер слишком долго отвечает</translation>
+    </message>
+    <message>
+        <source>the provider rejected the request</source>
+        <translation>провайдер отклонил запрос</translation>
+    </message>
+</context>
+<context>
+    <name>CloudSettingsPanel</name>
+    <message>
+        <source>No API key is set.</source>
+        <translation>Ключ API не задан.</translation>
+    </message>
+    <message>
+        <source>The provider rejected the API key.</source>
+        <translation>Провайдер отклонил ключ API.</translation>
+    </message>
+    <message>
+        <source>The provider does not know this model.</source>
+        <translation>Провайдер не знает такой модели.</translation>
+    </message>
+    <message>
+        <source>The provider does not support strict JSON schema output (response_format json_schema), which Sessio requires.</source>
+        <translation>Провайдер не поддерживает строгий вывод по JSON-схеме (response_format json_schema), который нужен Sessio.</translation>
+    </message>
+    <message>
+        <source>The provider is limiting requests. Try again later.</source>
+        <translation>Провайдер ограничивает запросы. Попробуйте позже.</translation>
+    </message>
+    <message>
+        <source>The provider reported an error.</source>
+        <translation>Провайдер сообщил об ошибке.</translation>
+    </message>
+    <message>
+        <source>No connection to the provider.</source>
+        <translation>Нет связи с провайдером.</translation>
+    </message>
+    <message>
+        <source>The provider took too long to answer.</source>
+        <translation>Провайдер слишком долго отвечает.</translation>
+    </message>
+    <message>
+        <source>The provider rejected the request.</source>
+        <translation>Провайдер отклонил запрос.</translation>
+    </message>
+    <message>
+        <source>Optional. Cloud models write the meeting summary, key points and agreements much faster than the local model. Call text is sent to the provider you choose below, so cloud models are off until you accept the terms.</source>
+        <translation>Необязательно. Облачные модели готовят итог встречи, ключевые пункты и договорённости намного быстрее локальной. Текст звонка отправляется выбранному ниже провайдеру, поэтому облако выключено, пока вы не примете условия.</translation>
+    </message>
+    <message>
+        <source>Provider (OpenAI-compatible)</source>
+        <translation>Провайдер (совместимый с OpenAI)</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Адрес</translation>
+    </message>
+    <message>
+        <source>Model</source>
+        <translation>Модель</translation>
+    </message>
+    <message>
+        <source>API key</source>
+        <translation>Ключ API</translation>
+    </message>
+    <message>
+        <source>Remove key</source>
+        <translation>Удалить ключ</translation>
+    </message>
+    <message>
+        <source>The model&apos;s context window. Recorded for future use; summaries currently use small parts of the call.</source>
+        <translation>Окно контекста модели. Сохраняется на будущее; итог сейчас строится по небольшим частям звонка.</translation>
+    </message>
+    <message>
+        <source>Context size (tokens)</source>
+        <translation>Размер контекста (токены)</translation>
+    </message>
+    <message>
+        <source>Test connection</source>
+        <translation>Проверить подключение</translation>
+    </message>
+    <message>
+        <source>Privacy</source>
+        <translation>Конфиденциальность</translation>
+    </message>
+    <message>
+        <source>Hide names, phone numbers and e-mail addresses before sending</source>
+        <translation>Скрывать имена, телефоны и адреса электронной почты перед отправкой</translation>
+    </message>
+    <message>
+        <source>Enable cloud models…</source>
+        <translation>Включить облачные модели…</translation>
+    </message>
+    <message>
+        <source>Withdraw consent</source>
+        <translation>Отозвать согласие</translation>
+    </message>
+    <message>
+        <source>Where each task runs</source>
+        <translation>Где выполняется каждая задача</translation>
+    </message>
+    <message>
+        <source>Local model</source>
+        <translation>Локальная модель</translation>
+    </message>
+    <message>
+        <source>Cloud model</source>
+        <translation>Облачная модель</translation>
+    </message>
+    <message>
+        <source>Agreements during the call</source>
+        <translation>Договорённости во время звонка</translation>
+    </message>
+    <message>
+        <source>Key points during the call</source>
+        <translation>Ключевые пункты во время звонка</translation>
+    </message>
+    <message>
+        <source>Meeting summary after the call</source>
+        <translation>Итог встречи после звонка</translation>
+    </message>
+    <message>
+        <source>If the cloud is unavailable, Sessio says so and does not switch to the local model on its own.</source>
+        <translation>Если облако недоступно, Sessio сообщит об этом и не переключится на локальную модель сам.</translation>
+    </message>
+    <message>
+        <source>Enter the provider address and the model first.</source>
+        <translation>Сначала укажите адрес провайдера и модель.</translation>
+    </message>
+    <message>
+        <source>Cloud models are enabled for %1.</source>
+        <translation>Облачные модели включены для %1.</translation>
+    </message>
+    <message>
+        <source>Cloud models are off. Nothing is sent anywhere.</source>
+        <translation>Облачные модели выключены. Ничего никуда не отправляется.</translation>
+    </message>
+    <message>
+        <source>No key stored.</source>
+        <translation>Ключ не сохранён.</translation>
+    </message>
+    <message>
+        <source>A key is stored in the system keychain.</source>
+        <translation>Ключ хранится в системной связке ключей.</translation>
+    </message>
+    <message>
+        <source>Testing…</source>
+        <translation>Проверяем…</translation>
+    </message>
+    <message>
+        <source>Connected. The provider supports strict JSON schema output.</source>
+        <translation>Подключено. Провайдер поддерживает строгий вывод по JSON-схеме.</translation>
+    </message>
+</context>
+<context>
     <name>DaySummaryWidget</name>
     <message>
         <source>Free all day</source>
@@ -1334,6 +1567,21 @@
     <message>
         <source>Join</source>
         <translation>Присоединиться</translation>
+    </message>
+</context>
+<context>
+    <name>Engine</name>
+    <message>
+        <source>Local model</source>
+        <translation>Локальная модель</translation>
+    </message>
+    <message>
+        <source>Cloud</source>
+        <translation>Облако</translation>
+    </message>
+    <message>
+        <source>Cloud · %1</source>
+        <translation>Облако · %1</translation>
     </message>
 </context>
 <context>
@@ -1993,6 +2241,10 @@
     <message>
         <source>Prepared by AI</source>
         <translation>Подготовлено ИИ</translation>
+    </message>
+    <message>
+        <source>Prepared by AI · %1</source>
+        <translation>Подготовлено ИИ · %1</translation>
     </message>
     <message>
         <source>Add to my notes</source>
@@ -3642,6 +3894,10 @@ See you!</source>
     <message>
         <source>Unable to delete transcripts.</source>
         <translation>Не удалось удалить транскрипции.</translation>
+    </message>
+    <message>
+        <source>Cloud models</source>
+        <translation>Облачные модели</translation>
     </message>
     <message>
         <source>Backup Encryption</source>
