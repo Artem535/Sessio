@@ -22,7 +22,8 @@ public:
 
 // Groups a PipelineError message into what the user can act on:
 // "invalid_output" (the model's reply was unusable), "too_long" (input over
-// the model budget), "cancelled", or "runtime" (anything else).
+// the model budget), "cancelled", "timeout" (cloud), "cloud" (any other cloud
+// engine failure; the code says which) or "runtime" (anything else).
 QString failureReason(const QString &pipelineError);
 
 // Top-level model input. Keys keep their insertion order, as the prompts were

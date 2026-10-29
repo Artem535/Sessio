@@ -16,6 +16,8 @@ add_library(${TARGET_NAME} STATIC
   summary_pipeline.h
   summary_pipeline.cpp
   prompter_engine.h
+  cloud_engine.h
+  cloud_engine.cpp
 )
 qt_add_resources(${TARGET_NAME} call_prompter_prompts
   PREFIX /call-prompter
@@ -24,7 +26,7 @@ qt_add_resources(${TARGET_NAME} call_prompter_prompts
         prompts/summary_leaf.txt prompts/summary_overview.txt)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 find_package(reflectcpp CONFIG REQUIRED)
-target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Core PRIVATE reflectcpp::reflectcpp)
+target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Core Qt6::Network PRIVATE reflectcpp::reflectcpp)
 
 # Gemma through the LiteRT-LM C++ API, or a stub without the runtime.
 set(ENGINE_TARGET ${PROJECT_NAME}_call_prompter_engine)

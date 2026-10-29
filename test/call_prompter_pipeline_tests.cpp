@@ -213,6 +213,9 @@ TEST(PipelineFailureReasonTest, GroupsFixedErrorCodesForTheUser) {
   EXPECT_EQ(failureReason("invalid notes evidence source"), "invalid_output");
   EXPECT_EQ(failureReason("invalid notes output schema/budget"), "invalid_output");
   EXPECT_EQ(failureReason("reply is not JSON"), "invalid_output");
+  EXPECT_EQ(failureReason("cloud auth"), "cloud");
+  EXPECT_EQ(failureReason("cloud server"), "cloud");
+  EXPECT_EQ(failureReason("cloud timeout"), "timeout");
   EXPECT_EQ(failureReason("output budget exceeded"), "invalid_output");
   EXPECT_EQ(failureReason("notes transcript budget exceeded"), "too_long");
   EXPECT_EQ(failureReason("context budget exceeded"), "too_long");

@@ -316,6 +316,8 @@ QString renderGemmaPrompt(const QString &system, const QString &user) {
 
 QString failureReason(const QString &error) {
   if (error == QLatin1String("cancelled")) return QStringLiteral("cancelled");
+  if (error == QLatin1String("cloud timeout")) return QStringLiteral("timeout");
+  if (error.startsWith(QLatin1String("cloud "))) return QStringLiteral("cloud");
   // "invalid notes source*" rejects the request's own utterances, not the reply.
   if (error == QLatin1String("invalid notes source") || error == QLatin1String("invalid notes source fields"))
     return QStringLiteral("runtime");
