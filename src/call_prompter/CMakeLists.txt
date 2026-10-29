@@ -18,6 +18,8 @@ add_library(${TARGET_NAME} STATIC
   prompter_engine.h
   cloud_engine.h
   cloud_engine.cpp
+  pseudonymizer.h
+  pseudonymizer.cpp
 )
 qt_add_resources(${TARGET_NAME} call_prompter_prompts
   PREFIX /call-prompter
