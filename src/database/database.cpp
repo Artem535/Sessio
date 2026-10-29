@@ -2209,6 +2209,9 @@ bool Database::delete_transcript(const int64_t id) {
   auto links = executePrepared(conn, "DELETE FROM TranscriptClient WHERE transcript_id = $1",
                                {duckdb::Value::BIGINT(id)});
   if (!links || links->HasError()) return false;
+  auto speakers = executePrepared(conn, constance::kDeleteSpeakersByTranscriptIdQuery,
+                                  {duckdb::Value::BIGINT(id)});
+  if (!speakers || speakers->HasError()) return false;
   auto phrases = executePrepared(conn, constance::kDeletePhrasesByTranscriptIdQuery,
                                  {duckdb::Value::BIGINT(id)});
   if (!phrases || phrases->HasError()) {
@@ -2245,7 +2248,7 @@ bool Database::delete_all_transcripts() {
       if (!invalidate_call_materials(conn, chunk->GetValue(0, row).GetValue<int64_t>())) return false;
   if (conn.Query("DELETE FROM CallMaterialTranscript")->HasError()) return false;
   if (conn.Query("DELETE FROM TranscriptPrompterState; DELETE FROM TranscriptPrompterNote;")->HasError()) return false;
-  if (conn.Query("DELETE FROM TranscriptClient")->HasError()) return false;
+  if (conn.Query("DELETE FROM TranscriptClient; DELETE FROM TranscriptSpeaker;")->HasError()) return false;
   auto phrases = executePrepared(conn, constance::kDeleteAllTranscriptPhrasesQuery, {});
   if (!phrases || phrases->HasError()) {
     PLOG_ERROR << "Failed to delete all transcript phrases: "
@@ -2263,7 +2266,8 @@ bool Database::delete_all_transcripts() {
   return true;
 }
 
-int64_t Database::add_transcript_phrase(const DuckTranscriptPhrase &phrase) {
+int64_t Database::add_transcript_phrase(const DuckTranscriptPhrase &phrase,
+                                        std::optional<std::string> *stored_speaker_name) {
   if (phrase.transcript_id <= 0 || phrase.text.empty() || phrase.end_ms < phrase.start_ms) {
     PLOG_WARNING << "Rejected invalid transcript phrase (transcript_id="
                  << phrase.transcript_id << ")";
@@ -2306,6 +2310,7 @@ int64_t Database::add_transcript_phrase(const DuckTranscriptPhrase &phrase) {
     PLOG_ERROR << "Empty result from RETURNING id in add_transcript_phrase";
     return 0;
   }
+  if (stored_speaker_name) *stored_speaker_name = db_utils::toOptionalString(chunk->GetValue(1, 0));
   return static_cast<int64_t>(chunk->GetValue(0, 0).GetValue<int32_t>());
 }
 
@@ -2431,7 +2436,9 @@ int64_t Database::purge_orphan_transcripts() {
   if (conn.Query("UPDATE CallMaterial SET event_id=NULL WHERE event_id NOT IN (SELECT id FROM Event);")
           ->HasError()) return 0;
   if (conn.Query("DELETE FROM TranscriptClient WHERE transcript_id NOT IN (SELECT id FROM Transcript) "
-                 "OR client_id NOT IN (SELECT id FROM Client)")->HasError()) return 0;
+                 "OR client_id NOT IN (SELECT id FROM Client);"
+                 "DELETE FROM TranscriptSpeaker WHERE transcript_id NOT IN (SELECT id FROM Transcript);")
+          ->HasError()) return 0;
   auto phrases = executePrepared(conn, constance::kPurgeOrphanTranscriptPhrasesQuery, {});
   if (!phrases || phrases->HasError()) {
     PLOG_ERROR << "Failed to purge orphan transcript phrases: "
@@ -2636,9 +2643,14 @@ bool Database::rename_transcript_speaker(const int64_t transcript_id,
   }
   if (!transcriptExists(conn, transcript_id)) return false;
   if (!invalidate_call_materials(conn, transcript_id)) return false;
-  auto result = executePrepared(conn, constance::kRenameTranscriptSpeakerQuery,
-                                {duckdb::Value(new_name), duckdb::Value::BIGINT(transcript_id),
-                                 duckdb::Value(track_role)});
+  auto speaker = executePrepared(conn, constance::kUpsertTranscriptSpeakerQuery,
+                                 {duckdb::Value::BIGINT(transcript_id), duckdb::Value(track_role),
+                                  duckdb::Value(new_name)});
+  auto result = speaker && !speaker->HasError()
+      ? executePrepared(conn, constance::kRenameTranscriptSpeakerQuery,
+                        {duckdb::Value(new_name), duckdb::Value::BIGINT(transcript_id),
+                         duckdb::Value(track_role)})
+      : std::move(speaker);
   if (!result || result->HasError()) {
     PLOG_ERROR << "Failed to rename transcript speaker (transcript_id=" << transcript_id
                << "): " << (result ? result->GetError() : "prepare failed");

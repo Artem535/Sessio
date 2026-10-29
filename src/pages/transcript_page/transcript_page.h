@@ -1,5 +1,6 @@
 #pragma once
 #include "database.h"
+#include "speaker_rename.h"
 #include <QWidget>
 #include <functional>
 #include <memory>
@@ -44,6 +45,12 @@ public:
   Q_INVOKABLE void selectReaderTranscript(const QString &id);
   Q_INVOKABLE void readerAction(const QString &action);
   Q_INVOKABLE void setReaderMode(bool reading);
+// Names every phrase of trackRole in the shown transcript; refused while it
+// is recording or a phrase is being edited.
+Q_INVOKABLE bool renameSpeaker(const QString &trackRole, const QString &name);
+// Asks for the new name (see setRenamePromptHook), then renameSpeaker.
+Q_INVOKABLE void promptSpeakerRename(const QString &trackRole);
+void setRenamePromptHook(pcm::transcriptionui::SpeakerNamePrompt prompt) { mRenamePrompt = std::move(prompt); }
 protected:
   bool eventFilter(QObject *object, QEvent *event) override;
 signals:
@@ -52,17 +59,20 @@ signals:
   void readerTranscriptSelected();
   void backRequested();
   void transcriptsChanged();
+void speakersRenamed(qint64 transcriptId);
   // Emitted when the transcript currently rendered changes (not on every
   // re-render, so an in-progress note edit is never clobbered).
   void transcriptActivated(qint64 transcriptId);
 private:
   void showTranscript();
   bool mayMutate(int64_t transcriptId);
+  static QString speakerName(const DuckTranscriptPhrase &phrase);
   void reportFailure();
   void filterPhrases();
   void activateTranscript(qint64 id);
   void updatePhraseSizes();
   bool mEditing = false;
+  pcm::transcriptionui::SpeakerNamePrompt mRenamePrompt;
   class QQuickWidget *mQuickReader = nullptr;
   QWidget *mExternalHeader = nullptr;
   std::shared_ptr<pcm::database::Database> mDb;

@@ -193,6 +193,25 @@ TEST_F(PrompterControllerTest, EditedEvidenceCannotBeAcceptedOrSavedAsTheOldProp
   EXPECT_FALSE(controller->acceptCard(cardId));
   EXPECT_TRUE(controller->records().isEmpty());
 }
+TEST_F(PrompterControllerTest, RenamedSpeakerReachesLaterRequestsAndKeepsCardEvidence) {
+  QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
+  const auto p = phrase("Send document Friday"); controller->addPhrase(p); controller->flush();
+  controller->handleResult(reply(requests[0][0].toJsonObject(), p));
+  ASSERT_EQ(controller->cards().size(), 1);
+  const auto cardId = controller->cards()[0].toObject()["id"].toString();
+  const auto q = phrase("Agreed"); controller->addPhrase(q);
+  ASSERT_TRUE(db->rename_transcript_speaker(id, "participant", "Anna"));
+  controller->speakersRenamed(id);
+  EXPECT_EQ(controller->source(QString::number(p.id))["speaker"].toString(), "Anna");
+  EXPECT_EQ(controller->cards()[0].toObject()["participants"].toArray(), QJsonArray{"Anna"});
+  EXPECT_TRUE(controller->evidenceAvailable(cardId));
+  controller->flush();
+  ASSERT_EQ(requests.count(), 2);
+  for (const auto &u : requests[1][0].toJsonObject()["utterances"].toArray())
+    EXPECT_EQ(u.toObject()["speaker"].toString(), "Anna");
+  controller->speakersRenamed(id + 1);  // another transcript: ignored
+  EXPECT_EQ(controller->source(QString::number(q.id))["speaker"].toString(), "Anna");
+}
 TEST_F(PrompterControllerTest, LookbackDoesNotBlockAValidNewPhrase) {
   QSignalSpy requests(controller.get(), &CallPrompterController::requestReady);
   const auto a = phrase(std::string(5000, 'a')), b = phrase(std::string(5000, 'b'));

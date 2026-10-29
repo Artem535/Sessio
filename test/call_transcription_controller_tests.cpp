@@ -480,6 +480,24 @@ TEST_F(ControllerTest, SecondStartWhileFinishingIsRejected) {
   EXPECT_FALSE(label("transcriptNotice").isEmpty());
   release->set_value();
 }
+TEST_F(ControllerTest, RenamingASpeakerDuringTheCallPersistsAndNamesLaterPhrases) {
+  start();
+  phrase();
+  const auto id = transcriptId();
+  QSignalSpy renamed(controller.get(), &CallTranscriptionController::speakersRenamed);
+  QSignalSpy added(controller.get(), &CallTranscriptionController::phraseAdded);
+  emit panel->speakerRenameRequested("participant", "Anna");
+  ASSERT_EQ(renamed.count(), 1);
+  EXPECT_EQ(renamed[0][0].toLongLong(), id);
+  EXPECT_EQ(panel->findChild<QLabel *>("phraseSpeaker")->text(), "Anna");
+  EXPECT_EQ(db->get_transcript_phrases(id).at(0).speaker_name.value_or(""), "Anna");
+
+  provider->simulateAudio("remote", concat({speech(1000), silence(800)}));
+  ASSERT_TRUE(pump([this] { return panel->phraseCount() == 2; }));
+  ASSERT_EQ(added.count(), 1);
+  EXPECT_EQ(added[0][0].value<DuckTranscriptPhrase>().speaker_name.value_or(""), "Anna");
+  EXPECT_EQ(db->get_transcript_phrases(id).at(1).speaker_name.value_or(""), "Anna");
+}
 TEST_F(ControllerTest, ShutdownDoesNotBlock) {
   auto release = std::make_shared<std::promise<void>>();
   auto gate = release->get_future().share();

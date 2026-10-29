@@ -183,13 +183,18 @@ public:
   // Single writer thread invariant: ids are allocated as MAX(id)+1, so only
   // one thread may add phrases at a time. Rejects (returns 0) when the
   // transcript is not in "recording" status or its consent was revoked.
-  int64_t add_transcript_phrase(const DuckTranscriptPhrase &phrase);
+  // A track role renamed in that transcript (see rename_transcript_speaker)
+  // stores its new name instead of phrase.speaker_name; the stored name is
+  // reported through stored_speaker_name when given.
+  int64_t add_transcript_phrase(const DuckTranscriptPhrase &phrase,
+                                std::optional<std::string> *stored_speaker_name = nullptr);
   std::vector<DuckTranscriptPhrase> get_transcript_phrases(int64_t transcript_id);
   std::optional<int64_t> get_transcript_id_for_phrase(int64_t phrase_id);
   bool update_transcript_phrase_text(int64_t phrase_id, const std::string &text);
   bool delete_transcript_phrase(int64_t phrase_id);
-  // Sets speaker_name on every phrase of the transcript with that track role
-  // (not a text edit: `edited` is untouched) and bumps updated_at. Returns true
+  // Sets speaker_name on every phrase of the transcript with that track role,
+  // and on phrases of that role added later (not a text edit: `edited` is
+  // untouched) and bumps updated_at. Returns true
   // iff the transcript exists, even when no phrase matched; false for an empty
   // name or an unknown transcript.
   bool rename_transcript_speaker(int64_t transcript_id, const std::string &track_role,
