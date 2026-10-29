@@ -106,11 +106,11 @@ PrompterWorker::PrompterWorker(pcm::prompter::PrompterEngineFactory factory, QOb
   mCloud.pseudonymize = [] { return pcm::app_settings::cloudPseudonymize(); };
   mCloud.label = [] { return QStringLiteral("cloud:") + pcm::app_settings::cloudModel(); };
   mCloud.parallelism = [] { return 4; };
-  mCloud.makeEngine = [this]() -> std::unique_ptr<pcm::prompter::PrompterEngine> {
+  mCloud.makeEngine = []() -> std::unique_ptr<pcm::prompter::PrompterEngine> {
     pcm::prompter::CloudConfig config;
     config.baseUrl = pcm::app_settings::cloudBaseUrl();
     config.model = pcm::app_settings::cloudModel();
-    config.apiKey = mCloudApiKey;
+    config.apiKey = pcm::app_settings::cloudApiKeyCached();
     return pcm::prompter::createCloudEngine(config);
   };
   // No GUI owner: synchronous loading can outlive PrompterWorker. Neither the

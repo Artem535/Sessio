@@ -1,6 +1,8 @@
 #include "settings_dialog.h"
 #ifdef SESSIO_CALL_TRANSCRIPTION
 #include "transcription_settings_panel.h"
+#include "cloud_settings_panel.h"
+#include "cloud_key_store.h"
 #include "engine_factory.h"
 #endif
 #include "app_role_switcher.h"
@@ -764,6 +766,7 @@ void SettingsDialog::setupTranscriptionSection() {
   connect(panel, &TranscriptionSettingsPanel::prompterAccelerationChanged, this, &pcm::app_settings::setPrompterAcceleration);
   connect(panel, &TranscriptionSettingsPanel::tuningChanged, this,
           &pcm::app_settings::setTranscriptionTuning);
+  setupCloudSection();
   connect(panel, &TranscriptionSettingsPanel::deleteAllRequested, this, [this, panel] {
     if (!mDb) return;
     if (mTranscriptionActive && mTranscriptionActive()) return;
@@ -781,6 +784,27 @@ void SettingsDialog::setupTranscriptionSection() {
       QMessageBox::warning(this, tr("Transcription"), tr("Unable to delete transcripts."));
     }
   });
+#endif
+}
+
+void SettingsDialog::setupCloudSection() {
+#ifdef SESSIO_CALL_TRANSCRIPTION
+  auto *panel = new CloudSettingsPanel(mSettingsStack);
+  auto *keys = new CloudKeyStore(this);
+  mSettingsSections->addItem(tr("Cloud models"), {}, {}, QStringLiteral("cloud"));
+  mSettingsStack->addWidget(makeScrollPage(panel, mSettingsStack));
+  connect(keys, &CloudKeyStore::readFinished, panel, [panel](bool ok, QString key, QString) {
+    if (!ok) return;
+    panel->setStoredKey(key);
+    pcm::app_settings::setCloudApiKeyCached(key);
+  });
+  connect(panel, &CloudSettingsPanel::keyChanged, keys, [keys](QString key) {
+    pcm::app_settings::setCloudApiKeyCached(key);
+    if (key.isEmpty()) keys->remove(); else keys->write(key);
+  });
+  connect(panel, &CloudSettingsPanel::consentAccepted, keys, &CloudKeyStore::read);
+  // Read the key only for someone who has opted in: no keychain prompt otherwise.
+  if (pcm::app_settings::cloudConsentValid()) keys->read();
 #endif
 }
 

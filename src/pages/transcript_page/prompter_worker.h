@@ -26,7 +26,7 @@ public:
   bool startCloud();
   // Which engine serves a request. By default the user's settings decide
   // (featureEngine per task) and the engine is built from the cloud settings
-  // and the API key given to setCloudApiKey(). Tests replace all of it.
+  // and the in-memory API key (app_settings::cloudApiKeyCached). Tests replace all of it.
   struct CloudRouting {
     std::function<bool(const QString &task)> useCloud;
     std::function<std::unique_ptr<pcm::prompter::PrompterEngine>()> makeEngine;  // GUI thread, per request
@@ -35,7 +35,6 @@ public:
     std::function<int()> parallelism;  // concurrent summary leaf calls
   };
   void setCloudRouting(CloudRouting routing) { mCloud = std::move(routing); }
-  void setCloudApiKey(const QString &key) { mCloudApiKey = key; }
   void stop();
   void send(const QJsonObject &request);
   void cancelNotes(qint64 materialId, const QString &requestToken = {});
@@ -64,7 +63,6 @@ private:
   QQueue<QJsonObject> mQueue;
   QString mModelPath;
   CloudRouting mCloud;
-  QString mCloudApiKey;
   bool mCloudOnly = false, mExpectedCloud = false;
   int mGeneration = 0, mSerial = 0, mCallTimeoutMs = 0;
   int mAgreementsCallMs = 120000, mCancelGraceMs = 30000;

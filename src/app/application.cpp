@@ -1,3 +1,4 @@
+#include "cloud_key_store.h"
 #include "application.h"
 #include "my_day_bridge.h"
 #include "file_log.h"
@@ -1222,6 +1223,15 @@ void Application::connectSignals() {
       notesPage->setAgreements(prompter->records());
     });
     auto *worker = new PrompterWorker(this);
+    // The cloud key reaches the worker through an in-memory cache, read once for someone who opted in.
+    if (pcm::app_settings::cloudConsentValid()) {
+      auto *keys = new CloudKeyStore(this);
+      connect(keys, &CloudKeyStore::readFinished, keys, [keys](bool ok, QString key, QString) {
+        if (ok) pcm::app_settings::setCloudApiKeyCached(key);
+        keys->deleteLater();
+      });
+      keys->read();
+    }
     auto *finals = new CallNotesFinalizer(mDb, this);
     auto *prompterPanel = new PrompterPanel(prompter, mDb);
     prompterPanel->setCallNoteSaver([notes](const QString &id, const QString &text) { return notes->appendAgreement(id, text); });
@@ -1291,20 +1301,28 @@ void Application::connectSignals() {
     connect(finals, &CallNotesFinalizer::materialChanged, notes, [notes](qint64 id) {
       if (notes->materialId() == id) notes->refreshFromStorage();
     });
-    connect(finals, &CallNotesFinalizer::generationRequested, worker, [worker, finals] {
-      const auto model = pcm::app_settings::prompterModel();
-      finals->setGenerationEnabled(worker->start(model.isEmpty() ? PrompterWorker::bundledModel() : model));
-    });
-    auto startPrompter = [worker, prompter, notes, notesWanted] {
+    // Starts what the given features run on: the local model when any of them is local, or just the
+    // cloud engine. With no local model on disk, cloud-routed features still work.
+    const auto startWorker = [worker](std::initializer_list<const char *> features) {
+      bool local = false, cloud = false;
+      for (const char *feature : features) (pcm::app_settings::featureEngine(feature) == "cloud" ? cloud : local) = true;
+      if (!local) return worker->startCloud();
       const auto configured = pcm::app_settings::prompterModel();
-      if (worker->start(configured.isEmpty() ? PrompterWorker::bundledModel() : configured)) {
+      const auto model = configured.isEmpty() ? PrompterWorker::bundledModel() : configured;
+      if (cloud && !QFileInfo(model).isFile()) return worker->startCloud();
+      return worker->start(model);
+    };
+    connect(finals, &CallNotesFinalizer::generationRequested, worker, [startWorker, finals] {
+      finals->setGenerationEnabled(startWorker({"summary"}));
+    });
+    auto startPrompter = [startWorker, prompter, notes, notesWanted] {
+      if (startWorker({"agreements", "live_points"})) {
         *notesWanted = true; notes->setGenerationEnabled(true);
         prompter->resume();
       }
     };
-    auto startNotesModel = [worker, notes] {
-      const auto configured = pcm::app_settings::prompterModel();
-      notes->setGenerationEnabled(worker->start(configured.isEmpty() ? PrompterWorker::bundledModel() : configured));
+    auto startNotesModel = [startWorker, notes] {
+      notes->setGenerationEnabled(startWorker({"live_points"}));
     };
     connect(notes, &CallNotesController::generationRequested, worker, startNotesModel);
     connect(prompterPanel, &PrompterPanel::pauseRequested, prompter, [worker, prompter, notes, notesWanted] {

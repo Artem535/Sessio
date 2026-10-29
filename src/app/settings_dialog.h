@@ -63,6 +63,7 @@ private:
   std::function<bool()> mTranscriptionActive;
   QWidget *mTranscriptionPanel = nullptr;
   void setupTranscriptionSection();
+  void setupCloudSection();
   void setupUi();
   void setupLiveKitSection();
   void loadSettings() const;

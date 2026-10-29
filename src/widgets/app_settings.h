@@ -32,6 +32,9 @@ void acceptCloudConsent(); // binds consent to the current base URL
 void revokeCloudConsent(); // every feature goes back to local
 bool cloudPseudonymize();  // default true
 void setCloudPseudonymize(bool enabled);
+// The API key as read from the keychain, kept in memory only for this run.
+QString cloudApiKeyCached();
+void setCloudApiKeyCached(const QString &key);
 QString featureEngine(const QString &feature);
 void setFeatureEngine(const QString &feature, const QString &engine);
 

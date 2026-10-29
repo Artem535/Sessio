@@ -7,6 +7,7 @@
 #include <QStandardPaths>
 #include <QStringList>
 #include <QUrl>
+#include <mutex>
 #include <QTime>
 
 namespace {
@@ -182,6 +183,18 @@ void revokeCloudConsent() {
 }
 bool cloudPseudonymize() { return QSettings().value("cloud/pseudonymize", true).toBool(); }
 void setCloudPseudonymize(bool enabled) { QSettings().setValue("cloud/pseudonymize", enabled); }
+namespace {
+std::mutex gCloudKeyMutex;
+QString gCloudKey;
+} // namespace
+QString cloudApiKeyCached() {
+  std::lock_guard lock(gCloudKeyMutex);
+  return gCloudKey;
+}
+void setCloudApiKeyCached(const QString &key) {
+  std::lock_guard lock(gCloudKeyMutex);
+  gCloudKey = key;
+}
 QString featureEngine(const QString &feature) {
   if (!cloudConsentValid()) return QStringLiteral("local");
   return QSettings().value("cloud/engine/" + feature).toString() == QLatin1String("cloud") ? QStringLiteral("cloud")
