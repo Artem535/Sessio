@@ -1,0 +1,28 @@
+#include "meeting_join.h"
+
+#include "provider_kind.h"
+
+namespace pcm::meeting {
+
+JoinAction resolveJoinAction(const DuckEvent &event, const std::optional<QString> &seriesJoinTarget) {
+  if (seriesJoinTarget) {
+    // Series-backed: the series target is authoritative; empty means nothing to join.
+    if (seriesJoinTarget->isEmpty()) {
+      return {};
+    }
+    return {JoinAction::Kind::LiveKit, *seriesJoinTarget};
+  }
+  // Jitsi meetings also join through the token backend, which names the provider.
+  if (event.provider_kind && event.meeting_ref && !event.meeting_ref->empty() &&
+      isBackendHosted(providerKindFromString(*event.provider_kind))) {
+    return {JoinAction::Kind::LiveKit, QString::fromStdString(*event.meeting_ref)};
+  }
+  if (!event.meeting_url.empty()) {
+    if (event.provider_kind == std::optional<std::string>{"ExternalJitsi"})
+      return {JoinAction::Kind::JitsiUrl, QString::fromStdString(event.meeting_url)};
+    return {JoinAction::Kind::Url, QString::fromStdString(event.meeting_url)};
+  }
+  return {};
+}
+
+} // namespace pcm::meeting

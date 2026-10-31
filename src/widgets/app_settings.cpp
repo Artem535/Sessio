@@ -5,6 +5,9 @@
 #include <QObject>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QStringList>
+#include <QUrl>
+#include <mutex>
 #include <QTime>
 
 namespace {
@@ -108,6 +111,135 @@ QString defaultAutoBackupDestinationValue() {
 } // namespace
 
 namespace pcm::app_settings {
+bool transcriptionEnabled() {
+  return QSettings().value("transcription/enabled", true).toBool();
+}
+
+void setTranscriptionEnabled(bool enabled) {
+  QSettings().setValue("transcription/enabled", enabled);
+  if (!enabled) {
+    QSettings().setValue("transcription/autoStart", false);
+    QSettings().setValue("prompter/autoStart", false);
+  }
+}
+
+bool transcriptionAutoStart() { return transcriptionEnabled() && QSettings().value("transcription/autoStart", false).toBool(); }
+void setTranscriptionAutoStart(bool enabled) {
+  if (enabled) setTranscriptionEnabled(true);
+  QSettings().setValue("transcription/autoStart", enabled);
+  if (!enabled) QSettings().setValue("prompter/autoStart", false);
+}
+bool prompterAutoStart() { return transcriptionAutoStart() && QSettings().value("prompter/autoStart", false).toBool(); }
+void setPrompterAutoStart(bool enabled) {
+  if (enabled) setTranscriptionAutoStart(true);
+  QSettings().setValue("prompter/autoStart", enabled);
+}
+QString prompterModel() { return QSettings().value("prompter/model").toString(); }
+void setPrompterModel(const QString &model) {
+  QSettings settings;
+  settings.setValue("prompter/model", model);
+  // Keys of the former Python runtime.
+  settings.remove("prompter/python");
+  settings.remove("prompter/template");
+}
+QString prompterAcceleration() {
+  const auto mode = QSettings().value("prompter/acceleration").toString();
+  return mode == "gpu" || mode == "cpu" ? mode : QStringLiteral("auto");
+}
+void setPrompterAcceleration(const QString &mode) { QSettings().setValue("prompter/acceleration", mode); }
+
+namespace {
+QString normalisedUrl(const QString &url) {
+  const auto trimmed = url.trimmed();
+  if (trimmed.isEmpty()) return {};
+  return QUrl(trimmed).adjusted(QUrl::StripTrailingSlash | QUrl::NormalizePathSegments).toString();
+}
+const QStringList kFeatures{"agreements", "live_points", "summary"};
+} // namespace
+
+QString cloudBaseUrl() { return QSettings().value("cloud/baseUrl").toString(); }
+void setCloudBaseUrl(const QString &url) {
+  const auto next = url.trimmed();
+  if (normalisedUrl(next) != normalisedUrl(cloudBaseUrl())) revokeCloudConsent();
+  QSettings().setValue("cloud/baseUrl", next);
+}
+QString cloudModel() { return QSettings().value("cloud/model").toString(); }
+void setCloudModel(const QString &model) { QSettings().setValue("cloud/model", model.trimmed()); }
+int cloudContextTokens() { return qMax(2048, QSettings().value("cloud/contextTokens", 32768).toInt()); }
+void setCloudContextTokens(int tokens) { QSettings().setValue("cloud/contextTokens", qMax(2048, tokens)); }
+bool cloudConsentValid() {
+  const QSettings settings;
+  const auto consent = settings.value("cloud/consentUrl").toString();
+  return !consent.isEmpty() && consent == normalisedUrl(settings.value("cloud/baseUrl").toString());
+}
+void acceptCloudConsent() {
+  QSettings settings;
+  settings.setValue("cloud/consentUrl", normalisedUrl(settings.value("cloud/baseUrl").toString()));
+}
+void revokeCloudConsent() {
+  QSettings settings;
+  settings.remove("cloud/consentUrl");
+  for (const auto &feature : kFeatures) settings.remove("cloud/engine/" + feature);
+}
+bool cloudPseudonymize() { return QSettings().value("cloud/pseudonymize", true).toBool(); }
+void setCloudPseudonymize(bool enabled) { QSettings().setValue("cloud/pseudonymize", enabled); }
+namespace {
+std::mutex gCloudKeyMutex;
+QString gCloudKey;
+} // namespace
+QString cloudApiKeyCached() {
+  std::lock_guard lock(gCloudKeyMutex);
+  return gCloudKey;
+}
+void setCloudApiKeyCached(const QString &key) {
+  std::lock_guard lock(gCloudKeyMutex);
+  gCloudKey = key;
+}
+QString featureEngine(const QString &feature) {
+  if (!cloudConsentValid()) return QStringLiteral("local");
+  return QSettings().value("cloud/engine/" + feature).toString() == QLatin1String("cloud") ? QStringLiteral("cloud")
+                                                                                         : QStringLiteral("local");
+}
+void setFeatureEngine(const QString &feature, const QString &engine) {
+  QSettings().setValue("cloud/engine/" + feature, engine == QLatin1String("cloud") ? "cloud" : "local");
+}
+
+pcm::transcription::TranscriptionTuning transcriptionTuning() {
+  using pcm::transcription::TranscriptionTuning;
+  const QSettings settings;
+  TranscriptionTuning tuning;
+  tuning.threshold = settings.value("transcription/vadThreshold", tuning.threshold).toFloat();
+  tuning.minSilenceSec = settings.value("transcription/vadMinSilence", tuning.minSilenceSec).toFloat();
+  tuning.minSpeechSec = settings.value("transcription/vadMinSpeech", tuning.minSpeechSec).toFloat();
+  tuning.maxPhraseSec = settings.value("transcription/vadMaxPhrase", tuning.maxPhraseSec).toFloat();
+  tuning.numThreads = settings.value("transcription/threads", tuning.numThreads).toInt();
+  return tuning.clamped();
+}
+
+void setTranscriptionTuning(const pcm::transcription::TranscriptionTuning &tuning) {
+  const auto t = tuning.clamped();
+  QSettings settings;
+  settings.setValue("transcription/vadThreshold", t.threshold);
+  settings.setValue("transcription/vadMinSilence", t.minSilenceSec);
+  settings.setValue("transcription/vadMinSpeech", t.minSpeechSec);
+  settings.setValue("transcription/vadMaxPhrase", t.maxPhraseSec);
+  settings.setValue("transcription/threads", t.numThreads);
+}
+
+QString callDisplayName() {
+  return QSettings().value("calls/displayName").toString().trimmed().left(64);
+}
+
+void setCallDisplayName(const QString &name) {
+  QSettings().setValue("calls/displayName", name.trimmed().left(64));
+}
+
+QString externalJitsiServerUrl() {
+  return QSettings().value("calls/externalJitsiServerUrl").toString();
+}
+void setExternalJitsiServerUrl(const QString &url) {
+  QSettings().setValue("calls/externalJitsiServerUrl", url.trimmed());
+}
 
 bool confirmEventDeletion() {
   QSettings settings;

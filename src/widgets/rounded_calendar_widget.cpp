@@ -1,5 +1,6 @@
 #include "rounded_calendar_widget.h"
 
+#include "accent_color.h"
 #include "constants.hpp"
 
 #include <QPainter>
@@ -181,7 +182,7 @@ void RoundedCalendarWidget::paintEvent(QPaintEvent *event) {
 
       if (isSelected) {
         painter.setPen(Qt::NoPen);
-        painter.setBrush(QColor(93, 123, 230));
+        painter.setBrush(pcm::widgets::accentColor(palette()));
         painter.drawRoundedRect(rect.adjusted(6, 4, -6, -4), kCellRadius, kCellRadius);
       }
 
@@ -197,6 +198,9 @@ void RoundedCalendarWidget::paintEvent(QPaintEvent *event) {
         }
       }
 
+      if (isSelected) {
+        textColor = pcm::widgets::onAccentColor(palette());
+      }
       painter.setPen(textColor);
       QFont cellFont = font();
       cellFont.setBold(isSelected);

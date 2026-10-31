@@ -1,0 +1,134 @@
+= Gemma E4B: event extraction and target matching
+
+Evaluation dates: 2026-10-12–2026-10-13. Throwaway spike ++#++146, no
+product integration.
+
+== Change
+
+The previous prompt performs extraction, target selection and ledger
+operations in one request. It misses notes promises and deletes meetings
+when notes are cancelled. The new pipeline separates these
+responsibilities:
+
+[arabic]
+. Extract accepted future actions or explicit cancellations from the new
+window alone, without access to previous model state. Return action,
+source evidence and related participants; keep independently promised
+actions separate.
+. Validate IDs against the current source and participant labels against
+source speakers. Filter existing candidate records by compatible
+participants.
+. Use a unique exact action-text match when available (only case,
+whitespace and trailing sentence punctuation normalized). Otherwise ask
+a separate Gemma call to compare the event, candidate records and new
+source utterances.
+. Code applies only a unique valid target. Ambiguous/unknown targets and
+invalid extraction are retained as rejected events in the trace, without
+changing state.
+
+Participants represent people related to an action, including document
+recipient; they are not a certified performer field. The participant
+filter permits equal sets or subset relations to accommodate incomplete
+mentions. It is a candidate filter, not independent semantic proof. The
+matcher can still select the wrong target in an unseen case. User review
+remains required for integration.
+
+== Method
+
+Same Gemma-4-E4B-it LiteRT package and tokenizer as earlier E4B runs,
+CPU4threads, LiteRT-LM0.18.0, MTP ON, thinking OFF, greedy
+top++_++k1/temperature0/seed146, context4096, fresh sessions, no grammar
+or prompt cache. New output cap384 instead of256 for the richer event
+format. Exact prompts are materialized in
+`prompts/event-final-extract.txt` and `event-final-match.txt`. CPU-only
+scope MemoryMax5G/MemorySwapMax0. Generated model state only; the gold
+ledger is used exclusively by the separate evaluation script.
+
+Four scripts/fixtures: original10 windows, transferred formulations8,
+different performers6, fresh presentation scenario7. Each replay starts
+empty; two replays per fixture. Source files are
+`event-++*++-windows.json`. The final fresh scenario was authored before
+participant-prompt iterations and not used to adjust prompts after its
+result. It remains a small authored probe, not an independent
+representative corpus.
+
+Earlier exploratory variants are preserved in event++_++pipeline.py and
+local raw artifacts: the first missed initial facts; another duplicated
+date-changed meetings; later variants lost performer information or
+rejected valid cancellations. Some exploratory runs stopped early once a
+failure was observed. Final-candidate results are reported separately,
+not pooled with these attempts.
+
+Three final scenarios completed on October12. The fresh run was
+interrupted in its second replay; its partial JSON/log are preserved as
+`++*++-interrupted.++*++`. Only that scenario was rerun on October13.
+Available host RAM changed from about 6GiB with full swap to17GiB with
+empty swap; fresh latency is therefore separate.
+
+== Verified result
+
+The original, transferred and different-performer scenarios pass every
+reviewed state transition and exact ledger/evidence check in both
+replays. Meeting/notes remain separate; date/time changes retain IDs;
+targeted cancellation preserves unrelated records. No wrong record
+deletion occurred in the final tested cases.
+
+The fresh scenario retains one cancelled promise: extractor identifies
+the cancellation, but outputs an infinitive action instead of the
+earlier named performer phrase. Exact matching fails and Gemma returns
+no target. The event is visible as `no cancellation target`; code
+preserves both records. This is a recall failure, not a successful
+cancellation. Subsequent neutral windows retain that stale record, so
+one missed cancellation produces several failing states.
+
+Final evaluation after completion: 62 transitions (31 distinct windows,
+two replays). Original20/20, transferred16/16, different
+performers12/12, fresh6/14 pass exact ledger/evidence checks:
+total54/62. The eight failing states are the same missed cancellation
+and its propagation in both replays. This fraction is not a general
+accuracy estimate. All four replays are complete; paired raw calls and
+states are identical, with no parse failures or output-cap truncation.
+Action/date/performer/target text was reviewed separately from
+ID/evidence checks. The manifest confirms unchanged inference code,
+prompts and input fixtures.
+
+== Latency
+
+On the three completed October12 fixtures, full-window medians are
+original5.911s, transferred4.773s, different-performer4.676s. Original
+first seven windows median 5.885s; meeting reschedule about9.6s, notes
+cancellation about9.2s. The earlier single-call rules{plus}examples
+original-window median was5.607s, but failed the target selection gate.
+Positive transitions may require two calls: the original notes
+acceptance takes up to13.528s. These are complete update times, not time
+to a useful safe prompter hint. Hint generation is outside this
+pipeline.
+
+The October13 fresh rerun median is10.245s, maximum20.429s, 20 model
+calls for 14 windows. Different host conditions and fixture prevent
+attributing this difference to a particular cause or pooling it with
+earlier timing as a speed gain.
+
+Memory metadata samples RSS only at window boundaries, so it must not be
+called the transient peak. This is offline synthetic transcript replay,
+without ASR, diarization errors, overlapping speech or concurrent
+video-call load.
+
+== Integration boundary
+
+Use the final pipeline as the next integration candidate for reviewable
+agreement suggestions and a visible unresolved-event queue. Store the
+application ledger separately from model outputs. Show source utterances
+for additions/changes and require confirmation for cancellations, rather
+than silently dropping rejected events or applying inferred edits.
+Automatic mutation acceptance is not established.
+
+Code: `spikes/live-llm-bench/event++_++pipeline.py`. Replay:
+`run++_++event++_++quality.sh`. Evaluation:
+`evaluate++_++event++_++ledger.py`; ledger/evidence comparison is
+supplemented by manual action/date/performer/target review and does not
+claim general accuracy. Raw final artifacts:
+`results/event-final-++{++original,heldout,owners,fresh}.json`,
+metadata/logs, manifest and `event-final-evaluation.json`. Product code
+unchanged. All final inference jobs completed; no active model process
+remains.

@@ -1,0 +1,127 @@
+#include "device_check_widget.h"
+#include "device_manager.h"
+
+#include <QApplication>
+#include <QComboBox>
+#include <QLayout>
+#include <QLabel>
+#include <QMediaDevices>
+#include <QPushButton>
+#include <QSignalSpy>
+#include <QTest>
+#include <gtest/gtest.h>
+#include <livekit/livekit.h>
+
+TEST(DeviceCheckWidgetTest, LeavingThePreviewReleasesTheCameraAndLaterDeviceChangesDoNotReopenIt) {
+  pcm::video::DeviceManager deviceManager;
+  DeviceCheckWidget widget(&deviceManager);
+  widget.show();
+  QApplication::processEvents();
+  widget.hide();
+  EXPECT_FALSE(widget.previewActive());
+  // A hot-plug event or the call's own camera start can change the device lists while hidden.
+  emit deviceManager.devicesChanged();
+  QApplication::processEvents();
+  EXPECT_FALSE(widget.previewActive());
+  widget.show();
+  QApplication::processEvents();
+  widget.hide();
+  EXPECT_FALSE(widget.previewActive());
+}
+
+TEST(DeviceCheckWidgetTest, HasCameraMicrophoneSpeakerSelectors) {
+  pcm::video::DeviceManager deviceManager;
+  DeviceCheckWidget widget(&deviceManager);
+
+  EXPECT_NE(widget.findChild<QComboBox *>("cameraCombo"), nullptr);
+  EXPECT_NE(widget.findChild<QComboBox *>("microphoneCombo"), nullptr);
+  EXPECT_NE(widget.findChild<QComboBox *>("speakerCombo"), nullptr);
+}
+
+TEST(DeviceCheckWidgetTest, ClickingJoinEmitsJoinRequested) {
+  pcm::video::DeviceManager deviceManager;
+  DeviceCheckWidget widget(&deviceManager);
+  auto *joinButton = widget.findChild<QPushButton *>("joinButton");
+  ASSERT_NE(joinButton, nullptr);
+
+  QSignalSpy joinSpy(&widget, &DeviceCheckWidget::joinRequested);
+  QTest::mouseClick(joinButton, Qt::LeftButton);
+
+  EXPECT_EQ(joinSpy.count(), 1);
+}
+
+// The screen must start on what the OS treats as the default device, not on the
+// first listed one (often a built-in analog output while a headset is connected).
+TEST(DeviceCheckWidgetTest, PreselectsTheSystemDefaultDevices) {
+  pcm::video::DeviceManager deviceManager;
+  DeviceCheckWidget widget(&deviceManager);
+
+  if (const auto output = QMediaDevices::defaultAudioOutput(); !output.isNull()) {
+    EXPECT_EQ(widget.findChild<QComboBox *>("speakerCombo")->currentData().toByteArray(), output.id());
+  }
+  if (const auto input = QMediaDevices::defaultAudioInput(); !input.isNull()) {
+    EXPECT_EQ(widget.findChild<QComboBox *>("microphoneCombo")->currentData().toByteArray(), input.id());
+  }
+}
+
+// Layout contract: the camera preview and the selector card sit side by side in one body row
+// (preview first); the selectors live in the card with captions and a microphone level meter;
+// Test sits next to the speaker selector; Back comes before Join.
+TEST(DeviceCheckWidgetTest, PutsThePreviewBesideASelectorCardWithMeterAndSpeakerTest) {
+  pcm::video::DeviceManager deviceManager;
+  DeviceCheckWidget widget(&deviceManager);
+
+  auto *body = widget.findChild<QWidget *>("deviceCheckBody");
+  auto *preview = widget.findChild<QLabel *>("devicePreviewLabel");
+  auto *card = widget.findChild<QWidget *>("deviceCard");
+  ASSERT_NE(body, nullptr);
+  ASSERT_NE(preview, nullptr);
+  ASSERT_NE(card, nullptr);
+  EXPECT_EQ(preview->parentWidget(), body);
+  EXPECT_EQ(card->parentWidget(), body);
+  EXPECT_LT(body->layout()->indexOf(preview), body->layout()->indexOf(card));
+
+  for (const char *name : {"cameraCombo", "microphoneCombo", "speakerCombo"}) {
+    auto *combo = widget.findChild<QComboBox *>(name);
+    ASSERT_NE(combo, nullptr) << name;
+    EXPECT_TRUE(card->isAncestorOf(combo)) << name;
+  }
+  EXPECT_TRUE(card->isAncestorOf(widget.findChild<QWidget *>("micLevelMeter")));
+  auto *test = widget.findChild<QPushButton *>("testSpeakerButton");
+  ASSERT_NE(test, nullptr);
+  EXPECT_TRUE(card->isAncestorOf(test));
+
+  auto *back = widget.findChild<QPushButton *>("backFromDeviceCheckButton");
+  auto *join = widget.findChild<QPushButton *>("joinButton");
+  ASSERT_NE(back, nullptr);
+  ASSERT_NE(join, nullptr);
+  EXPECT_EQ(back->parentWidget(), join->parentWidget());
+  EXPECT_LT(back->parentWidget()->layout()->indexOf(back), back->parentWidget()->layout()->indexOf(join));
+}
+
+// Crash regression: a style sheet on this screen (or on any ancestor of its combo boxes) makes Qt
+// re-polish the combos, and Qlementine's combo-box event filter then recurses until the stack
+// overflows. Keep every ancestor of a combo free of style sheets.
+TEST(DeviceCheckWidgetTest, NoAncestorOfAComboBoxCarriesAStyleSheet) {
+  pcm::video::DeviceManager deviceManager;
+  DeviceCheckWidget widget(&deviceManager);
+  EXPECT_TRUE(widget.styleSheet().isEmpty());
+  for (const char *name : {"cameraCombo", "microphoneCombo", "speakerCombo"}) {
+    auto *combo = widget.findChild<QComboBox *>(name);
+    ASSERT_NE(combo, nullptr) << name;
+    for (QWidget *ancestor = combo->parentWidget(); ancestor; ancestor = ancestor->parentWidget()) {
+      EXPECT_TRUE(ancestor->styleSheet().isEmpty())
+          << name << " has a styled ancestor: " << ancestor->objectName().toStdString();
+    }
+  }
+}
+
+int main(int argc, char **argv) {
+  QApplication app(argc, argv);
+  // The preview's capture adapter creates a LiveKit video source, so the SDK must be up.
+  livekit::initialize(livekit::LogLevel::Warn);
+  ::testing::InitGoogleTest(&argc, argv);
+  const int result = RUN_ALL_TESTS();
+  livekit::shutdown();
+  return result;
+}

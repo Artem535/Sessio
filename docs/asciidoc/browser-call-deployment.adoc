@@ -1,0 +1,2 @@
+// Canonical source lives in Antora; keep the previous include path working.
+include::../antora/modules/ROOT/pages/reference/browser-call-deployment.adoc[leveloffset=+0]

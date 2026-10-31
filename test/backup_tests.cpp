@@ -91,8 +91,10 @@ std::string otherRecoveryPhrase() {
 }
 
 bool createEncryptedBackup(const pcm::database::Database &database,
-                           const std::string &backup_path) {
+                           const std::string &backup_path,
+                           std::optional<std::string> attachments_root = {}) {
   pcm::backup::BackupOptions options;
+  options.attachments_root = std::move(attachments_root);
   options.encryption = pcm::backup::BackupEncryptionOptions{
       .master_key = fixedMasterKey(),
       .recovery_password = testRecoveryPhrase()};
@@ -100,8 +102,10 @@ bool createEncryptedBackup(const pcm::database::Database &database,
 }
 
 pcm::backup::RestoreResult restoreWithRecoveryPhrase(const std::string &backup_path,
-                                                     const std::string &target_path) {
+                                                     const std::string &target_path,
+                                                     std::optional<std::string> attachments_root = {}) {
   pcm::backup::RestoreOptions options;
+  options.attachments_root = std::move(attachments_root);
   options.recovery_password = testRecoveryPhrase();
   return pcm::backup::RestoreService{}.restore_backup(backup_path, target_path, options);
 }
@@ -1011,6 +1015,21 @@ TEST(BackupValidatorTest, RejectsUnsupportedFormatVersion) {
   EXPECT_FALSE(result.ok);
   EXPECT_FALSE(result.errors.empty());
 
+  manifest.psybackup_format_version = 1;
+  manifest.schema_version = 5;
+  ASSERT_TRUE(rfl::json::save(
+      Poco::Path(extractDir).append("manifest.json").toString(), manifest, rfl::json::pretty));
+  {
+    std::ofstream zipOut(tamperedPath, std::ios::binary | std::ios::trunc);
+    Poco::Zip::Compress compress(zipOut, true);
+    compress.addRecursive(Poco::Path(extractDir), Poco::Zip::ZipCommon::CL_MAXIMUM, true);
+    compress.close();
+  }
+  EXPECT_FALSE(validator.validate(tamperedPath).ok);
+  const auto futureTarget = extractDir + "-future-target";
+  EXPECT_FALSE(pcm::backup::RestoreService{}.restore_backup(tamperedPath, futureTarget).ok);
+  EXPECT_FALSE(Poco::File(futureTarget).exists());
+
   extractDirFile.remove(true);
   destFile.remove();
   tamperedFile.remove();
@@ -1148,6 +1167,358 @@ TEST(RestoreServiceTest, RestoresDatabaseSnapshotIntoNewDirectory) {
   Poco::File(targetPath).remove(true);
   Poco::File(Poco::Path(Poco::Path::current()).append("tmp_restore_source"))
       .remove(true);
+}
+
+TEST(RestoreServiceTest, RestoresTranscriptsAndPhrases) {
+  auto sourceDb = makeTestDatabase("tmp_restore_transcript_source");
+
+  DuckEvent event;
+  event.name = std::string{"Recorded session"};
+  event.start_date = 1730000000000;
+  event.end_date = 1730003600000;
+  event.duration = 3600;
+  event.event_stat_id = 1;
+  event.payment_stat_id = 1;
+  const auto eventId = sourceDb.add_event(event);
+  ASSERT_GT(eventId, 0);
+
+  const auto transcriptId = sourceDb.add_transcript(
+      eventId, "live_local_v1", std::string{"gigaam-v3-rnnt"}, 1730000100000);
+  ASSERT_GT(transcriptId, 0);
+  ASSERT_TRUE(sourceDb.save_prompter_state(transcriptId, 0, "{\"cards\":[{\"id\":\"saved-card\"}]}"));
+  DuckTranscriptPhrase phrase;
+  phrase.transcript_id = transcriptId;
+  phrase.track_role = "participant";
+  phrase.speaker_name = std::string{"Client"};
+  phrase.start_ms = 1500;
+  phrase.end_ms = 4200;
+  phrase.text = "Привет, это тест восстановления";
+  const auto editedId = sourceDb.add_transcript_phrase(phrase);
+  ASSERT_GT(editedId, 0);
+  DuckTranscriptPhrase second = phrase;
+  second.start_ms = 5000;
+  second.end_ms = 6000;
+  second.text = "Вторая фраза";
+  ASSERT_GT(sourceDb.add_transcript_phrase(second), 0);
+  ASSERT_TRUE(sourceDb.update_transcript_phrase_text(editedId, "Привет, это тест восстановления"));
+  ASSERT_TRUE(sourceDb.set_transcript_status(transcriptId, "draft"));
+  ASSERT_TRUE(sourceDb.revoke_transcript_consent(transcriptId, 1730000300000));
+  const auto sourceTranscript = sourceDb.get_transcript(transcriptId);
+  ASSERT_NE(sourceTranscript, nullptr);
+  const auto standaloneId = sourceDb.add_transcript(std::nullopt, "standalone_scope",
+                                                    std::string("standalone_model"), 1730000200000);
+  DuckTranscriptPhrase standalonePhrase = phrase;
+  standalonePhrase.transcript_id = standaloneId;
+  standalonePhrase.text = "Standalone text";
+  ASSERT_GT(sourceDb.add_transcript_phrase(standalonePhrase), 0);
+  ASSERT_TRUE(sourceDb.set_transcript_status(standaloneId, "draft"));
+  DuckClient attached; attached.name = "Existing client";
+  const auto attachedId = sourceDb.add_client(attached);
+  ASSERT_TRUE(sourceDb.set_transcript_clients(standaloneId, {attachedId}));
+
+  const auto backupPath = Poco::Path(Poco::Path::current())
+                              .append("tmp_restore_transcript.psybackup")
+                              .toString();
+  removeIfExists(backupPath);
+  ASSERT_TRUE(pcm::backup::BackupService{}.create_backup(sourceDb, backupPath).ok);
+
+  const auto targetPath = Poco::Path(Poco::Path::current())
+                              .append("tmp_restore_transcript_target")
+                              .toString();
+  if (Poco::File(targetPath).exists()) {
+    Poco::File(targetPath).remove(true);
+  }
+  const auto restoreResult =
+      pcm::backup::RestoreService{}.restore_backup(backupPath, targetPath);
+  ASSERT_TRUE(restoreResult.ok) << restoreResult.error;
+
+  pcm::config::Config targetConfig{
+      .db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(targetPath)}};
+  pcm::database::Database restoredDb{targetConfig};
+  EXPECT_EQ(restoredDb.get_prompter_state(transcriptId).revision, 1);
+  EXPECT_EQ(restoredDb.get_prompter_state(transcriptId).json, "{\"cards\":[{\"id\":\"saved-card\"}]}");
+  const auto restored = restoredDb.get_transcripts_for_event(eventId);
+  ASSERT_EQ(restored.size(), 1u);
+  EXPECT_EQ(restored[0].status, "draft");
+  EXPECT_EQ(restored[0].consent_scope, "live_local_v1");
+  EXPECT_EQ(restored[0].model_id.value_or(""), "gigaam-v3-rnnt");
+  EXPECT_EQ(restored[0].consent_given_at, 1730000100000);
+  ASSERT_TRUE(restored[0].consent_revoked_at.has_value());
+  EXPECT_EQ(*restored[0].consent_revoked_at, 1730000300000);
+  const auto phrases = restoredDb.get_transcript_phrases(restored[0].id);
+  EXPECT_EQ(restored[0].created_at, sourceTranscript->created_at);
+  EXPECT_EQ(restored[0].updated_at, sourceTranscript->updated_at);
+  ASSERT_EQ(phrases.size(), 2u);
+  EXPECT_TRUE(phrases[0].edited);
+  EXPECT_FALSE(phrases[1].edited);
+  EXPECT_EQ(phrases[0].text, "Привет, это тест восстановления");
+  EXPECT_EQ(phrases[0].start_ms, 1500);
+  EXPECT_EQ(phrases[0].end_ms, 4200);
+  EXPECT_EQ(phrases[0].speaker_name.value_or(""), "Client");
+  const auto standalone = restoredDb.get_transcript(standaloneId);
+  ASSERT_NE(standalone, nullptr);
+  EXPECT_FALSE(standalone->event_id.has_value());
+  EXPECT_EQ(standalone->consent_scope, "standalone_scope");
+  EXPECT_EQ(standalone->model_id.value_or(""), "standalone_model");
+  EXPECT_EQ(restoredDb.get_transcript_client_ids(standaloneId), std::vector<int64_t>{attachedId});
+  ASSERT_EQ(restoredDb.get_transcript_phrases(standaloneId).size(), 1);
+  EXPECT_EQ(restoredDb.get_transcript_phrases(standaloneId)[0].text, "Standalone text");
+
+  Poco::File(backupPath).remove();
+  Poco::File(targetPath).remove(true);
+  Poco::File(Poco::Path(Poco::Path::current()).append("tmp_restore_transcript_source"))
+      .remove(true);
+}
+
+TEST(RestoreServiceTest, RestoresLegacySchemaOneAndBackfillsTranscriptClientsBeforeReplacement) {
+  const auto root = Poco::Path(Poco::Path::current()).append("tmp_legacy_transcript_source").toString();
+  auto source = makeTestDatabase("tmp_legacy_transcript_source");
+  DuckClient client; client.name = "Legacy client";
+  const auto clientId = source.add_client(client);
+  DuckEvent event; event.name = "Legacy event"; event.start_date = 1730000000000;
+  event.end_date = 1730003600000; event.duration = 3600; event.event_stat_id = 1; event.payment_stat_id = 1;
+  const auto eventId = source.add_event(event);
+  ASSERT_GT(source.add_event_client(eventId, clientId), 0);
+  const auto id = source.add_transcript(eventId, "legacy_scope", std::string("legacy_model"), 1730000100000);
+  DuckTranscriptPhrase phrase; phrase.transcript_id = id; phrase.track_role = "participant";
+  phrase.text = "Legacy phrase"; phrase.end_ms = 100;
+  const auto phraseId = source.add_transcript_phrase(phrase);
+  ASSERT_GT(phraseId, 0);
+  ASSERT_TRUE(source.set_transcript_status(id, "draft"));
+  const auto before = *source.get_transcript(id);
+  {
+    duckdb::DuckDB raw(root + "/database.db"); duckdb::Connection conn(raw);
+    ASSERT_FALSE(conn.Query("DROP TABLE TranscriptClient; "
+                           "ALTER TABLE Transcript ALTER COLUMN event_id SET NOT NULL; "
+                           "UPDATE ApplicationMetadata SET schema_version=1")->HasError());
+  }
+  const auto backup = root + ".psybackup";
+  removeIfExists(backup);
+  ASSERT_TRUE(pcm::backup::BackupService{}.create_backup(source, backup).ok);
+  ASSERT_TRUE(pcm::backup::BackupValidator{}.validate(backup).ok);
+  const auto target = root + "-target";
+  if (Poco::File(target).exists()) Poco::File(target).remove(true);
+  const auto result = pcm::backup::RestoreService{}.restore_backup(backup, target);
+  ASSERT_TRUE(result.ok) << result.error;
+  {
+    // Restore migrates the staged database before moving it into place.
+    duckdb::DuckDB raw(target + "/database.db"); duckdb::Connection conn(raw);
+    auto version = conn.Query("SELECT schema_version FROM ApplicationMetadata");
+    ASSERT_FALSE(version->HasError());
+    EXPECT_EQ(version->Fetch()->GetValue(0, 0).GetValue<int32_t>(), 4);
+  }
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(target)}};
+  {
+    pcm::database::Database restored(conf);
+    const auto row = restored.get_transcript(id);
+    ASSERT_NE(row, nullptr);
+    EXPECT_EQ(row->event_id, eventId); EXPECT_EQ(row->consent_scope, before.consent_scope);
+    EXPECT_EQ(row->model_id, before.model_id); EXPECT_EQ(row->created_at, before.created_at);
+    EXPECT_EQ(row->updated_at, before.updated_at); EXPECT_EQ(row->consent_given_at, before.consent_given_at);
+    EXPECT_EQ(restored.get_transcript_client_ids(id), std::vector<int64_t>{clientId});
+    ASSERT_EQ(restored.get_transcript_phrases(id).size(), 1);
+    EXPECT_EQ(restored.get_transcript_phrases(id)[0].id, phraseId);
+    EXPECT_EQ(restored.get_transcript_phrases(id)[0].text, "Legacy phrase");
+  }
+  Poco::File(backup).remove(); Poco::File(target).remove(true); Poco::File(root).remove(true);
+}
+
+TEST(RestoreServiceTest, CallMaterialsRoundTripEncryptedBackupIncludingManualOnlyCallsAndSegmentLinks) {
+  const auto root = tempPath("tmp_restore_call_material_source");
+  const auto target = root + "-target";
+  const auto backup = root + ".psybackup";
+  const auto attachments = root + "-attachments";
+  const auto restoredAttachments = target + "-attachments";
+  const auto relativeAttachment = std::string("calls/1/entry/file/plan.txt");
+  Poco::File(Poco::Path(attachments).append("calls/1/entry/file").toString()).createDirectories();
+  overwriteFile(Poco::Path(attachments).append(relativeAttachment).toString(), "Saved plan");
+  if (Poco::File(target).exists()) Poco::File(target).remove(true);
+  removeIfExists(backup);
+  int64_t manual = 0, linked = 0, first = 0, second = 0, created = 0;
+  const std::string manualJson = R"({"manual_notes":"Ручная заметка без ASR","manual_entries":[{"id":"entry","body_markdown":"**My note**","attachments":[{"id":"file","relative_path":"calls/1/entry/file/plan.txt"}]}],"manual_draft_attachments":[{"id":"draft","relative_path":"calls/1/entry/file/plan.txt"}]})";
+  const std::string linkedJson = R"({"manual_text":"My notes","final":{"text":"Saved result"},"key_points":[]})";
+  {
+    auto source = makeTestDatabase("tmp_restore_call_material_source");
+    manual = source.create_call_material(std::nullopt);
+    ASSERT_GT(manual, 0);
+    ASSERT_TRUE(source.save_call_material(manual, 0, manualJson));
+    created = source.get_call_material(manual).created_at;
+    linked = source.create_call_material(std::nullopt);
+    first = source.add_transcript(std::nullopt, "scope");
+    second = source.add_transcript(std::nullopt, "scope");
+    ASSERT_TRUE(source.link_call_material_transcript(linked, first));
+    ASSERT_TRUE(source.link_call_material_transcript(linked, second));
+    ASSERT_TRUE(source.save_call_material(linked, source.get_call_material(linked).revision, linkedJson));
+    ASSERT_TRUE(createEncryptedBackup(source, backup, attachments));
+  }
+  ASSERT_TRUE(pcm::backup::BackupValidator{}.validate(backup, testRecoveryPhrase()).ok);
+  const auto restored = restoreWithRecoveryPhrase(backup, target, restoredAttachments);
+  ASSERT_TRUE(restored.ok) << restored.error;
+  EXPECT_EQ(readFile(Poco::Path(restoredAttachments).append(relativeAttachment).toString()), "Saved plan");
+  {
+    pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(target)}};
+    pcm::database::Database db(conf);
+    EXPECT_EQ(db.get_application_metadata().schema_version, 4);
+    EXPECT_EQ(db.get_call_materials().size(), 2u);
+    EXPECT_EQ(db.get_call_material(manual).created_at, created);
+    EXPECT_EQ(db.get_call_material(manual).json, manualJson);
+    EXPECT_EQ(db.get_call_material(manual).revision, 1);
+    EXPECT_FALSE(db.get_call_material(manual).event_id.has_value());
+    EXPECT_TRUE(db.get_call_material_transcript_ids(manual).empty());
+    EXPECT_EQ(db.get_call_material(linked).json, linkedJson);
+    EXPECT_EQ(db.get_call_material_transcript_ids(linked), (std::vector<int64_t>{first, second}));
+    EXPECT_EQ(db.get_call_material_for_transcript(second).id, linked);
+    EXPECT_GT(db.create_call_material(std::nullopt), linked);  // Exported sequence continues.
+  }
+  Poco::File(backup).remove(); Poco::File(target).remove(true); Poco::File(root).remove(true);
+  Poco::File(attachments).remove(true); Poco::File(restoredAttachments).remove(true);
+}
+
+TEST(RestoreServiceTest, backupRoundTripKeepsDayTodos) {
+  const auto root = tempPath("tmp_restore_day_todo_source");
+  const auto target = root + "-target";
+  const auto backup = root + ".psybackup";
+  const auto attachments = root + "-attachments";
+  const auto restoredAttachments = target + "-attachments";
+  Poco::File(attachments).createDirectories();
+  if (Poco::File(target).exists()) Poco::File(target).remove(true);
+  removeIfExists(backup);
+  int64_t todoId = 0;
+  {
+    auto source = makeTestDatabase("tmp_restore_day_todo_source");
+    DuckDayTodo todo;
+    todo.title = "Call back";
+    todo.day_ms = 1730000000000;
+    todo.client_id = 5;
+    todo.done_at_ms = 1730003600000;
+    todoId = source.add_day_todo(todo);
+    ASSERT_GT(todoId, 0);
+    ASSERT_TRUE(createEncryptedBackup(source, backup, attachments));
+  }
+  const auto restored = restoreWithRecoveryPhrase(backup, target, restoredAttachments);
+  ASSERT_TRUE(restored.ok) << restored.error;
+  {
+    pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(target)}};
+    pcm::database::Database db(conf);
+    const auto rows = db.get_day_todos(1730000000000, 1730000000000 + 86400000, false);
+    ASSERT_EQ(rows.size(), 1u);
+    EXPECT_EQ(rows[0].id, todoId);
+    EXPECT_EQ(rows[0].title, "Call back");
+    EXPECT_EQ(rows[0].client_id, 5);
+    EXPECT_EQ(rows[0].done_at_ms, 1730003600000);
+  }
+  Poco::File(backup).remove(); Poco::File(target).remove(true); Poco::File(root).remove(true);
+  Poco::File(attachments).remove(true); Poco::File(restoredAttachments).remove(true);
+}
+
+TEST(RestoreServiceTest, CallMaterialSchemaThreeBackupMigratesBeforeReplacement) {
+  const auto root = tempPath("tmp_restore_call_material_schema_three");
+  const auto target = root + "-target";
+  const auto backup = root + ".psybackup";
+  if (Poco::File(target).exists()) Poco::File(target).remove(true);
+  removeIfExists(backup);
+  int64_t transcript = 0;
+  const std::string old = R"({"cards":[]})";
+  {
+    auto source = makeTestDatabase("tmp_restore_call_material_schema_three");
+    transcript = source.add_transcript(std::nullopt, "scope");
+    ASSERT_TRUE(source.save_prompter_state(transcript, 0, old));
+    {
+      duckdb::DuckDB raw(root + "/database.db"); duckdb::Connection conn(raw);
+      ASSERT_FALSE(conn.Query("DROP TABLE CallMaterialTranscript; DROP TABLE CallMaterial; "
+                             "DROP SEQUENCE call_material_id_seq; "
+                             "UPDATE ApplicationMetadata SET schema_version=3")->HasError());
+    }
+    ASSERT_TRUE(createEncryptedBackup(source, backup));
+  }
+  const auto restored = restoreWithRecoveryPhrase(backup, target);
+  ASSERT_TRUE(restored.ok) << restored.error;
+  {
+    pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(target)}};
+    pcm::database::Database db(conf);
+    EXPECT_EQ(db.get_application_metadata().schema_version, 4);
+    EXPECT_TRUE(db.get_call_materials().empty());
+    EXPECT_EQ(db.get_prompter_state(transcript).json, old);
+    const auto id = db.create_call_material(std::nullopt);
+    EXPECT_GT(id, 0);
+    EXPECT_TRUE(db.link_call_material_transcript(id, transcript));
+  }
+  Poco::File(backup).remove(); Poco::File(target).remove(true); Poco::File(root).remove(true);
+}
+
+TEST(RestoreServiceTest, CallMaterialMissingSchemaFourTableDoesNotReplaceExistingNotes) {
+  const auto root = tempPath("tmp_invalid_call_material_source");
+  const auto target = tempPath("tmp_invalid_call_material_target");
+  const auto backup = root + ".psybackup";
+  const auto contents = root + "-contents";
+  const auto plain = root + ".zip";
+  if (Poco::File(contents).exists()) Poco::File(contents).remove(true);
+  removeIfExists(plain);
+  removeIfExists(backup);
+  int64_t retained = 0;
+  {
+    auto db = makeTestDatabase("tmp_invalid_call_material_target");
+    retained = db.create_call_material(std::nullopt);
+    ASSERT_TRUE(db.save_call_material(retained, 0, R"({"manual_text":"Keep existing workspace"})"));
+  }
+  pcm::backup::BackupManifest manifest;
+  {
+    auto source = makeTestDatabase("tmp_invalid_call_material_source");
+    const auto metadata = source.get_application_metadata();
+    manifest.schema_version = metadata.schema_version;
+    manifest.backup_format_version = metadata.backup_format_version;
+    manifest.workspace_uuid = metadata.workspace_uuid;
+    manifest.kind = "database";
+  }
+  ASSERT_EQ(manifest.schema_version, 4);
+  // Close the Database before corrupting its schema. A separate DuckDB
+  // instance has its own catalog; exporting through the still-open original
+  // Database would not reliably export the corruption being tested.
+  const auto databaseDir = Poco::Path(contents).append("database").toString();
+  Poco::File(contents).createDirectories();
+  {
+    duckdb::DuckDB raw(root + "/database.db"); duckdb::Connection conn(raw);
+    ASSERT_FALSE(conn.Query("DROP TABLE CallMaterialTranscript")->HasError());
+    auto missing = conn.Query("SELECT COUNT(*) FROM information_schema.tables "
+                             "WHERE table_name='CallMaterialTranscript'");
+    ASSERT_FALSE(missing->HasError());
+    ASSERT_EQ(missing->Fetch()->GetValue(0, 0).GetValue<int64_t>(), 0);
+    auto transcripts = conn.Query("SELECT COUNT(*) FROM Transcript");
+    ASSERT_EQ(transcripts->Fetch()->GetValue(0, 0).GetValue<int64_t>(), 0);
+    std::string escapedDir;
+    for (const char ch : databaseDir) {
+      if (ch == '\'') escapedDir += '\'';
+      escapedDir += ch;
+    }
+    ASSERT_FALSE(conn.Query("EXPORT DATABASE '" + escapedDir + "' (FORMAT PARQUET)")->HasError());
+  }
+  // Package the raw export directly, avoiding startup migration repairing the
+  // missing table. Recompute every checksum so rejection tests schema validity.
+  const Poco::DirectoryIterator end;
+  for (Poco::DirectoryIterator it(databaseDir); it != end; ++it) {
+    ASSERT_TRUE(it->isFile());
+    manifest.entries.push_back({"database/" + it.name(),
+        static_cast<int64_t>(it->getSize()), pcm::backup::sha256_file(it.path().toString())});
+  }
+  ASSERT_TRUE(rfl::json::save(Poco::Path(contents).append("manifest.json").toString(), manifest));
+  {
+    std::ofstream zipOut(plain, std::ios::binary | std::ios::trunc);
+    Poco::Zip::Compress compress(zipOut, true);
+    compress.addRecursive(Poco::Path(contents), Poco::Zip::ZipCommon::CL_MAXIMUM, true);
+    compress.close();
+  }
+  ASSERT_TRUE(pcm::backup::encrypt_backup_file(plain, backup, testRecoveryPhrase(), fixedMasterKey()).ok);
+  ASSERT_TRUE(pcm::backup::BackupValidator{}.validate(backup, testRecoveryPhrase()).ok);
+  const auto result = restoreWithRecoveryPhrase(backup, target);
+  EXPECT_FALSE(result.ok);
+  EXPECT_EQ(result.error, "backup is missing schema-4 call material tables");
+  {
+    pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(target)}};
+    pcm::database::Database db(conf);
+    EXPECT_EQ(db.get_call_material(retained).json, R"({"manual_text":"Keep existing workspace"})");
+  }
+  Poco::File(backup).remove(); Poco::File(target).remove(true); Poco::File(root).remove(true);
+  Poco::File(plain).remove(); Poco::File(contents).remove(true);
 }
 
 TEST(RestoreServiceTest, RestoresEncryptedBackupWithCorrectPassword) {

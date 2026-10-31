@@ -3,6 +3,7 @@
 #include <Poco/Path.h>
 #include <rfl/Flatten.hpp>
 #include <rfl/yaml.hpp>
+#include "app_role.h"
 #include "rfl_path.hpp"
 
 namespace pcm::config {
@@ -21,6 +22,8 @@ struct Config {
                                            .append(kAppDirName)
                                            .append("Config.yaml");
     rfl::Flatten<DatabaseConfig> db_conf;
+    std::string app_role = "Unset";
+    std::string token_backend_base_url = "";
 
     static void save_config(const Config &conf);
     static Config read_config();

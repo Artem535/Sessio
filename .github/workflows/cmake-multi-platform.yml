@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "devel", "devel-qt"]
+    branches: ["main", "devel", "devel-qt", "feat/118-call-transcription", "codex/151-call-prompter", "feat/jitsi-web-calls"]
   pull_request:
     branches: ["main", "devel", "devel-qt"]
 
@@ -17,9 +17,106 @@ env:
   VCPKG_COMMIT: 62159a45e18f3a9ac0548628dcaf74fcb60c6ff9
 
 jobs:
+  # The call prompter runtime (libsessio_litert on LiteRT-LM v0.18.0, Vulkan
+  # with CPU fallback). The upstream super-build takes hours, so install/ is
+  # cached and rebuilt only when the build scripts or the shim change: the shim
+  # has no stable ABI, so a runtime built from an older sessio_litert.h must
+  # never be linked into the app.
+  litert-runtime:
+    name: LiteRT-LM runtime (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      # The prebuilt Dawn/WebGPU libraries are LFS objects; the GPU script
+      # downloads and SHA-checks only the five it needs.
+      GIT_LFS_SKIP_SMUDGE: "1"
+      JOBS: "4"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore runtime cache
+        id: cache-litert
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/sessio-litert
+          key: litert-lm-v0.18.0-${{ runner.os }}-${{ hashFiles('scripts/build-litert-lm.sh', 'scripts/build-litert-lm-gpu.sh', 'src/call_prompter/litert/**', 'test/litert_gpu_runtime_smoke.cpp') }}
+
+      - name: Free disk space
+        if: steps.cache-litert.outputs.cache-hit != 'true'
+        run: |
+          # The CPU build tree alone is ~18 GB.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          build_root=/mnt/sessio-litert-build
+          if ! sudo mkdir -p "$build_root" 2>/dev/null; then build_root="$RUNNER_TEMP/sessio-litert-build"; mkdir -p "$build_root"; fi
+          sudo chown "$(id -u):$(id -g)" "$build_root"
+          echo "LITERT_BUILD_ROOT=$build_root" >> "$GITHUB_ENV"
+          df -h / "$build_root"
+
+      - name: Install LiteRT-LM build dependencies
+        if: steps.cache-litert.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake curl patchelf openjdk-17-jdk-headless \
+            python3-dev zlib1g-dev libssl-dev libcurl4-openssl-dev \
+            libvulkan-dev
+          # LiteRT-LM's shim prepares its Python build tools through uv.
+          pipx install uv
+          # pipx's bin dir differs between runner images; ask pipx itself.
+          uv_bin="$(pipx environment --value PIPX_BIN_DIR)"
+          echo "$uv_bin" >> "$GITHUB_PATH"
+          gcc --version | head -1; cmake --version | head -1; java -version; cargo --version; python3 --version; "$uv_bin/uv" --version
+
+      - name: Build CPU runtime
+        if: steps.cache-litert.outputs.cache-hit != 'true'
+        run: scripts/build-litert-lm.sh "$LITERT_BUILD_ROOT/cpu"
+
+      - name: Build Vulkan runtime
+        if: steps.cache-litert.outputs.cache-hit != 'true'
+        run: |
+          bash scripts/build-litert-lm-gpu.sh "$LITERT_BUILD_ROOT/gpu" "$LITERT_BUILD_ROOT/cpu"
+          rm -rf "$RUNNER_TEMP/sessio-litert"
+          cp -a "$LITERT_BUILD_ROOT/gpu/install" "$RUNNER_TEMP/sessio-litert"
+
+      - name: Save runtime cache
+        if: steps.cache-litert.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/sessio-litert
+          key: ${{ steps.cache-litert.outputs.cache-primary-key }}
+
+      - name: Verify runtime
+        run: |
+          lib="$RUNNER_TEMP/sessio-litert/lib"
+          ls -la "$lib"
+          for so in libsessio_litert.so libLiteRt.so libLiteRtWebGpuAccelerator.so libwebgpu_dawn.so; do
+            test -f "$lib/$so" || { echo "::error::$so missing from the runtime"; exit 1; }
+          done
+          # Every sibling resolves through $ORIGIN; libvulkan is dlopen()ed.
+          if ldd "$lib"/*.so | grep 'not found'; then
+            echo "::error::Unresolved runtime dependency"
+            exit 1
+          fi
+
+      - name: Upload runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: sessio-litert-runtime
+          path: ${{ runner.temp }}/sessio-litert
+          retention-days: 3
+          if-no-files-found: error
+
+  # The same runtime for Windows and macOS (CPU only), from LiteRT-LM's Bazel build.
+  litert-desktop:
+    name: LiteRT runtime
+    uses: ./.github/workflows/litert-desktop.yml
+
   build:
     name: Build ${{ matrix.os }}
+    needs: [litert-runtime, litert-desktop]
     runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
 
     strategy:
       fail-fast: false
@@ -28,17 +125,19 @@ jobs:
           - os: ubuntu-latest
             qt_version: 6.10.2
             artifact_name: Sessio-linux-appimage
-            qt_component: "qt.qt6.6102.linux_gcc_64 qt.qt6.6102.addons.qtmultimedia qt.qt6.6102.addons.qtscxml"
+            qt_component: "qt.qt6.6102.linux_gcc_64 qt.qt6.6102.addons.qtmultimedia qt.qt6.6102.addons.qtscxml extensions.qtwebengine.6102.linux_gcc_64 qt.qt6.6102.addons.qtwebchannel qt.qt6.6102.addons.qtpositioning qt.qt6.6102.addons.qtserialport"
           - os: macos-latest
             qt_version: 6.10.2
             qt_arch: clang_64
             artifact_name: Sessio-macos-dmg
+            litert_artifact: sessio-litert-runtime-macos
             qt_host: mac
             qt_target: desktop
           - os: windows-2022
             qt_version: 6.10.2
             qt_arch: win64_msvc2022_64
             artifact_name: Sessio-windows-installer
+            litert_artifact: sessio-litert-runtime-windows
             qt_host: windows
             qt_target: desktop
 
@@ -84,6 +183,8 @@ jobs:
             libxcb-xkb1 \
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
+            libpulse-dev \
+            libpipewire-0.3-dev \
             libsecret-1-dev \
             libwayland-client0 \
             libwayland-cursor0 \
@@ -96,7 +197,9 @@ jobs:
         id: cache-qt-linux
         uses: actions/cache/restore@v4
         with:
-          path: ${{ github.workspace }}/Qt/${{ matrix.qt_version }}/gcc_64
+          # Keep SDK QML outside the checkout: qmlimportscanner recursively scans
+          # the application's source directory and would import SDK-only plugins.
+          path: ${{ runner.temp }}/sessio-qt/${{ matrix.qt_version }}/gcc_64
           # Includes qt_component so a cache saved before this branch added
           # the qtmultimedia/qtscxml addons can't be restored here: the old
           # key alone (runner.os-qt-version-gcc_64) matched regardless of
@@ -105,7 +208,7 @@ jobs:
           # this PR's first CI run (Qt6Multimedia not found despite the
           # matrix listing it, because the install step was skipped on a
           # cache hit from before it was added).
-          key: ${{ runner.os }}-qt-${{ matrix.qt_version }}-gcc_64-${{ matrix.qt_component }}
+          key: ${{ runner.os }}-qt-external-v2-${{ matrix.qt_version }}-gcc_64-${{ matrix.qt_component }}
 
       - name: Install Qt (Windows)
         if: runner.os == 'Windows' || runner.os == 'macOS'
@@ -116,7 +219,7 @@ jobs:
           host: ${{ matrix.qt_host }}
           target: ${{ matrix.qt_target }}
           arch: ${{ matrix.qt_arch }}
-          modules: 'qtmultimedia qtscxml'
+          modules: 'qtmultimedia qtscxml qtwebengine qtwebchannel qtpositioning'
           cache: true
 
       - name: Setup MSVC environment
@@ -142,7 +245,7 @@ jobs:
           curl -L -O https://download.qt.io/official_releases/online_installers/qt-online-installer-linux-x64-online.run
           chmod +x qt-online-installer-linux-x64-online.run
           ./qt-online-installer-linux-x64-online.run \
-            --root "${{ github.workspace }}/Qt" \
+            --root "${{ runner.temp }}/sessio-qt" \
             --accept-licenses \
             --accept-obligations \
             --default-answer \
@@ -155,15 +258,15 @@ jobs:
       - name: Export Qt environment (Linux)
         if: runner.os == 'Linux'
         run: |
-          echo "Qt6_DIR=${{ github.workspace }}/Qt/${{ matrix.qt_version }}/gcc_64/lib/cmake/Qt6" >> "$GITHUB_ENV"
-          echo "CMAKE_PREFIX_PATH=${{ github.workspace }}/Qt/${{ matrix.qt_version }}/gcc_64${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}" >> "$GITHUB_ENV"
-          echo "${{ github.workspace }}/Qt/${{ matrix.qt_version }}/gcc_64/bin" >> "$GITHUB_PATH"
+          echo "Qt6_DIR=${{ runner.temp }}/sessio-qt/${{ matrix.qt_version }}/gcc_64/lib/cmake/Qt6" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=${{ runner.temp }}/sessio-qt/${{ matrix.qt_version }}/gcc_64${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}" >> "$GITHUB_ENV"
+          echo "${{ runner.temp }}/sessio-qt/${{ matrix.qt_version }}/gcc_64/bin" >> "$GITHUB_PATH"
 
       - name: Save Qt cache (Linux)
         if: runner.os == 'Linux' && steps.cache-qt-linux.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: ${{ github.workspace }}/Qt/${{ matrix.qt_version }}/gcc_64
+          path: ${{ runner.temp }}/sessio-qt/${{ matrix.qt_version }}/gcc_64
           key: ${{ steps.cache-qt-linux.outputs.cache-primary-key }}
 
       - name: Restore vcpkg binary cache
@@ -219,8 +322,45 @@ jobs:
           & "${{ github.workspace }}/vcpkg/bootstrap-vcpkg.bat" -disableMetrics
           "VCPKG_ROOT=${{ github.workspace }}/vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Download call prompter runtime (Windows, macOS)
+        if: runner.os != 'Linux'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.litert_artifact }}
+          path: ${{ runner.temp }}/sessio-litert
+
       - name: Configure
-        run: cmake --preset vcpkg-release
+        if: runner.os != 'Linux'
+        run: cmake --preset vcpkg-release "-DSESSIO_LITERT_DIR=${{ runner.temp }}/sessio-litert"
+
+      - name: Download call prompter runtime
+        if: runner.os == 'Linux'
+        uses: actions/download-artifact@v4
+        with:
+          name: sessio-litert-runtime
+          path: ${{ runner.temp }}/sessio-litert
+
+      - name: Configure (Linux, with transcription tests)
+        if: runner.os == 'Linux'
+        run: >
+          cmake --preset vcpkg-release -DSESSIO_BUILD_TRANSCRIPTION_TESTS=ON
+          "-DSESSIO_LITERT_DIR=${{ runner.temp }}/sessio-litert"
+
+      # The models are downloaded at build time into this directory (see
+      # cmake/FetchTranscriptionModels.cmake); restoring it skips ~200 MB.
+      - name: Cache transcription models
+        uses: actions/cache@v4
+        with:
+          path: build-release/transcription-models
+          key: transcription-models-${{ hashFiles('cmake/FetchTranscriptionModels.cmake') }}
+
+      - name: Verify LiveKit RPM staging
+        if: runner.os == 'Linux'
+        run: >
+          cmake
+          -DPCM_SOURCE_DIR="${{ github.workspace }}"
+          -DPCM_TEST_BINARY_DIR="${{ github.workspace }}/build-release/packaging-test"
+          -P test/bundle_livekit_linux_deps_test.cmake
 
       - name: Save vcpkg binary cache
         if: steps.cache-vcpkg-binary.outputs.cache-hit != 'true'
@@ -253,6 +393,18 @@ jobs:
       - name: Build
         run: cmake --build build-release --parallel
 
+      - name: Transcription model tests
+        if: runner.os == 'Linux'
+        run: |
+          cmake --build build-release --target Sessio_transcription_model_tests --parallel
+          ctest --test-dir build-release -L models --output-on-failure
+
+      - name: Verify transcription install tree
+        if: runner.os == 'Linux'
+        run: |
+          cmake --install build-release --prefix "${{ github.workspace }}/build-release/transcription-install"
+          cmake -DINSTALL_ROOT="${{ github.workspace }}/build-release/transcription-install" -P test/transcription_install_smoke.cmake
+
       - name: Install bundle
         if: runner.os != 'Windows'
         run: cmake --install build-release --config MinSizeRel --prefix "${{ github.workspace }}/build-release/install"
@@ -265,11 +417,32 @@ jobs:
           Copy-Item build-release/Sessio.exe build-release/packages/Sessio/
           $keychainDll = Get-ChildItem build-release/_deps/qtkeychain-build -Recurse -Filter qt6keychain.dll |
             Select-Object -First 1
-          if ($null -eq $keychainDll) {
-            throw "qt6keychain.dll was not built"
+          if ($null -ne $keychainDll) {
+            Copy-Item $keychainDll.FullName (Join-Path $env:QT_ROOT_DIR "bin") -Force
+            Copy-Item $keychainDll.FullName build-release/packages/Sessio/ -Force
+          } else {
+            # qtkeychain can be linked statically. Require a DLL only when
+            # the executable actually imports it; a .lib alone is ambiguous.
+            $dependencies = & dumpbin /DEPENDENTS build-release/Sessio.exe
+            if ($LASTEXITCODE -ne 0) { throw "Cannot inspect Sessio.exe dependencies" }
+            if ($dependencies -match 'qt6keychain\.dll') {
+              throw "Sessio.exe imports qt6keychain.dll but the DLL was not found"
+            }
+            Write-Host "qtkeychain is linked statically; no runtime DLL required"
           }
-          Copy-Item $keychainDll.FullName (Join-Path $env:QT_ROOT_DIR "bin") -Force
-          Copy-Item $keychainDll.FullName build-release/packages/Sessio/ -Force
+
+          # LiveKit's prebuilt SDK ships its own runtime DLLs (not built by
+          # this project, so they never land next to Sessio.exe on their
+          # own) — without this, the installer launches but any LiveKit
+          # call fails immediately with a missing-DLL error.
+          foreach ($dllName in "livekit.dll", "livekit_ffi.dll") {
+            $dll = Get-ChildItem build-release/_deps/livekit-sdk -Recurse -Filter $dllName |
+              Select-Object -First 1
+            if ($null -eq $dll) {
+              throw "$dllName was not found under build-release/_deps/livekit-sdk"
+            }
+            Copy-Item $dll.FullName build-release/packages/Sessio/ -Force
+          }
 
       - name: Run windeployqt
         if: runner.os == 'Windows'
@@ -280,8 +453,13 @@ jobs:
             --release `
             --svg `
             --no-translations `
+            --qmldir src/pages/transcript_page/qml `
             --dir build-release/packages/Sessio `
             build-release/packages/Sessio/Sessio.exe
+          if (-not (Test-Path build-release/packages/Sessio/QtWebEngineProcess.exe)) {
+            Write-Error "QtWebEngineProcess.exe missing after windeployqt"
+            exit 1
+          }
 
       - name: Copy vcpkg runtime DLLs
         if: runner.os == 'Windows'
@@ -291,6 +469,55 @@ jobs:
             -Path build-release/vcpkg_installed/x64-windows/bin/*.dll `
             -Destination build-release/packages/Sessio `
             -Force
+
+      - name: Copy libical timezone data
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Resolved at run time as <exe dir>\zoneinfo (src/meeting/schedule_zoneinfo.cpp).
+          $zoneinfo = "build-release/vcpkg_installed/x64-windows/share/libical/zoneinfo"
+          if (-not (Test-Path "$zoneinfo/America/New_York.ics")) {
+            throw "libical zoneinfo not found at $zoneinfo"
+          }
+          Copy-Item $zoneinfo build-release/packages/Sessio/zoneinfo -Recurse -Force
+
+      - name: Copy transcription models and runtime DLLs
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Resolved at run time as <exe dir>\models (ModelLocator).
+          $dest = "build-release/packages/Sessio"
+          $models = "build-release/transcription-models"
+          if (-not (Test-Path "$models/gigaam-v3-rnnt/encoder.int8.onnx")) {
+            throw "transcription models not found at $models"
+          }
+          Copy-Item $models "$dest/models" -Recurse -Force
+          Remove-Item "$dest/models/.stamp", "$dest/models/gigaam-v3-rnnt/test_wavs" -Recurse -Force -ErrorAction SilentlyContinue
+
+          # sherpa-onnx and ONNX Runtime are built/unpacked in the build tree
+          # and never land next to Sessio.exe on their own.
+          foreach ($dllName in "sherpa-onnx-c-api.dll", "sherpa-onnx-cxx-api.dll") {
+            $dll = Get-ChildItem build-release -Recurse -Filter $dllName |
+              Where-Object { $_.FullName -notmatch "packages" } | Select-Object -First 1
+            if ($null -eq $dll) {
+              throw "$dllName was not found under build-release"
+            }
+            Copy-Item $dll.FullName $dest -Force
+          }
+          $ort = Get-ChildItem build-release/_deps/onnxruntime-src -Recurse -Filter "onnxruntime*.dll"
+          if (-not ($ort | Where-Object { $_.Name -eq "onnxruntime.dll" })) {
+            throw "onnxruntime.dll was not found under build-release/_deps/onnxruntime-src"
+          }
+          $ort | ForEach-Object { Copy-Item $_.FullName $dest -Force }
+
+          # Call prompter runtime, built by the litert-desktop job: our DLL, the
+          # prebuilt LiteRt/WebGPU/Dawn libraries and the DirectX shader compiler.
+          Copy-Item "$env:RUNNER_TEMP/sessio-litert/bin/*.dll" $dest -Force
+          Copy-Item "$env:RUNNER_TEMP/sessio-litert/LICENSE*" $dest -Force
+
+          foreach ($required in "Sessio.exe", "models/silero_vad.onnx", "models/gigaam-v3-rnnt/encoder.int8.onnx", "models/gigaam-v3-rnnt/decoder.onnx", "models/gigaam-v3-rnnt/joiner.onnx", "models/gigaam-v3-rnnt/tokens.txt", "onnxruntime.dll", "sherpa-onnx-c-api.dll", "sherpa-onnx-cxx-api.dll", "sessio_litert.dll", "libLiteRt.dll", "libLiteRtWebGpuAccelerator.dll", "dxcompiler.dll") {
+            if (-not (Test-Path "$dest/$required")) { throw "$required missing from $dest" }
+          }
 
       - name: Install Inno Setup
         if: runner.os == 'Windows'
@@ -302,12 +529,67 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(Sessio VERSION ([0-9.]+)' | Select-Object -First 1).Matches.Groups[1].Value
+          if (-not $version) { throw "Application version not found in CMakeLists.txt" }
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
-            "/DMyAppVersion=${{ matrix.qt_version }}" `
+            "/DMyAppVersion=$version" `
             "/DMySourceDir=${{ github.workspace }}\build-release\packages\Sessio" `
             "/DMyOutputDir=${{ github.workspace }}\build-release\packages" `
             "/DMyIconFile=${{ github.workspace }}\resources\icons\Sessio.ico" `
             "${{ github.workspace }}\packaging\Sessio.iss"
+
+      - name: Build RPM package
+        if: runner.os == 'Linux'
+        run: |
+          cpack --config build-release/CPackConfig.cmake --generator RPM --verbose
+          rpm -qip build-release/packages/*.rpm
+          rpm -qp --requires build-release/packages/*.rpm
+          rpm -qlp build-release/packages/*.rpm
+          if rpm -qp --requires build-release/packages/*.rpm | grep -E 'libQt6.*PRIVATE_API'; then
+            echo "::error::RPM must not depend on Qt private ABI; check accidental static QML plugin imports"
+            exit 1
+          fi
+          # Only /usr/bin, /usr/share and the private /usr/lib/sessio may be owned
+          # by this package: anything else (Qt libs, plugins, headers) can
+          # overwrite system files. Accept the directory entries themselves
+          # as well as their contents, including RPM's build-id metadata.
+          unexpected_rpm_files="$(rpm -qlp build-release/packages/*.rpm |
+            grep -vE '^/usr/(bin|share)(/|$)|^/usr/lib(64)?/(sessio|\.build-id)(/|$)' || true)"
+          if [ -n "$unexpected_rpm_files" ]; then
+            echo "$unexpected_rpm_files"
+            echo "::error::RPM must not install files outside bin, share and /usr/lib/sessio"
+            exit 1
+          fi
+          if rpm -qp --provides build-release/packages/*.rpm | grep -E '\.so'; then
+            echo "::error::RPM must not Provide shared-library sonames"
+            exit 1
+          fi
+          # sherpa-onnx and ONNX Runtime are bundled in /usr/lib*/sessio, so rpm's
+          # autoreq must not turn them into system dependencies.
+          if rpm -qp --requires build-release/packages/*.rpm | grep -Ei 'sherpa|onnxruntime'; then
+            echo "::error::RPM must not Require the bundled sherpa-onnx/ONNX Runtime libraries"
+            exit 1
+          fi
+          # The prompter runtime and its LiteRT/Dawn plugins are bundled too.
+          if rpm -qp --requires build-release/packages/*.rpm | grep -Ei 'sessio_litert|LiteRt|webgpu|kissfft'; then
+            echo "::error::RPM must not Require the bundled LiteRT-LM runtime"
+            exit 1
+          fi
+          for so in libsessio_litert.so libLiteRt.so libLiteRtWebGpuAccelerator.so libwebgpu_dawn.so; do
+            rpm -qlp build-release/packages/*.rpm | grep -E "^/usr/lib(64)?/sessio/$so\$" ||
+              { echo "::error::$so is missing from the RPM"; exit 1; }
+          done
+          for dep in 'qt6-qtbase >= 6.8' qt6-qtbase-gui qt6-qtsvg qt6-qtwayland qt6-qtmultimedia qt6-qtdeclarative qt6-qtwebengine qtkeychain-qt6; do
+            rpm -qp --requires build-release/packages/*.rpm | grep -Fx "$dep"
+          done
+
+      - name: Upload Linux RPM
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sessio-linux-rpm
+          path: build-release/packages/*.rpm
+          if-no-files-found: error
 
       - name: Download linuxdeployqt
         if: runner.os == 'Linux'
@@ -322,36 +604,40 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           mkdir -p "${{ github.workspace }}/build-release/AppDir"
+          cmake -DSESSIO_BUNDLE_QT=ON build-release
+          cmake --build build-release --parallel
           cmake --install build-release --config MinSizeRel --prefix "${{ github.workspace }}/build-release/AppDir/usr"
-          QT_PREFIX="${{ github.workspace }}/Qt/${{ matrix.qt_version }}/gcc_64"
+          QT_PREFIX="${{ runner.temp }}/sessio-qt/${{ matrix.qt_version }}/gcc_64"
           export PATH="$QT_PREFIX/bin:$PATH"
           export LD_LIBRARY_PATH="$QT_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+          export QML_SOURCES_PATHS="${{ github.workspace }}/src/pages/transcript_page/qml"
           mkdir -p build-release/AppDir/usr/plugins/platforms
           cp -av "$QT_PREFIX/plugins/platforms/libqwayland.so" build-release/AppDir/usr/plugins/platforms/ || true
           cp -av "$QT_PREFIX/plugins/platforms/libqxcb.so" build-release/AppDir/usr/plugins/platforms/ || true
+          # libpipewire must match the host's PipeWire daemon and SPA plugins; never bundle it.
           build-release/tools/linuxdeploy-x86_64.AppImage \
             --appdir build-release/AppDir \
             --executable build-release/AppDir/usr/bin/Sessio \
             --desktop-file build-release/AppDir/usr/share/applications/Sessio.desktop \
             --icon-file build-release/AppDir/usr/share/icons/hicolor/scalable/apps/Sessio.svg \
             --plugin qt \
+            --exclude-library 'libpipewire-0.3.so*' \
             --output appimage
+          # linuxdeploy populates AppDir in place, so this is what the
+          # AppImage was squashed from. Chromium cannot render without it.
+          if [ -z "$(find build-release/AppDir -name QtWebEngineProcess -type f -print -quit)" ]; then
+            echo "::error::QtWebEngineProcess is missing from the AppImage AppDir"
+            exit 1
+          fi
           mkdir -p build-release/packages
           find . -maxdepth 1 -type f -name '*.AppImage' ! -name 'linuxdeploy*.AppImage' -exec mv {} build-release/packages/ \;
 
-      - name: Build RPM package
-        if: runner.os == 'Linux'
-        run: |
-          cpack --config build-release/CPackConfig.cmake --generator RPM --verbose
-          rpm -qip build-release/packages/*.rpm
-          rpm -qlp build-release/packages/*.rpm
-
-      - name: Upload Linux package
+      - name: Upload Linux AppImage
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: build-release/packages/*
+          path: build-release/packages/*.AppImage
           if-no-files-found: error
 
       - name: Build macOS DMG
@@ -359,13 +645,22 @@ jobs:
         run: |
           mkdir -p build-release/packages
           APP_BUNDLE="${{ github.workspace }}/build-release/install/Sessio.app"
-          macdeployqt "$APP_BUNDLE" -always-overwrite
+          macdeployqt "$APP_BUNDLE" -always-overwrite -qmldir="${{ github.workspace }}/src/pages/transcript_page/qml"
 
           test -d "$APP_BUNDLE/Contents/Frameworks/QtCore.framework"
           test -d "$APP_BUNDLE/Contents/Frameworks/QtGui.framework"
           test -d "$APP_BUNDLE/Contents/Frameworks/QtWidgets.framework"
+          test -d "$APP_BUNDLE/Contents/Frameworks/QtWebEngineCore.framework"
+          test -e "$APP_BUNDLE/Contents/Frameworks/QtWebEngineCore.framework/Helpers/QtWebEngineProcess.app/Contents/MacOS/QtWebEngineProcess"
+          plutil -extract NSCameraUsageDescription raw "$APP_BUNDLE/Contents/Info.plist" >/dev/null
+          plutil -extract NSMicrophoneUsageDescription raw "$APP_BUNDLE/Contents/Info.plist" >/dev/null
           test -d "$APP_BUNDLE/Contents/PlugIns/platforms"
           test -f "$APP_BUNDLE/Contents/PlugIns/platforms/libqcocoa.dylib"
+          test -f "$APP_BUNDLE/Contents/Frameworks/libsessio_litert.dylib"
+          test -f "$APP_BUNDLE/Contents/Frameworks/libLiteRt.dylib"
+          test -f "$APP_BUNDLE/Contents/Frameworks/libLiteRtWebGpuAccelerator.dylib"
+          otool -L "$APP_BUNDLE/Contents/MacOS/Sessio" | grep '@rpath/libsessio_litert.dylib' >/dev/null
+          otool -l "$APP_BUNDLE/Contents/MacOS/Sessio" | grep -A2 LC_RPATH | grep '@executable_path/../Frameworks' >/dev/null
 
           du -sh "$APP_BUNDLE"
           du -sh "$APP_BUNDLE/Contents/Frameworks"
@@ -420,10 +715,16 @@ jobs:
           echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=v$APP_VERSION" >> "$GITHUB_ENV"
 
-      - name: Download Linux artifact
+      - name: Download Linux AppImage artifact
         uses: actions/download-artifact@v4
         with:
           name: Sessio-linux-appimage
+          path: release/linux
+
+      - name: Download Linux RPM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Sessio-linux-rpm
           path: release/linux
 
       - name: Download macOS artifact

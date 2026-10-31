@@ -12,9 +12,46 @@
 #include <sodium.h>
 
 #include <chrono>
+#include <barrier>
 #include <ctime>
+#include <future>
+#include <set>
+#include <vector>
 
 namespace {
+
+std::string decodeJwtPart(const std::string &part) {
+  std::string decoded(part.size(), '\0');
+  size_t size = 0;
+  if (sodium_base642bin(reinterpret_cast<unsigned char *>(decoded.data()), decoded.size(),
+                        part.data(), part.size(), nullptr, &size, nullptr,
+                        sodium_base64_VARIANT_URLSAFE_NO_PADDING) != 0) {
+    return {};
+  }
+  decoded.resize(size);
+  return decoded;
+}
+
+std::string verifiedPayload(const std::string &jwt, const std::string &secret) {
+  const auto first = jwt.find('.');
+  const auto second = jwt.find('.', first + 1);
+  const auto signature = decodeJwtPart(jwt.substr(second + 1));
+  unsigned char expected[crypto_auth_hmacsha256_BYTES];
+  crypto_auth_hmacsha256_state state;
+  crypto_auth_hmacsha256_init(&state, reinterpret_cast<const unsigned char *>(secret.data()), secret.size());
+  crypto_auth_hmacsha256_update(&state, reinterpret_cast<const unsigned char *>(jwt.data()), second);
+  crypto_auth_hmacsha256_final(&state, expected);
+  EXPECT_EQ(signature.size(), sizeof(expected));
+  if (signature.size() == sizeof(expected)) {
+    EXPECT_EQ(sodium_memcmp(signature.data(), expected, sizeof(expected)), 0);
+  }
+  return decodeJwtPart(jwt.substr(first + 1, second - first - 1));
+}
+
+std::string subject(const std::string &payload) {
+  const auto start = payload.find("\"sub\":\"") + 7;
+  return payload.substr(start, payload.find('"', start) - start);
+}
 
 // Mirrors the production nowIso8601() format
 // ("%Y-%m-%dT%H:%M:%SZ", see meetings_repository.cpp) but offset from now, so
@@ -47,6 +84,9 @@ protected:
     config.liveKitApiKey = "test-key";
     config.liveKitApiSecret = "test-secret";
     config.tokenTtlSeconds = 600;
+    config.jitsiUrl = "https://jitsi.test";
+    config.jitsiAppId = "sessio";
+    config.jitsiAppSecret = "jitsi-secret";
 
     service = std::make_unique<pcm::tokenbackend::MeetingService>(
         *authorizer, *meetings, *invitations, config, "ws://livekit.test:7880");
@@ -149,6 +189,95 @@ TEST_F(MeetingServiceTest, ClientAndSpecialistTokensShareTheSameRoom) {
   ASSERT_TRUE(specialistToken.ok());
   ASSERT_TRUE(clientToken.ok());
   EXPECT_EQ(specialistToken.value->roomName, clientToken.value->roomName);
+}
+
+TEST_F(MeetingServiceTest, RepeatedTokensHaveUniqueSignedIdentitiesAndDisplayRoles) {
+  const auto created = service->createMeeting(credential, windowStart, windowEnd);
+  ASSERT_TRUE(created.ok());
+  std::set<std::string> identities;
+  std::string room;
+  for (const auto &role : {std::string("client"), std::string("practitioner")}) {
+    for (int issuance = 0; issuance < 4; ++issuance) {
+      const auto token = role == "client"
+          ? service->issueClientToken(created.value->invitationCode, created.value->passcode)
+          : service->issueSpecialistToken(credential, created.value->meetingRef);
+      ASSERT_TRUE(token.ok());
+      const auto payload = verifiedPayload(token.value->jwt, config.liveKitApiSecret);
+      const auto identity = subject(payload);
+      EXPECT_TRUE(identities.insert(identity).second);
+      EXPECT_TRUE(identity.starts_with(role + "-" + created.value->meetingRef + "-"));
+      EXPECT_EQ(subject(verifiedPayload(token.value->jwt, config.liveKitApiSecret)), identity);
+      EXPECT_NE(payload.find("\"metadata\":\"{\\\"role\\\":\\\"" + role + "\\\"}\""), std::string::npos);
+      if (room.empty()) room = token.value->roomName;
+      EXPECT_EQ(token.value->roomName, room);
+      EXPECT_NE(payload.find("\"room\":\"" + room + "\""), std::string::npos);
+      for (const auto *grant : {"roomJoin", "canPublish", "canSubscribe", "canPublishData"}) {
+        EXPECT_NE(payload.find(std::string("\"") + grant + "\":true"), std::string::npos);
+      }
+    }
+  }
+  EXPECT_EQ(identities.size(), 8u);
+}
+
+TEST_F(MeetingServiceTest, DisplayNamesAreSignedEscapedAndDoNotBecomeIdentity) {
+  const auto created = service->createMeeting(credential, windowStart, windowEnd);
+  ASSERT_TRUE(created.ok());
+  const std::string name = "Анна \"A\"";
+  const auto a = service->issueClientToken(created.value->invitationCode, created.value->passcode, name);
+  const auto b = service->issueSpecialistToken(credential, created.value->meetingRef, name);
+  ASSERT_TRUE(a.ok());
+  ASSERT_TRUE(b.ok());
+  const auto pa = verifiedPayload(a.value->jwt, config.liveKitApiSecret);
+  const auto pb = verifiedPayload(b.value->jwt, config.liveKitApiSecret);
+  for (const auto &payload : {pa, pb}) {
+    EXPECT_NE(payload.find("\"name\":\"Анна \\\"A\\\"\""), std::string::npos);
+    EXPECT_NE(subject(payload), name);
+  }
+  EXPECT_NE(subject(pa), subject(pb));
+  EXPECT_EQ(a.value->roomName, b.value->roomName);
+}
+
+TEST_F(MeetingServiceTest, InvalidDisplayNamesAreRejected) {
+  const auto created = service->createMeeting(credential, windowStart, windowEnd);
+  ASSERT_TRUE(created.ok());
+  for (const auto &name : {std::string(257, 'a'), std::string("name\nother")}) {
+    const auto result = service->issueClientToken(created.value->invitationCode, created.value->passcode, name);
+    EXPECT_EQ(result.error, pcm::tokenbackend::ServiceError::InvalidDisplayName);
+    EXPECT_FALSE(result.ok());
+  }
+}
+
+TEST_F(MeetingServiceTest, ConcurrentClientTokensHaveDistinctSignedIdentitiesInTheSameRoom) {
+  const auto created = service->createMeeting(credential, windowStart, windowEnd);
+  ASSERT_TRUE(created.ok());
+  constexpr int issuances = 4;
+  std::barrier start(issuances);
+  using TokenOutcome = pcm::tokenbackend::Result<pcm::tokenbackend::TokenResult>;
+  std::vector<std::future<TokenOutcome>> tokens;
+  for (int issuance = 0; issuance < issuances; ++issuance) {
+    tokens.emplace_back(std::async(std::launch::async, [&] {
+      start.arrive_and_wait();
+      return service->issueClientToken(created.value->invitationCode, created.value->passcode);
+    }));
+  }
+  std::set<std::string> identities;
+  std::string room;
+  for (auto &pending : tokens) {
+    std::optional<TokenOutcome> token;
+    ASSERT_NO_THROW(token.emplace(pending.get()));
+    ASSERT_TRUE(token->ok());
+    const auto payload = verifiedPayload(token->value->jwt, config.liveKitApiSecret);
+    EXPECT_TRUE(identities.insert(subject(payload)).second);
+    EXPECT_TRUE(subject(payload).starts_with("client-" + created.value->meetingRef + "-"));
+    EXPECT_NE(payload.find(R"("metadata":"{\"role\":\"client\"}")"), std::string::npos);
+    if (room.empty()) room = token->value->roomName;
+    EXPECT_EQ(token->value->roomName, room);
+    EXPECT_NE(payload.find("\"room\":\"" + room + "\""), std::string::npos);
+    for (const auto *grant : {"roomJoin", "canPublish", "canSubscribe", "canPublishData"}) {
+      EXPECT_NE(payload.find(std::string("\"") + grant + "\":true"), std::string::npos);
+    }
+  }
+  EXPECT_EQ(identities.size(), issuances);
 }
 
 TEST_F(MeetingServiceTest, InvalidateStopsFurtherTokenIssuance) {
@@ -362,4 +491,94 @@ TEST_F(MeetingServiceTest, ClosedWindowDoesNotBurnAPasscodeAttempt) {
   ASSERT_TRUE(invitation.has_value());
   EXPECT_EQ(invitation->passcodeAttempts, 0);
   EXPECT_EQ(invitation->status, "active");
+}
+
+// --- Jitsi meetings ---------------------------------------------------------
+
+namespace {
+std::string jwtClaim(const std::string &payload, const std::string &key) {
+  const auto at = payload.find("\"" + key + "\":");
+  if (at == std::string::npos) return {};
+  auto start = at + key.size() + 3;
+  if (payload[start] == '"') {
+    ++start;
+    return payload.substr(start, payload.find('"', start) - start);
+  }
+  return payload.substr(start, payload.find_first_of(",}", start) - start);
+}
+} // namespace
+
+TEST_F(MeetingServiceTest, CreatesJitsiMeeting) {
+  auto created = service->createMeeting(credential, windowStart, windowEnd, "jitsi");
+  ASSERT_TRUE(created.ok());
+  auto meeting = meetings->findByRef(created.value->meetingRef);
+  ASSERT_TRUE(meeting);
+  EXPECT_EQ(meeting->provider, "jitsi");
+}
+
+TEST_F(MeetingServiceTest, DefaultMeetingProviderIsLiveKit) {
+  auto created = service->createMeeting(credential, windowStart, windowEnd);
+  ASSERT_TRUE(created.ok());
+  EXPECT_EQ(meetings->findByRef(created.value->meetingRef)->provider, "livekit");
+  auto token = service->issueSpecialistToken(credential, created.value->meetingRef);
+  ASSERT_TRUE(token.ok());
+  EXPECT_EQ(token.value->provider, "livekit");
+}
+
+TEST_F(MeetingServiceTest, RejectsJitsiWhenUnconfigured) {
+  config.jitsiUrl.clear();
+  config.jitsiAppId.clear();
+  config.jitsiAppSecret.clear();
+  auto created = service->createMeeting(credential, windowStart, windowEnd, "jitsi");
+  EXPECT_FALSE(created.ok());
+  EXPECT_EQ(created.error, pcm::tokenbackend::ServiceError::JitsiNotConfigured);
+}
+
+TEST_F(MeetingServiceTest, RejectsUnknownProvider) {
+  auto created = service->createMeeting(credential, windowStart, windowEnd, "zoom");
+  EXPECT_FALSE(created.ok());
+  EXPECT_EQ(created.error, pcm::tokenbackend::ServiceError::InvalidProvider);
+}
+
+TEST_F(MeetingServiceTest, SpecialistTokenForJitsiIsJitsiJwt) {
+  auto created = service->createMeeting(credential, windowStart, windowEnd, "jitsi");
+  ASSERT_TRUE(created.ok());
+  auto token = service->issueSpecialistToken(credential, created.value->meetingRef, "Anna");
+  ASSERT_TRUE(token.ok());
+  EXPECT_EQ(token.value->provider, "jitsi");
+  EXPECT_EQ(token.value->endpointUrl, "https://jitsi.test");
+  const auto room = meetings->findByRef(created.value->meetingRef)->roomName;
+  std::string lower = room;
+  for (auto &c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  EXPECT_EQ(token.value->roomName, lower);
+  const auto payload = verifiedPayload(token.value->jwt, "jitsi-secret");
+  EXPECT_EQ(jwtClaim(payload, "room"), lower);
+  EXPECT_EQ(jwtClaim(payload, "moderator"), "true");
+  EXPECT_EQ(jwtClaim(payload, "iss"), "sessio");
+  EXPECT_NE(jwtClaim(payload, "id").find("practitioner-" + created.value->meetingRef + "-"), std::string::npos);
+  EXPECT_GT(token.value->expiresAtUnix, 0);
+}
+
+TEST_F(MeetingServiceTest, ClientTokenForJitsiIsJitsiJwt) {
+  auto created = service->createMeeting(credential, windowStart, windowEnd, "jitsi");
+  ASSERT_TRUE(created.ok());
+  auto wrong = service->issueClientToken(created.value->invitationCode, "000000");
+  EXPECT_EQ(wrong.error, pcm::tokenbackend::ServiceError::WrongPasscode);
+  auto token = service->issueClientToken(created.value->invitationCode, created.value->passcode, "Ivan");
+  ASSERT_TRUE(token.ok());
+  EXPECT_EQ(token.value->provider, "jitsi");
+  EXPECT_EQ(token.value->endpointUrl, "https://jitsi.test");
+  const auto payload = verifiedPayload(token.value->jwt, "jitsi-secret");
+  EXPECT_EQ(jwtClaim(payload, "moderator"), "false");
+  EXPECT_EQ(jwtClaim(payload, "room"), token.value->roomName);
+}
+
+TEST_F(MeetingServiceTest, ReissueKeepsJitsiProvider) {
+  auto created = service->createMeeting(credential, windowStart, windowEnd, "jitsi");
+  ASSERT_TRUE(created.ok());
+  auto reissued = service->reissueInvitation(credential, created.value->meetingRef);
+  ASSERT_TRUE(reissued.ok());
+  auto token = service->issueClientToken(reissued.value->invitationCode, reissued.value->passcode);
+  ASSERT_TRUE(token.ok());
+  EXPECT_EQ(token.value->provider, "jitsi");
 }

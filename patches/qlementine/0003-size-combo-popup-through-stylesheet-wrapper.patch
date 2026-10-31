@@ -1,0 +1,50 @@
+diff --git a/lib/src/style/eventFilters/ComboboxItemViewFilter.hpp b/lib/src/style/eventFilters/ComboboxItemViewFilter.hpp
+--- a/lib/src/style/eventFilters/ComboboxItemViewFilter.hpp
++++ b/lib/src/style/eventFilters/ComboboxItemViewFilter.hpp
+@@ -14,15 +14,17 @@
+ #include <QAbstractItemView>
+ #include <QChildEvent>
+ #include <QScreen>
++#include <QPointer>
+
+ namespace oclero::qlementine {
+ // Event filter for the item view in the QComboBox's popup.
+ class ComboboxItemViewFilter : public QObject {
+ public:
+-  ComboboxItemViewFilter(QComboBox* comboBox, QAbstractItemView* view)
++  ComboboxItemViewFilter(QComboBox* comboBox, QAbstractItemView* view, QlementineStyle* style = nullptr)
+     : QObject(view)
+     , _comboBox(comboBox)
+     , _view(view)
++    , _style(style ? style : qobject_cast<QlementineStyle*>(comboBox->style()))
+     , _initialMaxHeight(view->maximumHeight()) {
+     _view->installEventFilter(this);
+
+@@ -85,7 +87,7 @@
+   void fixViewGeometry() const {
+     if (_comboBox) {
+       if (auto* view = _comboBox->view()) {
+-        if (const auto* qlementineStyle = qobject_cast<QlementineStyle*>(_comboBox->style())) {
++        if (const auto* qlementineStyle = _style.data()) {
+           const auto isTreeView = view->inherits("QTreeView");
+           const auto hMargin = qlementineStyle->pixelMetric(QStyle::PM_MenuHMargin);
+           const auto shadowWidth = qlementineStyle->theme().spacing;
+@@ -152,6 +154,7 @@
+
+   QComboBox* _comboBox{ nullptr };
+   QAbstractItemView* _view{ nullptr };
++  QPointer<QlementineStyle> _style;
+   int _initialMaxHeight{ 0 };
+   QModelIndex _clickedIndex{};
+ };
+diff --git a/lib/src/style/QlementineStyle.cpp b/lib/src/style/QlementineStyle.cpp
+--- a/lib/src/style/QlementineStyle.cpp
++++ b/lib/src/style/QlementineStyle.cpp
+@@ -4827,6 +4827,6 @@
+
+       itemView->viewport()->setAutoFillBackground(false);
+       auto* comboBox = findFirstParentOfType<QComboBox>(itemView);
+-      new ComboboxItemViewFilter(comboBox, itemView);
++      new ComboboxItemViewFilter(comboBox, itemView, this);
+     }
+   }

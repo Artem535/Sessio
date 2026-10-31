@@ -78,8 +78,8 @@ TEST(ChangeLogTextTest, StatusChangeWithoutReasonHasNoParenthetical) {
 }
 
 TEST(ChangeLogTextTest, RescheduleFormatsOldAndNewDates) {
-  const auto oldAt = QDateTime(QDate(2026, 3, 10), QTime(9, 0), QTimeZone::systemTimeZone());
-  const auto newAt = QDateTime(QDate(2026, 3, 12), QTime(14, 30), QTimeZone::systemTimeZone());
+  const auto oldAt = QDateTime(QDate(2026, 3, 10), QTime(9, 0), QTimeZone(QTimeZone::LocalTime));
+  const auto newAt = QDateTime(QDate(2026, 3, 12), QTime(14, 30), QTimeZone(QTimeZone::LocalTime));
 
   DuckEventChangeLog entry;
   entry.change_kind = 3;
