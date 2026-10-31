@@ -2,6 +2,7 @@
 #include "livekit_video_provider.h"
 #include "series_join_target.h"
 #include "web_call_provider.h"
+#include "jitsi_url.h"
 
 #include <QStackedWidget>
 #include <QUrl>
@@ -83,18 +84,28 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
 
   connect(mEntryWidget, &CallEntryWidget::joinByCodeRequested, this,
           [this](const QString &code, const QString &passcode) {
+            mEntryWidget->setJitsiFallbackUrl({});
             mCurrentEventId.reset(); // a code/passcode join never has a known Event
             mEntryWidget->clearError();
             const auto [invitationCode, invitationPasscode] =
                 joinCredentialsFromInput(code, passcode);
             mTokenClient->requestClientToken(invitationCode, invitationPasscode, mEntryWidget->displayName());
           });
+  connect(mEntryWidget, &CallEntryWidget::joinJitsiRequested, this,
+          [this](const QString &url) { joinExternalJitsi(url); });
 
   connect(mEntryWidget, &CallEntryWidget::ownMeetingJoinRequested, this,
           [this](const QString &meetingRef) {
+            for (const auto &meeting : mUpcomingMeetings) {
+              if (meeting.meetingRef == meetingRef && !meeting.jitsiUrl.isEmpty()) {
+                joinExternalJitsi(meeting.jitsiUrl, meeting.eventId);
+                return;
+              }
+            }
             if (!mBearerCredentialProvider) {
               return;
             }
+            mEntryWidget->setJitsiFallbackUrl({});
             mCurrentEventId.reset();
             for (const auto &meeting : mUpcomingMeetings) {
               if (meeting.meetingRef == meetingRef) {
@@ -216,6 +227,27 @@ void CallsPage::setSidePanelExpandedByDefault(bool expanded) { mCallPage->setSid
 void CallsPage::setVideoProviderFactoryForTesting(
     std::function<pcm::video::VideoProvider *(const QString &provider)> factory) {
   mVideoProviderFactory = std::move(factory);
+}
+
+void CallsPage::joinExternalJitsi(const QString &url, std::optional<int64_t> eventId) {
+  if (hasActiveCall()) return;
+  mEntryWidget->setJitsiFallbackUrl({});
+  const auto address = pcm::meeting::parseJitsiRoomUrl(url);
+  if (!address) {
+    mEntryWidget->showError(tr("Enter a valid HTTPS Jitsi room link without login, query or fragment."));
+    return;
+  }
+  mCurrentEventId = eventId;
+  mEntryWidget->setJitsiFallbackUrl(url.trimmed());
+  mEntryWidget->clearError();
+  pcm::tokenclient::TokenResult result;
+  result.provider = QStringLiteral("jitsi");
+  result.endpointUrl = address->server.toString(QUrl::FullyEncoded);
+  QUrl roomUrl = address->server;
+  roomUrl.setPath(address->server.path() + address->room);
+  // startJoin appends the final room segment; keep its URL encoding intact.
+  result.roomName = roomUrl.path(QUrl::FullyEncoded).mid(address->server.path(QUrl::FullyEncoded).size());
+  startJoin(result); // no backend request and no JWT for a user-selected server
 }
 
 void CallsPage::startJoin(const pcm::tokenclient::TokenResult &result) {

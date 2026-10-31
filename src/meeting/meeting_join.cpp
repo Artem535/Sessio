@@ -18,6 +18,8 @@ JoinAction resolveJoinAction(const DuckEvent &event, const std::optional<QString
     return {JoinAction::Kind::LiveKit, QString::fromStdString(*event.meeting_ref)};
   }
   if (!event.meeting_url.empty()) {
+    if (event.provider_kind == std::optional<std::string>{"ExternalJitsi"})
+      return {JoinAction::Kind::JitsiUrl, QString::fromStdString(event.meeting_url)};
     return {JoinAction::Kind::Url, QString::fromStdString(event.meeting_url)};
   }
   return {};

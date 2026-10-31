@@ -1,0 +1,14 @@
+diff --git a/lib/src/style/eventFilters/ComboboxItemViewFilter.hpp b/lib/src/style/eventFilters/ComboboxItemViewFilter.hpp
+--- a/lib/src/style/eventFilters/ComboboxItemViewFilter.hpp
++++ b/lib/src/style/eventFilters/ComboboxItemViewFilter.hpp
+@@ -47,7 +47,9 @@ protected:
+           const auto* childEvent = static_cast<QChildEvent*>(evt);
+           const auto* child = childEvent->child();
+-          if (child == _comboBox->view()) {
++          // view() lazily creates a popup and emits ChildAdded before Qt has
++          // assigned it, recursively re-entering this filter during startup.
++          if (child == _view) {
+             if (auto* qlementine = qobject_cast<QlementineStyle*>(_comboBox->style())) {
+               _comboBox->setItemDelegate(new ComboBoxDelegate(_comboBox, *qlementine));
+             }
+           }

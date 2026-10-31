@@ -35,6 +35,10 @@ protected:
     // SESSIO_PROMPTER_PRINT=1 the two runs' replies can be diffed.
     GemmaOptions options;
     options.reusePrefix = qEnvironmentVariableIsEmpty("SESSIO_PROMPTER_NO_PREFIX_CACHE");
+    if (qEnvironmentVariable("SESSIO_PROMPTER_TEST_CPU") == "1")
+      options.acceleration = GemmaOptions::Acceleration::Cpu;
+    else if (qEnvironmentVariable("SESSIO_PROMPTER_TEST_GPU") == "1")
+      options.acceleration = GemmaOptions::Acceleration::Gpu;
     sEngine = createGemmaEngine(path, cache, options);
     std::cout << "model loaded in " << timer.elapsed() / 1000.0 << " s\n";
   }
@@ -131,6 +135,11 @@ TEST_F(ModelSmokeTest, AcceptedRescheduleTargetsTheMeetingWithoutAHint) {
                        R"([{"id":"meeting","text":"Созвон Анны и Бориса в пятницу в 15:00","participants":["Анна","Борис"]}])");
   EXPECT_TRUE(hasEvent(out, "accept", "meeting"));
   EXPECT_TRUE(out["suggestions"].toArray().isEmpty());
+  int days = (1 - QDate::currentDate().dayOfWeek() + 7) % 7;
+  if (days == 0) days = 7;
+  ASSERT_FALSE(out["events"].toArray().isEmpty());
+  EXPECT_EQ(out["events"][0].toObject()["date"].toString(),
+            QDate::currentDate().addDays(days).toString(Qt::ISODate));
 }
 
 TEST_F(ModelSmokeTest, CancellingNotesKeepsTheMeeting) {
@@ -300,6 +309,117 @@ TEST_F(ModelSmokeTest, NextMeetingDateResolvedFromWeekday) {
   EXPECT_TRUE(event["meeting"].toBool());
   EXPECT_EQ(event["date"].toString(), "2026-11-05");
   EXPECT_EQ(event["time"].toString(), "15:00");
+}
+
+TEST_F(ModelSmokeTest, CalibrationProposalDoesNotBecomeAnAcceptedDecision) {
+  const QJsonArray sources{
+      phrase("p1", "Лев", "Может, перенесём архив на отдельный сервер? Пока это только вариант.", 0),
+      phrase("p2", "Нина", "Сначала сравним стоимость, решение ещё не принято.", 1)};
+  const auto out = processLivePoints(sources, {}, printing("calibration proposal"));
+  for (const auto &point : out["key_points"].toArray()) {
+    const auto text = point.toObject()["text"].toString();
+    // Negated decision words are faithful tentative output, not a decision.
+    for (const QString word : {QStringLiteral("решено"), QStringLiteral("выбран"), QStringLiteral("договорились")})
+      EXPECT_TRUE(!text.contains(word, Qt::CaseInsensitive) ||
+                  text.contains("не " + word, Qt::CaseInsensitive)) << text.toStdString();
+  }
+}
+
+TEST_F(ModelSmokeTest, ConstrainedCyrillicEnumProducesAValidName) {
+  // The two choices share the first UTF-8 byte (D0), but not a whole character.
+  // A string-only tokenizer must not receive that incomplete forced prefix.
+  const auto out = sEngine->generate(
+      QStringLiteral("Return only JSON with actor set to Борис."), R"({"actor":"Борис"})",
+      R"({"type":"object","properties":{"actor":{"type":"string","enum":["Анна","Борис"]}},"required":["actor"],"additionalProperties":false})");
+  ASSERT_TRUE(out.isObject());
+  const auto name = out.toObject()["actor"].toString();
+  EXPECT_TRUE(name == QStringLiteral("Анна") || name == QStringLiteral("Борис"));
+  EXPECT_FALSE(name.contains(QChar::ReplacementCharacter));
+}
+
+TEST_F(ModelSmokeTest, CalibrationAcceptedDecisionSurvivesNoise) {
+  const QJsonArray sources{
+      phrase("d1", "Лев", "Привет! Раз, два, микрофон работает?", 0),
+      phrase("d2", "Нина", "Да. Для резервных копий используем отдельный диск, облако не подходит.", 1),
+      phrase("d3", "Лев", "Согласен, выбираем отдельный диск.", 2)};
+  const auto out = processLivePoints(sources, {}, printing("calibration decision"));
+  const auto json = QString::fromUtf8(QJsonDocument(out).toJson(QJsonDocument::Compact));
+  EXPECT_FALSE(out["key_points"].toArray().isEmpty());
+  EXPECT_TRUE(json.contains("диск", Qt::CaseInsensitive));
+  EXPECT_FALSE(json.contains("микрофон", Qt::CaseInsensitive));
+}
+
+TEST_F(ModelSmokeTest, CalibrationIncompleteActionCreatesNoSummaryTask) {
+  const QJsonArray sources{
+      phrase("f1", "Лев", "Надо будет отправить... ну эту... потом.", 0),
+      phrase("f2", "Нина", "Не поняла, что именно. Связь прерывается.", 1)};
+  const auto out = processSummary(sources, {QDate(2026, 10, 29), {}}, printing("calibration fragment"));
+  EXPECT_TRUE(out["tasks"].toArray().isEmpty());
+}
+
+TEST_F(ModelSmokeTest, CalibrationPersonalMeetingDoesNotInventTheOtherParticipant) {
+  const auto out = run(R"([{"id":"a1","speaker":"Лев","text":"Завтра в 14:00 у меня приём у стоматолога."},
+                           {"id":"a2","speaker":"Нина","text":"Понятно."}])");
+  const auto events = out["events"].toArray();
+  ASSERT_EQ(events.size(), 1);
+  EXPECT_TRUE(events[0].toObject()["meeting"].toBool());
+  EXPECT_EQ(events[0].toObject()["time"].toString(), "14:00");
+  EXPECT_EQ(events[0].toObject()["participants"].toArray(), (QJsonArray{"Лев"}));
+}
+
+TEST_F(ModelSmokeTest, CalibrationSummaryDoesNotInventAConclusion) {
+  const QJsonArray sources{
+      phrase("q1", "Лев", "Есть два варианта тарифа. Стоимость первого пока неизвестна.", 0),
+      phrase("q2", "Нина", "И цена второго тоже неизвестна, данных пока нет.", 1)};
+  const auto out = processSummary(sources, {QDate(2026, 10, 29), {}}, printing("calibration open discussion"));
+  EXPECT_TRUE(out["tasks"].toArray().isEmpty());
+  const auto text = out["overview"].toObject()["text"].toString();
+  EXPECT_FALSE(text.isEmpty());
+  EXPECT_FALSE(text.contains("договорились", Qt::CaseInsensitive));
+  EXPECT_FALSE(text.contains("выбрали", Qt::CaseInsensitive));
+  EXPECT_FALSE(text.contains("завершил", Qt::CaseInsensitive));
+}
+
+// Fixed after B1 calibration, before evaluating the runtime repair. These
+// topics and phrases are absent from prompt examples; do not tune on them.
+TEST_F(ModelSmokeTest, HoldoutRejectedDeliveryCreatesNoAgreement) {
+  const auto out = run(R"([{"id":"h1","speaker":"Олег","text":"Может, привезёшь образцы в пятницу?"},
+                           {"id":"h2","speaker":"Юлия","text":"Нет, не смогу. Ничего не обещаю."}])");
+  EXPECT_TRUE(empty(out));
+}
+
+TEST_F(ModelSmokeTest, HoldoutExternalMeetingKeepsOnlyTheKnownParticipant) {
+  const auto out = run(R"([{"id":"h3","speaker":"Олег","text":"Завтра в 09:30 у меня встреча с мастером по ремонту."},
+                           {"id":"h4","speaker":"Юлия","text":"Поняла."}])");
+  const auto events = out["events"].toArray();
+  ASSERT_EQ(events.size(), 1);
+  EXPECT_TRUE(events[0].toObject()["meeting"].toBool());
+  EXPECT_EQ(events[0].toObject()["time"].toString(), "09:30");
+  EXPECT_EQ(events[0].toObject()["participants"].toArray(), (QJsonArray{"Олег"}));
+}
+
+TEST_F(ModelSmokeTest, HoldoutFinishedRestorationCreatesNoFutureTask) {
+  const QJsonArray sources{
+      phrase("h5", "Олег", "Восстановление завершено. Архив открылся, все файлы на месте.", 0),
+      phrase("h6", "Юлия", "Проверка прошла без ошибок. Больше ничего делать не нужно.", 1)};
+  const auto out = processSummary(sources, {QDate(2026, 10, 30), {}}, printing("holdout restoration"));
+  EXPECT_TRUE(out["tasks"].toArray().isEmpty());
+  const auto text = out["overview"].toObject()["text"].toString();
+  EXPECT_FALSE(text.isEmpty());
+  EXPECT_TRUE(text.contains("восстанов", Qt::CaseInsensitive) || text.contains("архив", Qt::CaseInsensitive));
+}
+
+TEST_F(ModelSmokeTest, HoldoutConcreteDecisionSurvivesSmallTalk) {
+  const QJsonArray sources{
+      phrase("h7", "Олег", "Добрый день, слышно?", 0),
+      phrase("h8", "Юлия", "Да. Мы решили перенести семинар в библиотеку: там тихо.", 1),
+      phrase("h9", "Олег", "Подтверждаю, семинар будет в библиотеке.", 2)};
+  const auto out = processLivePoints(sources, {}, printing("holdout library"));
+  const auto points = out["key_points"].toArray();
+  ASSERT_FALSE(points.isEmpty());
+  const auto json = QString::fromUtf8(QJsonDocument(out).toJson(QJsonDocument::Compact));
+  EXPECT_TRUE(json.contains("библиотек", Qt::CaseInsensitive));
+  EXPECT_FALSE(json.contains("слышно", Qt::CaseInsensitive));
 }
 
 int main(int argc, char **argv) {

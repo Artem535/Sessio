@@ -87,6 +87,7 @@ signals:
   void changed();
   void openEventRequested(qint64 eventId, qint64 dayMs);
   void openLiveKitMeetingRequested(QString target);
+  void openExternalJitsiMeetingRequested(QString url, qint64 eventId);
   void openClientRequested(qint64 clientId);
 
 private:

@@ -19,6 +19,9 @@ public:
   explicit CloudSettingsPanel(QWidget *parent = nullptr);
   // The key currently in the keychain (empty: none); used by "Test connection".
   void setStoredKey(const QString &key);
+  void beginKeyRead();
+  void keyReadFinished(bool ok, const QString &key);
+  void keyWriteFinished(bool ok);
   // Asks for the terms; true when accepted. The default shows CloudConsentDialog.
   void setConsentAsker(std::function<bool(const QString &host, bool pseudonymize)> asker) { mAskConsent = std::move(asker); }
 signals:
@@ -26,9 +29,12 @@ signals:
   void keyChanged(QString key);
   // The terms were accepted: the caller may now read the key from the keychain.
   void consentAccepted();
+  void keyAvailable(QString key);
 private:
   void refresh();
   void runTest();
+  void invalidateProbe();
+  bool validProvider() const;
   QLineEdit *mUrl, *mModel, *mKey;
   QSpinBox *mContext;
   QCheckBox *mPseudonymize;
@@ -36,5 +42,8 @@ private:
   QPushButton *mEnable, *mRevoke, *mRemoveKey, *mTest;
   QLabel *mConsentState, *mTestResult, *mKeyState;
   QString mStoredKey;
+  QString mPendingKey, mKeyStatus;
+  bool mKeyBusy = false;
+  quint64 mProbeGeneration = 0;
   std::function<bool(const QString &, bool)> mAskConsent;
 };

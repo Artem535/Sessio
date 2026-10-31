@@ -307,8 +307,18 @@ private:
   // then decoded unconstrained and the caller's validation still applies.
   std::shared_ptr<::litert::lm::Constraint> jsonConstraint(Engine::Session &session, const std::string &schema) {
     if (!mConstraints) {
-      auto provider = ::litert::lm::CreateConstraintProvider(::litert::lm::LlGuidanceConfig(), mEngine->GetTokenizer(),
-                                                             session.GetSessionConfig().GetStopTokenIds());
+      const auto &tokenizer = mEngine->GetTokenizer();
+      const auto &stops = session.GetSessionConfig().GetStopTokenIds();
+      const auto pieces = tokenizer.GetTokens();
+      ::litert::lm::LlGuidanceConfig config;
+      // Unmarked stop tokens look like ordinary text to llguidance and can
+      // be sampled inside a JSON string, terminating an unfinished object.
+      // Only singleton stops are control tokens; multi-token stop sequences
+      // may contain ordinary words, which must remain available to the model.
+      for (const auto &stop : stops)
+        if (stop.size() == 1 && stop.front() >= 0 && static_cast<size_t>(stop.front()) < pieces.size())
+          config.special_tokens.push_back(pieces[stop.front()]);
+      auto provider = ::litert::lm::CreateConstraintProvider(config, tokenizer, stops);
       if (!provider.ok()) return nullptr;
       mConstraints = std::move(*provider);
     }

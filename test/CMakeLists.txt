@@ -494,6 +494,17 @@ add_executable(Sessio_prompter_task_gate_tests prompter_task_gate_tests.cpp)
 target_include_directories(Sessio_prompter_task_gate_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/call_prompter/litert)
 target_link_libraries(Sessio_prompter_task_gate_tests PRIVATE GTest::gtest_main)
 gtest_discover_tests(Sessio_prompter_task_gate_tests)
+
+add_executable(Sessio_litert_token_bytes_tests litert_token_bytes_tests.cpp)
+target_include_directories(Sessio_litert_token_bytes_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/call_prompter/litert)
+target_link_libraries(Sessio_litert_token_bytes_tests PRIVATE GTest::gtest_main)
+gtest_discover_tests(Sessio_litert_token_bytes_tests)
+
+add_executable(Sessio_qlementine_combo_filter_tests qlementine_combo_filter_tests.cpp)
+target_include_directories(Sessio_qlementine_combo_filter_tests PRIVATE
+    ${qlementine_SOURCE_DIR}/lib/src/style/eventFilters)
+target_link_libraries(Sessio_qlementine_combo_filter_tests PRIVATE qlementine Qt6::Widgets GTest::gtest)
+gtest_discover_tests(Sessio_qlementine_combo_filter_tests)
 target_link_libraries(Sessio_call_prompter_pipeline_tests PRIVATE GTest::gtest_main Sessio_call_prompter)
 gtest_discover_tests(Sessio_call_prompter_pipeline_tests)
 if(SESSIO_LITERTLM_FOUND)
@@ -1271,7 +1282,7 @@ target_link_libraries(Sessio_my_day_page_tests PRIVATE
 gtest_discover_tests(Sessio_my_day_page_tests)
 
 # Shared "join meeting" decision (inspector + My Day)
-add_executable(Sessio_meeting_join_tests meeting_join_tests.cpp)
+add_executable(Sessio_meeting_join_tests meeting_join_tests.cpp jitsi_url_tests.cpp)
 target_link_libraries(Sessio_meeting_join_tests PRIVATE
     GTest::gtest
     GTest::gtest_main

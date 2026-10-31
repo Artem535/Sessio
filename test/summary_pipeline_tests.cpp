@@ -470,3 +470,45 @@ TEST(SummaryPipeline, FallbackOverviewDoesNotRepeatTheSameSentence) {
   const auto out = processSummary(longCall(2), ctx(), model.generate());
   EXPECT_EQ(out["overview"].toObject()["text"].toString(), "Обсудили проект и сроки сдачи.");
 }
+
+TEST(SummaryPipeline, MeetingsWithDifferentStructuredDatesStaySeparate) {
+  Model model;
+  model.leaf = [](const QJsonObject &input) {
+    auto reply = leafReply(input);
+    const auto id = firstId(input);
+    reply["tasks"] = QJsonArray{task("Обсудить проект на встрече", {id}, true,
+                                     id == "u0" ? "2026-10-30" : "2026-10-31", "12:00")};
+    return reply;
+  };
+  EXPECT_EQ(processSummary(longCall(2), ctx(), model.generate())["tasks"].toArray().size(), 2);
+}
+
+TEST(SummaryPipeline, SameWordsWithDifferentRecipientsStaySeparate) {
+  EXPECT_EQ(twoChunkSummary({"Отправить готовый отчёт Ивану до пятницы"},
+                            {"Отправить готовый отчёт Петру до пятницы"})["tasks"].toArray().size(), 2);
+}
+
+TEST(SummaryPipeline, SourceNumberMentionedAsContentIsPreserved) {
+  Model model;
+  model.leaf = [](const QJsonObject &input) {
+    auto reply = leafReply(input);
+    reply["key_points"] = QJsonArray{item("Бюджет проекта 4821 рублей (реплика 4821).", {"4821"}),
+                                     item("Расходы (бюджет 4821 рублей).", {"4821"})};
+    return reply;
+  };
+  const auto out = processSummary({source("4821", "Бюджет проекта 4821 рублей.")}, ctx(), model.generate());
+  EXPECT_EQ(texts(out["key_points"].toArray()),
+            (QStringList{"Бюджет проекта 4821 рублей.", "Расходы (бюджет 4821 рублей)."}));
+}
+
+TEST(SummaryPipeline, MeetingsWithDifferentStructuredTimesStaySeparate) {
+  Model model;
+  model.leaf = [](const QJsonObject &input) {
+    auto reply = leafReply(input);
+    const auto id = firstId(input);
+    reply["tasks"] = QJsonArray{task("Обсудить проект на встрече", {id}, true, "2026-10-30",
+                                     id == "u0" ? "12:00" : "17:00")};
+    return reply;
+  };
+  EXPECT_EQ(processSummary(longCall(2), ctx(), model.generate())["tasks"].toArray().size(), 2);
+}

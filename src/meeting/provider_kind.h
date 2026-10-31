@@ -5,7 +5,7 @@
 
 namespace pcm::meeting {
 
-enum class ProviderKind { ExternalUrl, LiveKit, Jitsi };
+enum class ProviderKind { ExternalUrl, LiveKit, Jitsi, ExternalJitsi };
 
 [[nodiscard]] inline std::string providerKindToString(const ProviderKind kind) {
   switch (kind) {
@@ -15,6 +15,8 @@ enum class ProviderKind { ExternalUrl, LiveKit, Jitsi };
     return "LiveKit";
   case ProviderKind::Jitsi:
     return "Jitsi";
+  case ProviderKind::ExternalJitsi:
+    return "ExternalJitsi";
   }
   return "ExternalUrl";
 }
@@ -30,6 +32,7 @@ providerKindFromString(const std::string &value) {
   if (value == "Jitsi") {
     return ProviderKind::Jitsi;
   }
+  if (value == "ExternalJitsi") return ProviderKind::ExternalJitsi;
   return std::nullopt;
 }
 

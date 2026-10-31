@@ -42,6 +42,7 @@ public:
   void setMaterialHistory(const QVariantList &history);
   void preselectOwnMeeting(const QString &meetingRef);
   void prefillJoinCode(const QString &code, const QString &passcode);
+  void joinExternalJitsi(const QString &url, std::optional<int64_t> eventId = std::nullopt);
   void setSidePanelWidget(QWidget *panel);
   void setSidePanelExpandedByDefault(bool expanded);
   void setTranscribeButtonVisible(bool visible);

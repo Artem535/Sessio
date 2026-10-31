@@ -402,6 +402,15 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
     schemaDays << date;
     if (promptDays.size() < kPromptCalendarDays) promptDays << date + ' ' + day.toObject()["weekday"].toString();
   }
+  // Resolve common relative dates outside the model: examples must not anchor
+  // "tomorrow" or a weekday to the example's date instead of this call's day.
+  QJsonObject dateHints{{"сегодня", callDate.toString(Qt::ISODate)},
+                        {"завтра", callDate.addDays(1).toString(Qt::ISODate)},
+                        {"послезавтра", callDate.addDays(2).toString(Qt::ISODate)}};
+  for (const auto &day : calendarDays(callDate.addDays(1), 7)) {
+    const auto object = day.toObject();
+    dateHints.insert(object["weekday"].toString(), object["date"]);
+  }
   auto extractSchema = baseSchema<ExtractSchema>();
   extractSchema = restrictStrings(extractSchema, "kind", {"accept", "cancel"});
   extractSchema = restrictStrings(extractSchema, "participants", sorted(speakers));
@@ -411,7 +420,7 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
                         R"("time":{"type":"string","pattern":"^(([01][0-9]|2[0-3]):[0-5][0-9])?$"})");
   const auto extracted = call(prompt("extract.txt"),
                               {{"new_utterances", window}, {"call_date", promptDays.first()},
-                               {"calendar", QJsonArray::fromStringList(promptDays)}},
+                               {"calendar", QJsonArray::fromStringList(promptDays)}, {"date_hints", dateHints}},
                               extractSchema);
   if (!extracted.isObject() || !extracted.toObject().value("events").isArray())
     throw PipelineError("invalid extraction");

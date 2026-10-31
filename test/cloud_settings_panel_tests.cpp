@@ -116,9 +116,11 @@ TEST_F(CloudPanelTest, KeyIsHandedOutNeverPrefilledAndNeverStoredInSettings) {
   EXPECT_EQ(keys[0][0].toString(), "sk-secret");
   EXPECT_TRUE(field->text().isEmpty());
   for (const auto &key : QSettings().allKeys()) EXPECT_FALSE(QSettings().value(key).toString().contains("sk-secret"));
+  panel.keyWriteFinished(true);
   child<QPushButton>(panel, "cloudRemoveKey")->click();
   ASSERT_EQ(keys.count(), 2);
   EXPECT_TRUE(keys[1][0].toString().isEmpty());
+  panel.keyWriteFinished(true);
   // A stored key is announced, not shown.
   panel.setStoredKey("sk-stored");
   EXPECT_TRUE(field->text().isEmpty());
@@ -131,6 +133,112 @@ TEST_F(CloudPanelTest, PseudonymizationDefaultsOnAndIsStored) {
   EXPECT_TRUE(box->isChecked());
   box->setChecked(false);
   EXPECT_FALSE(settings::cloudPseudonymize());
+}
+
+TEST_F(CloudPanelTest, InvalidProviderAddressCannotReceiveConsent) {
+  CloudSettingsPanel panel;
+  bool asked = false;
+  panel.setConsentAsker([&](const QString &, bool) { asked = true; return true; });
+  child<QLineEdit>(panel, "cloudBaseUrl")->setText("not-an-address");
+  child<QLineEdit>(panel, "cloudModel")->setText("m1");
+  child<QPushButton>(panel, "cloudEnable")->click();
+  EXPECT_FALSE(asked);
+  EXPECT_FALSE(settings::cloudConsentValid());
+}
+
+TEST_F(CloudPanelTest, EditedConfigurationClearsPreviousProbeResult) {
+  CloudSettingsPanel panel;
+  auto *result = child<QLabel>(panel, "cloudTestResult");
+  result->setText("Connected");
+  child<QLineEdit>(panel, "cloudModel")->setText("different-model");
+  EXPECT_TRUE(result->text().isEmpty());
+}
+
+TEST_F(CloudPanelTest, KeyStorageIsReportedOnlyAfterSuccessfulCompletion) {
+  CloudSettingsPanel panel;
+  auto *field = child<QLineEdit>(panel, "cloudApiKey");
+  field->setText("sk-secret");
+  emit field->editingFinished();
+  auto *state = child<QLabel>(panel, "cloudKeyState");
+  EXPECT_FALSE(state->text().contains("A key is stored"));
+  EXPECT_TRUE(state->text().contains("Saving"));
+  panel.keyWriteFinished(false);
+  EXPECT_TRUE(state->text().contains("could not"));
+  EXPECT_FALSE(state->text().contains("sk-secret"));
+}
+
+TEST_F(CloudPanelTest, StoredKeyCanBeReadAndRemovedBeforeConsent) {
+  CloudSettingsPanel panel;
+  QSignalSpy available(&panel, &CloudSettingsPanel::keyAvailable);
+  QSignalSpy writes(&panel, &CloudSettingsPanel::keyChanged);
+  panel.beginKeyRead();
+  EXPECT_FALSE(child<QLineEdit>(panel, "cloudApiKey")->isEnabled());
+  panel.keyReadFinished(true, "saved-secret");
+  EXPECT_FALSE(settings::cloudConsentValid());
+  ASSERT_EQ(available.count(), 1);
+  EXPECT_EQ(available[0][0].toString(), "saved-secret");
+  EXPECT_TRUE(child<QLineEdit>(panel, "cloudApiKey")->text().isEmpty());
+  child<QPushButton>(panel, "cloudRemoveKey")->click();
+  ASSERT_EQ(writes.count(), 1);
+  EXPECT_TRUE(writes[0][0].toString().isEmpty());
+  EXPECT_TRUE(child<QLabel>(panel, "cloudKeyState")->text().contains("Removing"));
+  panel.keyWriteFinished(false);
+  EXPECT_EQ(available.count(), 1);
+  EXPECT_TRUE(child<QPushButton>(panel, "cloudRemoveKey")->isEnabled());
+  child<QPushButton>(panel, "cloudRemoveKey")->click();
+  panel.keyWriteFinished(true);
+  ASSERT_EQ(available.count(), 2);
+  EXPECT_TRUE(available[1][0].toString().isEmpty());
+  EXPECT_FALSE(child<QPushButton>(panel, "cloudRemoveKey")->isEnabled());
+}
+
+TEST_F(CloudPanelTest, KeyReadFailureIsVisibleAndAllowsReplacement) {
+  CloudSettingsPanel panel;
+  panel.beginKeyRead();
+  panel.keyReadFinished(false, {});
+  EXPECT_TRUE(child<QLabel>(panel, "cloudKeyState")->text().contains("could not be read"));
+  EXPECT_TRUE(child<QLineEdit>(panel, "cloudApiKey")->isEnabled());
+}
+
+TEST_F(CloudPanelTest, UnsafeOrMalformedProviderAddressesCannotReceiveConsent) {
+  for (const auto &address : {"http://remote.example/v1", "https://user:secret@example.com/v1",
+                             "https://example.com/v1?key=secret", "https://example.com/v1#fragment",
+                             "file:///tmp/model"}) {
+    CloudSettingsPanel panel;
+    bool asked = false;
+    panel.setConsentAsker([&](const QString &, bool) { asked = true; return true; });
+    child<QLineEdit>(panel, "cloudBaseUrl")->setText(address);
+    child<QLineEdit>(panel, "cloudModel")->setText("m1");
+    child<QPushButton>(panel, "cloudEnable")->click();
+    EXPECT_FALSE(asked) << address;
+    EXPECT_FALSE(settings::cloudConsentValid()) << address;
+  }
+}
+
+TEST_F(CloudPanelTest, LoopbackHttpProviderCanReceiveConsent) {
+  for (const auto &address : {"http://localhost:11434/v1", "http://127.0.0.1:8000/v1", "http://[::1]:8000/v1"}) {
+    CloudSettingsPanel panel;
+    panel.setConsentAsker([](const QString &, bool) { return true; });
+    child<QLineEdit>(panel, "cloudBaseUrl")->setText(address);
+    child<QLineEdit>(panel, "cloudModel")->setText("m1");
+    child<QPushButton>(panel, "cloudEnable")->click();
+    EXPECT_TRUE(settings::cloudConsentValid()) << address;
+  }
+}
+
+TEST_F(CloudPanelTest, InFlightProbeCannotApproveAnEditedConfiguration) {
+  FakeHttpServer server;
+  server.enqueue({200, chat(R"({"ok":true})"), 100});
+  CloudSettingsPanel panel;
+  child<QLineEdit>(panel, "cloudBaseUrl")->setText(server.url("/v1").toString());
+  child<QLineEdit>(panel, "cloudModel")->setText("m1");
+  panel.setStoredKey("k");
+  child<QPushButton>(panel, "cloudTest")->click();
+  QTRY_COMPARE_WITH_TIMEOUT(server.requests().size(), 1, 5000);
+  child<QLineEdit>(panel, "cloudModel")->setText("m2");
+  QTest::qWait(250);
+  EXPECT_TRUE(child<QLabel>(panel, "cloudTestResult")->text().isEmpty());
+  EXPECT_TRUE(child<QPushButton>(panel, "cloudTest")->isEnabled());
 }
 
 TEST_F(CloudPanelTest, TestConnectionAcceptsAProviderWithJsonSchema) {

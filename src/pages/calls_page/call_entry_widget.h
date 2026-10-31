@@ -8,6 +8,7 @@
 class QLabel;
 class QLineEdit;
 class QVBoxLayout;
+class QPushButton;
 
 struct UpcomingMeeting {
   QString meetingRef;
@@ -15,6 +16,7 @@ struct UpcomingMeeting {
   QDateTime startTime;
   bool joinEnabled = false;
   int64_t eventId = 0;
+  QString jitsiUrl;
 };
 
 class CallEntryWidget final : public QWidget {
@@ -25,6 +27,7 @@ class CallEntryWidget final : public QWidget {
   Q_PROPERTY(QString name READ displayName WRITE setDisplayName NOTIFY workspaceChanged)
   Q_PROPERTY(QString code READ code NOTIFY workspaceChanged)
   Q_PROPERTY(QString passcode READ passcode NOTIFY workspaceChanged)
+  Q_PROPERTY(QString jitsiFallbackUrl READ jitsiFallbackUrl NOTIFY workspaceChanged)
 
 public:
   explicit CallEntryWidget(bool showOwnMeetings, QWidget *parent = nullptr);
@@ -49,6 +52,11 @@ public:
   void setDisplayName(const QString &name);
   Q_INVOKABLE void joinOwn(const QString &ref);
   Q_INVOKABLE void joinInvitation(const QString &code, const QString &passcode);
+  Q_INVOKABLE void joinJitsi(const QString &url);
+  Q_INVOKABLE void openJitsiInBrowser(const QString &url);
+  Q_INVOKABLE void openJitsiFallback();
+  QString jitsiFallbackUrl() const { return mJitsiFallbackUrl; }
+  void setJitsiFallbackUrl(const QString &url);
   Q_INVOKABLE void openMaterial(const QString &id);
   Q_INVOKABLE void openTranscript(const QString &id);
 
@@ -63,6 +71,7 @@ signals:
   void transcriptRequested(qint64 id);
   void ownMeetingJoinRequested(QString meetingRef);
   void joinByCodeRequested(QString code, QString passcode);
+  void joinJitsiRequested(QString url);
   // The entry screen became visible: its meeting list may be stale.
   void shown();
 
@@ -79,4 +88,6 @@ private:
   QLabel *mErrorLabel{nullptr};
   QLabel *mAvatarLabel{nullptr};
   QLabel *mNoCallsLabel{nullptr};
+  QPushButton *mFallbackBrowserButton{nullptr};
+  QString mJitsiFallbackUrl;
 };

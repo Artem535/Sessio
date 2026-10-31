@@ -102,12 +102,13 @@ bool similar(const Words &a, const Words &b) {
   const auto smaller = std::min(a.stems.size(), b.stems.size());
   if (smaller < 2) return false;
   const auto common = QSet<QString>(a.stems).intersect(b.stems).size();
-  const auto united = a.stems.size() + b.stems.size() - common;
-  return common * 10 >= smaller * 8 || common * 10 >= united * 7;
+  // A differing recipient or subject is meaningful, even in a long sentence.
+  // Only a complete subset can be a shortened version of the same statement.
+  return common == smaller;
 }
 
 // Source ids belong in evidence_ids; the model sometimes copies them into the prose too.
-QString withoutSourceIds(QString text, const QSet<QString> &ids) {
+QString withoutSourceIds(QString text, const QSet<QString> &ids, const QSet<QString> &sourceNumbers) {
   QStringList numeric;
   for (const auto &id : ids)
     if (id.size() >= 3 && std::all_of(id.begin(), id.end(), [](QChar c) { return c.isDigit(); }))
@@ -115,18 +116,29 @@ QString withoutSourceIds(QString text, const QSet<QString> &ids) {
   if (numeric.isEmpty()) return text;
   const auto any = numeric.join(QLatin1Char('|'));
   constexpr auto options = QRegularExpression::UseUnicodePropertiesOption | QRegularExpression::CaseInsensitiveOption;
-  const QRegularExpression wrapped(QStringLiteral(R"(\s*[(\[][^)\]]*\b(?:%1)\b[^)\]]*[)\]])").arg(any), options);
-  const QRegularExpression bare(QStringLiteral(R"(\s*(?:реплик\w*|сообщени\w*|id)?\s*[№#]?\s*\b(?:%1)\b)").arg(any), options);
+  const QRegularExpression wrapped(QStringLiteral(
+      R"(\s*[(\[]\s*(?:(?:см\.?|реплик\w*|сообщени\w*|id)\s*[:№#]?\s*)?(?:%1)(?:[\s,;и]+(?:%1))*\s*[)\]])").arg(any), options);
+  const QRegularExpression labelled(QStringLiteral(R"(\s*(?:реплик\w*|сообщени\w*|id)\s*[:№#]?\s*\b(?:%1)\b)").arg(any), options);
   const QRegularExpression beforePunctuation(QStringLiteral(R"(\s+([,.;:!?]))"));
-  text.replace(wrapped, QString()).replace(bare, QString()).replace(beforePunctuation, QStringLiteral("\\1"));
+  text.replace(wrapped, QString()).replace(labelled, QString());
+  QStringList stray;
+  for (const auto &id : ids)
+    if (!sourceNumbers.contains(id) && numeric.contains(QRegularExpression::escape(id)))
+      stray << QRegularExpression::escape(id);
+  if (!stray.isEmpty()) {
+    const QRegularExpression bare(QStringLiteral(R"(\s*[№#]?\s*\b(?:%1)\b)").arg(stray.join('|')), options);
+    text.replace(bare, QString());
+  }
+  text.replace(beforePunctuation, QStringLiteral("\\1"));
   // Cutting an id at the end leaves the separator that preceded it.
   static const QRegularExpression dangling(QStringLiteral(R"([\s,;:\-–—]+$)"));
   return text.remove(dangling).simplified();
 }
 
 // Drops an item whose prose was nothing but source ids.
-std::optional<QJsonObject> cleanedItem(QJsonObject item, const QSet<QString> &allowed) {
-  const auto text = withoutSourceIds(item["text"].toString(), allowed);
+std::optional<QJsonObject> cleanedItem(QJsonObject item, const QSet<QString> &allowed,
+                                      const QSet<QString> &sourceNumbers) {
+  const auto text = withoutSourceIds(item["text"].toString(), allowed, sourceNumbers);
   if (text.isEmpty()) return std::nullopt;
   item["text"] = text;
   return item;
@@ -143,7 +155,8 @@ struct Leaf {
 };
 
 // Validates a leaf reply against its chunk's sources.
-Leaf checkedLeaf(const QJsonValue &value, const QSet<QString> &allowed, const QSet<QString> &dates) {
+Leaf checkedLeaf(const QJsonValue &value, const QSet<QString> &allowed, const QSet<QString> &dates,
+                 const QSet<QString> &sourceNumbers) {
   const auto object = value.toObject();
   if (!value.isObject() || object.size() != 4 || !object["key_points"].isArray() || !object["tasks"].isArray() ||
       !object["open_questions"].isArray() || object["key_points"].toArray().size() > kLeafPoints ||
@@ -152,13 +165,13 @@ Leaf checkedLeaf(const QJsonValue &value, const QSet<QString> &allowed, const QS
   Leaf leaf;
   leaf.note = checkedItem(object["note"], kLeafNoteLength, true, allowed);
   if (!leaf.note["text"].toString().isEmpty()) {
-    if (const auto note = cleanedItem(leaf.note, allowed)) leaf.note = *note;
+    if (const auto note = cleanedItem(leaf.note, allowed, sourceNumbers)) leaf.note = *note;
     else leaf.note = QJsonObject{{"text", ""}, {"evidence_ids", QJsonArray{}}};
   }
   for (const auto &p : object["key_points"].toArray())
-    if (const auto point = cleanedItem(checkedItem(p, kPointLength, false, allowed), allowed)) leaf.points.append(*point);
+    if (const auto point = cleanedItem(checkedItem(p, kPointLength, false, allowed), allowed, sourceNumbers)) leaf.points.append(*point);
   for (const auto &q : object["open_questions"].toArray())
-    if (const auto question = cleanedItem(checkedItem(q, kQuestionLength, false, allowed), allowed))
+    if (const auto question = cleanedItem(checkedItem(q, kQuestionLength, false, allowed), allowed, sourceNumbers))
       leaf.questions.append(*question);
   for (const auto &t : object["tasks"].toArray()) {
     const auto task = t.toObject();
@@ -171,7 +184,7 @@ Leaf checkedLeaf(const QJsonValue &value, const QSet<QString> &allowed, const QS
     out["meeting"] = task["meeting"];
     out["date"] = dates.contains(task["date"].toString()) ? task["date"].toString() : QString();
     out["time"] = validTime(task["time"].toString()) ? task["time"].toString() : QString();
-    if (const auto cleaned = cleanedItem(out, allowed)) leaf.tasks.append(*cleaned);
+    if (const auto cleaned = cleanedItem(out, allowed, sourceNumbers)) leaf.tasks.append(*cleaned);
   }
   return leaf;
 }
@@ -200,7 +213,13 @@ QJsonArray mergedList(const QList<QJsonArray> &lists, qsizetype limit, const QSt
       if (std::any_of(blocked.begin(), blocked.end(), [&](const Words &b) { return similar(words, b); })) continue;
       qsizetype twin = -1;
       for (qsizetype i = 0; i < kept.size() && twin < 0; ++i)
-        if (similar(words, kept[i])) twin = i;
+        if (similar(words, kept[i])) {
+          const auto previous = all[i].toObject();
+          bool compatible = true;
+          for (const char *field : {"meeting", "date", "time"})
+            if (item.contains(field) && previous.contains(field) && item[field] != previous[field]) compatible = false;
+          if (compatible) twin = i;
+        }
       if (twin < 0) {
         all.append(item);
         kept.append(words);
@@ -244,6 +263,13 @@ QJsonObject joinedNotes(const QJsonArray &notes, qsizetype limit) {
 
 QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &ctx, const Generate &generate) {
   if (utterances.isEmpty()) return emptySummary();
+  // A number spoken in the call may happen to equal a database source id.
+  QSet<QString> sourceNumbers;
+  static const QRegularExpression number(QStringLiteral(R"(\b[0-9]+\b)"));
+  for (const auto &utterance : utterances) {
+    auto matches = number.globalMatch(utterance.toObject()["text"].toString());
+    while (matches.hasNext()) sourceNumbers.insert(matches.next().captured());
+  }
   const auto leafPrompt = prompt("summary_leaf.txt");
   const auto overviewPrompt = prompt("summary_overview.txt");
 
@@ -296,7 +322,7 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
     payload += ",\"utterances\":" + QJsonDocument(input).toJson(QJsonDocument::Compact) + '}';
     try {
       return checkedLeaf(call(leafPrompt, payload, restrictStrings(leafDates, "evidence_ids", sorted(allowed))), allowed,
-                         dateSet);
+                         dateSet, sourceNumbers);
     } catch (const PipelineError &error) {
       if (!usable(error)) throw;
       return std::nullopt;
@@ -371,7 +397,7 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
       const auto reply = call(overviewPrompt, serialize({{"notes", group}}), schema).toObject();
       if (reply.size() != 1) throw PipelineError("invalid notes output schema/budget");
       const auto overview = checkedItem(reply["overview"], limit, false, allowed);
-      if (const auto cleaned = cleanedItem(overview, allowed)) return *cleaned;
+      if (const auto cleaned = cleanedItem(overview, ids(utterances), sourceNumbers)) return *cleaned;
       return joinedNotes(group, limit);
     } catch (const PipelineError &error) {
       if (!usable(error)) throw;

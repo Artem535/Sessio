@@ -765,6 +765,72 @@ TEST(CallsPageTest, JitsiTokenBuildsWebProvider) {
   EXPECT_EQ(fakeProvider->mLastJoinUrl, QStringLiteral("https://jitsi.test/rm_abc"));
 }
 
+TEST(CallsPageTest, DirectJitsiLinkJoinsWithoutBackendRequestOrToken) {
+  FakeTokenBackendServer server;
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager devices;
+  CallsPage page(false, &devices, &client);
+  QSignalSpy knownEvent(&page, &CallsPage::eventKnownForCurrentCall);
+  FakeVideoProvider *provider = nullptr;
+  QWidget view;
+  page.setVideoProviderFactoryForTesting([&](const QString &kind) -> pcm::video::VideoProvider * {
+    EXPECT_EQ(kind, "jitsi");
+    provider = new FakeVideoProvider(); provider->mCallView = &view; return provider;
+  });
+  page.joinExternalJitsi("https://external.test/prefix/room");
+  ASSERT_TRUE(QTest::qWaitFor([&] { return provider && provider->mJoinCallCount == 1; }, 2000));
+  EXPECT_EQ(provider->mLastJoinUrl, "https://external.test/prefix/room");
+  EXPECT_TRUE(provider->mLastJoinToken.isEmpty());
+  EXPECT_TRUE(server.requestPaths.isEmpty());
+  EXPECT_TRUE(knownEvent.isEmpty());
+}
+
+TEST(CallsPageTest, ScheduledExternalJitsiJoinsWithoutBearerAndKeepsEventIdentity) {
+  FakeTokenBackendServer server;
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager devices;
+  CallsPage page(true, &devices, &client);
+  QSignalSpy knownEvent(&page, &CallsPage::eventKnownForCurrentCall);
+  UpcomingMeeting meeting;
+  meeting.meetingRef = "external-jitsi:42";
+  meeting.title = "Meeting";
+  meeting.startTime = QDateTime::currentDateTime();
+  meeting.joinEnabled = true;
+  meeting.eventId = 42;
+  meeting.jitsiUrl = "https://external.test/prefix/room";
+  page.setUpcomingMeetings({meeting});
+  FakeVideoProvider *provider = nullptr;
+  QWidget view;
+  page.setVideoProviderFactoryForTesting([&](const QString &) -> pcm::video::VideoProvider * {
+    provider = new FakeVideoProvider(); provider->mCallView = &view; return provider;
+  });
+  page.findChild<CallEntryWidget *>()->joinOwn(meeting.meetingRef);
+  ASSERT_TRUE(QTest::qWaitFor([&] { return provider && provider->mJoinCallCount == 1; }, 2000));
+  ASSERT_EQ(knownEvent.size(), 1);
+  EXPECT_EQ(knownEvent.at(0).at(0).toLongLong(), 42);
+  EXPECT_TRUE(server.requestPaths.isEmpty());
+  EXPECT_TRUE(provider->mLastJoinToken.isEmpty());
+  provider->simulateJoinFailed("This Jitsi server requires authentication.");
+  ASSERT_TRUE(QTest::qWaitFor([&] { return !page.findChild<CallEntryWidget *>()->error().isEmpty(); }, 2000));
+  EXPECT_EQ(page.findChild<CallEntryWidget *>()->jitsiFallbackUrl(), meeting.jitsiUrl);
+  EXPECT_FALSE(page.findChild<QPushButton *>("jitsiFallbackBrowserButton")->isHidden());
+}
+
+TEST(CallsPageTest, RejectsDirectJitsiCredentialsWithoutCreatingProviderOrBackendRequest) {
+  FakeTokenBackendServer server;
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager devices;
+  CallsPage page(false, &devices, &client);
+  int providerCalls = 0;
+  page.setVideoProviderFactoryForTesting([&](const QString &) -> pcm::video::VideoProvider * {
+    ++providerCalls; return new FakeVideoProvider();
+  });
+  page.joinExternalJitsi("https://external.test/room?jwt=do-not-forward");
+  EXPECT_EQ(providerCalls, 0);
+  EXPECT_TRUE(server.requestPaths.isEmpty());
+  EXPECT_FALSE(page.findChild<CallEntryWidget *>()->error().isEmpty());
+}
+
 TEST(CallsPageTest, LiveKitTokenUnchanged) {
   FakeTokenBackendServer server;
   server.setNextResponse(200, kTokenResponse);

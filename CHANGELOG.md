@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.39] - 2026-10-30
+
+- Added joining external Jitsi rooms by URL and creating calendar meetings on
+  a selected external server, independently of Sessio invitations. Deployment
+  prefixes and server websocket/BOSH settings are respected.
+- Cloud model settings report keychain loading, saving and removal failures,
+  discard obsolete connection checks and validate provider addresses.
+- Fixed the local Gemma constrained-decoding adapter for SentencePiece byte
+  tokens and UTF-8 prefixes. Calibrated extraction prompts and supplied relative
+  date hints computed from the call date.
+- Summary deduplication preserves different recipients and meeting dates/times;
+  source-ID cleanup preserves numbers spoken in the conversation.
+- Fixed compressed Qlementine dropdown lists inside styled cards throughout
+  the application, and recursive popup creation during widget initialization.
+
 ## [0.2.38] - 2026-10-29
 
 - Added optional cloud models for the meeting summary, the key points during a

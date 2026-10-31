@@ -42,6 +42,12 @@ TEST(MeetingJoinTest, externalUsesUrl) {
   EXPECT_EQ(a.kind, JoinAction::Kind::Url);
   EXPECT_EQ(a.target, QStringLiteral("https://x.invalid/a"));
 }
+TEST(MeetingJoinTest, ExternalJitsiUsesEmbeddedUrlWithoutBackendReference) {
+  const auto e = makeEvent("ExternalJitsi", "", "https://other.test/prefix/room");
+  const auto action = resolveJoinAction(e, std::nullopt);
+  EXPECT_EQ(action.kind, JoinAction::Kind::JitsiUrl);
+  EXPECT_EQ(action.target, "https://other.test/prefix/room");
+}
 
 TEST(MeetingJoinTest, offlineIsNone) {
   const auto e = makeEvent("", "", "");

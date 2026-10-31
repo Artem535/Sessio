@@ -2,6 +2,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <deque>
+#include <array>
 #include <gtest/gtest.h>
 
 using namespace pcm::prompter;
@@ -253,6 +254,24 @@ TEST(CalendarDays, StartsAtTheGivenDateWithRussianWeekdays) {
   EXPECT_EQ(days.first().toObject(), (QJsonObject{{"date", "2026-10-29"}, {"weekday", "четверг"}}));
   EXPECT_EQ(days.last().toObject()["date"].toString(), "2026-11-18");
   EXPECT_EQ(days.last().toObject()["weekday"].toString(), "среда");
+}
+
+TEST_F(PipelineTest, RelativeDateHintsUseTheCallDateAndCrossYearBoundaries) {
+  for (const auto &[date, tomorrow, monday, thursday] : {
+           std::array<const char *, 4>{"2026-10-30", "2026-10-31", "2026-11-02", "2026-11-05"},
+           std::array<const char *, 4>{"2026-12-31", "2027-01-01", "2027-01-04", "2027-01-07"}}) {
+    request["call_date"] = date;
+    QJsonObject input;
+    processRequest(request, [&](const QString &, const QByteArray &payload, const QByteArray &) -> QJsonValue {
+      input = QJsonDocument::fromJson(payload).object();
+      return QJsonObject{{"events", QJsonArray{}}};
+    });
+    const auto hints = input["date_hints"].toObject();
+    EXPECT_EQ(hints["сегодня"].toString(), date);
+    EXPECT_EQ(hints["завтра"].toString(), tomorrow);
+    EXPECT_EQ(hints["понедельник"].toString(), monday);
+    EXPECT_EQ(hints["четверг"].toString(), thursday);
+  }
 }
 
 TEST_F(PipelineTest, ExtractCallPassesSchemaWithDateEnumFromCallDate) {

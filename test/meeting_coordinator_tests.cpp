@@ -25,6 +25,25 @@ TEST(MeetingCoordinatorTest, DispatchesCreateToExternalUrlProvider) {
   EXPECT_EQ(listener.lastDescriptor->meetingRef, QStringLiteral("https://meet.example.invalid/room-9"));
 }
 
+TEST(MeetingCoordinatorTest, ExternalJitsiCreatesAndCancelsLocallyWithoutSendingBearer) {
+  FakeTokenBackendServer server;
+  pcm::meeting::MeetingCoordinator coordinator(server.baseUrl().toString(), "must-stay-local");
+  QSignalSpy created(&coordinator, &pcm::meeting::MeetingCoordinator::meetingCreated);
+  coordinator.createMeeting(pcm::meeting::ProviderKind::ExternalJitsi,
+                            {.rawMeetingUrl = "https://external.test/deployment/"});
+  ASSERT_EQ(created.size(), 1);
+  const auto descriptor = created.at(0).at(0).value<pcm::meeting::MeetingDescriptor>();
+  ASSERT_TRUE(descriptor.meetingUrl);
+  EXPECT_TRUE(descriptor.meetingUrl->startsWith("https://external.test/deployment/sessio-"));
+  EXPECT_TRUE(descriptor.meetingRef.isEmpty());
+  EXPECT_FALSE(descriptor.invitationState);
+  QSignalSpy canceled(&coordinator, &pcm::meeting::MeetingCoordinator::meetingCanceled);
+  coordinator.cancelMeeting(pcm::meeting::ProviderKind::ExternalJitsi, "");
+  EXPECT_EQ(canceled.size(), 1);
+  QCoreApplication::processEvents();
+  EXPECT_TRUE(server.requestPaths.isEmpty());
+}
+
 TEST(MeetingCoordinatorTest, DispatchesCreateToLiveKitProviderWhichFails) {
   // Base URL/credential are empty (real ones are threaded through in Task
   // 17), so LiveKitMeetingProvider's real HTTP call below fails against an

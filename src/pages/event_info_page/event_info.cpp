@@ -483,6 +483,8 @@ void QEventInfoPage::showInspector(const std::optional<DuckEvent> &event, bool f
   connect(mInspector, &QEventDetailsWidget::editRequested, this, &QEventInfoPage::editSelectedEvent);
   connect(mInspector, &QEventDetailsWidget::openLiveKitMeetingRequested,
           this, &QEventInfoPage::openLiveKitMeetingRequested);
+  connect(mInspector, &QEventDetailsWidget::openExternalJitsiMeetingRequested,
+          this, &QEventInfoPage::openExternalJitsiMeetingRequested);
   // Keep the details at their natural height: a vertically stretched details
   // widget spreads its rows across the whole panel.
   mInspectorLayout->insertWidget(0, mInspector, 0, Qt::AlignTop);
@@ -592,6 +594,8 @@ void QEventInfoPage::openQuickEventDialog(const QTime &startTime,
   layout.setContentsMargins(0, 0, 0, 0);
 
   auto *detailsWidget = new QEventDetailsWidget(&dialog);
+  connect(detailsWidget, &QEventDetailsWidget::openExternalJitsiMeetingRequested, this,
+          [this, &dialog](const QString &url, qint64 id) { dialog.reject(); emit openExternalJitsiMeetingRequested(url, id); });
   detailsWidget->setMeetingCoordinator(mMeetingCoordinator);
   connect(detailsWidget, &QEventDetailsWidget::openLiveKitMeetingRequested, this,
           [this, &dialog](const QString &meetingRef) {
@@ -635,6 +639,8 @@ std::optional<int64_t> QEventInfoPage::createEventFromTemplate(const EventTempla
   layout.setContentsMargins(0, 0, 0, 0);
 
   auto *detailsWidget = new QEventDetailsWidget(&dialog);
+  connect(detailsWidget, &QEventDetailsWidget::openExternalJitsiMeetingRequested, this,
+          [this, &dialog](const QString &url, qint64 id) { dialog.reject(); emit openExternalJitsiMeetingRequested(url, id); });
   detailsWidget->setMeetingCoordinator(mMeetingCoordinator);
   detailsWidget->setDialogMode(true);
   detailsWidget->setConflictChecker(
@@ -680,6 +686,8 @@ void QEventInfoPage::openEventDialog(const std::optional<DuckEvent> &event,
   layout.setContentsMargins(0, 0, 0, 0);
 
   auto *detailsWidget = new QEventDetailsWidget(&dialog);
+  connect(detailsWidget, &QEventDetailsWidget::openExternalJitsiMeetingRequested, this,
+          [this, &dialog](const QString &url, qint64 id) { dialog.reject(); emit openExternalJitsiMeetingRequested(url, id); });
   detailsWidget->setMeetingCoordinator(mMeetingCoordinator);
   connect(detailsWidget, &QEventDetailsWidget::openLiveKitMeetingRequested, this,
           [this, &dialog](const QString &meetingRef) {

@@ -543,6 +543,9 @@ void MyDayBridge::joinEvent(const qint64 eventId) {
     return;
   }
   switch (action.kind) {
+  case pcm::meeting::JoinAction::Kind::JitsiUrl:
+    emit openExternalJitsiMeetingRequested(action.target, eventId);
+    break;
   case pcm::meeting::JoinAction::Kind::LiveKit:
     emit openLiveKitMeetingRequested(action.target);
     break;

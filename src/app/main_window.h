@@ -131,6 +131,7 @@ public:
    * @param meetingRef The meeting reference to preselect on the Calls page.
    */
   void preselectLiveKitMeeting(const QString &meetingRef);
+  void openExternalJitsiMeeting(const QString &url, qint64 eventId);
 
   /**
    * @brief Switches to the Calls tab and prefills an invitation's code and

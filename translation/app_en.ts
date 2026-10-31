@@ -215,6 +215,14 @@
         <translation>Join a meeting</translation>
     </message>
     <message>
+        <source>Sessio invitation</source>
+        <translation>Sessio invitation</translation>
+    </message>
+    <message>
+        <source>Jitsi link</source>
+        <translation>Jitsi link</translation>
+    </message>
+    <message>
         <source>Invitation code or link</source>
         <translation>Invitation code or link</translation>
     </message>
@@ -231,6 +239,10 @@
         <translation>Connect</translation>
     </message>
     <message>
+        <source>Open in browser</source>
+        <translation>Open in browser</translation>
+    </message>
+    <message>
         <source>Your calls today</source>
         <translation>Your calls today</translation>
     </message>
@@ -239,12 +251,20 @@
         <translation>No calls today</translation>
     </message>
     <message>
+        <source>https://meet.example.org/room</source>
+        <translation>https://meet.example.org/room</translation>
+    </message>
+    <message>
         <source>Join</source>
         <translation>Join</translation>
     </message>
     <message>
         <source>Meetings</source>
         <translation>Meetings</translation>
+    </message>
+    <message>
+        <source>Enter a valid HTTPS Jitsi room link without login, query or fragment.</source>
+        <translation>Enter a valid HTTPS Jitsi room link without login, query or fragment.</translation>
     </message>
 </context>
 <context>
@@ -587,6 +607,13 @@
     <message>
         <source>Transcript</source>
         <translation>Transcript</translation>
+    </message>
+</context>
+<context>
+    <name>CallsPage</name>
+    <message>
+        <source>Enter a valid HTTPS Jitsi room link without login, query or fragment.</source>
+        <translation>Enter a valid HTTPS Jitsi room link without login, query or fragment.</translation>
     </message>
 </context>
 <context>
@@ -1389,8 +1416,8 @@
         <translation>The provider rejected the request.</translation>
     </message>
     <message>
-        <source>Optional. Cloud models write the meeting summary, key points and agreements much faster than the local model. Call text is sent to the provider you choose below, so cloud models are off until you accept the terms.</source>
-        <translation>Optional. Cloud models write the meeting summary, key points and agreements much faster than the local model. Call text is sent to the provider you choose below, so cloud models are off until you accept the terms.</translation>
+        <source>Optional. Use a cloud model for meeting summaries, key points and agreements. Call text is sent to the provider you choose below, so cloud models are off until you accept the terms.</source>
+        <translation>Optional. Use a cloud model for meeting summaries, key points and agreements. Call text is sent to the provider you choose below, so cloud models are off until you accept the terms.</translation>
     </message>
     <message>
         <source>Provider (OpenAI-compatible)</source>
@@ -1469,8 +1496,36 @@
         <translation>If the cloud is unavailable, Sessio says so and does not switch to the local model on its own.</translation>
     </message>
     <message>
+        <source>Saving key…</source>
+        <translation>Saving key…</translation>
+    </message>
+    <message>
+        <source>Removing key…</source>
+        <translation>Removing key…</translation>
+    </message>
+    <message>
         <source>Enter the provider address and the model first.</source>
         <translation>Enter the provider address and the model first.</translation>
+    </message>
+    <message>
+        <source>Enter an HTTPS provider address, or HTTP for a local provider, without credentials, query or fragment.</source>
+        <translation>Enter an HTTPS provider address, or HTTP for a local provider, without credentials, query or fragment.</translation>
+    </message>
+    <message>
+        <source>Reading key from the system keychain…</source>
+        <translation>Reading key from the system keychain…</translation>
+    </message>
+    <message>
+        <source>The key could not be read from the system keychain. Unlock the keychain and reopen settings to retry.</source>
+        <translation>The key could not be read from the system keychain. Unlock the keychain and reopen settings to retry.</translation>
+    </message>
+    <message>
+        <source>The key could not be removed from the system keychain. Try again.</source>
+        <translation>The key could not be removed from the system keychain. Try again.</translation>
+    </message>
+    <message>
+        <source>The key could not be saved in the system keychain. Unlock the keychain and enter it again.</source>
+        <translation>The key could not be saved in the system keychain. Unlock the keychain and enter it again.</translation>
     </message>
     <message>
         <source>Cloud models are enabled for %1.</source>
@@ -1842,6 +1897,10 @@
         <translation>Check devices and join</translation>
     </message>
     <message>
+        <source>Open in browser</source>
+        <translation>Open in browser</translation>
+    </message>
+    <message>
         <source>Meeting summary</source>
         <translation>Meeting summary</translation>
     </message>
@@ -1854,12 +1913,20 @@
         <translation>Transcripts</translation>
     </message>
     <message>
-        <source>Join a Sessio or Jitsi call using the invitation from its organizer.</source>
-        <translation>Join a Sessio or Jitsi call using the invitation from its organizer.</translation>
+        <source>Sessio invitation</source>
+        <translation>Sessio invitation</translation>
+    </message>
+    <message>
+        <source>Jitsi link</source>
+        <translation>Jitsi link</translation>
     </message>
     <message>
         <source>Paste the Sessio invitation link, or enter its code and passcode. The invitation selects Jitsi automatically.</source>
         <translation>Paste the Sessio invitation link, or enter its code and passcode. The invitation selects Jitsi automatically.</translation>
+    </message>
+    <message>
+        <source>Paste a room link from a Jitsi server that allows guest access. Browser sign-in, passwords and lobby admission are not supported here.</source>
+        <translation>Paste a room link from a Jitsi server that allows guest access. Browser sign-in, passwords and lobby admission are not supported here.</translation>
     </message>
     <message>
         <source>To host a Jitsi call: create an event in Calendar, enable Online, select Jitsi, and save. Use Copy invite to send the invitation to participants.</source>
@@ -1868,6 +1935,10 @@
     <message>
         <source>Invitation code or link</source>
         <translation>Invitation code or link</translation>
+    </message>
+    <message>
+        <source>https://meet.example.org/room</source>
+        <translation>https://meet.example.org/room</translation>
     </message>
     <message>
         <source>Passcode</source>
@@ -2680,6 +2751,18 @@
         <translation>Provider</translation>
     </message>
     <message>
+        <source>Sessio</source>
+        <translation>Sessio</translation>
+    </message>
+    <message>
+        <source>External server</source>
+        <translation>External server</translation>
+    </message>
+    <message>
+        <source>Jitsi server</source>
+        <translation>Jitsi server</translation>
+    </message>
+    <message>
         <source>Copy passcode</source>
         <translation>Copy passcode</translation>
     </message>
@@ -2784,8 +2867,28 @@
         <translation>Failed to create the LiveKit meeting: %1</translation>
     </message>
     <message>
+        <source>This meeting keeps its existing Jitsi link.</source>
+        <translation>This meeting keeps its existing Jitsi link.</translation>
+    </message>
+    <message>
+        <source>Set an external Jitsi server in Settings → Calls before creating this meeting.</source>
+        <translation>Set an external Jitsi server in Settings → Calls before creating this meeting.</translation>
+    </message>
+    <message>
+        <source>Server: %1. Its administrator controls access to the room.</source>
+        <translation>Server: %1. Its administrator controls access to the room.</translation>
+    </message>
+    <message>
+        <source>Sessio creates the meeting and invitation.</source>
+        <translation>Sessio creates the meeting and invitation.</translation>
+    </message>
+    <message>
         <source>Recurring meetings use LiveKit for now</source>
         <translation>Recurring meetings use LiveKit for now</translation>
+    </message>
+    <message>
+        <source>Set a valid external Jitsi server in Settings → Calls before creating this meeting.</source>
+        <translation>Set a valid external Jitsi server in Settings → Calls before creating this meeting.</translation>
     </message>
     <message>
         <source>Overlaps with an existing event, %1.</source>
@@ -3550,10 +3653,6 @@ See you!</translation>
         <translation>Language</translation>
     </message>
     <message>
-        <source>LiveKit</source>
-        <translation>LiveKit</translation>
-    </message>
-    <message>
         <source>System default</source>
         <translation>System default</translation>
     </message>
@@ -3898,6 +3997,22 @@ See you!</translation>
     <message>
         <source>Name in calls</source>
         <translation>Name in calls</translation>
+    </message>
+    <message>
+        <source>External Jitsi server</source>
+        <translation>External Jitsi server</translation>
+    </message>
+    <message>
+        <source>Used when creating external Jitsi meetings. The server must allow guest access.</source>
+        <translation>Used when creating external Jitsi meetings. The server must allow guest access.</translation>
+    </message>
+    <message>
+        <source>Enter a valid HTTPS server address without login, query or fragment.</source>
+        <translation>Enter a valid HTTPS server address without login, query or fragment.</translation>
+    </message>
+    <message>
+        <source>Saved</source>
+        <translation>Saved</translation>
     </message>
     <message>
         <source>Stop transcription before deleting its data.</source>
@@ -4963,6 +5078,13 @@ Your previous data was kept.</translation>
     <message>
         <source>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</source>
         <translation>Some meetings would move to other dates or times. Pick another timezone, or cancel and keep the series as it is.</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::meeting::MeetingCoordinator</name>
+    <message>
+        <source>Enter a valid HTTPS Jitsi server address.</source>
+        <translation>Enter a valid HTTPS Jitsi server address.</translation>
     </message>
 </context>
 <context>

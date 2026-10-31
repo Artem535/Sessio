@@ -178,7 +178,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  QCoreApplication::setApplicationVersion("0.2.37");
+  QCoreApplication::setApplicationVersion("0.2.39");
   // Before anything that can log: on Windows this file and the crash dump are
   // the only trace a hang or crash leaves.
   const QString logDir =
@@ -560,10 +560,12 @@ void Application::refreshUpcomingMeetings() {
       }
     }
     const auto kind = pcm::meeting::providerKindFromString(event.provider_kind.value_or(""));
-    if (!kind || !pcm::meeting::isBackendHosted(*kind)) {
+    const bool externalJitsi = kind == pcm::meeting::ProviderKind::ExternalJitsi;
+    if (!kind || (!pcm::meeting::isBackendHosted(*kind) && !externalJitsi)) {
       continue;
     }
-    if (!event.meeting_ref.has_value() || event.meeting_ref->empty() ||
+    if ((!externalJitsi && (!event.meeting_ref.has_value() || event.meeting_ref->empty())) ||
+        (externalJitsi && event.meeting_url.empty()) ||
         !isEligibleStatus(event.event_stat_id)) {
       continue;
     }
@@ -572,7 +574,9 @@ void Application::refreshUpcomingMeetings() {
     }
 
     UpcomingMeeting meeting;
-    meeting.meetingRef = QString::fromStdString(*event.meeting_ref);
+    meeting.meetingRef = externalJitsi ? QStringLiteral("external-jitsi:%1").arg(event.id)
+                                     : QString::fromStdString(*event.meeting_ref);
+    if (externalJitsi) meeting.jitsiUrl = QString::fromStdString(event.meeting_url);
     meeting.title = QString::fromStdString(event.name.value_or(""));
     meeting.startTime = QDateTime::fromMSecsSinceEpoch(event.start_date.value_or(0));
     meeting.joinEnabled = true;
@@ -1146,6 +1150,8 @@ void Application::connectSignals() {
             &Application::refreshUpcomingMeetings);
     connect(page, &QEventInfoPage::openLiveKitMeetingRequested, mMainWindow.get(),
             &MainWindow::preselectLiveKitMeeting);
+    connect(page, &QEventInfoPage::openExternalJitsiMeetingRequested, this, &Application::refreshUpcomingMeetings);
+    connect(page, &QEventInfoPage::openExternalJitsiMeetingRequested, mMainWindow.get(), &MainWindow::openExternalJitsiMeeting);
   }
 
   // «Мой день» start page: "Join" runs the same two steps as the Calendar's Open Meeting.
@@ -1156,6 +1162,9 @@ void Application::connectSignals() {
             &Application::refreshUpcomingMeetings);
     connect(myDay->bridge(), &pcm::my_day::MyDayBridge::openLiveKitMeetingRequested,
             mMainWindow.get(), &MainWindow::preselectLiveKitMeeting);
+    connect(myDay->bridge(), &pcm::my_day::MyDayBridge::openExternalJitsiMeetingRequested, this, &Application::refreshUpcomingMeetings);
+    connect(myDay->bridge(), &pcm::my_day::MyDayBridge::openExternalJitsiMeetingRequested,
+            mMainWindow.get(), &MainWindow::openExternalJitsiMeeting);
   }
 
   // Specialist Calls tab: when a call for one of the specialist's own events
