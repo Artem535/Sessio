@@ -9,6 +9,7 @@ WORKDIR /src
 COPY . .
 RUN cmake -S . -B build -G Ninja \
       -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
+      -DPCM_SCHEDULE_ZONEINFO_DIR=/usr/share/pcm-schedule/zoneinfo \
       -DCMAKE_BUILD_TYPE=Release -DPCM_TB_BUILD_TESTS=OFF \
     && cmake --build build
 
@@ -18,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && useradd --system --create-home --shell /usr/sbin/nologin token-backend \
     && mkdir -p /data && chown token-backend:token-backend /data
 COPY --from=build /src/build/pcm_token_backend /usr/local/bin/pcm_token_backend
+COPY --from=build /src/build/vcpkg_installed/x64-linux/share/libical/zoneinfo /usr/share/pcm-schedule/zoneinfo
 ENV DB_PATH=/data/token-backend.sqlite3
 VOLUME ["/data"]
 EXPOSE 8080

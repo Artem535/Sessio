@@ -1,6 +1,9 @@
 #include "main_window.h"
+#include "my_day_bridge.h"
 #include "../widgets/app_settings.h"
 #include "ui/app/ui_mainwindow.h"
+#include "transcript_page.h"
+#include "transcript_list_page.h"
 
 #include <oclero/qlementine/widgets/AboutDialog.hpp>
 #include <oclero/qlementine/widgets/Switch.hpp>
@@ -40,11 +43,13 @@ MainWindow::MainWindow(QWidget *parent)
   titleLayout->addWidget(titleIconLabel);
   titleLayout->addWidget(titleTextLabel);
   titleLayout->addStretch();
+  mTitleWidget = titleWidget;
   mUi->gridLayout->replaceWidget(mUi->label, titleWidget);
   mUi->label->hide();
   mUi->label->deleteLater();
 
   // Create navigation buttons
+  mBtnMyDay = new TabButton(QIcon(":/icons/sun-solid-full.svg"), tr(": NAV_MY_DAY"), this);
   mBtnCalendar =
       new TabButton(QIcon(":/icons/calendar-solid-full.svg"), tr(": NAV_CALENDAR"), this);
   mBtnClients =
@@ -55,15 +60,22 @@ MainWindow::MainWindow(QWidget *parent)
       new TabButton(QIcon(":/icons/users-gear-solid-full.svg"), tr(": NAV_DETAILS"), this);
   mBtnNotes =
       new TabButton(QIcon(":/icons/notes.svg"), tr("Notes"), this);
+  mBtnCalls =
+      new TabButton(QIcon(":/icons/video-solid-full.svg"), tr("Meetings"), this);
+  mBtnTranscripts = new TabButton(QIcon(":/icons/notes.svg"), tr("Transcripts"), this);
+  mBtnTranscripts->hide();
 
   // Add buttons to the vertical layout
+  mUi->verticalLayout->addWidget(mBtnMyDay);
   mUi->verticalLayout->addWidget(mBtnCalendar);
   mUi->verticalLayout->addWidget(mBtnClients);
   mUi->verticalLayout->addWidget(mBtnAnalytics);
   mUi->verticalLayout->addWidget(mBtnProfile);
   mUi->verticalLayout->addWidget(mBtnNotes);
+  mUi->verticalLayout->addWidget(mBtnCalls);
+  mUi->verticalLayout->addWidget(mBtnTranscripts);
   mBtnProfile->hide();
-  mBtnNotes->hide();
+  mBtnNotes->show();
 
   mBtnBackToClients = new QPushButton(tr("Back to clients"), this);
   mBtnBackToClients->setFlat(true);
@@ -117,6 +129,21 @@ void MainWindow::addClientInfoPage(std::shared_ptr<QClientModel> model) {
 }
 
 
+void MainWindow::addMyDayPage(std::shared_ptr<pcm::database::Database> db, QTimelineModel *model,
+                              pcm::meeting::SeriesCallService *seriesCalls) {
+  const auto page = new pcm::my_day::MyDayPage(std::move(db), model, seriesCalls, this);
+  mPages.insertOrAssign(Pages::myDay, page);
+
+  const int index = mUi->stackedWidget->addWidget(page);
+  mPagesIndex.insertOrAssign(Pages::myDay, index);
+  connect(page->bridge(), &pcm::my_day::MyDayBridge::openEventRequested, this,
+          &MainWindow::returnToEvent);
+  connect(page->bridge(), &pcm::my_day::MyDayBridge::openClientRequested, this,
+          &MainWindow::openClientById);
+  // Start page: lands here regardless of the order pages were added in.
+  showPage(Pages::myDay, mBtnMyDay);
+}
+
 void MainWindow::addEventInfoPage(QTimelineModel *model,
                                   pcm::meeting::MeetingCoordinator *meetingCoordinator) {
   const auto page = new QEventInfoPage(model, meetingCoordinator, this);
@@ -124,6 +151,8 @@ void MainWindow::addEventInfoPage(QTimelineModel *model,
 
   const int index = mUi->stackedWidget->addWidget(page);
   mPagesIndex.insertOrAssign(Pages::eventInfo, index);
+  // Day|Month switch and "New meeting" live in the top row next to the title.
+  setPageCustomWidget(Pages::eventInfo, page->headerControls());
 }
 
 void MainWindow::addAnalyticsPage(std::shared_ptr<pcm::database::Database> db) {
@@ -146,11 +175,93 @@ void MainWindow::addClientCardPage(std::shared_ptr<pcm::database::Database> db) 
 
 void MainWindow::addClientNotesPage(std::shared_ptr<pcm::database::Database> db) {
   const auto page = new ClientNotesPage(std::move(db), this);
+  page->enableQuickWorkspace();
+  setPageCustomWidget(Pages::clientNotes, page->headerControls());
   mPages.insertOrAssign(Pages::clientNotes, page);
 
   const int index = mUi->stackedWidget->addWidget(page);
   mPagesIndex.insertOrAssign(Pages::clientNotes, index);
-  setPageCustomWidget(Pages::clientNotes, mBtnBackToClients);
+}
+
+void MainWindow::addCallsPage(pcm::video::DeviceManager *deviceManager,
+                              pcm::tokenclient::TokenBackendClient *tokenClient,
+                              std::function<QString()> bearerCredentialProvider) {
+  const auto page = new CallsPage(/*specialistMode=*/true, deviceManager, tokenClient, this);
+  page->enableQuickWorkspace();
+  setPageCustomWidget(Pages::calls, page->headerControls());
+  page->setBearerCredentialProvider(std::move(bearerCredentialProvider));
+  mPages.insertOrAssign(Pages::calls, page);
+  connect(page, &CallsPage::fullscreenChanged, this, &MainWindow::setCallFullscreen);
+
+  const int index = mUi->stackedWidget->addWidget(page);
+  mPagesIndex.insertOrAssign(Pages::calls, index);
+}
+
+void MainWindow::setCallFullscreen(bool fullscreen) {
+  if (fullscreen == mCallFullscreen) {
+    return;
+  }
+  mCallFullscreen = fullscreen;
+  if (fullscreen) {
+    mChromeVisibility.clear();
+    const auto hide = [this](QWidget *widget) {
+      if (!widget) return;
+      mChromeVisibility.insert(widget, widget->isVisibleTo(this));
+      widget->hide();
+    };
+    hide(mTitleWidget);
+    hide(mUi->pageCustomWidgetHost);
+    hide(statusBar());
+    for (int i = 0; i < mUi->verticalLayout->count(); ++i) {
+      hide(mUi->verticalLayout->itemAt(i)->widget());
+    }
+    mGridMargins = mUi->gridLayout->contentsMargins();
+    mUi->gridLayout->setContentsMargins(0, 0, 0, 0);
+  } else {
+    for (auto it = mChromeVisibility.cbegin(); it != mChromeVisibility.cend(); ++it) {
+      it.key()->setVisible(it.value());
+    }
+    mChromeVisibility.clear();
+    mUi->gridLayout->setContentsMargins(mGridMargins);
+  }
+}
+
+void MainWindow::registerTranscriptPage(QWidget *page) {
+  if (mPages.contains(Pages::transcript)) return;
+  mPages.insertOrAssign(Pages::transcript, page);
+  mPagesIndex.insertOrAssign(Pages::transcript, mUi->stackedWidget->addWidget(page));
+  if (auto *transcript = qobject_cast<TranscriptPage *>(page)) setPageCustomWidget(Pages::transcript, transcript->headerControls());
+}
+void MainWindow::openTranscriptPage() { showPage(Pages::transcript, mBtnCalendar); }
+void MainWindow::registerTranscriptListPage(QWidget *page) {
+  if (mPages.contains(Pages::transcriptList)) return;
+  mPages.insertOrAssign(Pages::transcriptList, page);
+  mPagesIndex.insertOrAssign(Pages::transcriptList, mUi->stackedWidget->addWidget(page));
+  if (auto *library = qobject_cast<TranscriptListPage *>(page)) setPageCustomWidget(Pages::transcriptList, library->headerControls());
+  mBtnTranscripts->show();
+  connect(mBtnTranscripts, &QPushButton::clicked, this, &MainWindow::openTranscriptListPage);
+}
+void MainWindow::openTranscriptListPage() { showPage(Pages::transcriptList, mBtnTranscripts); }
+void MainWindow::returnToEvent(int64_t eventId, qint64 dayMs) {
+  showPage(Pages::eventInfo, mBtnCalendar);
+  if (auto *page = dynamic_cast<QEventInfoPage *>(getPage(Pages::eventInfo)))
+    page->showEventOnDay(eventId, dayMs);
+}
+
+void MainWindow::openClientById(const qint64 clientId) {
+  if (!mDb) return;
+  auto *card = dynamic_cast<QClientInfoCardPage *>(mPages.value(Pages::clientCard, nullptr));
+  if (!card) return;
+  std::unique_ptr<DuckClient> client;
+  try {
+    client = mDb->get_client(clientId);
+  } catch (const std::exception &) {
+    return;
+  }
+  if (!client) return;
+  card->setClientInfo(*client);
+  setClientNavigationVisible(Pages::clientCard, true);
+  showPage(Pages::clientCard, mBtnProfile);
 }
 
 void MainWindow::setDatabase(std::shared_ptr<pcm::database::Database> db) {
@@ -169,6 +280,8 @@ void MainWindow::connectSignals() {
       dynamic_cast<QEventInfoPage *>(mPages[Pages::eventInfo]);
 
   // Connect navigation buttons to switch pages
+  connect(mBtnMyDay, &QPushButton::clicked,
+          [this]() { showPage(Pages::myDay, mBtnMyDay); });
   connect(mBtnCalendar, &QPushButton::clicked,
           [this]() { showPage(Pages::eventInfo, mBtnCalendar); });
 
@@ -182,6 +295,8 @@ void MainWindow::connectSignals() {
           [this]() { showPage(Pages::clientCard, mBtnProfile); });
   connect(mBtnNotes, &QPushButton::clicked,
           [this]() { showPage(Pages::clientNotes, mBtnNotes); });
+  connect(mBtnCalls, &QPushButton::clicked,
+          [this]() { showPage(Pages::calls, mBtnCalls); });
 
   // When a client is selected in the list, show its info in the client card page
   connect(clientInfoPage, &ClientInfo::displayButtonClicked, clientCardPage,
@@ -240,7 +355,7 @@ void MainWindow::connectSignals() {
             emit provideClientEventPairSave(clientId, eventId);
           });
 
-  showPage(Pages::eventInfo, mBtnCalendar);
+  showPage(Pages::myDay, mBtnMyDay);
 }
 
 QWidget *MainWindow::getPage(const Pages page) { return mPages[page]; }
@@ -258,16 +373,39 @@ void MainWindow::setPageCustomWidget(const Pages page, QWidget *widget) {
   }
 }
 
+void MainWindow::preselectLiveKitMeeting(const QString &meetingRef) {
+  showPage(Pages::calls, mBtnCalls);
+  if (auto *callsPage = dynamic_cast<CallsPage *>(mPages.value(Pages::calls, nullptr))) {
+    callsPage->preselectOwnMeeting(meetingRef);
+  }
+}
+
+void MainWindow::openJoinLink(const QString &code, const QString &passcode) {
+  showPage(Pages::calls, mBtnCalls);
+  if (auto *callsPage = dynamic_cast<CallsPage *>(mPages.value(Pages::calls, nullptr))) {
+    callsPage->prefillJoinCode(code, passcode);
+  }
+}
+
+void MainWindow::openExternalJitsiMeeting(const QString &url, qint64 eventId) {
+  showPage(Pages::calls, mBtnCalls);
+  if (auto *calls = dynamic_cast<CallsPage *>(mPages.value(Pages::calls, nullptr)))
+    calls->joinExternalJitsi(url, eventId > 0 ? std::optional<int64_t>(eventId) : std::nullopt);
+}
+
 void MainWindow::initDefaultStyle() const {
-  checkButton(mBtnCalendar);
+  checkButton(mBtnMyDay);
 }
 
 void MainWindow::checkButton(QPushButton *btn) const {
+  mBtnMyDay->setChecked(false);
   mBtnCalendar->setChecked(false);
   mBtnClients->setChecked(false);
   mBtnAnalytics->setChecked(false);
   mBtnProfile->setChecked(false);
   mBtnNotes->setChecked(false);
+  mBtnCalls->setChecked(false);
+  mBtnTranscripts->setChecked(false);
   btn->setChecked(true);
 }
 
@@ -314,7 +452,7 @@ void MainWindow::setClientNavigationVisible(const Pages page,
       break;
     case Pages::clientNotes:
       if (mBtnNotes) {
-        mBtnNotes->setVisible(visible);
+        mBtnNotes->show();
       }
       break;
     default:
@@ -330,19 +468,16 @@ void MainWindow::setupUtilityButtons() {
     button->setCursor(Qt::PointingHandCursor);
     button->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     button->setIconSize(QSize(16, 16));
+    // The colour is taken from the live palette (no hard-coded value), so it
+    // follows the light and dark Qlementine themes; a style sheet without any
+    // colour would leave the text unreadable.
     button->setStyleSheet(
         "QPushButton {"
-        " color: rgba(255, 255, 255, 0.52);"
+        " color: palette(window-text);"
         " background: transparent;"
         " border: none;"
         " padding: 6px 10px;"
         " text-align: left;"
-        "}"
-        "QPushButton:hover {"
-        " color: rgba(255, 255, 255, 0.78);"
-        "}"
-        "QPushButton:pressed {"
-        " color: rgba(255, 255, 255, 0.92);"
         "}");
     return button;
   };
@@ -365,8 +500,11 @@ void MainWindow::setupUtilityButtons() {
 
 void MainWindow::openSettingsDialog() {
   SettingsDialog dialog(mDb, this);
+  dialog.setTranscriptionActiveProvider(mTranscriptionActive);
+  dialog.setRoleSwitcher(mRoleSwitcher);
   dialog.exec();
   refreshPageAppearance();
+  emit settingsSaved();
 }
 
 void MainWindow::openAboutDialog() {
@@ -384,6 +522,8 @@ void MainWindow::openAboutDialog() {
 
 QString MainWindow::pageTitle(const Pages page) const {
   switch (page) {
+    case Pages::myDay:
+      return tr("My day");
     case Pages::clientInfo:
       return tr("Clients");
     case Pages::eventInfo:
@@ -394,6 +534,12 @@ QString MainWindow::pageTitle(const Pages page) const {
       return tr("Details");
     case Pages::clientNotes:
       return tr("Notes");
+    case Pages::calls:
+      return tr("Meetings");
+    case Pages::transcript:
+      return tr("Transcript");
+    case Pages::transcriptList:
+      return tr("Transcripts");
   }
 
   return tr("Page");

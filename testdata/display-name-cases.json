@@ -1,0 +1,10 @@
+[
+  {"value":"Гость","accepted":true,"normalised":"Гость"},
+  {"value":" Гость　","accepted":true,"normalised":"Гость"},
+  {"value":"😀","accepted":true,"normalised":"😀"},
+  {"value":"","accepted":false,"normalised":""},
+  {"value":"   ","accepted":false,"normalised":""},
+  {"value":"a\u0085","accepted":false,"normalised":""},
+  {"value":"a\u0000b","accepted":false,"normalised":""},
+  {"value":"a\u007fb","accepted":false,"normalised":""}
+]

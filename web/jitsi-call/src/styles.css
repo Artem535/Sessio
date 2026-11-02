@@ -1,0 +1,17 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #14161a; color: #e8eaed; font: 14px system-ui, sans-serif; }
+#app { display: flex; flex-direction: column; height: 100%; }
+#status { padding: 6px 12px; font-size: 12px; opacity: 0.8; min-height: 28px; }
+#grid { flex: 1; display: grid; gap: 8px; padding: 8px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); grid-auto-rows: 1fr; min-height: 0; }
+.tile { position: relative; background: #22262d; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 0; }
+.tile video { width: 100%; height: 100%; object-fit: cover; }
+.tile.local video { transform: scaleX(-1); }
+.tile .name { position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 4px; background: rgba(0, 0, 0, 0.55); font-size: 12px; }
+.tile .avatar { font-size: 40px; opacity: 0.5; }
+.tile.has-video .avatar { display: none; }
+#empty { opacity: 0.6; align-self: center; justify-self: center; grid-column: 1 / -1; text-align: center; }
+#controls { display: flex; justify-content: center; gap: 8px; padding: 10px; }
+#controls button { padding: 8px 16px; border: 0; border-radius: 6px; background: #343a44; color: inherit; cursor: pointer; font: inherit; }
+#controls button[aria-pressed="false"] { background: #6b2b2b; }
+#controls button.leave { background: #b3261e; }

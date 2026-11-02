@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Sessio — настройка видеозвонков (макет)</title>
+<meta name="viewport" content="width=1280">
+<style>
+@font-face { font-family:"SessioSans"; src:url("assets/fonts/NotoSans-Regular.ttf"); font-weight:400; }
+@font-face { font-family:"SessioSans"; src:url("assets/fonts/NotoSans-Medium.ttf"); font-weight:500; }
+@font-face { font-family:"SessioSans"; src:url("assets/fonts/NotoSans-SemiBold.ttf"); font-weight:600; }
+@font-face { font-family:"SessioSans"; src:url("assets/fonts/NotoSans-Bold.ttf"); font-weight:700; }
+@font-face { font-family:"SessioSans"; src:url("assets/fonts/NotoSans-ExtraBold.ttf"); font-weight:800; }
+:root {
+  --bg:#282b33; --card:#30343f; --input:#1e2026; --inputb:#353a47; --gray:#4c5368; --gray2:#3b4050;
+  --blue:#5086ff; --line:#70747e; --muted:#a2a6b3; --text:#f2f3f7; --edge:#b8a8f4; --red:#ff2d2d;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html,body { width:1280px; height:720px; overflow:hidden; background:#000; color:var(--text);
+  font-family:"SessioSans","Noto Sans",sans-serif; font-size:13px; }
+#stage { position:absolute; left:0; top:0; width:1280px; height:720px; overflow:hidden; background:#0c0d11; transform-origin:0 0; }
+.hide { display:none !important; }
+.abs { position:absolute; }
+
+/* ---------- window ---------- */
+#win { position:absolute; left:3px; top:3px; right:3px; bottom:3px; background:var(--bg); border:2px solid var(--edge); border-radius:12px; overflow:hidden; }
+#sidebar { position:absolute; left:0; top:0; width:176px; bottom:0; }
+#brand { position:absolute; left:16px; top:18px; display:flex; align-items:center; gap:9px; font-size:26px; font-weight:400; letter-spacing:.2px; }
+#brand img { width:22px; height:22px; }
+.tab { position:absolute; left:15px; width:138px; height:25px; display:flex; align-items:center; gap:10px; padding-left:10px; border:2px solid transparent; border-radius:12px; font-size:16.5px; font-weight:700; line-height:1; white-space:nowrap; }
+.tab img { width:13px; height:13px; }
+.tab.sel { color:#4c88ff; border-color:#4c88ff; }
+.stab { position:absolute; left:20px; display:flex; align-items:center; gap:7px; font-size:12px; font-weight:700; color:#b0b3be; }
+.stab img { width:14px; height:14px; }
+#content { position:absolute; left:176px; top:0; right:0; bottom:0; }
+
+/* ---------- calendar page ---------- */
+#calw { position:absolute; left:4px; top:76px; width:400px; height:262px; background:var(--card); border-radius:12px; }
+.calhead { position:absolute; left:10px; right:10px; top:10px; height:26px; display:flex; align-items:center; justify-content:space-between; font-size:12px; font-weight:700; }
+.calhead i { width:24px; height:24px; border-radius:6px; background:var(--gray2); display:flex; align-items:center; justify-content:center; font-style:normal; font-size:15px; line-height:1; font-weight:700; }
+#calGrid { position:absolute; left:10px; right:10px; top:46px; display:grid; grid-template-columns:repeat(7,1fr); text-align:center; }
+#calGrid .wd { height:26px; line-height:26px; font-size:10.5px; }
+#calGrid .wd.we { color:var(--red); }
+#calGrid .d { height:31px; line-height:31px; font-size:11.5px; position:relative; }
+#calGrid .d.o { color:#575b69; }
+#calGrid .d.we { color:var(--red); }
+#calGrid .d.we.o { color:#6b3a42; }
+#calGrid .d.sel:before { content:""; position:absolute; left:50%; top:5px; width:42px; height:21px; margin-left:-21px; border-radius:6px; background:#5b7be9; }
+#calGrid .d.sel:after { content:""; position:absolute; left:50%; top:24px; width:30px; height:2px; margin-left:-15px; background:#9bb2ff; }
+#calGrid .d.sel { color:#fff; }
+#calGrid .d span { position:relative; z-index:1; }
+#daySum { position:absolute; left:18px; top:362px; width:380px; }
+#daySum .h { font-size:12px; font-weight:700; }
+#daySum .l { margin-top:5px; font-size:12px; color:#bfc2cc; line-height:1.55; }
+#slots { position:absolute; left:4px; top:532px; width:400px; }
+#slots .tt { font-size:12px; font-weight:700; margin-bottom:6px; }
+#slots .grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+#slots .s { height:32px; border-radius:16px; background:#333847; border:1px solid #444a5c; text-align:center; line-height:30px; font-size:12px; font-weight:700; }
+#tl { position:absolute; left:412px; top:76px; width:600px; height:614px; border:1px solid #3d4250; border-radius:12px; overflow:hidden; background:var(--bg); }
+#tlInner { position:absolute; left:0; right:0; top:0; height:1440px; transform:translateY(-720px); }
+#tlInner .hr { position:absolute; left:0; right:0; height:0; border-top:1.5px solid var(--line); }
+#tlInner .hl { position:absolute; left:5px; font-size:10.5px; color:#b8bbc6; margin-top:4px; }
+#tlInner .vsol { position:absolute; left:40px; top:0; bottom:0; border-left:2px solid var(--line); }
+#tlInner .vdash { position:absolute; left:320px; top:0; bottom:0; border-left:1px dashed #9a9ea8; }
+#nowLine { position:absolute; left:40px; right:0; border-top:2px solid #e96b72; }
+.evb { position:absolute; left:46px; right:8px; border-radius:6px; padding:5px 9px; background:#2c4c93; border-left:4px solid #5086ff; font-size:12px; font-weight:700; overflow:hidden; line-height:1.35; }
+.evb small { display:block; font-weight:400; font-size:10.5px; color:#d1dcfb; }
+#btnAdd { position:absolute; left:1021px; top:76px; width:40px; height:40px; border-radius:8px; background:var(--gray); display:flex; align-items:center; justify-content:center; }
+#btnAdd img { width:17px; height:17px; }
+
+/* ---------- dialogs ---------- */
+#scrim { position:absolute; inset:0; background:#0007; z-index:20; }
+.dlg { position:absolute; background:var(--bg); border:2px solid var(--edge); border-radius:12px; z-index:21; box-shadow:0 18px 50px #000b; }
+.btn { height:28px; padding:0 14px; border-radius:6px; background:var(--gray); font-size:12px; font-weight:700; line-height:28px; text-align:center; white-space:nowrap; }
+.btn.pri { background:var(--blue); }
+.btn.dis { opacity:.38; }
+.inp { height:28px; border-radius:5px; background:var(--input); border:1px solid var(--inputb); padding:0 8px; display:flex; align-items:center; font-size:12.5px; white-space:nowrap; }
+.inp.foc { border:1.5px solid #3f82ff; box-shadow:0 0 0 2px #3a82ff40; }
+.inp .ph { color:#5f6474; }
+.inp.dis { color:#6b6f7c; }
+.caret { display:inline-block; width:1.5px; height:15px; background:#fff; margin-left:1px; }
+.sel-t { background:#2f6bd6; }
+.spin { position:relative; padding-right:26px; }
+.spin:after { content:"⌃\A⌄"; white-space:pre; position:absolute; right:3px; top:2px; bottom:2px; width:18px; border-radius:4px; background:var(--gray); font-size:9px; line-height:9px; text-align:center; padding-top:2px; }
+.combo { height:28px; border-radius:5px; background:var(--gray); padding:0 9px; display:flex; align-items:center; justify-content:space-between; font-size:12.5px; }
+.combo:after { content:"⌃\A⌄"; white-space:pre; font-size:9px; line-height:8px; color:#d8dbe6; text-align:center; }
+.seg { display:flex; height:32px; border-radius:8px; background:#333848; padding:3px; gap:2px; }
+.seg > div { flex:1; border-radius:6px; text-align:center; line-height:26px; font-size:12px; color:#dfe1ea; }
+.seg > div.on { background:var(--blue); color:#fff; }
+.tg { width:30px; height:16px; border-radius:8px; background:var(--gray); position:relative; flex:none; }
+.tg:after { content:""; position:absolute; left:2px; top:2px; width:12px; height:12px; border-radius:50%; background:#fff; }
+.tg.on { background:var(--blue); } .tg.on:after { left:16px; }
+.wdb { width:36px; height:24px; border-radius:5px; background:#363b46; border:1px solid #566070; text-align:center; line-height:22px; font-weight:600; font-size:11px; }
+.wdb.on { background:#4f83ff; border-color:#4f83ff; }
+
+/* event dialog */
+#evDlg { left:352px; top:22px; width:576px; padding:14px 14px 14px 14px; }
+.er { display:flex; align-items:center; min-height:34px; }
+.er > .lb { width:104px; flex:none; font-size:12px; color:#e4e6ee; }
+.er > .ct { flex:1; display:flex; align-items:center; gap:8px; }
+.er .full { flex:1; }
+#evStatus { margin:2px 0 4px 104px; font-size:11.5px; line-height:1.5; color:#d3d6e0; }
+#evFoot { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+
+/* settings dialog */
+#stDlg { left:340px; top:24px; width:600px; height:668px; padding:16px 16px; }
+#stDlg h2 { font-size:13px; font-weight:700; margin-bottom:10px; }
+#stTabs { display:flex; height:34px; border-radius:9px; background:#333848; padding:3px; gap:2px; margin-bottom:12px; }
+#stTabs div { flex:1; text-align:center; line-height:28px; font-size:11px; white-space:nowrap; border-radius:7px; color:#e3e5ed; }
+#stTabs div.on { background:var(--blue); color:#fff; }
+.sh { font-size:13.5px; font-weight:700; margin:8px 0 7px; }
+.sbox { background:var(--card); border:1px solid #3d4250; border-radius:9px; padding:13px 14px; margin-bottom:10px; }
+.sbox .fl { font-weight:700; font-size:12.5px; margin-bottom:3px; }
+.sbox .fd { font-size:12px; color:#b6b9c5; margin-bottom:7px; }
+.sbox .inp { margin-bottom:9px; }
+#stClose { position:absolute; right:16px; bottom:14px; }
+
+/* device check */
+#devWrap { position:absolute; left:96px; top:187px; width:882px; }
+#devTitle { font-size:14px; font-weight:700; margin-bottom:31px; }
+#prev { position:relative; width:360px; height:202px; border-radius:6px; background:radial-gradient(ellipse at 50% 40%,#4a4f5d,#23262e); overflow:hidden; }
+#prevHint { position:absolute; left:0; top:264px; font-size:12px; color:#9a9eac; }
+#devCard { position:absolute; left:376px; top:50px; width:506px; height:225px; background:var(--card); border:1px solid #3d4250; border-radius:10px; padding:14px 16px; }
+#devCard .cap { font-size:12px; color:#b6b9c5; margin-bottom:5px; }
+#meter { display:flex; gap:4px; margin:6px 0 11px; }
+#meter i { flex:1; height:6px; border-radius:3px; background:#4a4e5b; }
+#meter i.on { background:#3cb372; }
+#devBtns { position:absolute; right:0; top:305px; display:flex; gap:10px; }
+.pill { height:40px; border-radius:20px; padding:0 24px; line-height:40px; font-size:12px; font-weight:700; background:#3d4150; }
+.pill.pri { background:var(--blue); padding:0 29px; }
+
+/* call */
+#pgConn { position:absolute; inset:0; background:#14161b; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; font-size:16px; color:#cfd4e4; z-index:5; }
+.bigspin { width:40px; height:40px; border:4px solid #2c3550; border-top-color:#5086ff; border-radius:50%; }
+#pgCall { position:absolute; inset:0; background:#14161b; z-index:5; }
+#remote { position:absolute; left:12px; top:12px; right:12px; bottom:12px; border-radius:12px; overflow:hidden; background:radial-gradient(ellipse at 50% 35%,#3b3f55,#1c1e29); }
+#pip { position:absolute; right:30px; top:30px; width:230px; height:130px; border-radius:9px; overflow:hidden; background:radial-gradient(ellipse at 50% 30%,#2c4160,#141a28); border:2px solid #3c4560; z-index:3; }
+.nm { position:absolute; left:12px; bottom:10px; padding:2px 8px; border-radius:5px; background:#0009; font-size:11px; z-index:2; }
+#ctl { position:absolute; left:50%; bottom:92px; transform:translateX(-50%); display:flex; gap:9px; align-items:center; background:#1b1e26ee; border:1px solid #2f3547; padding:7px 10px; border-radius:30px; z-index:4; }
+.rb { width:38px; height:38px; border-radius:50%; background:#323849; display:flex; align-items:center; justify-content:center; }
+.rb svg { width:18px; height:18px; fill:#fff; }
+#btnLeave { height:38px; padding:0 20px; border-radius:19px; background:#d24a52; line-height:38px; font-weight:700; font-size:13px; margin-left:5px; }
+#banner { position:absolute; left:50%; top:30px; transform:translateX(-50%); padding:7px 18px; border-radius:16px; background:#0b0d12e8; border:1px solid #2f3547; font-size:12.5px; z-index:4; }
+#pgEnded { position:absolute; inset:0; background:#14161b; z-index:5; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; color:#dfe3f0; }
+
+/* overlays */
+#doc { position:absolute; left:340px; top:200px; width:600px; height:290px; background:#1b1d23; border:1px solid #3a4052; border-radius:8px; box-shadow:0 14px 50px #000c; z-index:30; overflow:hidden; }
+#doc .tb { height:30px; line-height:30px; padding:0 13px; background:#262932; font-size:11.5px; color:#c9cddb; }
+#doc pre { padding:16px 19px; font-family:"DejaVu Sans Mono","Noto Sans Mono",monospace; font-size:13px; line-height:1.7; color:#e6e8ef; white-space:pre-wrap; }
+#cursor { position:absolute; left:0; top:0; width:23px; height:23px; z-index:100; pointer-events:none; filter:drop-shadow(0 1px 2px #0009); }
+#ripple { position:absolute; width:20px; height:20px; margin:-10px 0 0 -10px; border-radius:50%; border:2px solid #8fb0ff; z-index:99; pointer-events:none; }
+#toast { position:absolute; left:50%; top:22px; transform:translateX(-50%); padding:9px 20px; border-radius:8px; background:#2bb5a0; color:#fff; font-size:13.5px; font-weight:600; z-index:90; box-shadow:0 5px 20px #0008; }
+#callout { position:absolute; z-index:80; padding:8px 13px; border-radius:8px; background:#fbc064; color:#2b2410; font-size:13.5px; font-weight:700; max-width:300px; box-shadow:0 5px 20px #0008; }
+#sub { position:absolute; left:50%; bottom:26px; transform:translateX(-50%); width:1010px; text-align:center; z-index:110; font-size:23px; line-height:1.3; font-weight:600; color:#fff; text-shadow:0 1px 4px #000; }
+#sub span { background:#000c; padding:2px 12px; border-radius:7px; box-decoration-break:clone; -webkit-box-decoration-break:clone; }
+#titleCard { position:absolute; inset:0; z-index:105; background:linear-gradient(180deg,#0b0c1066,#0b0c10d0); display:flex; flex-direction:column; align-items:center; justify-content:center; }
+#titleCard .big { font-size:56px; font-weight:800; letter-spacing:-.5px; }
+#titleCard .small { margin-top:10px; font-size:22px; color:#b9c6ee; }
+#titleCard .logo { display:flex; align-items:center; gap:12px; font-size:23px; font-weight:600; margin-bottom:20px; color:#cfd6f0; }
+#titleCard .logo img { width:30px; height:30px; }
+#endCard { position:absolute; inset:0; z-index:106; background:radial-gradient(ellipse at 50% 40%,#1d2440,#0b0c10); display:flex; flex-direction:column; align-items:center; justify-content:center; }
+#endCard .steps { display:flex; align-items:center; gap:10px; margin-top:12px; }
+#endCard .st { padding:12px 18px; border-radius:12px; background:#2a3560; border:2px solid #5086ff; font-size:19px; font-weight:700; }
+#endCard .ar { font-size:28px; color:#8fb0ff; }
+#endCard .big { font-size:36px; font-weight:800; margin-bottom:18px; }
+</style>
+</head>
+<body>
+<div id="stage">
+<div id="win">
+
+  <div id="sidebar">
+    <div id="brand"><img src="assets/brain-solid-full.svg">Sessio</div>
+    <div class="tab sel" id="navCalendar" style="top:64px"><img src="assets/calendar-solid-full.svg">Календарь</div>
+    <div class="tab" id="navClients" style="top:92px"><img src="assets/users-line-solid-full.svg">Клиенты</div>
+    <div class="tab" id="navAnalytics" style="top:120px"><img src="assets/chart-area-solid-full.svg">Аналитика</div>
+    <div class="tab" id="navCalls" style="top:148px"><img src="assets/video-solid-full.svg">Звонки</div>
+    <div class="stab" id="navSettings" style="top:621px"><img src="assets/users-gear-solid-full.svg">Настройки</div>
+    <div class="stab" id="navAbout" style="top:649px"><img src="assets/brain-solid-full.svg">О программе</div>
+  </div>
+
+  <div id="content">
+    <div id="pgCal">
+      <div id="calw"><div class="calhead"><i>‹</i><span>Октябрь 2026</span><i>›</i></div><div id="calGrid"></div></div>
+      <div id="daySum"><div class="h" id="dsH"></div><div class="l" id="dsL"></div></div>
+      <div id="slots"><div class="tt">Быстрые слоты сессий</div><div class="grid" id="slotGrid"></div></div>
+      <div id="tl"><div id="tlInner"></div></div>
+      <div id="btnAdd"><img src="assets/calendar-plus-solid-full.svg"></div>
+    </div>
+
+    <div id="pgDevice" class="hide">
+      <div id="devWrap">
+        <div id="devTitle">Проверьте устройства</div>
+        <div id="prev"></div>
+        <div id="prevHint">Пока вы не подключились, это превью видите только вы</div>
+        <div id="devCard">
+          <div class="cap">Камера</div><div class="combo" id="selCam">Встроенная камера</div>
+          <div style="height:9px"></div>
+          <div class="cap">Микрофон</div><div class="combo" id="selMic"></div>
+          <div id="meter"></div>
+          <div class="cap" style="margin-top:2px">Динамик</div>
+          <div style="display:flex;gap:8px"><div class="combo" id="selSpk" style="flex:1"></div><div class="btn" id="btnTest" style="padding:0 15px">Проверить</div></div>
+          <div id="toneHint" style="font-size:11px;color:#7be0c3;margin-top:5px;height:14px"></div>
+        </div>
+        <div id="devBtns"><div class="pill" id="btnBack">Назад</div><div class="pill pri" id="btnJoin">Присоединиться</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pgConn" class="hide"><div class="bigspin" id="bigSpin"></div><div>Подключение...</div></div>
+  <div id="pgCall" class="hide">
+    <div id="remote"></div>
+    <div id="pip"></div>
+    <div id="banner">Ожидание других участников</div>
+    <div id="ctl">
+      <div class="rb"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V22h2v-3.1A7 7 0 0 0 19 12z"/></svg></div>
+      <div class="rb"><svg viewBox="0 0 24 24"><path d="M3 6h12a2 2 0 0 1 2 2v2.5l4-2.5v8l-4-2.5V16a2 2 0 0 1-2 2H3z"/></svg></div>
+      <div class="rb"><svg viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg></div>
+      <div class="rb"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.7-1L15 3.5h-4L10.7 6a7 7 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.3 2.5h4l.3-2.5a7 7 0 0 0 1.7-1l2.4 1 2-3.4zM13 15.5A3.5 3.5 0 1 1 13 8.5a3.5 3.5 0 0 1 0 7z"/></svg></div>
+      <div id="btnLeave">Завершить</div>
+    </div>
+  </div>
+  <div id="pgEnded" class="hide">Звонок завершён.</div>
+</div>
+
+<div id="scrim" class="hide"></div>
+
+<div id="evDlg" class="dlg hide">
+  <div class="er"><div class="lb">Название</div><div class="ct"><div class="inp full" id="fTitle"></div></div></div>
+  <div class="er"><div class="lb">Дата</div><div class="ct"><div class="inp spin full" id="fDate">02.10.2026</div></div></div>
+  <div class="er"><div class="lb">Время</div><div class="ct" style="justify-content:space-around"><span>С</span><div class="inp spin" id="fFrom" style="width:92px"></div><span>По</span><div class="inp spin" id="fTo" style="width:92px"></div></div></div>
+  <div class="er"><div class="lb">Тип</div><div class="ct"><div class="tg"></div><span>Обычное</span></div></div>
+  <div class="er"><div class="lb">Статус встречи</div><div class="ct"><div class="combo full">Запланирована</div></div></div>
+  <div class="er"><div class="lb">Повтор</div><div class="ct"><div class="seg full" style="flex:1"><div id="rpNone" class="on">Нет</div><div id="rpDay">День</div><div id="rpWeek">Неделя</div><div id="rpMonth">Месяц</div><div id="rpYear">Год</div></div></div></div>
+  <div class="er rpx hide"><div class="lb"></div><div class="ct"><span>Каждые</span><div class="inp spin" style="width:96px">1 нед.</div><div class="tg"></div><span>До</span><div class="inp spin dis" style="width:108px">02.01.2027</div></div></div>
+  <div class="er rpx hide"><div class="lb">Дни</div><div class="ct" style="gap:5px"><div class="wdb">Пн</div><div class="wdb">Вт</div><div class="wdb">Ср</div><div class="wdb">Чт</div><div class="wdb on">Пт</div><div class="wdb">Сб</div><div class="wdb">Вс</div></div></div>
+  <div class="er"><div class="lb">Формат сессии</div><div class="ct"><div class="tg" id="swOnline"></div><span>Онлайн-сессия</span></div></div>
+  <div class="er onl hide"><div class="lb">Провайдер</div><div class="ct"><div class="seg" style="flex:1"><div id="pvExt" class="on">Внешняя ссылка</div><div id="pvLk">LiveKit</div></div></div></div>
+  <div class="er onl hide"><div class="lb">Ссылка на встречу</div><div class="ct"><div class="inp full dis"><span class="ph">▣&nbsp; https://...</span></div></div></div>
+  <div class="er onl hide"><div class="lb"></div><div class="ct"><div class="btn" id="btnOpen" style="padding:0 10px">Открыть</div><div class="btn" id="btnCopyLink" style="padding:0 10px">Скопировать ссылку</div><div class="btn" id="btnCopyInvite" style="padding:0 10px">Скопировать приглашение</div></div></div>
+  <div id="evStatus"></div>
+  <div class="er"><div class="lb">Буферы</div><div class="ct"><span>До</span><div class="inp spin" style="width:84px">0 мин</div><span>После</span><div class="inp spin" style="width:84px">0 мин</div></div></div>
+  <div id="evFoot"><div class="btn pri" id="btnApply" style="width:96px">Применить</div><div class="btn" id="btnCancel" style="width:68px">Отмена</div></div>
+</div>
+
+<div id="stDlg" class="dlg hide">
+  <h2>Настройки приложения</h2>
+  <div id="stTabs"><div id="tabGeneral">Основные</div><div>Безопасность</div><div>Резервные копии</div><div>События</div><div>Онлайн</div><div id="tabLiveKit">LiveKit</div></div>
+  <div id="pageGeneral">
+    <div class="sh">Язык</div>
+    <div class="sbox" style="display:flex;justify-content:space-between;align-items:center"><div><div class="fl">Язык интерфейса</div><div class="fd" style="margin:0;max-width:330px">Выбранный язык будет применён после перезапуска приложения.</div></div><div class="combo" style="width:130px">Русский</div></div>
+    <div class="sh">База данных</div>
+    <div class="sbox"><div class="fl">Папка базы данных</div><div class="fd">~/.config/Sessio/database</div><div class="btn pri" style="width:112px;margin-top:10px">Открыть папку</div></div>
+  </div>
+  <div id="pageLiveKit" class="hide">
+    <div class="sh">Звонки</div>
+    <div class="sbox"><div class="fl" style="font-weight:400;color:#c5c8d3;margin-bottom:6px">Имя в звонках</div><div class="inp" id="inName" style="margin-bottom:0"></div></div>
+    <div class="sh">Токен-бэкенд</div>
+    <div class="sbox">
+      <div class="fl">URL токен-бэкенда</div><div class="fd">Базовый адрес бэкенда, выдающего токены LiveKit.</div>
+      <div class="inp" id="inUrl"></div>
+      <div class="fl">Bearer-токен</div><div class="fd">Хранится в системной связке ключей. Оставьте пустым, чтобы сохранить текущий ключ.</div>
+      <div class="inp" id="inToken"></div>
+      <div id="credStatus" style="font-size:12px;color:#c5c8d3;margin-bottom:6px"></div>
+      <div style="display:flex;justify-content:flex-end"><div class="btn" id="btnSave" style="width:82px">Сохранить</div></div>
+    </div>
+  </div>
+  <div class="btn" id="stClose" style="width:70px">Закрыть</div>
+</div>
+
+<div id="doc" class="hide"><div class="tb">Демонстрационный текстовый документ — только тестовое приглашение</div><pre id="docText"></pre></div>
+
+<div id="ripple" class="hide"></div>
+<svg id="cursor" viewBox="0 0 24 24"><path d="M3 2l15 9.2-6.4 1.4 3.6 6.8-2.8 1.5-3.6-6.9L3 19z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>
+<div id="toast" class="hide"></div>
+<div id="callout" class="hide"></div>
+<div id="titleCard" class="hide"><div class="logo"><img src="assets/brain-solid-full.svg">Sessio</div><div class="big">Настройка видеозвонков</div><div class="small">Еженедельная онлайн-встреча и постоянная ссылка для клиента</div></div>
+<div id="endCard" class="hide"><div class="big">Настройка завершена</div>
+  <div class="steps"><div class="st">Настроить</div><div class="ar">→</div><div class="st">Создать встречу</div><div class="ar">→</div><div class="st">Передать приглашение</div><div class="ar">→</div><div class="st">Проверить устройства</div></div></div>
+<div id="sub"><span></span></div>
+</div>
+
+<script src="data.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const q = (sel) => document.querySelector(sel);
+const DUR = SCRIPT_DATA.DURATION;
+const CUES = SCRIPT_DATA.cues();
+
+/* ---------------- static content ---------------- */
+(function build() {
+  const g = $("calGrid");
+  ["пн","вт","ср","чт","пт","сб","вс"].forEach((w, i) => { const e = document.createElement("div"); e.className = "wd" + (i >= 5 ? " we" : ""); e.textContent = w; g.appendChild(e); });
+  const days = [28,29,30,1,2,3,4, 5,6,7,8,9,10,11, 12,13,14,15,16,17,18, 19,20,21,22,23,24,25, 26,27,28,29,30,31,1, 2,3,4,5,6,7,8];
+  days.forEach((d, i) => {
+    const e = document.createElement("div");
+    e.className = "d" + (i % 7 >= 5 ? " we" : "") + (i < 3 || i >= 34 ? " o" : "");
+    e.id = "day" + i; e.dataset.d = d; e.innerHTML = "<span>" + d + "</span>";
+    g.appendChild(e);
+  });
+  ["09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00"].forEach((t) => { const e = document.createElement("div"); e.className = "s"; e.textContent = t; $("slotGrid").appendChild(e); });
+  const tl = $("tlInner");
+  tl.insertAdjacentHTML("beforeend", '<div class="vsol"></div><div class="vdash"></div>');
+  for (let h = 0; h < 24; h++) tl.insertAdjacentHTML("beforeend", `<div class="hr" style="top:${h * 60}px"></div><div class="hl" style="top:${h * 60}px">${String(h).padStart(2, "0")}:00</div>`);
+  tl.insertAdjacentHTML("beforeend", '<div id="nowLine" style="top:' + (18.2 * 60) + 'px"></div>');
+  tl.insertAdjacentHTML("beforeend", '<div class="evb hide" id="evBlock" style="top:' + (18.5 * 60) + 'px;height:50px">Тестовая консультация<small>18:30 – 19:20 · Онлайн</small></div>');
+  const m = $("meter"); for (let i = 0; i < 12; i++) m.appendChild(document.createElement("i"));
+  const person = (w, c1, c2) => `<svg viewBox="0 0 200 140" preserveAspectRatio="xMidYMax meet" style="position:absolute;inset:0;width:100%;height:100%"><defs><linearGradient id="g${w}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><circle cx="100" cy="58" r="26" fill="url(#g${w})"/><path d="M42 142c4-34 28-50 58-50s54 16 58 50z" fill="url(#g${w})"/></svg>`;
+  $("prev").innerHTML = person("a", "#8b90a0", "#666b7b");
+  $("remote").innerHTML = '<div id="remoteBody">' + person("b", "#f0b99a", "#cf8d6c") + '<div class="nm">Клиент (тест)</div></div><div id="remoteWait" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:16px;color:#8e95ab"></div>';
+  $("pip").innerHTML = person("c", "#9fb2e8", "#6a7fc4") + '<div class="nm" style="left:7px;bottom:6px;font-size:10px">Специалист Анна</div>';
+})();
+
+/* ---------------- timeline of actions ---------------- */
+const A = [], M = [], C = [];
+const act = (t, fn, d = 0) => A.push({ t, d, fn });
+const set = (t, obj) => act(t, (s) => Object.assign(s, obj));
+const type = (t, d, key, text) => act(t, (s, p) => { s[key] = text.slice(0, Math.round(text.length * p)); }, d);
+const mv = (t, d, sel) => M.push({ t, d, sel });
+const click = (t) => { C.push(t); };
+
+const STAT_SENDING = "Отправка расписания...";
+const STAT_SYNC = "Расписание синхронизировано с сервером.";
+const STAT_CREATING = "Создание постоянной ссылки...";
+const STAT_READY = "Постоянная ссылка готова.";
+const INVITE = "Приглашение на консультацию «Тестовая консультация»\nКаждую пятницу, 18:30–19:20\nhttps://calls.example.test/i/DEMO-ONLY-0000\n\n(тестовые данные для демонстрации)";
+
+/* 0 – 15 : intro */
+set(0, { titleCard: true }); set(5.5, { titleCard: false });
+mv(0, 0.01, "#navCalendar"); mv(8, 2.5, "#navSettings");
+
+/* 15 – 50 : settings */
+click(15); set(15, { dlg: "settings", tab: "general" });
+mv(16, 1.2, "#tabLiveKit"); click(17.4); set(17.4, { tab: "livekit" });
+mv(19.5, 1.2, "#inName"); click(21); set(21, { focus: "name" });
+type(22, 4, "name", "Специалист Анна");
+mv(27.5, 1.2, "#inUrl"); click(29); set(29, { focus: "url" });
+set(27, { callout: ["Адрес выдаёт администратор", "#inUrl"] });
+type(30, 3.5, "url", "https://calls.example.test");
+mv(35, 1.2, "#inToken"); click(36.5); set(36.5, { focus: "token", callout: ["Ключ доступа выдаёт администратор", "#inToken"] });
+type(37.5, 3.5, "token", "••••••••••••••••••••••••");
+set(42, { callout: null });
+
+/* 50 – 65 : save, close */
+mv(49, 1.5, "#btnSave"); click(51.5); set(51.5, { focus: null, saved: true });
+set(52, { toast: "Учётные данные сохранены" }); set(55, { toast: null });
+mv(57, 1.4, "#stClose"); click(60); set(60, { dlg: null });
+
+/* 65 – 105 : create meeting */
+mv(62, 1.8, "#btnAdd"); click(65.5); set(65.5, { dlg: "event", fmode: "new" });
+mv(66.5, 1.2, "#fTitle"); click(68); set(68, { focus: "title", titleSel: true });
+type(69, 3.5, "title", "Тестовая консультация"); set(69, { titleSel: false });
+set(73, { focus: null });
+mv(74, 1.2, "#fFrom"); click(75.5); set(75.5, { from: "18:30" });
+mv(77, 0.8, "#fTo"); click(78); set(78, { to: "19:20" });
+mv(81, 1.5, "#swOnline"); click(83.5); set(83.5, { online: true });
+mv(87, 1.2, "#pvLk"); click(89); set(89, { prov: "lk" });
+mv(92, 1.2, "#rpWeek"); click(94); set(94, { repeat: "week" });
+set(94.2, { callout: ["Раз в неделю, по пятницам", "#rpWeek"] }); set(98.5, { callout: null });
+mv(99, 1.6, "#btnApply"); click(102); set(102, { dlg: null, ev: true, linkReady: false, stat: [] });
+
+/* 105 – 125 : sync status */
+mv(103, 1.5, "#evBlock"); click(104.8); set(104.8, { dlg: "event", fmode: "edit", stat: [STAT_SENDING] });
+set(108.5, { stat: [STAT_SYNC, STAT_CREATING] });
+set(114, { stat: [STAT_SYNC, STAT_READY], linkReady: true });
+mv(106, 2.5, "#evStatus");
+
+/* 125 – 150 : copy invitation */
+mv(124, 2, "#btnCopyInvite"); click(127.5);
+set(127.5, { toast: "Приглашение скопировано", callout: ["Одна ссылка на всю серию", "#btnCopyInvite"] });
+set(130.5, { toast: null }); set(133, { callout: null });
+set(128.5, { doc: true }); set(131, { docText: INVITE }); set(139, { doc: false });
+
+/* 150 – 190 : open meeting, device check */
+mv(139.5, 1.6, "#btnCancel"); click(141.5); set(141.5, { dlg: null });
+mv(143, 1.6, "#evBlock"); click(145.5); set(145.5, { dlg: "event", fmode: "edit" });
+mv(147, 2.4, "#btnOpen"); click(150.3); set(150.3, { dlg: null, page: "device", tab2: "calls" });
+mv(152.5, 1.4, "#selMic"); click(155); set(155, { micOpen: true });
+set(158, { micOpen: false, mic: "Наушники (микрофон)" });
+mv(159, 1.3, "#selSpk"); click(161); set(161, { spkOpen: true });
+set(163.5, { spkOpen: false, spk: "Наушники (вывод)" });
+mv(164.5, 1.0, "#btnTest"); click(166); set(166, { tone: true }); set(168.5, { tone: false });
+set(168.5, { callout: ["Наушники помогут избежать эха", "#selSpk"] }); set(174, { callout: null });
+mv(174.5, 5, "#prev");
+
+/* 190 – 210 : join */
+mv(184, 5, "#btnJoin"); click(190.3); set(190.3, { page: "conn" });
+set(194.5, { page: "call", waiting: true });
+set(198, { waiting: false, remote: true });
+
+/* 210 – 235 : next occurrence */
+mv(203, 3.5, "#btnLeave"); click(207); set(207, { page: "ended" });
+set(208.8, { page: "cal", tab2: "calendar", sel: 2 });
+mv(209, 1.2, "#day11"); click(211); set(211, { sel: 9 });
+mv(211.8, 1.2, "#evBlock"); click(213.5); set(213.5, { dlg: "event", fmode: "edit", day: 9, linkReady: true, stat: [STAT_SYNC, STAT_READY] });
+mv(214.5, 1.5, "#btnCopyInvite"); click(216.5); set(216.5, { toast: "Приглашение скопировано", callout: ["Та же самая ссылка", "#btnCopyInvite"] });
+set(219.5, { toast: null }); set(222, { callout: null });
+mv(222.5, 3, "#evStatus");
+
+/* 235 – 245 : end card */
+set(235, { endCard: true, dlg: null });
+
+A.sort((a, b) => a.t - b.t); M.sort((a, b) => a.t - b.t);
+
+/* ---------------- state ---------------- */
+function init() {
+  return { titleCard: false, endCard: false, dlg: null, tab: "general", name: "", url: "", token: "", focus: null, saved: false, toast: null, callout: null,
+    page: "cal", tab2: "calendar", fmode: "new", day: 2, sel: 2, ev: false, title: "Новое событие", titleSel: true, from: "11:25", to: "12:25",
+    online: false, prov: "ext", repeat: "none", stat: [], linkReady: false, doc: false, docText: "",
+    mic: "Встроенный микрофон", spk: "Встроенный динамик", micOpen: false, spkOpen: false, tone: false, waiting: false, remote: false };
+}
+function compute(now) {
+  const s = init();
+  for (const a of A) { if (a.t > now) break; const p = a.d ? Math.min(1, (now - a.t) / a.d) : 1; a.fn(s, p, now); }
+  return s;
+}
+
+/* ---------------- cursor ---------------- */
+let targets = null;
+function center(sel) { const r = q(sel).getBoundingClientRect(); const wide = r.width > 220 && !["#prev", "#evStatus"].includes(sel);
+  const fx = sel === "#evStatus" ? 0.7 : wide ? 0.25 : 0.5; return [r.left + r.width * fx, r.top + r.height * 0.55]; }
+function calibrate() { targets = []; for (const m of M) { applyTime(m.t + m.d + 0.001, true); targets.push(center(m.sel)); } }
+function cursorPos(now) {
+  if (!targets) return [1000, 600];
+  let pos = [1000, 600];
+  for (let i = 0; i < M.length; i++) {
+    const m = M[i], tg = targets[i];
+    if (now >= m.t + m.d) { pos = tg; continue; }
+    if (now >= m.t) { const p = (now - m.t) / m.d, e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; return [pos[0] + (tg[0] - pos[0]) * e, pos[1] + (tg[1] - pos[1]) * e]; }
+    break;
+  }
+  return pos;
+}
+
+/* ---------------- render ---------------- */
+const show = (el, on) => el.classList.toggle("hide", !on);
+function setCaret(el, text, focus, ph, selAll) {
+  const t = (text || "").replace(/</g, "&lt;");
+  el.innerHTML = (t ? (selAll ? '<span class="sel-t">' + t + "</span>" : t) : (ph ? '<span class="ph">' + ph + "</span>" : "")) + (focus && !selAll ? '<span class="caret"></span>' : "");
+  el.classList.toggle("foc", !!focus);
+}
+function render(s, now) {
+  const pg = s.page, full = pg === "conn" || pg === "call" || pg === "ended";
+  show($("sidebar"), !full); show($("content"), !full);
+  show($("pgCal"), pg === "cal"); show($("pgDevice"), pg === "device");
+  show($("pgConn"), pg === "conn"); show($("pgCall"), pg === "call"); show($("pgEnded"), pg === "ended");
+  ["navCalendar", "navClients", "navAnalytics", "navCalls"].forEach((id) => $(id).classList.remove("sel"));
+  $(s.tab2 === "calls" ? "navCalls" : "navCalendar").classList.add("sel");
+
+  for (let i = 0; i < 42; i++) { const e = $("day" + i); const d = +e.dataset.d; e.classList.toggle("sel", i >= 3 && i < 34 && d === s.sel); }
+  $("dsH").textContent = s.sel === 9 ? "Пятница, 9 октября 2026" : "Пятница, 2 октября 2026";
+  const hasEv = s.ev && (s.sel === 2 || s.sel === 9);
+  $("dsL").innerHTML = hasEv ? "1 сессия · 0 клиент(ов)<br>Занято: 0 ч 50 мин<br>Следующая сессия: 18:30" : "Свободно весь день";
+  show($("evBlock"), hasEv); show($("nowLine"), s.sel === 2);
+
+  const dlg = s.dlg;
+  show($("scrim"), !!dlg); show($("stDlg"), dlg === "settings"); show($("evDlg"), dlg === "event");
+
+  $("tabGeneral").classList.toggle("on", s.tab === "general"); $("tabLiveKit").classList.toggle("on", s.tab === "livekit");
+  show($("pageGeneral"), s.tab === "general"); show($("pageLiveKit"), s.tab === "livekit");
+  setCaret($("inName"), s.name, s.focus === "name", "");
+  setCaret($("inUrl"), s.url, s.focus === "url", "https://token-backend.example.com");
+  setCaret($("inToken"), s.token, s.focus === "token", "");
+  $("credStatus").textContent = s.saved ? "Учётные данные сохранены" : "Учётные данные пока не сохранены";
+
+  const isNew = s.fmode === "new";
+  const selAll = isNew && s.titleSel && s.title === "Новое событие" && s.focus === "title";
+  setCaret($("fTitle"), isNew ? s.title : "Тестовая консультация", s.focus === "title", "", selAll);
+  $("fDate").textContent = s.day === 9 ? "09.10.2026" : "02.10.2026";
+  $("fFrom").textContent = isNew ? s.from : "18:30"; $("fTo").textContent = isNew ? s.to : "19:20";
+  const onl = isNew ? s.online : true, prov = isNew ? s.prov : "lk", rep = isNew ? s.repeat : "week";
+  $("swOnline").classList.toggle("on", onl);
+  document.querySelectorAll(".onl").forEach((e) => show(e, onl));
+  $("pvExt").classList.toggle("on", prov !== "lk"); $("pvLk").classList.toggle("on", prov === "lk");
+  ["rpNone", "rpDay", "rpWeek", "rpMonth", "rpYear"].forEach((id) => $(id).classList.remove("on"));
+  $(rep === "week" ? "rpWeek" : "rpNone").classList.add("on");
+  document.querySelectorAll(".rpx").forEach((e) => show(e, rep === "week"));
+  ["btnOpen", "btnCopyLink", "btnCopyInvite"].forEach((id) => $(id).classList.toggle("dis", isNew || (id !== "btnOpen" && !s.linkReady)));
+  $("evStatus").innerHTML = (isNew ? [] : s.stat).map((t) => `<div>${t}</div>`).join("");
+  $("evDlg").style.top = (isNew ? 40 : 28) + "px";
+
+  $("selMic").textContent = s.mic; $("selSpk").textContent = s.spk;
+  const lvl = Math.round(12 * (0.35 + 0.35 * Math.abs(Math.sin(now * 5.1) * Math.sin(now * 1.7 + 1))));
+  Array.from($("meter").children).forEach((e, i) => e.classList.toggle("on", i < lvl));
+  $("toneHint").textContent = s.tone ? "♪ Сигнал воспроизводится..." : "";
+
+  show($("banner"), s.waiting); show($("remoteBody"), s.remote); show($("remoteWait"), !s.remote);
+  $("remoteWait").textContent = s.waiting ? "" : "Ожидание видео...";
+  $("bigSpin").style.transform = "rotate(" + (now * 540) + "deg)";
+
+  let pop = $("popList");
+  if (!pop) { pop = document.createElement("div"); pop.id = "popList"; pop.style.cssText = "position:absolute;z-index:40;background:#3a3f50;border:1px solid #5a6178;border-radius:6px;padding:4px;font-size:12.5px;box-shadow:0 8px 24px #000a"; $("stage").appendChild(pop); }
+  const list = s.micOpen ? ["selMic", ["Встроенный микрофон", "Наушники (микрофон)"]] : s.spkOpen ? ["selSpk", ["Встроенный динамик", "Наушники (вывод)"]] : null;
+  if (list) { const r = $(list[0]).getBoundingClientRect(); pop.style.left = r.left + "px"; pop.style.top = (r.bottom + 3) + "px"; pop.style.width = r.width + "px";
+    pop.innerHTML = list[1].map((t, i) => `<div style="padding:7px 8px;border-radius:4px;${i === 1 ? "background:#4d6ec9" : ""}">${t}</div>`).join(""); pop.style.display = "block"; } else pop.style.display = "none";
+
+  show($("doc"), s.doc); $("docText").textContent = s.docText;
+  show($("titleCard"), s.titleCard); show($("endCard"), s.endCard);
+  const t = $("toast"); show(t, !!s.toast); if (s.toast) t.textContent = s.toast;
+  const co = $("callout");
+  if (s.callout) { show(co, true); co.textContent = s.callout[0]; const r = q(s.callout[1]).getBoundingClientRect();
+    if (r.width > 220) { co.style.left = (r.right - 300) + "px"; co.style.top = (r.top - 44) + "px"; }
+    else { co.style.left = (r.right + 14) + "px"; co.style.top = (r.top - 2) + "px"; } } else show(co, false);
+
+  const cue = CUES.find((c) => now >= c.t0 && now < c.t1);
+  show($("sub"), !!cue); if (cue) $("sub").firstElementChild.textContent = cue.text;
+}
+function applyTime(now, calib) {
+  const s = compute(now);
+  render(s, now);
+  if (!calib) {
+    const pos = cursorPos(now);
+    const c = $("cursor"); c.style.left = pos[0] - 3 + "px"; c.style.top = pos[1] - 2 + "px";
+    const rp = $("ripple"); let on = false;
+    for (const ct of C) { if (now >= ct && now < ct + 0.45) { const p = (now - ct) / 0.45; rp.style.left = pos[0] + "px"; rp.style.top = pos[1] + "px"; rp.style.transform = "scale(" + (0.4 + p * 1.6) + ")"; rp.style.opacity = 1 - p; on = true; } }
+    show(rp, on);
+  }
+}
+window.setTime = (t) => applyTime(t, false);
+window.DURATION = DUR;
+window.addEventListener("load", () => {
+  const params = new URLSearchParams(location.search);
+  document.fonts.ready.then(() => {
+    calibrate();
+    window.READY = true;
+    if (params.has("t")) applyTime(parseFloat(params.get("t")), false);
+    else if (!params.has("render")) {
+      const st = $("stage"); const fit = () => { st.style.transform = "scale(" + Math.min(innerWidth / 1280, innerHeight / 720) + ")"; }; fit(); addEventListener("resize", fit);
+      document.documentElement.style.width = "100%"; document.body.style.width = "100%";
+      const t0 = performance.now(); const tick = () => { applyTime(((performance.now() - t0) / 1000) % (DUR + 1), false); requestAnimationFrame(tick); }; tick();
+    }
+  });
+});
+</script>
+</body>
+</html>

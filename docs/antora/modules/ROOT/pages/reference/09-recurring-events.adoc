@@ -1,0 +1,39 @@
+= Recurring Events
+
+Recurring events are represented as a series plus generated occurrences.
+The database does not create every future event row when the user creates a
+weekly session.
+
+== Data Shape
+
+- `EventSeries`
+: Stores the base event fields and the recurrence rule, for example
+  `FREQ=WEEKLY;INTERVAL=1;BYDAY=TU`.
+
+- `Event`
+: Stores one-time events and materialized overrides of recurring occurrences.
+  A materialized occurrence has `series_id` and `original_occurrence_start`.
+
+- `EventSeriesException`
+: Stores removed occurrences. The series can still generate the date, but the
+  timeline filters it out.
+
+== Timeline Loading
+
+When a day is selected, the timeline loads regular `Event` rows for the day,
+then loads active `EventSeries` records that can intersect the day. The
+recurrence service calculates occurrences inside the selected day. Generated
+occurrences are displayed as virtual `DuckEvent` values.
+
+If an occurrence has a matching exception, it is skipped. If a concrete `Event`
+already exists for the same `series_id` and `original_occurrence_start`, the
+concrete event replaces the virtual occurrence.
+
+== First Version Scope
+
+The first implementation supports daily, weekly, monthly, and yearly recurrence
+from the event form. The stored rule uses RRULE-compatible text and occurrences
+are expanded through `libical`.
+
+Editing a virtual occurrence materializes it as an `Event` override. Deleting a
+virtual occurrence creates an `EventSeriesException`.

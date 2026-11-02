@@ -64,13 +64,15 @@ int64_t QTimelineWidget::addEvent(const DuckEvent &event,
 int64_t QTimelineWidget::addEventSeries(const DuckEvent &event,
                                         const int64_t clientId,
                                         const QString &recurrenceRule,
-                                        const std::optional<int64_t> recurrenceUntilMs) const {
+                                        const std::optional<int64_t> recurrenceUntilMs,
+                                        const QString &publishTimezone) const {
   if (!mModel) {
     qCWarning(logTimelineWidget) << "QTimelineWidget::addEventSeries | Model is null";
     return 0;
   }
 
-  return mModel->addEventSeries(event, clientId, recurrenceRule, recurrenceUntilMs);
+  return mModel->addEventSeries(event, clientId, recurrenceRule, recurrenceUntilMs,
+                                publishTimezone);
 }
 
 bool QTimelineWidget::updateEventSeries(

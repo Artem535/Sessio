@@ -3,6 +3,9 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include <cstdint>
+#include <ctime>
+#include <cstdio>
 #include <optional>
 #include <string>
 
@@ -60,6 +63,42 @@ inline duckdb::Value toDuckTimestamp(const std::optional<std::int64_t>& micros_o
   if (!micros_opt.has_value()) return duckdb::Value(); // NULL
   auto ts = duckdb::Timestamp::FromEpochMicroSeconds(*micros_opt);
   return duckdb::Value::TIMESTAMP(ts);
+}
+
+namespace detail {
+inline bool localTime(const std::time_t secs, std::tm &out) {
+#ifdef _WIN32
+  return localtime_s(&out, &secs) == 0;
+#else
+  return localtime_r(&secs, &out) != nullptr;
+#endif
+}
+} // namespace detail
+
+// Local calendar date ("YYYY-MM-DD") of an epoch-millisecond instant; "" when out of range.
+inline std::string msToLocalDateString(std::int64_t ms) {
+  // Floor division so pre-epoch instants land on the right second.
+  std::int64_t secs = ms / 1000;
+  if (ms % 1000 < 0) --secs;
+  std::tm tm{};
+  if (!detail::localTime(static_cast<std::time_t>(secs), tm)) return {};
+  char buf[48];
+  std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+  return buf;
+}
+
+// Local midnight (epoch ms) of a "YYYY-MM-DD" date; 0 when unparsable.
+inline std::int64_t localDateStringToMidnightMs(const std::string &date) {
+  int y = 0, m = 0, d = 0;
+  if (std::sscanf(date.c_str(), "%d-%d-%d", &y, &m, &d) != 3) return 0;
+  std::tm tm{};
+  tm.tm_year = y - 1900;
+  tm.tm_mon = m - 1;
+  tm.tm_mday = d;
+  tm.tm_isdst = -1;
+  const std::time_t t = std::mktime(&tm);
+  if (t == static_cast<std::time_t>(-1)) return 0;
+  return static_cast<std::int64_t>(t) * 1000;
 }
 
 } // namespace pcm::database::db_utils

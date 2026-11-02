@@ -1,0 +1,76 @@
+= LiteRT-LM: источники для CPU spike
+
+Проверено 2026-10-09. Это исследование источников, не результат
+локального inference.
+
+== Поддержка ноутбука
+
+* Python API доступен для Linux и архитектуры x86++_++64; CPU — backend
+по умолчанию. https://developers.google.com/edge/litert-lm/python[Google
+API guide].
+* CPU-вычисления Gemma 4 в LiteRT-LM используют XNNPACK. Этот backend
+поддерживает Linux x86/x86-64, включая SIMD до AVX512. Значит Ryzen —
+обоснованный кандидат для запуска, но это вывод из поддержки
+архитектуры: официального теста именно 7840HS здесь нет.
+https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/blob/main/README.md[Model
+card], https://github.com/google/XNNPACK#supported-architectures[XNNPACK
+architectures].
+* Официальная таблица Linux CPU относится к Arm, Windows CPU — Intel
+LunarLake. Эти числа нельзя переносить на Ryzen.
+https://developers.google.com/edge/litert-lm/models/gemma-4[Gemma 4
+guide].
+
+== Экспорт и квантизация
+
+* Готовый `gemma-4-E2B-it.litertlm` опубликован в
+https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm[litert-community/gemma-4-E2B-it-litert-lm].
+Для воспроизводимости нужно фиксировать revision и SHA256 конкретного
+скачанного файла.
+* Текущая карточка описывает mobile quantization со смесью 2-, 4- и
+8-битных весов; footprint текстовых весов может быть около 0.8 GB,
+embeddings размером 1.12 GB поддерживаются через mmap. Vision/audio
+загружаются по требованию. Это описание экспорта, не обещание локального
+RSS.
+https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/blob/main/README.md[Model
+card].
+* Google выпустил отдельные QAT checkpoints для Q4++_++0 и mobile-схемы.
+Mobile-схема включает статическую квантизацию активаций, channel-wise
+веса и выбранные 2-битные тензоры. Поэтому готовый LiteRT mobile export
+нельзя объявлять эквивалентным ранее проверенному GGUF Q4++_++0:
+отличаются квантизация и потенциально исходный QAT checkpoint.
+https://blog.google/innovation-and-ai/technology/developers-tools/quantization-aware-training-gemma-4/[Google
+QAT announcement].
+* Есть официальный путь собственного экспорта через
+`litert-torch export++_++hf --model=google/gemma-4-E2B-it --externalize++_++embedder --jinja++_++chat++_++template++_++override=litert-community/gemma-4-E2B-it-litert-lm`.
+Для сравнения исключительно движков дополнительно нужны совпадающие
+checkpoint, типы/схемы всех тензоров и KV cache; одинаковое имя модели
+этого не обеспечивает.
+https://developers.google.com/edge/litert-lm/models/gemma-4[Export
+guide].
+
+== MTP и методика
+
+* MTP включается через `enable++_++speculative++_++decoding=True`. E4B
+CPU рекомендован с MTP, E2B CPU — выборочно: Google предупреждает о
+возможном замедлении freeform/generative задач. Нужны отдельные off/on
+прогоны наших русских JSON-задач.
+https://developers.google.com/edge/litert-lm/models/gemma-4[MTP guide],
+https://developers.google.com/edge/litert-lm/python[Python API].
+* Готовый файл должен содержать поддержку drafters: карточка предлагает
+повторное скачивание экспорта, полученного до 2026-05-05, для
+speculative decoding.
+https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/blob/main/README.md[Model
+card].
+* Опубликованные базовые числа используют 1024 prompt tokens, 256 decode
+tokens, context 2048, CPU 4 threads и уже инициализированные caches.
+TTFT исключает загрузку. Память измеряется разными платформенными
+метриками, поэтому таблица не даёт напрямую сопоставимые значения RSS
+между macOS, Windows и Linux.
+https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/blob/main/README.md[Benchmark
+methodology].
+
+Практический первый эксперимент: тот же пользовательский набор задач,
+явно CPU, четыре потока, отключённый thinking, одинаковый output budget,
+отдельные cold/warm результаты и MTP off/on. Вывод формулировать как
+сравнение конкретных поставок, пока эквивалентность весов и квантизации
+не доказана.

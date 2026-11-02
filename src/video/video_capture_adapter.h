@@ -27,6 +27,8 @@ public:
   [[nodiscard]] std::shared_ptr<livekit::VideoSource> videoSource() const { return mVideoSource; }
   [[nodiscard]] QVideoSink *previewSink() { return &mSink; }
   [[nodiscard]] int framesCaptured() const { return mFramesCaptured.load(); }
+  // True while the camera device is open (its indicator is on).
+  [[nodiscard]] bool isActive() const { return mCamera != nullptr; }
 
   // Starts (or restarts, for a device switch) capture from the given device.
   void start(const QCameraDevice &device);

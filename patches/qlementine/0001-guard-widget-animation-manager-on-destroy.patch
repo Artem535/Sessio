@@ -57,10 +57,10 @@ index 5a2cab2..fa0473b 100644
      });
    }
 diff --git a/lib/src/style/eventFilters/ComboboxItemViewFilter.hpp b/lib/src/style/eventFilters/ComboboxItemViewFilter.hpp
-index 77eed32..40920a6 100644
+index 77eed32..ed8ef16 100644
 --- a/lib/src/style/eventFilters/ComboboxItemViewFilter.hpp
 +++ b/lib/src/style/eventFilters/ComboboxItemViewFilter.hpp
-@@ -88,16 +88,17 @@ private:
+@@ -88,28 +88,36 @@ private:
            const auto hMargin = qlementineStyle->pixelMetric(QStyle::PM_MenuHMargin);
            const auto shadowWidth = qlementineStyle->theme().spacing;
            const auto borderWidth = qlementineStyle->theme().borderWidth;
@@ -84,23 +84,38 @@ index 77eed32..40920a6 100644
  
            // Height.
            const auto absoluteMinHeight = qlementineStyle->theme().controlHeightLarge * (isTreeView ? 5 : 1);
-@@ -106,10 +107,12 @@ private:
-           const auto absoluteMaxHeight = screen != nullptr ?
-                                              screen->geometry().height() - 128 - viewGlobalY :
-                                              qlementineStyle->theme().controlHeightLarge * 10;
+-          const auto screen = view->screen();
+-          const auto viewGlobalY = view->mapToGlobal(QPoint(0, 0)).y();  // Don't exceed the screen height when expanding a tree view.
+-          const auto absoluteMaxHeight = screen != nullptr ?
+-                                             screen->geometry().height() - 128 - viewGlobalY :
+-                                             qlementineStyle->theme().controlHeightLarge * 10;
 -          const auto height = std::min(absoluteMaxHeight, std::max(absoluteMinHeight, viewMinimumSizeHint().height()));
++          // A list is sized by its rows (up to maxVisibleItems) only: QComboBox::showPopup()
++          // then fits the popup on screen, opening it upwards if needed. Bounding it here by
++          // "screen height - 128 - view y" squashed the list to a sliver whenever the combo
++          // sat in the lower part of the screen (Windows reports real global positions;
++          // Wayland's are near zero, which hid it there).
++          auto maxHeight = viewMinimumSizeHint().height();
++          if (isTreeView) {
++            // Don't exceed the screen when expanding a tree view.
++            const auto screen = view->screen();
++            const auto viewGlobalY = view->mapToGlobal(QPoint(0, 0)).y();
++            maxHeight = screen != nullptr ? screen->availableGeometry().bottom() - 64 - viewGlobalY
++                                          : qlementineStyle->theme().controlHeightLarge * 10;
++          }
  
            view->setFixedWidth(width);
 -          view->setFixedHeight(height);
-+          if (absoluteMaxHeight > 0) {
-+            const auto height = std::min(absoluteMaxHeight, std::max(absoluteMinHeight, viewMinimumSizeHint().height()));
-+            view->setFixedHeight(height);
-+          }
++          view->setFixedHeight(std::max(absoluteMinHeight, std::min(maxHeight, viewMinimumSizeHint().height())));
            view->parentWidget()->adjustSize();
          }
        }
-@@ -132,7 +135,7 @@ private:
-       const auto rowCount = _view->model()->rowCount();
+@@ -129,10 +137,10 @@ private:
+     } else {
+       // QListView::minimumSizeHint() doesn't give the correct minimumHeight,
+       // so we have to compute it.
+-      const auto rowCount = _view->model()->rowCount();
++      const auto rowCount = std::min(_view->model()->rowCount(), std::max(1, _comboBox->maxVisibleItems()));
        for (auto i = 0; i < rowCount && height <= _initialMaxHeight; ++i) {
          const auto rowSizeHint = _view->sizeHintForRow(i);
 -        height = std::min(_initialMaxHeight, height + rowSizeHint);

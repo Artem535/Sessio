@@ -1,4 +1,5 @@
 #include "remote_video_renderer.h"
+#include "video_frame_source.h"
 
 #include <QApplication>
 #include <QTimer>
@@ -17,11 +18,17 @@ int main(int argc, char *argv[]) {
 
   for (int cycle = 0; cycle < 20; ++cycle) {
     auto renderer = std::make_unique<pcm::video::RemoteVideoRenderer>();
-    // No real track available in this environment — attachTrack(nullptr) and
-    // an immediate detach()/destroy prove the null-track and never-attached
-    // paths don't hang or crash, which is what a Leave-before-any-remote-
-    // track-ever-subscribed race would exercise in production.
-    renderer->attachTrack(nullptr);
+    // Qt-only consumption and source destruction are safe even without a
+    // paint context. Hardware OpenGL drawing is a separate runtime gate.
+    auto source = std::make_unique<pcm::video::VideoFrameSource>();
+    renderer->attachSource(source.get());
+    QImage frame(16, 9, QImage::Format_RGBA8888);
+    frame.fill(Qt::red);
+    source->submitFrame(frame);
+    app.processEvents();
+    source.reset(); // UI survives source destruction and pending notifications.
+    app.processEvents();
+    renderer->attachSource(nullptr);
     renderer->detach();
     renderer.reset();
   }

@@ -7,12 +7,14 @@
         <file alias="calendar-plus-solid-full.svg">icons/calendar-plus-solid-full.svg</file>
         <file alias="coins-solid-full.svg">icons/coins-solid-full.svg</file>
         <file alias="notes.svg">icons/notes.svg</file>
+        <file alias="sun-solid-full.svg">icons/sun-solid-full.svg</file>
         <file alias="user-minus-solid-full.svg">icons/user-minus-solid-full.svg</file>
         <file alias="user-pen-solid-full.svg">icons/user-pen-solid-full.svg</file>
         <file alias="user-plus-solid-full.svg">icons/user-plus-solid-full.svg</file>
         <file alias="user-solid-full.svg">icons/user-solid-full.svg</file>
         <file alias="users-gear-solid-full.svg">icons/users-gear-solid-full.svg</file>
         <file alias="users-line-solid-full.svg">icons/users-line-solid-full.svg</file>
+        <file alias="video-solid-full.svg">icons/video-solid-full.svg</file>
     </qresource>
     <qresource prefix="/themes">
         <file alias="qlementine_dark.json">themes/qlementine_dark.json</file>

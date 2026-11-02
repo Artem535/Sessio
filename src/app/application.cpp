@@ -1,24 +1,54 @@
+#include "cloud_key_store.h"
 #include "application.h"
+#include "my_day_bridge.h"
+#include "file_log.h"
 #include "app_lock_dialog.h"
+#include "role_selection_dialog.h"
+#include "provider_kind.h"
+#include "schedule_zoneinfo.h"
 #include "../backup/encrypted_container.h"
 #include "../backup/restore_service.h"
 #include "../event_view/recurrence_utils.h"
 #include "../widgets/app_settings.h"
+#ifdef SESSIO_CALL_TRANSCRIPTION
+#include "call_side_panel.h"
+#include "call_prompter_controller.h"
+#include "call_notes_controller.h"
+#include "call_notes_finalizer.h"
+#include "call_notes_page.h"
+#include "meeting_history.h"
+#include "transcript_export.h"
+#include "prompter_panel.h"
+#include "prompter_worker.h"
+#include "transcript_panel.h"
+#include "transcript_page.h"
+#include "transcript_list_page.h"
+#include "transcription_consent_dialog.h"
+#include "engine_factory.h"
+#endif
 
 #include <Poco/Path.h>
+#include <QDate>
 #include <QDir>
+#include <QEventLoop>
 #include <QFileInfo>
+#include <QFileOpenEvent>
+#include <QGuiApplication>
 #include <QLocale>
 #include <QStandardPaths>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QLibraryInfo>
 #include <QMenu>
 #include <QStringList>
+#include <QSysInfo>
 #include <QTimeZone>
 #include <QTranslator>
 #include <QWidget>
 #include <QIcon>
 #include <QInputDialog>
+#include <QScrollArea>
+#include <QVBoxLayout>
 #include <QLineEdit>
 #include <QDateTime>
 #include <oclero/qlementine.hpp>
@@ -35,6 +65,19 @@ namespace pcm {
 
 namespace {
 constexpr int kNotificationPollIntervalMs = 30 * 1000;
+// Upper bound on how long specialist startup waits for the keychain to hand
+// back the token-backend bearer credential (see loadBearerCredential()).
+constexpr int kBearerCredentialReadTimeoutMs = 3 * 1000;
+
+bool sameUpcomingMeetings(const QList<UpcomingMeeting> &lhs,
+                          const QList<UpcomingMeeting> &rhs) {
+  return std::equal(lhs.cbegin(), lhs.cend(), rhs.cbegin(), rhs.cend(),
+                    [](const UpcomingMeeting &a, const UpcomingMeeting &b) {
+                      return a.meetingRef == b.meetingRef && a.title == b.title &&
+                             a.startTime == b.startTime &&
+                             a.joinEnabled == b.joinEnabled && a.eventId == b.eventId;
+                    });
+}
 
 // Renamed from PsyClientManager to Sessio. Installs that still have their
 // Qt-managed settings/backups directory under the old org/app name get it
@@ -81,16 +124,78 @@ void clearSensitiveString(std::string *text) {
 
 Application::Application() = default;
 
-int Application::run(int argc, char *argv[]) {
+int Application::run(int argc, char *argv[], const QString &launchUrl) {
   QApplication app(argc, argv);
+
+  // Installed on &app as early as possible, before the role dialog or any
+  // other nested event loop below can run: on macOS, a cold start via a
+  // sessio:// link delivers a QFileOpenEvent to the QApplication instance
+  // itself, and it can arrive before mMainWindow/mClientModeWindow exists.
+  // eventFilter() queues that URL into mPendingJoinUrl when neither window
+  // exists yet; runClientFlow()/runSpecialistFlow() replay it via
+  // handleJoinLink() right after constructing their window.
+  app.installEventFilter(this);
+
+  // Single-instance guard: must run before any other setup below (style,
+  // translations, config read, role dialog, window construction) so a second
+  // launch exits as fast as possible. It can't run before QApplication
+  // itself is constructed — QLocalServer/QLocalSocket need a
+  // QCoreApplication-derived event-loop instance to already exist (the
+  // guard's own tests construct QCoreApplication first for the same reason)
+  // — but everything else in this function is far heavier than constructing
+  // QApplication, so a secondary instance still exits well before any of it
+  // runs.
+  mSingleInstanceGuard = std::make_unique<SingleInstanceGuard>();
+  if (!mSingleInstanceGuard->isPrimaryInstance()) {
+    // Forward unconditionally, even when launchUrl is empty: a plain
+    // relaunch (e.g. double-clicking the icon again with no sessio:// link
+    // involved) should still make the primary instance raise its window.
+    // SingleInstanceGuard::forwardToPrimaryInstance() substitutes a
+    // non-empty activation sentinel for an empty url, since writing zero
+    // bytes over the local socket would never reach the primary at all.
+    mSingleInstanceGuard->forwardToPrimaryInstance(launchUrl);
+    return 0;
+  }
+
+  mRoleSwitcher = std::make_unique<AppRoleSwitcher>([this]() {
+    return ApplicationRestarter::forRunningApplication(
+               mSingleInstanceGuard.get(), {},
+               [this]() {
+                 // Specialist mode shuts down through quitApplication() so a
+                 // due automatic backup still runs; Client mode just quits.
+                 if (mMainWindow) {
+                   quitApplication();
+                 } else {
+                   QApplication::quit();
+                 }
+               })
+        .restart();
+  });
+
   app.setQuitOnLastWindowClosed(false);
   migrateLegacyAppConfigDirectory(QStringLiteral("PsyClientManager"),
                                   QStringLiteral("Sessio"));
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  app.setApplicationVersion("0.1.34");
-  app.setWindowIcon(QIcon(":/icons/brain-solid-full.svg"));
+  QCoreApplication::setApplicationVersion("0.2.39");
+  // Before anything that can log: on Windows this file and the crash dump are
+  // the only trace a hang or crash leaves.
+  const QString logDir =
+      QDir(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)).filePath(QStringLiteral("logs"));
+  pcm::app::installFileLog(logDir);
+  pcm::app::installCrashDumpHandler(logDir);
+  qCInfo(logApplication).noquote() << "Sessio" << QCoreApplication::applicationVersion() << "on"
+                                   << QSysInfo::prettyProductName();
+  // Installed builds ship libical's timezone data next to the executable; the
+  // path compiled into the schedule engine only exists in development trees.
+  pcm::meeting::configureScheduleZoneinfo(QCoreApplication::applicationDirPath());
+  // Wayland panels match a window to its .desktop entry (and icon) by app_id,
+  // which Qt derives from the desktop file name; without this an RPM-installed
+  // Sessio's window can end up with a foreign icon.
+  QGuiApplication::setDesktopFileName(QStringLiteral("Sessio"));
+  app.setWindowIcon(QIcon::fromTheme(QStringLiteral("Sessio"),
+                                     QIcon(":/icons/brain-solid-full.svg")));
   auto *style = new oclero::qlementine::QlementineStyle(&app);
   app.setStyle(style);
 
@@ -148,36 +253,482 @@ int Application::run(int argc, char *argv[]) {
                               << localeName;
   }
 
+  config::Config conf;
+  try {
+    conf = config::Config::read_config();
+  } catch (const std::exception &error) {
+    qCWarning(logApplication) << "Failed to read config, falling back to defaults:"
+                              << error.what();
+  }
+
+  auto role = config::appRoleFromString(QString::fromStdString(conf.app_role));
+  if (!role.has_value() || *role == config::AppRole::Unset) {
+    RoleSelectionDialog roleDialog;
+    if (roleDialog.exec() != QDialog::Accepted || !roleDialog.selectedRole().has_value()) {
+      return 0; // user closed the first-launch prompt without choosing
+    }
+    role = roleDialog.selectedRole();
+    conf.app_role = config::appRoleToString(*role).toStdString();
+    try {
+      config::Config::save_config(conf);
+    } catch (const std::exception &error) {
+      // The chosen role still applies to this session; the prompt just
+      // reappears on the next launch.
+      qCWarning(logApplication) << "Failed to save the selected role:" << error.what();
+    }
+  }
+  qCInfo(logApplication) << "Starting with role:" << config::appRoleToString(*role);
+
+  mDeviceManager = std::make_unique<pcm::video::DeviceManager>();
+  mTokenBackendBaseUrl = QString::fromStdString(conf.token_backend_base_url);
+  mTokenClient = std::make_unique<pcm::tokenclient::TokenBackendClient>(mTokenBackendBaseUrl);
+
+  // A later launch forwards its sessio:// URL here once this instance's
+  // window exists; handleJoinLink() itself checks which of mMainWindow /
+  // mClientModeWindow got constructed, so this connection is safe to make
+  // before the role branch below actually builds either window.
+  connect(mSingleInstanceGuard.get(), &SingleInstanceGuard::urlReceivedFromSecondaryInstance,
+          this, &Application::handleJoinLink);
+
+  if (*role == config::AppRole::Client) {
+    return runClientFlow(app, launchUrl);
+  }
+  return runSpecialistFlow(app, launchUrl);
+}
+
+// Client mode: a join-by-code window and nothing else. Deliberately never
+// constructs Database, QClientModel, MeetingCoordinator, AutoBackupScheduler,
+// the tray/notifications or app-lock, and never runs a pending backup restore
+// or reads the specialist bearer credential from the keychain.
+int Application::runClientFlow(QApplication &app, const QString &launchUrl) {
+  // run() turns this off because the specialist flow keeps running in the
+  // system tray; Client mode has no tray icon, so closing its only window
+  // must end the process.
+  app.setQuitOnLastWindowClosed(true);
+  mClientModeWindow =
+      std::make_unique<ClientModeWindow>(mDeviceManager.get(), mTokenClient.get());
+  mClientModeWindow->setRoleSwitcher(mRoleSwitcher.get());
+  mClientModeWindow->show();
+  if (!launchUrl.isEmpty()) {
+    handleJoinLink(launchUrl);
+  }
+  if (!mPendingJoinUrl.isEmpty()) {
+    handleJoinLink(mPendingJoinUrl);
+    mPendingJoinUrl.clear();
+  }
+  return app.exec();
+}
+
+// Specialist mode: the full application.
+int Application::runSpecialistFlow(QApplication &app, const QString &launchUrl) {
   restorePendingBackup();
 
   mDb = std::make_shared<database::Database>(mConf);
+
+  // Before any call page or transcription session exists: close transcripts a
+  // crash left in "recording" state and drop rows whose event is gone.
+  {
+    const auto interrupted = mDb->finalize_interrupted_transcripts();
+    const auto orphans = mDb->purge_orphan_transcripts();
+    if (interrupted > 0 || orphans > 0) {
+      qCInfo(logApplication) << "Transcript recovery: interrupted=" << interrupted
+                             << "orphans=" << orphans;
+    }
+  }
 
   mAutoBackupScheduler =
       std::make_unique<pcm::backup::AutoBackupScheduler>(mDb);
   mAutoBackupScheduler->start();
 
-  mMeetingCoordinator = std::make_unique<pcm::meeting::MeetingCoordinator>(this);
+  loadBearerCredential();
+  mMeetingCoordinator = std::make_unique<pcm::meeting::MeetingCoordinator>(
+      mTokenBackendBaseUrl, mBearerCredential, this);
 
   mMainWindow = std::make_unique<MainWindow>();
+  mMainWindow->setRoleSwitcher(mRoleSwitcher.get());
   mClientModel = std::make_shared<QClientModel>(mDb);
 
-  mMainWindow->addEventInfoPage(new QTimelineModel(mDb, mMeetingCoordinator.get(), this),
-                                mMeetingCoordinator.get());
+  // Recurring-call publishing: schedule outbox sync, permanent invitation and
+  // the facade the event editor / timeline use. The sync starts once the
+  // window is up (see below).
+  mScheduleCredentialReader =
+      std::make_unique<StoreCredentialReader>(*mTokenCredentialStore);
+  mInvitationSecretStore = std::make_unique<QtKeychainSeriesInvitationStore>();
+  mScheduleSync = std::make_unique<pcm::meeting::ScheduleSync>(
+      *mDb, *mTokenClient, mScheduleCredentialReader->reader());
+  mSeriesInvitations = std::make_unique<pcm::meeting::SeriesInvitationService>(
+      *mDb, *mScheduleSync, *mTokenClient, mScheduleCredentialReader->reader(),
+      *mInvitationSecretStore);
+  mScheduleCommitter = std::make_unique<pcm::meeting::SeriesScheduleCommitter>(*mDb);
+  mScheduleCommitter->setSync(mScheduleSync.get());
+  mSeriesCalls = std::make_unique<pcm::meeting::SeriesCallService>(
+      *mDb, *mScheduleSync, *mSeriesInvitations, *mScheduleCommitter,
+      mMeetingCoordinator.get());
+
+  auto *timelineModel = new QTimelineModel(mDb, mMeetingCoordinator.get(), this);
+  mTimelineModel = timelineModel;
+#ifdef SESSIO_CALL_TRANSCRIPTION
+  mCallEventResolver = std::make_unique<pcm::calltranscription::CallEventResolver>(
+      mDb, [this](const DuckEvent &e) {
+        return mTimelineModel ? mTimelineModel->addEvent(e, true) : int64_t{0};
+      });
+#endif
+  timelineModel->setScheduleCommitter(mScheduleCommitter.get());
+  // The Calls tab lists today's meetings; it must follow every calendar change at once rather
+  // than waiting for the periodic poll.
+  const auto refresh = [this] { queueUpcomingMeetingsRefresh(); };
+  connect(timelineModel, &QAbstractItemModel::rowsInserted, this, refresh);
+  connect(timelineModel, &QAbstractItemModel::rowsRemoved, this, refresh);
+  connect(timelineModel, &QAbstractItemModel::rowsMoved, this, refresh);
+  connect(timelineModel, &QAbstractItemModel::modelReset, this, refresh);
+  connect(timelineModel, &QAbstractItemModel::dataChanged, this, refresh);
+  connect(timelineModel, &QTimelineModel::eventsLoaded, this, &Application::queueUpcomingMeetingsRefresh);
+  if (mMeetingCoordinator) {
+    connect(mMeetingCoordinator.get(), &pcm::meeting::MeetingCoordinator::meetingCreated, this,
+            [this] { queueUpcomingMeetingsRefresh(); });
+    connect(mMeetingCoordinator.get(), &pcm::meeting::MeetingCoordinator::meetingCanceled, this,
+            [this] { queueUpcomingMeetingsRefresh(); });
+  }
+  mMainWindow->addEventInfoPage(timelineModel, mMeetingCoordinator.get());
+  if (auto *eventPage = dynamic_cast<QEventInfoPage *>(
+          mMainWindow->getPage(MainWindow::Pages::eventInfo))) {
+    eventPage->setSeriesCallService(mSeriesCalls.get());
+  }
+  mMainWindow->addMyDayPage(mDb, timelineModel, mSeriesCalls.get());
   mMainWindow->addClientInfoPage(mClientModel);
   mMainWindow->addAnalyticsPage(mDb);
   mMainWindow->addClientCardPage(mDb);
   mMainWindow->addClientNotesPage(mDb);
+  mMainWindow->addCallsPage(mDeviceManager.get(), mTokenClient.get(),
+                            [this]() { return mBearerCredential; });
+  if (auto *calls = dynamic_cast<CallsPage *>(mMainWindow->getPage(MainWindow::Pages::calls)))
+    connect(calls, &CallsPage::upcomingMeetingsRefreshRequested, this,
+            &Application::queueUpcomingMeetingsRefresh);
+  refreshUpcomingMeetings();
   mMainWindow->setDatabase(mDb);
   mMainWindow->connectSignals();
   mMainWindow->installEventFilter(this);
-  app.installEventFilter(this);
+  // app.installEventFilter(this) already happened at the top of run(), before
+  // mMainWindow existed, so a QFileOpenEvent arriving during earlier startup
+  // (e.g. the first-launch role dialog) is queued in mPendingJoinUrl rather
+  // than lost; it is replayed below alongside the launchUrl parameter.
   connectSignals();
   initializeAppLock();
   initializeNotifications();
+  // Keep the Calls tab's "today's meetings" list current (meetings created or
+  // canceled while the app sits in the tray) on the notification poll cadence.
+  connect(&mNotificationTimer, &QTimer::timeout, this, &Application::refreshUpcomingMeetings);
 
   mMainWindow->show();
+  // Recover the persisted schedule queue (and probe the backend once).
+  mScheduleSync->start();
+  // Restart resume. A series published before the app was closed may lack its
+  // permanent invitation (ensureInvitation is a no-op for series that have one
+  // and waits for the schedule ACK otherwise), or may hold the idempotency key
+  // of a reissue that was interrupted before its secret was stored.
+  for (const auto &series : mDb->get_event_series_for_range(0, 253402300799000)) {
+    const auto identity = mDb->get_schedule_identity(series.id);
+    if (!identity.has_value()) {
+      continue;
+    }
+    if (identity->invitation_generation <= 0) {
+      mSeriesInvitations->ensureInvitation(series.id);
+    } else if (identity->invitation_key.has_value() && !identity->invitation_key->empty()) {
+      mSeriesInvitations->resumeInterruptedReissue(series.id);
+    }
+  }
+  connect(mScheduleSync.get(), &pcm::meeting::ScheduleSync::statusChanged, this,
+          [this](const QString &) { refreshUpcomingMeetings(); });
+  if (!launchUrl.isEmpty()) {
+    handleJoinLink(launchUrl);
+  }
+  if (!mPendingJoinUrl.isEmpty()) {
+    handleJoinLink(mPendingJoinUrl);
+    mPendingJoinUrl.clear();
+  }
 
   return app.exec();
+}
+
+// Reads the token-backend bearer credential from the keychain. The read is
+// asynchronous (QtKeychain completes it from the event loop), and
+// MeetingCoordinator takes the credential by value at construction, before
+// app.exec() is running, so without a wait it would always be constructed
+// with an empty credential. Wait for the result for at most
+// kBearerCredentialReadTimeoutMs; a slower keychain (e.g. a locked keyring
+// prompting for its password) still updates mBearerCredential when it
+// finishes, which the Calls tab picks up through its provider lambda.
+void Application::loadBearerCredential() {
+  mTokenCredentialStore = std::make_unique<QtKeychainTokenBackendCredentialStore>();
+  connect(mTokenCredentialStore.get(), &TokenBackendCredentialStore::readFinished, this,
+          [this](const bool ok, const QString &credential, const QString &error) {
+            mBearerCredentialReadDone = true;
+            if (ok) {
+              mBearerCredential = credential;
+              // Bug 3 (fixwave group 5): this lambda fires both for the very
+              // first startup read (here mMeetingCoordinator is still null —
+              // runSpecialistFlow() constructs it only after
+              // loadBearerCredential() returns, see that function's body)
+              // and for every later re-read triggered by onSettingsSaved()
+              // (where it already exists). The null check makes both cases
+              // correct: nothing to propagate to yet on the first read
+              // (MeetingCoordinator's constructor takes the current
+              // mBearerCredential by value instead), and live propagation on
+              // every later read.
+              if (mMeetingCoordinator) {
+                mMeetingCoordinator->setBearerCredential(mBearerCredential);
+              }
+            } else {
+              qCWarning(logApplication)
+                  << "Token-backend bearer credential unavailable:" << error;
+            }
+          });
+
+  QEventLoop waitLoop;
+  // Context object &waitLoop: both connections die with the loop, so a read
+  // finishing after the timeout never touches the destroyed local.
+  connect(mTokenCredentialStore.get(), &TokenBackendCredentialStore::readFinished, &waitLoop,
+          &QEventLoop::quit);
+  QTimer::singleShot(kBearerCredentialReadTimeoutMs, &waitLoop, &QEventLoop::quit);
+  mTokenCredentialStore->readBearerCredential();
+  if (!mBearerCredentialReadDone) {
+    waitLoop.exec();
+  }
+  if (!mBearerCredentialReadDone) {
+    qCWarning(logApplication) << "Timed out waiting for the keychain; LiveKit meeting "
+                                 "creation will run without a bearer credential";
+  }
+}
+
+// Builds the Calls tab's "today's meetings" list: today's LiveKit events that
+// have a meeting reference, are scheduled/completed/confirmed (the same status
+// set the reminder notifications use) and have not ended yet. Only pushes the
+// list to the page when it actually changed, so the periodic refresh does not
+// rebuild the rows (and drop keyboard focus) every tick.
+void Application::queueUpcomingMeetingsRefresh() {
+  if (mUpcomingRefreshQueued) return;
+  mUpcomingRefreshQueued = true;
+  QTimer::singleShot(0, this, [this] {
+    mUpcomingRefreshQueued = false;
+    refreshUpcomingMeetings();
+  });
+}
+
+void Application::refreshUpcomingMeetings() {
+  if (!mMainWindow || !mDb) {
+    return;
+  }
+  auto *callsPage = dynamic_cast<CallsPage *>(mMainWindow->getPage(MainWindow::Pages::calls));
+  if (callsPage == nullptr) {
+    return;
+  }
+
+  const auto today = QDate::currentDate();
+  const auto localTz = QTimeZone(QTimeZone::LocalTime);
+  const auto dayStartMs = QDateTime(today, QTime(0, 0), localTz).toMSecsSinceEpoch();
+  const auto dayEndMs =
+      QDateTime(today.addDays(1), QTime(0, 0), localTz).toMSecsSinceEpoch() - 1;
+  const auto nowMs = QDateTime::currentMSecsSinceEpoch();
+
+  const auto isEligibleStatus = [](const int64_t statusId) {
+    return statusId == 1 || statusId == 2 || statusId == 4;
+  };
+
+  auto events = mDb->get_day_events(dayStartMs, dayEndMs);
+  std::sort(events.begin(), events.end(), [](const DuckEvent &a, const DuckEvent &b) {
+    return a.start_date.value_or(0) < b.start_date.value_or(0);
+  });
+
+  // Occurrences of published series have no Event row until edited, and their
+  // call is the series' permanent invitation, joined by occurrence.
+  if (mSeriesCalls) {
+    const auto dayStart = QDateTime::fromMSecsSinceEpoch(dayStartMs);
+    const auto dayEnd = QDateTime::fromMSecsSinceEpoch(dayEndMs);
+    auto virtualEvents = pcm::recurrence::virtualOccurrencesInRange(*mDb, dayStart, dayEnd);
+    events.insert(events.end(), virtualEvents.cbegin(), virtualEvents.cend());
+    std::sort(events.begin(), events.end(), [](const DuckEvent &a, const DuckEvent &b) {
+      return a.start_date.value_or(0) < b.start_date.value_or(0);
+    });
+  }
+
+  QList<UpcomingMeeting> meetings;
+  for (auto &event : events) {
+    if (mSeriesCalls && event.series_id.has_value()) {
+      if (const auto target = mSeriesCalls->joinTargetFor(event)) {
+        event.provider_kind = "livekit";
+        event.meeting_ref = target->toStdString();
+      }
+    }
+    const auto kind = pcm::meeting::providerKindFromString(event.provider_kind.value_or(""));
+    const bool externalJitsi = kind == pcm::meeting::ProviderKind::ExternalJitsi;
+    if (!kind || (!pcm::meeting::isBackendHosted(*kind) && !externalJitsi)) {
+      continue;
+    }
+    if ((!externalJitsi && (!event.meeting_ref.has_value() || event.meeting_ref->empty())) ||
+        (externalJitsi && event.meeting_url.empty()) ||
+        !isEligibleStatus(event.event_stat_id)) {
+      continue;
+    }
+    if (event.end_date.has_value() && *event.end_date < nowMs) {
+      continue;
+    }
+
+    UpcomingMeeting meeting;
+    meeting.meetingRef = externalJitsi ? QStringLiteral("external-jitsi:%1").arg(event.id)
+                                     : QString::fromStdString(*event.meeting_ref);
+    if (externalJitsi) meeting.jitsiUrl = QString::fromStdString(event.meeting_url);
+    meeting.title = QString::fromStdString(event.name.value_or(""));
+    meeting.startTime = QDateTime::fromMSecsSinceEpoch(event.start_date.value_or(0));
+    meeting.joinEnabled = true;
+    meeting.eventId = event.id;
+    meetings.append(meeting);
+  }
+
+  QVariantList history;
+  try {
+    for (const auto &material : mDb->get_call_materials()) {
+      const auto state = QJsonDocument::fromJson(QByteArray::fromStdString(material.json)).object();
+      QString title = tr("Call materials");
+      if (material.event_id)
+        if (const auto event = mDb->get_event(*material.event_id)) title = QString::fromStdString(event->name.value_or(""));
+      QVariantList transcripts;
+      for (const auto id : mDb->get_call_material_transcript_ids(material.id))
+        transcripts.append(QVariantMap{{"id", QString::number(id)}, {"title", tr("Transcript") + " " + QString::number(id)}});
+      history.append(QVariantMap{{"id", QString::number(material.id)}, {"title", title},
+        {"date", QDateTime::fromMSecsSinceEpoch(material.created_at).toLocalTime().toString("dd.MM.yyyy · HH:mm")},
+        {"summary", materialSummaryText(state)},
+        {"transcripts", transcripts}});
+    }
+  } catch (...) { history.clear(); }
+  callsPage->setMaterialHistory(history);
+  if (sameUpcomingMeetings(meetings, mUpcomingMeetings)) {
+    return;
+  }
+  mUpcomingMeetings = meetings;
+  callsPage->setUpcomingMeetings(mUpcomingMeetings);
+}
+
+// Handles a sessio://join?code=...&passcode=... URL, whether it came from
+// this instance's own launch argument or was forwarded by a second instance
+// via mSingleInstanceGuard. The forwarded payload is not always a real join
+// link — a plain relaunch with no sessio:// url (e.g. double-clicking the
+// icon again) forwards a non-empty activation sentinel instead (see
+// SingleInstanceGuard::forwardToPrimaryInstance()) so raising the window
+// below always runs regardless of whether url parses as a join link.
+// Exactly one of mMainWindow / mClientModeWindow is constructed by the time
+// this can run (after the role branch in run()), so this only ever touches
+// the window for the role this process is actually running as.
+void Application::handleJoinLink(const QString &url) {
+  // Unconditional: raising/showing the existing window must happen whether
+  // or not url turns out to be a parseable join link.
+  if (mMainWindow) {
+    mMainWindow->show();
+    mMainWindow->raise();
+  } else if (mClientModeWindow) {
+    mClientModeWindow->show();
+    mClientModeWindow->raise();
+  }
+
+  const auto link = parseSessioJoinUrl(url);
+  if (!link.has_value()) {
+    return;
+  }
+  // Client mode: an invitation that names its token backend retargets the
+  // token client before the code is prefilled, so the join that follows goes
+  // to the backend that issued the invitation. Persisted so a later manual
+  // code entry or relaunch keeps using it.
+  //
+  // Specialist mode deliberately ignores it: the specialist's token client
+  // also sends the keychain bearer credential (specialist-token requests from
+  // the Calls tab), so letting any clicked link retarget it would hand that
+  // credential to whatever backend the link names. Specialists configure
+  // their backend in Settings instead.
+  const bool linkNamesBackend = link->backendUrl.has_value() && !link->backendUrl->isEmpty();
+  if (linkNamesBackend && mClientModeWindow && !mMainWindow) {
+    applyTokenBackendBaseUrl(*link->backendUrl);
+    persistTokenBackendBaseUrl(*link->backendUrl);
+  } else if (linkNamesBackend) {
+    qCInfo(logApplication) << "Ignoring the join link's backend in specialist mode";
+  }
+  if (mMainWindow) {
+    // Switch tabs too: prefilling a page the specialist is not looking at
+    // makes the link look like it did nothing.
+    mMainWindow->openJoinLink(link->code, link->passcode);
+  } else if (mClientModeWindow) {
+    // ClientModeWindow's CallsPage is its central widget — reuse the same
+    // dynamic_cast pattern via centralWidget() rather than a page lookup.
+    if (auto *callsPage = dynamic_cast<CallsPage *>(mClientModeWindow->centralWidget())) {
+      callsPage->prefillJoinCode(link->code, link->passcode);
+    }
+  }
+}
+
+void Application::applyTokenBackendBaseUrl(const QString &baseUrl) {
+  mTokenBackendBaseUrl = baseUrl;
+  if (mTokenClient) {
+    mTokenClient->setBaseUrl(mTokenBackendBaseUrl);
+    if (mScheduleSync) {
+      mScheduleSync->wake();
+    }
+  }
+  // Bug 3 (fixwave group 5): mMeetingCoordinator is null in Client mode
+  // (never constructed there) and also null here if this runs before
+  // runSpecialistFlow() constructs it — but applyTokenBackendBaseUrl() is
+  // only ever called from handleJoinLink() (Client mode only, guarded by
+  // mClientModeWindow && !mMainWindow there) and onSettingsSaved() (only
+  // reachable once mMainWindow/mMeetingCoordinator already exist), so this
+  // guard is a defensive no-op in both current call sites, not a real gap.
+  if (mMeetingCoordinator) {
+    mMeetingCoordinator->setTokenBackendBaseUrl(mTokenBackendBaseUrl);
+  }
+}
+
+void Application::persistTokenBackendBaseUrl(const QString &baseUrl) {
+  config::Config conf;
+  try {
+    conf = config::Config::read_config();
+  } catch (const std::exception &error) {
+    // Saving a default-constructed Config here would overwrite the unreadable
+    // file's role and database path, so leave it alone; the new URL still
+    // applies for this session.
+    qCWarning(logApplication) << "Failed to read config, not persisting the token backend URL:"
+                              << error.what();
+    return;
+  }
+  if (conf.token_backend_base_url == baseUrl.toStdString()) {
+    return;
+  }
+  conf.token_backend_base_url = baseUrl.toStdString();
+  try {
+    config::Config::save_config(conf);
+  } catch (const std::exception &error) {
+    qCWarning(logApplication) << "Failed to save the token backend URL:" << error.what();
+  }
+}
+
+// MainWindow emits settingsSaved after its SettingsDialog closes; the LiveKit
+// section may have written a new token backend URL to Config, which the
+// already-constructed token client would otherwise ignore until a restart.
+void Application::onSettingsSaved() {
+  // The same section may also have written a new bearer credential to the
+  // keychain; re-read it so the Calls tab's credential provider (which reads
+  // mBearerCredential) picks it up. The readFinished connection made in
+  // loadBearerCredential() updates mBearerCredential asynchronously.
+  if (mTokenCredentialStore) {
+    mTokenCredentialStore->readBearerCredential();
+  }
+  if (mScheduleSync) {
+    mScheduleSync->wake();
+  }
+
+  config::Config conf;
+  try {
+    conf = config::Config::read_config();
+  } catch (const std::exception &error) {
+    qCWarning(logApplication) << "Failed to read config after settings changed:" << error.what();
+    return;
+  }
+  applyTokenBackendBaseUrl(QString::fromStdString(conf.token_backend_base_url));
 }
 
 void Application::restorePendingBackup() {
@@ -238,6 +789,23 @@ void Application::restorePendingBackup() {
 }
 
 bool Application::eventFilter(QObject *watched, QEvent *event) {
+  // macOS delivers a sessio:// link (or any registered URL scheme/file open
+  // request) as a QFileOpenEvent sent to the QApplication instance itself,
+  // not to mMainWindow/mClientModeWindow — hence the filter installed on
+  // &app at the top of run(). If neither window has been constructed yet
+  // (a cold start), queue the URL in mPendingJoinUrl instead of dropping it;
+  // runClientFlow()/runSpecialistFlow() replay it once their window exists.
+  if (event != nullptr && event->type() == QEvent::FileOpen) {
+    const auto *openEvent = static_cast<QFileOpenEvent *>(event);
+    const QString url = openEvent->url().toString();
+    if (mMainWindow || mClientModeWindow) {
+      handleJoinLink(url);
+    } else {
+      mPendingJoinUrl = url;
+    }
+    return true;
+  }
+
   if (watched == mMainWindow.get() && event != nullptr &&
       event->type() == QEvent::Resize && mAppLockOverlay != nullptr) {
     mAppLockOverlay->setGeometry(mMainWindow->rect());
@@ -508,7 +1076,7 @@ void Application::checkUpcomingEventNotifications() {
 
 void Application::notifyUpcomingSeriesOccurrences(const int64_t nowMs,
                                                    const int64_t windowEndMs) {
-  const auto localTz = QTimeZone::systemTimeZone();
+  const auto localTz = QTimeZone(QTimeZone::LocalTime);
   const auto rangeStart =
       QDateTime::fromMSecsSinceEpoch(nowMs, QTimeZone::UTC).toTimeZone(localTz);
   const auto rangeEnd =
@@ -534,7 +1102,8 @@ void Application::notifyUpcomingSeriesOccurrences(const int64_t nowMs,
 
     const auto materializedStarts =
         mDb->get_materialized_occurrence_starts_for_series(series.id);
-    const auto occurrences = pcm::recurrence::occurrences(series, rangeStart, rangeEnd);
+    const auto occurrences =
+        pcm::recurrence::seriesOccurrences(*mDb, series, rangeStart, rangeEnd);
     for (const auto &occurrence : occurrences) {
       const auto occurrenceStartMs = occurrence.toUTC().toMSecsSinceEpoch();
       const std::pair<int64_t, int64_t> key{series.id, occurrenceStartMs};
@@ -561,6 +1130,7 @@ void Application::connectSignals() {
           &Application::removeClient);
   connect(mMainWindow.get(), &MainWindow::provideClientEventPairSave, this,
           &Application::saveClientEventPair);
+  connect(mMainWindow.get(), &MainWindow::settingsSaved, this, &Application::onSettingsSaved);
 
   {
     const auto widget = mMainWindow->getPage(MainWindow::Pages::eventInfo);
@@ -568,11 +1138,610 @@ void Application::connectSignals() {
     connect(page, &QEventInfoPage::provideFillClientComboBox, this,
             &Application::fillClientComboBox);
     connect(page, &QEventInfoPage::provideClientByEventId, [page, this](int64_t eventId) {
-      const auto client = mDb->get_client_by_event(eventId);
-      emit page->clientResolved(client.id);
+      try {
+        const auto client = mDb->get_client_by_event(eventId);
+        emit page->clientResolved(client.id);
+      } catch (const std::exception &) { emit page->clientResolved(0); }
     });
+    // Connected before preselectLiveKitMeeting so a meeting created earlier in
+    // this session is already in the Calls tab's list when it gets preselected
+    // (slots run in connection order).
+    connect(page, &QEventInfoPage::openLiveKitMeetingRequested, this,
+            &Application::refreshUpcomingMeetings);
+    connect(page, &QEventInfoPage::openLiveKitMeetingRequested, mMainWindow.get(),
+            &MainWindow::preselectLiveKitMeeting);
+    connect(page, &QEventInfoPage::openExternalJitsiMeetingRequested, this, &Application::refreshUpcomingMeetings);
+    connect(page, &QEventInfoPage::openExternalJitsiMeetingRequested, mMainWindow.get(), &MainWindow::openExternalJitsiMeeting);
+  }
 
+  // «Мой день» start page: "Join" runs the same two steps as the Calendar's Open Meeting.
+  // (openEventRequested / openClientRequested are wired inside MainWindow::addMyDayPage.)
+  if (auto *myDay = dynamic_cast<pcm::my_day::MyDayPage *>(
+          mMainWindow->getPage(MainWindow::Pages::myDay))) {
+    connect(myDay->bridge(), &pcm::my_day::MyDayBridge::openLiveKitMeetingRequested, this,
+            &Application::refreshUpcomingMeetings);
+    connect(myDay->bridge(), &pcm::my_day::MyDayBridge::openLiveKitMeetingRequested,
+            mMainWindow.get(), &MainWindow::preselectLiveKitMeeting);
+    connect(myDay->bridge(), &pcm::my_day::MyDayBridge::openExternalJitsiMeetingRequested, this, &Application::refreshUpcomingMeetings);
+    connect(myDay->bridge(), &pcm::my_day::MyDayBridge::openExternalJitsiMeetingRequested,
+            mMainWindow.get(), &MainWindow::openExternalJitsiMeeting);
+  }
+
+  // Specialist Calls tab: when a call for one of the specialist's own events
+  // starts, show that event's client notes in the call's side panel. One
+  // panel is created lazily and reused for later calls (CallPage detaches a
+  // replaced panel without deleting it).
+  {
+    auto *callsPage = dynamic_cast<CallsPage *>(mMainWindow->getPage(MainWindow::Pages::calls));
+#ifdef SESSIO_CALL_TRANSCRIPTION
+    auto *eventPage = dynamic_cast<QEventInfoPage *>(mMainWindow->getPage(MainWindow::Pages::eventInfo));
+    auto *panel = new TranscriptPanel;
+    auto *notes = new CallNotesController(mDb, this);
+    auto *notesPage = new CallNotesPage(mDb, notes, callsPage);
+    notesPage->setCallPanelMode();
+    mCallNotesPanel = notesPage->editor();
+    // Agreement → calendar: the pre-filled dialog lives on the Calendar page; «In calendar» jumps there.
+    const auto wireCalendar = [this, eventPage](CallNotesPage *page) {
+      connect(page, &CallNotesPage::paymentChanged, eventPage, &QEventInfoPage::reloadSelectedDay);
+      page->setCalendarOpener([eventPage](const EventTemplate &t) {
+        return eventPage ? eventPage->createEventFromTemplate(t) : std::nullopt;
+      });
+      page->setEventOpener([this](int64_t eventId) {
+        qint64 dayMs = QDateTime::currentMSecsSinceEpoch();
+        try {
+          if (const auto event = mDb->get_event(eventId); event && event->start_date) dayMs = *event->start_date;
+        } catch (...) {}
+        mMainWindow->returnToEvent(eventId, dayMs);
+      });
+    };
+    wireCalendar(notesPage);
+    auto bindNotesEditor = [](ClientNotesPage *page, CallNotesController *storage) {
+      const QPointer<CallNotesController> guard(storage);
+      auto boundMaterial = std::make_shared<qint64>(-1);
+      auto refresh = [page, guard, boundMaterial] {
+        if (!guard) return;
+        if (*boundMaterial != guard->materialId()) {
+          *boundMaterial = guard->materialId();
+          page->setCallNoteActions(guard->materialId(), {
+            [guard] { return guard ? guard->noteEntries() : QJsonArray{}; },
+            [guard](const QString &text, const QStringList &paths, const QString &id) {
+              return guard ? guard->saveNoteEntry(text, paths, id) : QString{};
+            },
+            [guard](const QString &entry, const QString &attachment) {
+              return guard ? guard->noteAttachmentPath(entry, attachment) : QString{};
+            },
+            [guard] { return guard ? guard->manualText() : QString{}; },
+            [guard](const QString &text) { return guard && guard->setManualText(text); },
+            [guard] { return guard ? guard->draftAttachmentPaths() : QStringList{}; },
+            [guard](const QStringList &paths) { return guard && guard->setDraftAttachmentPaths(paths); }
+          });
+        } else page->refresh();
+      };
+      QObject::connect(storage, &CallNotesController::changed, page, refresh);
+      refresh();
+    };
+    bindNotesEditor(mCallNotesPanel, notes);
+    connect(mCallNotesPanel, &ClientNotesPage::openEventRequested, mMainWindow.get(),
+            &MainWindow::returnToEvent);
+    auto *sidePanel = new CallSidePanel(notesPage, panel, callsPage);
+    auto *prompter = new CallPrompterController(mDb, this);
+    connect(panel, &TranscriptPanel::exportRequested, panel, [this, panel, prompter] {
+      const auto id = prompter->transcriptId();
+      if (id > 0 && !pcm::transcriptionui::exportTranscriptWithDialog(panel, *mDb, {id}))
+        QMessageBox::warning(panel, tr("Export transcript"), tr("Could not save the transcript file."));
+    });
+    connect(prompter, &CallPrompterController::cardsChanged, notesPage, [notesPage, prompter] {
+      notesPage->setAgreements(prompter->records());
+    });
+    auto *worker = new PrompterWorker(this);
+    // The cloud key reaches the worker through an in-memory cache, read once for someone who opted in.
+    if (pcm::app_settings::cloudConsentValid()) {
+      auto *keys = new CloudKeyStore(this);
+      connect(keys, &CloudKeyStore::readFinished, keys, [keys](bool ok, QString key, QString) {
+        if (ok) pcm::app_settings::setCloudApiKeyCached(key);
+        keys->deleteLater();
+      });
+      keys->read();
+    }
+    auto *finals = new CallNotesFinalizer(mDb, this);
+    auto *prompterPanel = new PrompterPanel(prompter, mDb);
+    prompterPanel->setCallNoteSaver([notes](const QString &id, const QString &text) { return notes->appendAgreement(id, text); });
+    notesPage->setPrompterPanel(prompterPanel);
+    connect(prompterPanel, &PrompterPanel::pendingCountChanged, sidePanel, &CallSidePanel::setPrompterPendingCount);
+    connect(prompterPanel, &PrompterPanel::sourceRequested, sidePanel, [sidePanel, panel](qint64 id) {
+      sidePanel->showTranscript(); panel->focusPhrase(id);
+    });
+    connect(prompterPanel, &PrompterPanel::noteSaved, mCallNotesPanel, &ClientNotesPage::refresh);
+    connect(prompterPanel, &PrompterPanel::noteSaved, mCallNotesPanel,
+            [page = mCallNotesPanel, sidePanel] { sidePanel->showNotes(); if (page) page->focusComposer(); });
+    connect(prompter, &CallPrompterController::requestReady, worker, &PrompterWorker::send);
+    connect(worker, &PrompterWorker::resultReady, prompter, &CallPrompterController::handleResult);
+    connect(worker, &PrompterWorker::failed, prompter, &CallPrompterController::workerFailed);
+    connect(notes, &CallNotesController::requestReady, worker, &PrompterWorker::send);
+    connect(worker, &PrompterWorker::resultReady, notes, &CallNotesController::handleResult);
+    connect(worker, &PrompterWorker::failed, notes, &CallNotesController::workerFailed);
+    connect(worker, &PrompterWorker::stopped, notes, &CallNotesController::workerFailed);
+    connect(notes, &CallNotesController::cancelRequested, worker, [notes, worker](const QString &token) { worker->cancelNotes(notes->materialId(), token); });
+    auto notesWanted = std::make_shared<bool>(false);
+    auto meetingDetails = std::make_shared<QString>();
+    // «Meeting» card text: client display name and start time, nothing else.
+    const auto describeMeeting = [this](const std::optional<int64_t> &eventId,
+                                        const std::optional<DuckClient> &client, int64_t fallbackMs) {
+      QStringList parts;
+      if (client) {
+        const QString name = QString::fromStdString(client->name.value_or("")) + ' ' +
+                             QString::fromStdString(client->last_name.value_or(""));
+        if (!name.trimmed().isEmpty()) parts << name.trimmed();
+      }
+      std::optional<int64_t> start;
+      if (eventId) {
+        try {
+          const auto event = mDb->get_event(*eventId);
+          if (event) start = event->start_date;
+        } catch (...) {}
+      }
+      if (!start && fallbackMs > 0) start = fallbackMs;
+      if (start)
+        parts << QDateTime::fromMSecsSinceEpoch(*start, QTimeZone::UTC).toLocalTime().toString("dd.MM HH:mm");
+      return parts.join(QString::fromUtf8(" \u00b7 "));
+    };
+    const MeetingControllerFactory meetingControllers = [this, finals](qint64 materialId, QObject *parent) {
+      auto *saved = new CallNotesController(mDb, parent);
+      saved->openMaterial(materialId);
+      if (finals->contains(materialId)) saved->refreshFromStorage();
+      connect(saved, &CallNotesController::cancelRequested, saved, [saved, finals](const QString &) {
+        finals->cancel(saved->materialId());
+      });
+      connect(finals, &CallNotesFinalizer::materialChanged, saved, [saved](qint64 id) {
+        if (saved->materialId() == id) saved->refreshFromStorage();
+      });
+      connect(saved, &CallNotesController::generationRequested, saved, [saved, finals] {
+        saved->deferFinal(); finals->enqueue(saved->materialId());
+      });
+      return saved;
+    };
+    notesPage->setControllerFactory(meetingControllers);
+    connect(finals, &CallNotesFinalizer::requestReady, worker, &PrompterWorker::send);
+    connect(worker, &PrompterWorker::resultReady, finals, &CallNotesFinalizer::handleResult);
+    connect(worker, &PrompterWorker::failed, finals, &CallNotesFinalizer::workerFailed);
+    connect(worker, &PrompterWorker::stopped, finals, &CallNotesFinalizer::workerFailed);
+    connect(finals, &CallNotesFinalizer::cancelRequested, worker, &PrompterWorker::cancelNotes);
+    connect(notes, &CallNotesController::cancelRequested, finals, [notes, finals](const QString &) {
+      finals->cancel(notes->materialId());
+    });
+    connect(finals, &CallNotesFinalizer::materialChanged, notes, [notes](qint64 id) {
+      if (notes->materialId() == id) notes->refreshFromStorage();
+    });
+    // Starts what the given features run on: the local model when any of them is local, or just the
+    // cloud engine. With no local model on disk, cloud-routed features still work.
+    const auto startWorker = [worker](std::initializer_list<const char *> features) {
+      bool local = false, cloud = false;
+      for (const char *feature : features) (pcm::app_settings::featureEngine(feature) == "cloud" ? cloud : local) = true;
+      if (!local) return worker->startCloud();
+      const auto configured = pcm::app_settings::prompterModel();
+      const auto model = configured.isEmpty() ? PrompterWorker::bundledModel() : configured;
+      if (cloud && !QFileInfo(model).isFile()) return worker->startCloud();
+      return worker->start(model);
+    };
+    connect(finals, &CallNotesFinalizer::generationRequested, worker, [startWorker, finals] {
+      finals->setGenerationEnabled(startWorker({"summary"}));
+    });
+    auto startPrompter = [startWorker, prompter, notes, notesWanted] {
+      if (startWorker({"agreements", "live_points"})) {
+        *notesWanted = true; notes->setGenerationEnabled(true);
+        prompter->resume();
+      }
+    };
+    auto startNotesModel = [startWorker, notes] {
+      notes->setGenerationEnabled(startWorker({"live_points"}));
+    };
+    connect(notes, &CallNotesController::generationRequested, worker, startNotesModel);
+    connect(prompterPanel, &PrompterPanel::pauseRequested, prompter, [worker, prompter, notes, notesWanted] {
+      *notesWanted = false; notes->cancel(); notes->setGenerationEnabled(false);
+      prompter->pause(); worker->stop();
+    });
+    callsPage->setSidePanelWidget(sidePanel);
+    pcm::transcriptionui::ControllerHooks hooks;
+    hooks.resolveEvent = [this](int64_t id) { return resolveCallEvent(id); };
+    hooks.askConsent = [this] {
+      TranscriptionConsentDialog dialog(mMainWindow.get());
+      return dialog.exec() == QDialog::Accepted;
+    };
+    hooks.askRevokeChoice = [this] {
+      QMessageBox box(QMessageBox::Question, tr("Consent withdrawn"),
+                      tr("Transcription has stopped. What should happen to the recorded text?"),
+                      QMessageBox::NoButton, mMainWindow.get());
+      auto *remove = box.addButton(tr("Delete what was recorded"), QMessageBox::DestructiveRole);
+      box.addButton(tr("Keep as draft"), QMessageBox::RejectRole);
+      box.exec();
+      return box.clickedButton() == remove
+          ? pcm::transcriptionui::ControllerHooks::RevokeChoice::DeleteRecorded
+          : pcm::transcriptionui::ControllerHooks::RevokeChoice::KeepAsDraft;
+    };
+    hooks.engineFactory = [] {
+      return pcm::calltranscription::makeProductionEngineFactory(
+          QCoreApplication::applicationDirPath().toStdString(),
+          qEnvironmentVariable("SESSIO_MODELS_DIR").toStdString(),
+          pcm::app_settings::transcriptionTuning());
+    };
+    auto modelsAvailable = [] {
+      return pcm::calltranscription::transcriptionModelsAvailable(
+          QCoreApplication::applicationDirPath().toStdString(),
+          qEnvironmentVariable("SESSIO_MODELS_DIR").toStdString());
+    };
+    hooks.modelsAvailable = modelsAvailable;
+    hooks.transcriptionEnabled = &pcm::app_settings::transcriptionEnabled;
+    hooks.autoStartEnabled = &pcm::app_settings::transcriptionAutoStart;
+    hooks.eventMaterialised = [eventPage](int64_t) { eventPage->reloadSelectedDay(); };
+    mCallTranscription = new pcm::transcriptionui::CallTranscriptionController(mDb, panel, sidePanel, std::move(hooks), this);
+    auto *controller = mCallTranscription.data();
+    auto manualPrompterRequested = std::make_shared<bool>(false);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptStarted, prompter,
+            [prompter, worker, notes, startPrompter, manualPrompterRequested](qint64 id) {
+      worker->stop(); prompter->beginTranscript(id); notes->attachTranscript(id);
+      prompter->setEventId(notes->eventId());
+      prompter->setCallDate(notes->callDate());  // «в четверг» resolves against the call's day, even past midnight
+      if (*manualPrompterRequested || pcm::app_settings::prompterAutoStart()) startPrompter();
+      *manualPrompterRequested = false;
+    });
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::phraseAdded,
+            prompter, &CallPrompterController::addPhrase);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::phraseAdded,
+            notes, &CallNotesController::addPhrase);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptionStopped,
+            prompter, [worker, prompter, notes] { notes->cancel(); notes->setGenerationEnabled(false); prompter->pause(); worker->stop(); });
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::consentRevoked,
+            prompter, [worker, prompter, notes, notesWanted] { *notesWanted = false; notes->revoke(); prompter->endCall(); worker->stop(); });
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::speakersRenamed,
+            prompter, &CallPrompterController::speakersRenamed);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::speakersRenamed,
+            notes, &CallNotesController::transcriptChanged);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptDeleted,
+            prompter, &CallPrompterController::transcriptDeleted);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptDeleted,
+            notes, &CallNotesController::transcriptDeleted);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptReady,
+            finals, &CallNotesFinalizer::transcriptReady);
+    connect(prompterPanel, &PrompterPanel::startRequested, controller,
+            [controller, prompter, startPrompter, manualPrompterRequested] {
+      if (controller->active() && prompter->transcriptId()) { startPrompter(); return; }
+      *manualPrompterRequested = true;
+      controller->onTranscribeRequested();
+      *manualPrompterRequested = false;
+    });
+    connect(notesPage, &CallNotesPage::retryRequested, prompterPanel, &PrompterPanel::startRequested);
+    auto refreshButton = [this, callsPage, modelsAvailable] {
+      mCallTranscription->refreshAvailability();
+      callsPage->setTranscribeButtonVisible(pcm::app_settings::transcriptionEnabled() &&
+                                           modelsAvailable());
+    };
+    connect(callsPage, &CallsPage::eventKnownForCurrentCall, this,
+            [this](int64_t id) { mCurrentCallEventId = id; });
+    connect(callsPage, &CallsPage::callSessionStarted, this,
+            [this, controller, refreshButton, prompter, worker, notes, finals, notesWanted, notesPage, meetingDetails, describeMeeting](pcm::video::VideoSession *session) {
+              finals->setCallActive(true);
+              worker->stop();
+              *notesWanted = false;
+              notes->beginCall(mCurrentCallEventId);
+              std::optional<DuckClient> callClient;
+              if (mCurrentCallEventId) {
+                try { callClient = mDb->get_client_by_event(*mCurrentCallEventId); } catch (...) {}
+              }
+              *meetingDetails = describeMeeting(mCurrentCallEventId, callClient, 0);
+              notesPage->setClient(callClient);
+              notesPage->setMeeting(*meetingDetails, tr("live"));
+              prompter->beginTranscript(0);
+              controller->attachCall(session, mCurrentCallEventId);
+              refreshButton();
+            });
+    connect(callsPage, &CallsPage::callSessionEnded, this, [this, controller, refreshButton, prompter, worker, notes, finals, notesWanted, notesPage, meetingDetails] {
+      controller->detachCall();
+      prompter->endCall(); worker->stop();
+      notes->setGenerationEnabled(false);
+      notes->finishCall();
+      notesPage->setMeeting(*meetingDetails, tr("ended"));
+      if (mCurrentCallEventId) {
+        try { notesPage->setClient(mDb->get_client_by_event(*mCurrentCallEventId)); } catch (...) {}
+      }
+      finals->setCallActive(false);
+      mCurrentCallEventId.reset();
+      refreshButton();
+    });
+    connect(callsPage, &CallsPage::transcribeRequested, controller,
+            &pcm::transcriptionui::CallTranscriptionController::onTranscribeRequested);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcribeButtonState,
+            callsPage, &CallsPage::setTranscribeButtonState);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::requestOpenTranscriptTab,
+            callsPage, [callsPage, sidePanel] { callsPage->openSidePanel(); sidePanel->showTranscript(); });
+    connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, controller,
+            &pcm::transcriptionui::CallTranscriptionController::shutdown);
+    connect(mMainWindow.get(), &MainWindow::settingsSaved, this, refreshButton);
+    mMainWindow->setTranscriptionActiveProvider([guard = mCallTranscription] {
+      return guard && guard->active();
+    });
+    eventPage->setTranscriptCountProvider([db = mDb](int64_t id) {
+      return static_cast<int>(db->get_transcripts_for_event(id).size());
+    });
+    auto *reviewPage = new TranscriptPage(mDb, 0, {}, mMainWindow.get());
+    auto *listPage = new TranscriptListPage(mDb, mMainWindow.get());
+    reviewPage->enableQuickReader();
+    listPage->enableQuickWorkspace();
+    mMainWindow->registerTranscriptListPage(listPage);
+    mMainWindow->registerTranscriptPage(reviewPage);
+    auto selectedEvent = std::make_shared<std::pair<int64_t, qint64>>(0, 0);
+    connect(reviewPage, &TranscriptPage::readerTranscriptSelected, reviewPage, [selectedEvent] { *selectedEvent = {0, 0}; });
+    connect(notesPage, &CallNotesPage::sourceRequested, sidePanel,
+            [this, notes, sidePanel, panel, reviewPage, selectedEvent](qint64 id) {
+      if (panel->focusPhrase(id)) { sidePanel->showTranscript(); return; }
+      const auto transcript = notes->source(QString::number(id))["transcript_id"].toInteger();
+      if (transcript <= 0 || reviewPage->editing()) return;
+      *selectedEvent = {0, 0}; reviewPage->reloadTranscript(transcript, tr("Transcript"));
+      mMainWindow->openTranscriptPage();
+      reviewPage->focusPhrase(id);
+    });
+    auto openMaterials = [this, notes, prompter, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting, wireCalendar](qint64 materialId, qint64 transcriptId, bool postCall = false) {
+      auto *dialog = new NotesEditorDialog(mMainWindow.get());
+      dialog->setAttribute(Qt::WA_DeleteOnClose);
+      CallNotesController *saved = notes;
+      if (postCall || notes->materialId() != materialId || materialId <= 0) {
+        saved = new CallNotesController(mDb, dialog);
+        if (materialId > 0) saved->openMaterial(materialId); else saved->openTranscript(transcriptId);
+        // The call owns its queued final, even when this review dialog closes.
+        // Saved views share the same scheduler as automatic finalization.
+        if (finals->contains(saved->materialId())) saved->refreshFromStorage();
+        connect(finals, &CallNotesFinalizer::materialChanged, saved, [saved](qint64 id) {
+          if (saved->materialId() == id) saved->refreshFromStorage();
+        });
+        connect(saved, &CallNotesController::generationRequested, saved, [saved, finals] {
+          saved->deferFinal(); finals->enqueue(saved->materialId());
+        });
+        connect(saved, &CallNotesController::cancelRequested, saved, [saved, finals](const QString &) {
+          finals->cancel(saved->materialId());
+        });
+        // Late ASR writes still belong to the completed call. Keep this view
+        // pinned to that material even when the next call replaces live notes.
+        connect(notes, &CallNotesController::changed, saved, [notes, saved, materialId] {
+          if (notes->materialId() == materialId) saved->refreshFromStorage();
+        });
+      }
+      auto *page = new CallNotesPage(mDb, saved, dialog);
+      bindNotesEditor(page->editor(), saved);
+      try {
+        const auto material = mDb->get_call_material(saved->materialId());
+        std::optional<DuckClient> client;
+        if (material.event_id) {
+          try { client = mDb->get_client_by_event(*material.event_id); } catch (...) {}
+          if (client) page->setClient(client);
+        }
+        page->setMeeting(describeMeeting(material.event_id, client, material.created_at), tr("ended"));
+      } catch (...) {}
+      page->setAgreements(saved == notes ? prompter->records() : loadMaterialAgreements(*mDb, saved->materialId()));
+      page->setControllerFactory(meetingControllers);
+      wireCalendar(page);
+      connect(page->editor(), &ClientNotesPage::openEventRequested, mMainWindow.get(), &MainWindow::returnToEvent);
+      if (saved == notes)
+        connect(page, &CallNotesPage::retryRequested, prompterPanel, &PrompterPanel::startRequested);
+      dialog->setPage(page, !postCall);
+      connect(dialog, &QDialog::accepted, this, [this] {
+        if (auto *journal = qobject_cast<ClientNotesPage *>(mMainWindow->getPage(MainWindow::Pages::clientNotes)))
+          journal->refresh();
+      });
+      connect(page, &CallNotesPage::sourceRequested, dialog, [this, saved, notes, panel, sidePanel, reviewPage, dialog, selectedEvent](qint64 phraseId) {
+        if (saved == notes && panel->focusPhrase(phraseId)) { sidePanel->showTranscript(); dialog->close(); return; }
+        // The workspace may show another meeting picked from History, so the phrase
+        // is resolved through the database, not through this window's own material.
+        const auto transcript = mDb->get_transcript_id_for_phrase(phraseId).value_or(0);
+        if (transcript <= 0 || reviewPage->editing()) return;
+        *selectedEvent = {0, 0};
+        reviewPage->reloadTranscript(transcript, tr("Transcript")); mMainWindow->openTranscriptPage();
+        reviewPage->focusPhrase(phraseId);
+        dialog->close();
+      });
+      if (postCall) {
+        dialog->setWindowTitle(tr("Meeting review"));
+        dialog->setModal(false);
+        dialog->showMaximized();
+      } else {
+        dialog->open();
+      }
+    };
+    connect(callsPage, &CallsPage::callSessionEnded, this, [this, callsPage, notes, openMaterials] {
+      // A cancelled device check or a failed join has nothing to review.
+      if (!callsPage->lastCallConnected()) return;
+      const auto materialId = notes->materialId();
+      if (materialId <= 0) return;
+      QTimer::singleShot(0, mMainWindow.get(), [this, materialId, openMaterials] {
+        if (mMainWindow->isVisible()) openMaterials(materialId, 0, true);
+      });
+    });
+    auto reviewNotesViews = std::make_shared<QHash<qint64, QPointer<QWidget>>>();
+    auto bindReviewNotes = [this, reviewPage, reviewNotesViews, notes, finals, controller,
+                            bindNotesEditor, meetingControllers, describeMeeting, wireCalendar](qint64 transcriptId) {
+      reviewPage->setNotesView(nullptr);
+      // Keep buffered saved-entry/AI edits alive across transcript selection.
+      // Hidden hosts stay owned by the page rather than becoming top-level windows.
+      for (const auto &view : *reviewNotesViews)
+        if (view && !view->parentWidget()) view->setParent(reviewPage);
+      if (transcriptId <= 0) return;
+      if (const auto existing = reviewNotesViews->value(transcriptId)) {
+        if (auto *saved = existing->findChild<CallNotesController *>()) {
+          saved->openTranscript(transcriptId);
+          if (finals->contains(saved->materialId())) saved->refreshFromStorage();
+        }
+        if (auto *page = existing->findChild<CallNotesPage *>()) {
+          const auto current = mDb->get_transcript(transcriptId);
+          page->setEnabled(current && current->status != "recording");
+        }
+        reviewPage->setNotesView(existing);
+        existing->show();
+        return;
+      }
+      auto *host = new QWidget(reviewPage);
+      reviewNotesViews->insert(transcriptId, host);
+      auto *layout = new QVBoxLayout(host);
+      layout->setContentsMargins(0, 0, 0, 0);
+      auto *saved = new CallNotesController(mDb, host);
+      saved->openTranscript(transcriptId);
+      connect(finals, &CallNotesFinalizer::materialChanged, saved, [saved](qint64 id) {
+        if (saved->materialId() == id) saved->refreshFromStorage();
+      });
+      connect(saved, &CallNotesController::generationRequested, saved, [saved, finals] {
+        saved->deferFinal(); finals->enqueue(saved->materialId());
+      });
+      connect(saved, &CallNotesController::cancelRequested, saved, [saved, finals](const QString &) {
+        finals->cancel(saved->materialId());
+      });
+      auto *page = new CallNotesPage(mDb, saved, host);
+      wireCalendar(page);
+      const auto transcript = mDb->get_transcript(transcriptId);
+      page->setEnabled(transcript && transcript->status != "recording");
+      connect(notes, &CallNotesController::changed, saved, [this, notes, saved, page, transcriptId] {
+        if (notes->materialId() != saved->materialId()) return;
+        saved->openTranscript(transcriptId);
+        const auto current = mDb->get_transcript(transcriptId);
+        page->setEnabled(current && current->status != "recording");
+      }, Qt::QueuedConnection);
+      connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptReady,
+              saved, [this, saved, page, transcriptId, finals](qint64 completed) {
+        if (completed != transcriptId) return;
+        saved->openTranscript(transcriptId);
+        if (finals->contains(saved->materialId())) saved->refreshFromStorage();
+        const auto current = mDb->get_transcript(transcriptId);
+        page->setEnabled(current && current->status != "recording");
+      });
+      layout->addWidget(page);
+      bindNotesEditor(page->editor(), saved);
+      page->setControllerFactory(meetingControllers);
+      const auto stored = mDb->get_call_material(saved->materialId());
+      std::optional<DuckClient> client;
+      const auto clientIds = mDb->get_transcript_client_ids(transcriptId);
+      if (clientIds.size() == 1)
+        if (const auto storedClient = mDb->get_client(clientIds.front())) client = *storedClient;
+      page->setClient(client);
+      page->setMeeting(describeMeeting(stored.event_id, client, stored.created_at), tr("ended"));
+      page->setAgreements(loadMaterialAgreements(*mDb, saved->materialId()));
+      connect(saved, &CallNotesController::changed, page, [this, page, saved] {
+        page->setAgreements(loadMaterialAgreements(*mDb, saved->materialId()));
+      });
+      connect(reviewPage, &TranscriptPage::transcriptsChanged, page, [this, page, saved, transcriptId] {
+        saved->refreshFromStorage();
+        std::optional<DuckClient> client;
+        const auto ids = mDb->get_transcript_client_ids(transcriptId);
+        if (ids.size() == 1)
+          if (const auto storedClient = mDb->get_client(ids.front())) client = *storedClient;
+        page->setClient(client);
+      });
+      auto focusSource = [reviewPage](qint64 phraseId) { reviewPage->focusPhrase(phraseId); };
+      connect(page, &CallNotesPage::sourceRequested, reviewPage, focusSource, Qt::QueuedConnection);
+      auto *reviewPrompter = new CallPrompterController(mDb, host);
+      reviewPrompter->beginTranscript(transcriptId);
+      reviewPrompter->setCallDate(saved->callDate());
+      connect(reviewPage, &TranscriptPage::speakersRenamed, reviewPrompter, &CallPrompterController::speakersRenamed);
+      auto *reviewSuggestions = new PrompterPanel(reviewPrompter, mDb, page);
+      reviewSuggestions->setCallNoteSaver([saved](const QString &cardId, const QString &text) {
+        return saved->appendAgreement(cardId, text);
+      });
+      reviewSuggestions->findChild<QPushButton *>("prompterStart")->hide();
+      reviewSuggestions->findChild<QPushButton *>("prompterPause")->hide();
+      page->setPrompterPanel(reviewSuggestions);
+      connect(reviewSuggestions, &PrompterPanel::sourceRequested, reviewPage, focusSource, Qt::QueuedConnection);
+      connect(reviewPrompter, &CallPrompterController::cardsChanged, page, [this, page, saved] {
+        page->setAgreements(loadMaterialAgreements(*mDb, saved->materialId()));
+      });
+      connect(page->editor(), &ClientNotesPage::openEventRequested, mMainWindow.get(), &MainWindow::returnToEvent);
+      reviewPage->setNotesView(host);
+    };
+    connect(reviewPage, &TranscriptPage::transcriptActivated, reviewPage, bindReviewNotes);
+    connect(listPage, &TranscriptListPage::openCallMaterialRequested, this,
+            [openMaterials](qint64 id) { openMaterials(id, 0); });
+    connect(callsPage, &CallsPage::materialRequested, this, [openMaterials](qint64 id) { openMaterials(id, 0); });
+    connect(callsPage, &CallsPage::transcriptRequested, listPage, &TranscriptListPage::openTranscriptRequested);
+    if (auto *journal = qobject_cast<ClientNotesPage *>(mMainWindow->getPage(MainWindow::Pages::clientNotes))) {
+      journal->setMaterialAttachmentResolver([db = mDb](qint64 material, const QString &entry, const QString &attachment) {
+        CallNotesController storage(db);
+        storage.openMaterial(material);
+        return storage.noteAttachmentPath(entry, attachment);
+      });
+      connect(journal, &ClientNotesPage::openCallMaterialRequested, this,
+              [openMaterials](qint64 id) { openMaterials(id, 0); });
+      connect(journal, &ClientNotesPage::openTranscriptRequested, reviewPage,
+              [this, reviewPage, selectedEvent](qint64 id) {
+        if (reviewPage->editing()) return;
+        *selectedEvent = {0, 0};
+        reviewPage->reloadTranscript(id, tr("Transcript"));
+        mMainWindow->openTranscriptPage();
+      });
+    }
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptReady,
+            listPage, [this, listPage, eventPage](qint64 id) {
+              listPage->reload();
+              const auto row = mDb->get_transcript(id);
+              if (row && row->event_id) eventPage->reloadSelectedDay();
+            });
+    connect(listPage, &TranscriptListPage::openTranscriptRequested, reviewPage,
+            [this, reviewPage, selectedEvent](qint64 id) {
+              if (!reviewPage->editing()) {
+                *selectedEvent = {0, 0};
+                reviewPage->reloadTranscript(id, tr("Transcript"));
+              }
+              mMainWindow->openTranscriptPage();
+            });
+    connect(eventPage, &QEventInfoPage::openTranscriptRequested, reviewPage,
+            [this, reviewPage, selectedEvent](int64_t id) {
+              if (reviewPage->editing()) {
+                mMainWindow->openTranscriptPage();
+                return;
+              }
+              const auto event = mDb->get_event(id);
+              if (!event) return;
+              *selectedEvent = {id, event->start_date.value_or(0)};
+              reviewPage->reload(id, QString::fromStdString(event->name.value_or("")));
+              mMainWindow->openTranscriptPage();
+            });
+    connect(reviewPage, &TranscriptPage::backRequested, mMainWindow.get(),
+            [this, selectedEvent, listPage] {
+              if (selectedEvent->first) mMainWindow->returnToEvent(selectedEvent->first, selectedEvent->second);
+              else { listPage->reload(); mMainWindow->openTranscriptListPage(); }
+            });
+    connect(reviewPage, &TranscriptPage::transcriptsChanged, eventPage, &QEventInfoPage::reloadSelectedDay);
+    connect(reviewPage, &TranscriptPage::transcriptsChanged, listPage, &TranscriptListPage::reload);
+    connect(listPage, &TranscriptListPage::transcriptsChanged, eventPage, &QEventInfoPage::reloadSelectedDay);
+    refreshButton();
+#endif
+    connect(callsPage, &CallsPage::eventKnownForCurrentCall, this,
+#ifdef SESSIO_CALL_TRANSCRIPTION
+            [this, callsPage, notesPage](const int64_t eventId) {
+#else
+            [this, callsPage](const int64_t eventId) {
+#endif
+              std::optional<DuckClient> client;
+              try {
+                client = mDb->get_client_by_event(eventId);
+              } catch (const std::exception &) {
+                // Event without a linked client: show an empty notes panel.
+              }
+              if (mCallNotesPanel.isNull()) {
+                mCallNotesPanel = new ClientNotesPage(mDb, callsPage);
+                callsPage->setSidePanelWidget(mCallNotesPanel);
+              }
+#ifdef SESSIO_CALL_TRANSCRIPTION
+              notesPage->setClient(client);  // also refreshes the editor and meeting history
+              // Call-owned notes work without a client. Keep their panel visible
+              // for standalone meetings as well as scheduled client calls.
+              callsPage->setSidePanelExpandedByDefault(true);
+#else
+              mCallNotesPanel->setClientInfo(client);
+              callsPage->setSidePanelExpandedByDefault(client.has_value());
+#endif
+            });
   }
 }
+
+#ifdef SESSIO_CALL_TRANSCRIPTION
+std::optional<int64_t> Application::resolveCallEvent(int64_t eventId) {
+  if (!mCallEventResolver) return std::nullopt;
+  return mCallEventResolver->resolve(eventId);
+}
+#endif
 
 } // namespace pcm
