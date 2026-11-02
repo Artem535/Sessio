@@ -424,6 +424,7 @@ jobs:
           # staging and dependency build/download data before creating RPM/AppDir.
           rm -rf build-release/transcription-install vcpkg/buildtrees vcpkg/packages
           rm -rf "$VCPKG_DEFAULT_BINARY_CACHE" "$VCPKG_DOWNLOADS"
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE" "$VCPKG_DOWNLOADS"
           df -h /
 
       - name: Install bundle
