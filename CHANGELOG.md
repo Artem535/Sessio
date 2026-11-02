@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
   source-ID cleanup preserves numbers spoken in the conversation.
 - Fixed compressed Qlementine dropdown lists inside styled cards throughout
   the application, and recursive popup creation during widget initialization.
+- Fixed clean Linux runtime builds by downloading the pinned ANTLR revision
+  from a SHA256-verified archive instead of a shallow Git clone.
 
 ## [0.2.38] - 2026-10-29
 
