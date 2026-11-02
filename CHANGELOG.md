@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
   the application, and recursive popup creation during widget initialization.
 - Fixed clean Linux runtime builds by downloading the pinned ANTLR revision
   from a SHA256-verified archive instead of a shallow Git clone.
+- Reclaimed Linux CI runner SDK and temporary staging space before packaging
+  to avoid exhausting the disk while preparing installers.
 
 ## [0.2.38] - 2026-10-29
 
