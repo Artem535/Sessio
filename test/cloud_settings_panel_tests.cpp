@@ -201,7 +201,7 @@ TEST_F(CloudPanelTest, KeyReadFailureIsVisibleAndAllowsReplacement) {
 }
 
 TEST_F(CloudPanelTest, UnsafeOrMalformedProviderAddressesCannotReceiveConsent) {
-  for (const auto &address : {"http://remote.example/v1", "https://user:secret@example.com/v1",
+  for (const auto &address : {"http://remote.example/v1", "https://user@example.com/v1",
                              "https://example.com/v1?key=secret", "https://example.com/v1#fragment",
                              "file:///tmp/model"}) {
     CloudSettingsPanel panel;

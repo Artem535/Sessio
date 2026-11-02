@@ -83,7 +83,7 @@ TEST(QlementineComboFilter, PopupRowsAndSelectionSurviveStylesheetsAndReopening)
 
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
-  app.setStyle(new oclero::qlementine::QlementineStyle(&app));
+  app.setStyle(new oclero::qlementine::QlementineStyle(&app)); // NOSONAR: QApplication owns and deletes its style.
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
