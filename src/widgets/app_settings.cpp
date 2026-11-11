@@ -234,6 +234,13 @@ void setCallDisplayName(const QString &name) {
   QSettings().setValue("calls/displayName", name.trimmed().left(64));
 }
 
+QString externalJitsiServerUrl() {
+  return QSettings().value("calls/externalJitsiServerUrl").toString();
+}
+void setExternalJitsiServerUrl(const QString &url) {
+  QSettings().setValue("calls/externalJitsiServerUrl", url.trimmed());
+}
+
 bool confirmEventDeletion() {
   QSettings settings;
   return settings.value(kConfirmEventDeletionKey, true).toBool();

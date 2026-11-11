@@ -343,6 +343,7 @@ void PrompterWorker::send(const QJsonObject &request) {
           pcm::prompter::SummaryContext context{QDate::fromString(request["call_date"].toString(), Qt::ISODate), {}};
           for (const auto &text : request["agreements"].toArray()) context.agreements << text.toString();
           context.parallelism = parallelism;
+          context.livePoints = request["live_points"].toArray();
           notes = pcm::prompter::processSummary(request["utterances"].toArray(), context, generate);
         } else {
           throw pcm::prompter::PipelineError("unsupported notes task");

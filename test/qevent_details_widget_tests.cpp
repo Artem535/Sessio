@@ -2,6 +2,7 @@
 #include "event_item.h"
 #include "fake_token_backend_server.h"
 #include "meeting_coordinator.h"
+#include "app_settings.h"
 
 #include <oclero/qlementine/widgets/SegmentedControl.hpp>
 
@@ -70,6 +71,11 @@ public:
 
 private:
   QTimer mTimer;
+};
+
+struct ExternalJitsiServerSetting {
+  QString previous = pcm::app_settings::externalJitsiServerUrl();
+  ~ExternalJitsiServerSetting() { pcm::app_settings::setExternalJitsiServerUrl(previous); }
 };
 
 struct SavedMeeting {
@@ -170,12 +176,80 @@ TEST(QEventDetailsWidgetTest, JitsiDisabledForRecurringEvents) {
   repeat->setCurrentData(QStringLiteral("none"));
   EXPECT_TRUE(fixture.provider->isItemEnabled(kJitsi));
   fixture.provider->setCurrentIndex(kJitsi);
+  auto *serverMode = fixture.widget.findChild<QComboBox *>("jitsiServerMode");
+  ASSERT_NE(serverMode, nullptr);
+  serverMode->setCurrentIndex(1);
   repeat->setCurrentData(QStringLiteral("daily"));
   EXPECT_EQ(fixture.provider->currentIndex(), kLiveKit);
+  EXPECT_EQ(fixture.widget.selectedProviderKind(), ProviderKind::LiveKit);
 
   repeat->setCurrentData(QStringLiteral("none"));
   EXPECT_TRUE(fixture.provider->isItemEnabled(kJitsi));
   EXPECT_TRUE(fixture.provider->toolTip().isEmpty());
+}
+
+TEST(QEventDetailsWidgetTest, ExternalJitsiCreatesDirectLinkWithoutBackendRequest) {
+  const ExternalJitsiServerSetting restoreSetting;
+  pcm::app_settings::setExternalJitsiServerUrl(QStringLiteral("https://meet.example.test/team/"));
+  FakeTokenBackendServer server;
+  MeetingCoordinator coordinator(server.baseUrl().toString(), "bearer-secret");
+  EventDetailsFixture form(&coordinator, &server);
+  form.widget.startCreatingNewEvent(QDate(2026, 10, 1), QTime(10, 0), 50);
+  form.title->setText("External session");
+  form.online->setChecked(true);
+  form.provider->setCurrentIndex(2);
+  auto *mode = form.widget.findChild<QComboBox *>("jitsiServerMode");
+  ASSERT_NE(mode, nullptr);
+  mode->setCurrentIndex(1);
+  form.apply->click();
+  ASSERT_EQ(form.saves.size(), 1u);
+  EXPECT_EQ(form.saves.front().kind, ProviderKind::ExternalJitsi);
+  EXPECT_TRUE(form.saves.front().meetingUrl.startsWith("https://meet.example.test/team/"));
+  EXPECT_TRUE(form.saves.front().meetingRef.isEmpty());
+  EXPECT_FALSE(form.saves.front().invitationState.has_value());
+  EXPECT_TRUE(server.requestPaths.isEmpty());
+}
+
+TEST(QEventDetailsWidgetTest, ExternalJitsiRescheduleKeepsRoomAndOpensInsideSessio) {
+  const ExternalJitsiServerSetting restoreSetting;
+  pcm::app_settings::setExternalJitsiServerUrl("https://new.example.test/changed/");
+  FakeTokenBackendServer server;
+  MeetingCoordinator coordinator(server.baseUrl().toString(), "bearer-secret");
+  EventDetailsFixture form(&coordinator, &server);
+  auto event = makeLiveKitEvent("");
+  event->setProviderKind(ProviderKind::ExternalJitsi);
+  event->setInvitationState(std::nullopt);
+  event->setMeetingUrl("https://old.example.test/prefix/original-room");
+  form.widget.startEditingEvent(event.get());
+  QSignalSpy joined(&form.widget, &QEventDetailsWidget::openExternalJitsiMeetingRequested);
+  form.openMeeting->click();
+  ASSERT_EQ(joined.size(), 1);
+  EXPECT_EQ(joined.front().front().toString(), event->meetingUrl());
+  form.timeTo->setTime(QTime(11, 0));
+  form.apply->click();
+  ASSERT_EQ(form.saves.size(), 1u);
+  EXPECT_EQ(form.saves.front().kind, ProviderKind::ExternalJitsi);
+  EXPECT_EQ(form.saves.front().meetingUrl, "https://old.example.test/prefix/original-room");
+  EXPECT_TRUE(server.requestPaths.isEmpty());
+}
+
+TEST(QEventDetailsWidgetTest, ExternalJitsiRequiresConfiguredServerBeforeSaving) {
+  const ExternalJitsiServerSetting restoreSetting;
+  pcm::app_settings::setExternalJitsiServerUrl({});
+  MeetingCoordinator coordinator("", "");
+  EventDetailsFixture form(&coordinator);
+  MessageBoxCloser closer;
+  form.widget.startCreatingNewEvent(QDate(2026, 10, 1), QTime(10, 0), 50);
+  form.title->setText("External session");
+  form.online->setChecked(true);
+  form.provider->setCurrentIndex(2);
+  auto *mode = form.widget.findChild<QComboBox *>("jitsiServerMode");
+  ASSERT_NE(mode, nullptr);
+  mode->setCurrentIndex(1);
+  form.apply->click();
+  EXPECT_TRUE(form.saves.empty());
+  ASSERT_FALSE(closer.texts.isEmpty());
+  EXPECT_TRUE(closer.texts.front().contains("Jitsi"));
 }
 
 TEST(QEventDetailsWidgetTest, NewLiveKitEventIsNotSavedUntilCreateCompletesAndNeverWhenItFails) {

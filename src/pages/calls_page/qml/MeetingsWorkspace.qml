@@ -85,6 +85,7 @@ Rectangle {
         target: meetingsBridge
         function onMeetingPreselected(ref) { modeSelector.currentIndex = 0; root.upcoming = true; root.selectedId = ref }
         function onInvitationPrefilled() {
+            joinMode.currentIndex = 0
             code.text = root.inviteCode
             passcode.text = root.invitePasscode
             joinDialog.open()
@@ -178,6 +179,7 @@ Rectangle {
                         Action { visible: root.upcoming && !!root.selected.id; text: qsTr("Check devices and join"); primary: true; enabled: root.selected.enabled === true; onClicked: if (meetingsBridge) meetingsBridge.joinOwn(root.selected.id) }
                         Action { visible: root.upcoming && !root.selected.id; text: qsTr("Join a meeting"); primary: true; onClicked: joinDialog.open() }
                         Copy { text: root.errorText; visible: text.length > 0; color: "#ef7777"; Layout.fillWidth: true }
+                        Action { text: qsTr("Open in browser"); visible: root.errorText.length > 0 && meetingsBridge && meetingsBridge.jitsiFallbackUrl.length > 0; onClicked: meetingsBridge.openJitsiFallback() }
                         Copy { visible: !root.upcoming && !!root.selected.summary; text: qsTr("Meeting summary"); font.pixelSize: 18; font.weight: Font.DemiBold; Layout.fillWidth: true }
                         Copy { visible: !root.upcoming; text: root.selected.summary || ""; font.pixelSize: 17; lineHeight: 1.7; Layout.fillWidth: true }
                         Action { visible: !root.upcoming && !!root.selected.id; text: qsTr("Open notes and materials"); primary: true; onClicked: if (meetingsBridge) meetingsBridge.openMaterial(root.selected.id) }
@@ -215,8 +217,14 @@ Rectangle {
         background: Rectangle { radius: 12; color: theme.base; border.color: theme.mid }
         contentItem: ColumnLayout {
             spacing: 16
-            Copy { text: qsTr("Join a Sessio or Jitsi call using the invitation from its organizer."); Layout.fillWidth: true }
-            Copy { text: qsTr("Paste the Sessio invitation link, or enter its code and passcode. The invitation selects Jitsi automatically."); color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
+            ComboBox {
+                id: joinMode
+                objectName: "qmlJoinMode"
+                Layout.fillWidth: true
+                model: [qsTr("Sessio invitation"), qsTr("Jitsi link")]
+            }
+            Copy { text: qsTr("Paste the Sessio invitation link, or enter its code and passcode. The invitation selects Jitsi automatically."); visible: joinMode.currentIndex === 0; color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
+            Copy { text: qsTr("Paste a room link from a Jitsi server that allows guest access. Browser sign-in, passwords and lobby admission are not supported here."); visible: joinMode.currentIndex === 1; color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
             Copy { text: qsTr("To host a Jitsi call: create an event in Calendar, enable Online, select Jitsi, and save. Use Copy invite to send the invitation to participants."); color: root.muted; font.pixelSize: 14; Layout.fillWidth: true }
             TextField {
                 Layout.fillWidth: true
@@ -232,13 +240,14 @@ Rectangle {
                 objectName: "qmlMeetingCode"
                 Layout.fillWidth: true
                 text: root.inviteCode
-                placeholderText: qsTr("Invitation code or link")
+                placeholderText: joinMode.currentIndex === 0 ? qsTr("Invitation code or link") : qsTr("https://meet.example.org/room")
                 placeholderTextColor: root.muted
                 color: theme.text
                 background: Rectangle { radius: 8; color: theme.window; border.color: theme.mid }
             }
             TextField {
                 id: passcode
+                visible: joinMode.currentIndex === 0
                 Layout.fillWidth: true
                 text: root.invitePasscode
                 placeholderText: qsTr("Passcode")
@@ -248,12 +257,13 @@ Rectangle {
                 background: Rectangle { radius: 8; color: theme.window; border.color: theme.mid }
             }
             Copy { text: root.errorText; color: "#ef7777"; visible: text.length > 0; Layout.fillWidth: true }
+            Action { text: qsTr("Open in browser"); visible: root.errorText.length > 0 && meetingsBridge && meetingsBridge.jitsiFallbackUrl.length > 0; onClicked: meetingsBridge.openJitsiFallback() }
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10
                 Item { Layout.fillWidth: true }
                 Action { text: qsTr("Cancel"); onClicked: joinDialog.reject() }
-                Action { text: qsTr("Continue"); primary: true; enabled: code.text.trim().length > 0; onClicked: { if (meetingsBridge) meetingsBridge.joinInvitation(code.text, passcode.text); joinDialog.close() } }
+                Action { text: qsTr("Continue"); primary: true; enabled: code.text.trim().length > 0; onClicked: { if (meetingsBridge) { if (joinMode.currentIndex === 0) meetingsBridge.joinInvitation(code.text, passcode.text); else meetingsBridge.joinJitsi(code.text) } if (!root.errorText) joinDialog.close() } }
             }
         }
     }

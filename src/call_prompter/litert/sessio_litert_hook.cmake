@@ -22,6 +22,7 @@ set_property(DIRECTORY PROPERTY EP_UPDATE_DISCONNECTED TRUE)
 # stb_image_resize2.h on 2026-10-19, which LiteRT-LM's stb_impl still includes.
 # Upstream's own FetchContent calls then use these sources instead of cloning.
 include(FetchContent)
+include("${CMAKE_CURRENT_LIST_DIR}/sessio_litert_antlr.cmake")
 FetchContent_Declare(sessio_stb
   URL https://codeload.github.com/nothings/stb/tar.gz/2c980bb59875b0d32144a71867fbdebb2f77cd20
   URL_HASH SHA256=9a955b1b49a4410088a2e0ee2a9c057c3c907d0c1d75454144cb980aca0ba515
@@ -47,6 +48,12 @@ function(_sessio_litert_add_library)
     message(FATAL_ERROR "[Sessio] LiteRT-LM did not define litert_lm_main; cannot mirror its link line")
   endif()
   add_library(sessio_litert SHARED "${SESSIO_LITERT_SOURCE_DIR}/sessio_litert.cpp")
+  include("${SESSIO_LITERT_SOURCE_DIR}/sessio_litert_llguidance.cmake")
+  sessio_litert_prepare_llguidance(
+    "${LITERTLM_PROJECT_ROOT}/runtime/components/constrained_decoding/llg_constraint_provider.cc"
+    "${PROJECT_BINARY_DIR}/sessio_llg_constraint_provider.cc")
+  target_sources(sessio_litert PRIVATE "${PROJECT_BINARY_DIR}/sessio_llg_constraint_provider.cc")
+  target_include_directories(sessio_litert PRIVATE "${PROJECT_BINARY_DIR}/third_party/llguidance/parser")
   if(TARGET litertlm_anchor)
     add_dependencies(sessio_litert litertlm_anchor)
   endif()

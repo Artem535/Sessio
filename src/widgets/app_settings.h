@@ -45,6 +45,8 @@ pcm::transcription::TranscriptionTuning transcriptionTuning();
 void setTranscriptionTuning(const pcm::transcription::TranscriptionTuning &tuning);
 QString callDisplayName();
 void setCallDisplayName(const QString &name);
+QString externalJitsiServerUrl();
+void setExternalJitsiServerUrl(const QString &url);
 
 bool confirmEventDeletion();
 void setConfirmEventDeletion(bool enabled);

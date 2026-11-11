@@ -387,6 +387,12 @@ void MainWindow::openJoinLink(const QString &code, const QString &passcode) {
   }
 }
 
+void MainWindow::openExternalJitsiMeeting(const QString &url, qint64 eventId) {
+  showPage(Pages::calls, mBtnCalls);
+  if (auto *calls = dynamic_cast<CallsPage *>(mPages.value(Pages::calls, nullptr)))
+    calls->joinExternalJitsi(url, eventId > 0 ? std::optional<int64_t>(eventId) : std::nullopt);
+}
+
 void MainWindow::initDefaultStyle() const {
   checkButton(mBtnMyDay);
 }

@@ -7,33 +7,73 @@ function loadScript(src) {
     const s = document.createElement('script');
     s.src = src;
     s.onload = resolve;
-    s.onerror = () => reject(new Error(`cannot load ${src}`));
+    s.onerror = () => reject(new Error('Could not load the Jitsi server resources. Check the server address.'));
     document.head.appendChild(s);
   });
 }
 
+function deploymentBase(serverUrl) {
+  const base = new URL(serverUrl);
+  if (!base.pathname.endsWith('/')) base.pathname += '/';
+  return base;
+}
+
+export function deploymentUrls(serverUrl) {
+  const base = deploymentBase(serverUrl);
+  return {
+    config: new URL('config.js', base).href,
+    library: new URL('libs/lib-jitsi-meet.min.js', base).href,
+  };
+}
+
+export function connectionOptions(serverUrl, room, config = {}) {
+  const base = deploymentBase(serverUrl);
+  const hosts = config.hosts || { domain: base.hostname, muc: `conference.${base.hostname}` };
+  const websocket = typeof config.websocket === 'string' && config.websocket.trim();
+  const bosh = typeof config.bosh === 'string' && config.bosh.trim();
+  const endpoint = new URL(websocket || bosh || 'xmpp-websocket', base);
+  if (endpoint.username || endpoint.password) throw new Error('Jitsi connection addresses cannot contain credentials.');
+  if (websocket || !bosh) {
+    if (endpoint.protocol === 'https:') endpoint.protocol = 'wss:';
+    else if (endpoint.protocol === 'http:') endpoint.protocol = 'ws:';
+    if (!['ws:', 'wss:'].includes(endpoint.protocol)) throw new Error('Invalid Jitsi websocket address.');
+  } else if (!['http:', 'https:'].includes(endpoint.protocol)) {
+    throw new Error('Invalid Jitsi BOSH address.');
+  }
+  if (!websocket && !bosh) endpoint.searchParams.set('room', room);
+  return { hosts, serviceUrl: endpoint.href };
+}
+
+function joinFailureMessage(reason) {
+  const code = String(reason || '').toLowerCase();
+  if (/password/.test(code)) return 'This Jitsi room requires a password. Open the meeting in your browser to enter it.';
+  if (/lobby|members.?only|not.?allowed/.test(code)) return 'This Jitsi room requires admission or authorized membership. Open the meeting in your browser.';
+  if (/auth|token|not.?authorized/.test(code)) return 'This Jitsi server requires authentication. Open the meeting in your browser to sign in.';
+  return 'Could not join the Jitsi room. Check its address and the server access rules.';
+}
+
 export async function createConference(options, handlers) {
-  const server = new URL(options.serverUrl);
   const room = String(options.room || '').toLowerCase();
   if (!room) throw new Error('room is required');
-  const wsScheme = server.protocol === 'http:' ? 'ws' : 'wss';
 
-  await loadScript(new URL('/config.js', server).href);
-  await loadScript(new URL('/libs/lib-jitsi-meet.min.js', server).href);
+  const resources = deploymentUrls(options.serverUrl);
+  // A reconnect/server change must not reuse the previous deployment's config.
+  window.config = undefined;
+  await loadScript(resources.config);
+  await loadScript(resources.library);
   const J = window.JitsiMeetJS;
   J.init({});
   J.setLogLevel(J.logLevels.WARN);
 
-  const hosts = (window.config && window.config.hosts) || { domain: server.host, muc: `conference.${server.host}` };
-  const connection = new J.JitsiConnection(null, options.jwt || null, {
-    hosts,
-    serviceUrl: `${wsScheme}://${server.host}/xmpp-websocket?room=${room}`,
-  });
+  const connection = new J.JitsiConnection(null, options.jwt || null,
+    connectionOptions(options.serverUrl, room, window.config || {}));
 
   let joined = false;
   let closed = false;
   let localId = null;
   let conference = null;
+  let joinTimer = null;
+  let connectionTimer = null;
   const localTracks = { audio: null, video: null };
 
   // One failure path: before the conference is joined it is a join failure,
@@ -42,11 +82,14 @@ export async function createConference(options, handlers) {
     if (closed) return;
     if (joined) handlers.onConnectionLost(reason);
     else handlers.onFailed(reason);
+    void cleanup().catch(() => {});
   };
 
   // Frees the camera/mic and the XMPP connection; used on every exit path.
   async function cleanup() {
     closed = true;
+    clearTimeout(joinTimer);
+    clearTimeout(connectionTimer);
     for (const track of Object.values(localTracks)) {
       if (track) await track.dispose().catch(() => {});
     }
@@ -59,16 +102,23 @@ export async function createConference(options, handlers) {
   let established = false;
   try {
     await new Promise((resolve, reject) => {
+    connectionTimer = setTimeout(() => reject(new Error('The Jitsi server did not respond. Check the address or open the meeting in your browser.')), 30000);
     connection.addEventListener(J.events.connection.CONNECTION_ESTABLISHED, () => {
+      clearTimeout(connectionTimer);
       established = true;
       resolve();
     });
-    connection.addEventListener(J.events.connection.CONNECTION_FAILED, (e, m) => {
-      const reason = `connection failed: ${e} ${m || ''}`.trim();
+    connection.addEventListener(J.events.connection.CONNECTION_FAILED, (e) => {
+      clearTimeout(connectionTimer);
+      const reason = joinFailureMessage(e);
       if (established) fail(reason);
       else reject(new Error(reason));
     });
-    connection.addEventListener(J.events.connection.CONNECTION_DISCONNECTED, () => fail('connection disconnected'));
+    connection.addEventListener(J.events.connection.CONNECTION_DISCONNECTED, () => {
+      clearTimeout(connectionTimer);
+      if (established) fail('The connection to the Jitsi server was lost.');
+      else reject(new Error('The Jitsi server disconnected before the meeting was reached.'));
+    });
     connection.connect();
     });
   } catch (err) {
@@ -103,9 +153,14 @@ export async function createConference(options, handlers) {
   conference.on(J.events.conference.USER_JOINED, announce);
   conference.on(J.events.conference.USER_LEFT, (id) => handlers.onParticipantLeft(id));
   conference.on(J.events.conference.DISPLAY_NAME_CHANGED, (id, name) => handlers.onDisplayName(id, name));
-  conference.on(J.events.conference.CONFERENCE_FAILED, (err) => fail(`conference failed: ${err}`));
+  conference.on(J.events.conference.CONFERENCE_FAILED, (err) => fail(joinFailureMessage(err)));
+  if (J.events.conference.PASSWORD_REQUIRED) {
+    conference.on(J.events.conference.PASSWORD_REQUIRED, () => fail(joinFailureMessage('password')));
+  }
   conference.on(J.events.conference.KICKED, () => fail('kicked'));
   conference.on(J.events.conference.CONFERENCE_JOINED, () => {
+    if (closed) return;
+    clearTimeout(joinTimer);
     joined = true;
     localId = conference.myUserId();
     handlers.onJoined(localId);
@@ -147,6 +202,9 @@ export async function createConference(options, handlers) {
     if (options.startWithMicrophone !== false) await attach('audio');
     if (options.startWithCamera !== false) await attach('video');
     conference.join();
+    if (!closed && !joined) {
+      joinTimer = setTimeout(() => fail('The Jitsi room did not admit you. It may require a host, lobby approval or sign-in. Open the meeting in your browser.'), 30000);
+    }
   } catch (err) {
     await cleanup();
     throw err;

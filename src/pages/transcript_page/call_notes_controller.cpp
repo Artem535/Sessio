@@ -259,6 +259,18 @@ void CallNotesController::dispatch(bool final) {
   if (final) {
     mRequest["task"] = "summary";
     mRequest["call_date"] = callDate().toString(Qt::ISODate);
+    const auto live = mState["live"].toObject();
+    const auto previousSources = live["sources"].toArray();
+    QSet<QString> currentIds;
+    for (const auto &source : previousSources)
+      if (inputs.contains(source)) currentIds.insert(source.toObject()["id"].toString());
+    QJsonArray livePointsForSummary;
+    for (const auto &value : live["key_points"].toArray()) {
+      const auto point = value.toObject();
+      if (value.isObject() && !point["text"].toString().trimmed().isEmpty() && validItem(point, currentIds))
+        livePointsForSummary.append(point);
+    }
+    mRequest["live_points"] = livePointsForSummary;
     QJsonArray agreements;
     for (const auto &value : loadMaterialAgreements(*mDb, mMaterialId)) {
       const auto record = value.toObject();
@@ -343,8 +355,8 @@ void CallNotesController::handleResult(const QJsonObject &result) {
   auto notes = result["notes"].toObject();
   if (!final) { appendLivePoints(notes, inputs, allowed, result["engine"]); return; }
   if (notes["format"].toInt() != 2 || !notes["overview"].isObject() || !validItem(notes["overview"].toObject(), allowed) ||
-      !validList(notes["key_points"], 10, allowed) || !validList(notes["tasks"], 8, allowed, true) ||
-      !validList(notes["open_questions"], 5, allowed)) { fail(QStringLiteral("invalid_output")); return; }
+      !validList(notes["key_points"], 20, allowed) || !validList(notes["tasks"], 12, allowed, true) ||
+      !validList(notes["open_questions"], 10, allowed)) { fail(QStringLiteral("invalid_output")); return; }
   if (current != inputs) {
     mInFlight = false; mFinalPending = true; flush(); return;
   }

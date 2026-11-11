@@ -1,4 +1,5 @@
 #include "web_call_provider.h"
+#include "jitsi_url.h"
 
 #include "audio_bridge_server.h"
 #include "call_scheme_handler.h"
@@ -6,6 +7,7 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLocale>
 #include <QLoggingCategory>
 #include <QMetaObject>
 #include <QThread>
@@ -145,12 +147,7 @@ void WebCallProvider::join(const QString &url, const QString &token) {
     return;
   }
 
-  // The backend may send JITSI_URL with a trailing slash.
-  QString trimmed = url;
-  while (trimmed.endsWith(QLatin1Char('/'))) trimmed.chop(1);
-  const qsizetype slash = trimmed.lastIndexOf(QLatin1Char('/'));
-  const qsizetype schemeEnd = trimmed.indexOf(QLatin1String("://"));
-  const bool parsed = slash > 0 && (schemeEnd < 0 || slash > schemeEnd + 2) && slash < trimmed.size() - 1;
+  const auto parsed = pcm::meeting::parseJitsiRoomUrl(url);
   const bool fake = mOptions.adapter == QLatin1String("fake");
   if (!parsed && !fake) {
     QTimer::singleShot(0, this, [this] { emit joinFailed(tr("Invalid call address")); });
@@ -165,8 +162,8 @@ void WebCallProvider::join(const QString &url, const QString &token) {
   QMetaObject::invokeMethod(mServer, "issueToken", Qt::BlockingQueuedConnection, qReturnArg(wsToken));
 
   QJsonObject opts{
-      {"serverUrl", parsed ? trimmed.left(slash) : QString()},
-      {"room", parsed ? trimmed.mid(slash + 1) : QStringLiteral("fake")},
+      {"serverUrl", parsed ? parsed->server.toString() : QString()},
+      {"room", parsed ? parsed->room : QStringLiteral("fake")},
       {"jwt", token},
       {"displayName", mOptions.displayName},
       {"wsPort", int(mWsPort)},
@@ -183,7 +180,8 @@ void WebCallProvider::join(const QString &url, const QString &token) {
   if (mSink->slot.hasSink()) callPage(QStringLiteral("setAudioCapture"), QStringLiteral("true"));
   callPage(QStringLiteral("join"), toJson(opts));
   if (!mPage->url().isValid() || mPage->url().isEmpty() || mPage->url().scheme() != QLatin1String("sessio-call")) {
-    mPage->load(QUrl(QStringLiteral("sessio-call://app/jitsi-call/index.html")));
+    // The page copies its strings from the app locale, not the browser default.
+    mPage->load(QUrl(QStringLiteral("sessio-call://app/jitsi-call/index.html?lang=%1").arg(QLocale().bcp47Name())));
   }
 }
 

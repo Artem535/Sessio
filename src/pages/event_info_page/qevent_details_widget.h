@@ -165,6 +165,7 @@ signals:
    * event, instead of trying to open a URL.
    */
   void openLiveKitMeetingRequested(QString meetingRef);
+  void openExternalJitsiMeetingRequested(QString url, qint64 eventId);
 
   /**
    * @brief The user asked to move this legacy LiveKit series to a permanent
@@ -204,6 +205,7 @@ private:
   // --- Initialization ---
   void initUi();
   void initConnections();
+  void updateJitsiServerControls();
   void initDefaultStyle();
   void initEditStyle();
   void initDefaultStates() const;
@@ -265,6 +267,9 @@ private:
   oclero::qlementine::Switch *mEventTypeSwitch = nullptr;
   oclero::qlementine::Switch *mOnlineSessionSwitch = nullptr;
   oclero::qlementine::SegmentedControl *mProviderKindControl = nullptr;
+  QWidget *mJitsiServerWidget = nullptr;
+  QComboBox *mJitsiServerMode = nullptr;
+  QLabel *mJitsiServerHint = nullptr;
   oclero::qlementine::SegmentedControl *mRepeatTypeControl = nullptr;
   QWidget *mRecurringOptionsWidget = nullptr;
   QSpinBox *mRepeatIntervalSpinBox = nullptr;

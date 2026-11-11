@@ -1621,8 +1621,9 @@ TEST(CallPageTest, WebProviderSkipsDeviceCheck) {
   EXPECT_NE(stack->currentWidget(), page.findChild<QWidget *>("deviceCheckWidget"));
   EXPECT_TRUE(view.isVisible());
   EXPECT_TRUE(page.isAncestorOf(&view));
-  EXPECT_TRUE(page.findChild<QToolButton *>("microphoneToggleButton")->isHidden());
-  EXPECT_TRUE(page.findChild<QToolButton *>("cameraToggleButton")->isHidden());
+  // Mic/camera stay native in web calls; share/devices/layout belong to the page.
+  EXPECT_FALSE(page.findChild<QToolButton *>("microphoneToggleButton")->isHidden());
+  EXPECT_FALSE(page.findChild<QToolButton *>("cameraToggleButton")->isHidden());
   EXPECT_TRUE(page.findChild<QToolButton *>("screenShareButton")->isHidden());
   EXPECT_TRUE(page.findChild<QToolButton *>("devicesButton")->isHidden());
 }
@@ -1712,7 +1713,8 @@ TEST(CallPageTest, ControlVisibilityIsRestoredAfterWebMode) {
   {
     VideoSession session(provider);
     page.attachSession(&session);
-    EXPECT_TRUE(page.findChild<QToolButton *>("microphoneToggleButton")->isHidden());
+    EXPECT_TRUE(page.findChild<QToolButton *>("screenShareButton")->isHidden());
+    EXPECT_FALSE(page.findChild<QToolButton *>("microphoneToggleButton")->isHidden());
   }
   EXPECT_FALSE(page.findChild<QToolButton *>("microphoneToggleButton")->isHidden());
   EXPECT_TRUE(page.findChild<QToolButton *>("screenShareButton")->isHidden());

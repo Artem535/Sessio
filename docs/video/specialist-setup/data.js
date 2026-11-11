@@ -18,7 +18,7 @@
   function cues() {
     const out = [];
     for (const [t0, t1, text] of ROWS) {
-      const parts = text.match(/[^.!?]+[.!?]+»?\s*|[^.!?]+$/g).map((s) => s.trim());
+      const parts = text.match(/(?:[^.!?]+[.!?]+»?\s*)|(?:[^.!?]+$)/g).map((s) => s.trim());
       const total = parts.reduce((a, p) => a + p.length, 0);
       // Break cues longer than ~95 chars at the comma/dash nearest the middle.
       const split = [];

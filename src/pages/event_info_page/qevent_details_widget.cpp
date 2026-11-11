@@ -1,5 +1,6 @@
 #include "qevent_details_widget.h"
 #include "meeting_join.h"
+#include "jitsi_url.h"
 #include "provider_kind.h"
 #include "../../widgets/accent_color.h"
 #include "../../widgets/app_settings.h"
@@ -55,8 +56,8 @@ protected:
 // Form rows of the online/meeting section; the inspector moves two of these
 // widgets out of the form and puts them back on the same rows.
 constexpr int onlineSectionRow = 10;
-constexpr int meetingActionsRow = onlineSectionRow + 6;
-constexpr int seriesCallRow = onlineSectionRow + 7;
+constexpr int meetingActionsRow = onlineSectionRow + 7;
+constexpr int seriesCallRow = onlineSectionRow + 8;
 constexpr int64_t kPaymentPendingId = 1;
 constexpr int64_t kPaymentPaidId = 2;
 constexpr int64_t kPaymentCanceledId = 3;
@@ -188,6 +189,7 @@ constexpr int providerKindIndex(const pcm::meeting::ProviderKind kind) {
   case pcm::meeting::ProviderKind::LiveKit:
     return 1;
   case pcm::meeting::ProviderKind::Jitsi:
+  case pcm::meeting::ProviderKind::ExternalJitsi:
     return 2;
   case pcm::meeting::ProviderKind::ExternalUrl:
     break;
@@ -208,6 +210,9 @@ constexpr pcm::meeting::ProviderKind providerKindAt(const int index) {
 } // namespace
 
 pcm::meeting::ProviderKind QEventDetailsWidget::selectedProviderKind() const {
+  if (mProviderKindControl->currentIndex() == 2 && mJitsiServerMode->currentIndex() == 1) {
+    return pcm::meeting::ProviderKind::ExternalJitsi;
+  }
   return providerKindAt(mProviderKindControl->currentIndex());
 }
 
@@ -356,12 +361,26 @@ void QEventDetailsWidget::initUi() {
   mUI->formLayout->insertRow(onlineSectionRow + 4, tr("Provider"),
                              mProviderKindControl);
 
+  mJitsiServerWidget = new QWidget(this);
+  auto *jitsiServerLayout = new QVBoxLayout(mJitsiServerWidget);
+  jitsiServerLayout->setContentsMargins(0, 0, 0, 0);
+  jitsiServerLayout->setSpacing(4);
+  mJitsiServerMode = new QComboBox(mJitsiServerWidget);
+  mJitsiServerMode->setObjectName(QStringLiteral("jitsiServerMode"));
+  mJitsiServerMode->addItem(tr("Sessio"));
+  mJitsiServerMode->addItem(tr("External server"));
+  mJitsiServerHint = new MutedLabel(mJitsiServerWidget);
+  mJitsiServerHint->setObjectName(QStringLiteral("jitsiServerHint"));
+  jitsiServerLayout->addWidget(mJitsiServerMode);
+  jitsiServerLayout->addWidget(mJitsiServerHint);
+  mUI->formLayout->insertRow(onlineSectionRow + 5, tr("Jitsi server"), mJitsiServerWidget);
+
   mMeetingUrlLabel = new QLabel(tr("Meeting link"), this);
   mMeetingUrlEdit = new oclero::qlementine::LineEdit(this);
   mMeetingUrlEdit->setObjectName(QStringLiteral("meetingUrlEdit"));
   mMeetingUrlEdit->setPlaceholderText(tr("https://..."));
   mMeetingUrlEdit->setIcon(QIcon(":/icons/calendar-solid-full.svg"));
-  mUI->formLayout->insertRow(onlineSectionRow + 5, mMeetingUrlLabel,
+  mUI->formLayout->insertRow(onlineSectionRow + 6, mMeetingUrlLabel,
                              mMeetingUrlEdit);
 
   mMeetingActionsWidget = new QWidget(this);
@@ -439,7 +458,7 @@ void QEventDetailsWidget::initUi() {
   mBufferAfterSpinBox->setMinimumWidth(92);
   buffersLayout->addWidget(mBufferAfterSpinBox);
   buffersLayout->addStretch();
-  mUI->formLayout->insertRow(onlineSectionRow + 8, tr("Buffers"),
+  mUI->formLayout->insertRow(onlineSectionRow + 9, tr("Buffers"),
                              mBuffersWidget);
 
   auto *conflictWidget = new QWidget(this);
@@ -454,7 +473,7 @@ void QEventDetailsWidget::initUi() {
   mSuggestFreeSlotButton->setVisible(false);
   conflictLayout->addWidget(mConflictWarningLabel);
   conflictLayout->addWidget(mSuggestFreeSlotButton, 0, Qt::AlignLeft);
-  mUI->formLayout->insertRow(onlineSectionRow + 9, QString(), conflictWidget);
+  mUI->formLayout->insertRow(onlineSectionRow + 10, QString(), conflictWidget);
 
   mUI->mAddButton->setIcon(QIcon(":/icons/calendar-plus-solid-full.svg"));
   mUI->mAddButton->setIconSize(QSize(16, 16));
@@ -619,7 +638,8 @@ void QEventDetailsWidget::refreshInspector() {
   const auto start = mCurrentEvent->getStartTime().toLocalTime();
   const auto end = mCurrentEvent->getEndTime().toLocalTime();
   const QString format = !event.is_online ? tr("In person")
-      : mCurrentEvent->providerKind() == std::optional{pcm::meeting::ProviderKind::Jitsi}
+      : (mCurrentEvent->providerKind() == std::optional{pcm::meeting::ProviderKind::Jitsi} ||
+         mCurrentEvent->providerKind() == std::optional{pcm::meeting::ProviderKind::ExternalJitsi})
           ? tr("Online (Jitsi)")
       : mCurrentEvent->providerKind() == std::optional{pcm::meeting::ProviderKind::LiveKit}
           ? tr("Online (LiveKit)") : tr("Online (external link)");
@@ -665,6 +685,10 @@ void QEventDetailsWidget::initConnections() {
           &QEventDetailsWidget::onEventTypeToggled);
   connect(mOnlineSessionSwitch, &QAbstractButton::toggled, this,
           &QEventDetailsWidget::onOnlineSessionToggled);
+  connect(mProviderKindControl, &oclero::qlementine::SegmentedControl::currentIndexChanged,
+          this, [this] { updateJitsiServerControls(); });
+  connect(mJitsiServerMode, qOverload<int>(&QComboBox::currentIndexChanged),
+          this, [this] { updateJitsiServerControls(); });
   connect(mRepeatTypeControl, &oclero::qlementine::SegmentedControl::currentIndexChanged, this,
           &QEventDetailsWidget::onRecurrenceTypeChanged);
   connect(mRepeatUntilSwitch, &QAbstractButton::toggled, mRepeatUntilDateEdit,
@@ -842,7 +866,10 @@ void QEventDetailsWidget::loadEvent(QEventItem *event,
   mEventTypeSwitch->setChecked(isWorkItem);
   mOnlineSessionSwitch->setChecked(event->isOnline());
   mProviderKindControl->setCurrentIndex(providerKindIndex(event->providerKind().value_or(pcm::meeting::ProviderKind::ExternalUrl)));
+  mJitsiServerMode->setCurrentIndex(
+      event->providerKind() == std::optional{pcm::meeting::ProviderKind::ExternalJitsi} ? 1 : 0);
   mMeetingUrlEdit->setText(event->meetingUrl());
+  updateJitsiServerControls();
   mUI->mCostSpinBox->setValue(
       event->cost().value_or(pcm::app_settings::defaultWorkEventCost()));
   const auto paymentStatusData = QVariant::fromValue(event->paymentStatusId());
@@ -1325,6 +1352,31 @@ void QEventDetailsWidget::onOnlineSessionToggled(const bool checked) {
   mMeetingUrlLabel->setVisible(checked);
   mMeetingUrlEdit->setVisible(checked);
   mMeetingActionsWidget->setVisible(checked);
+  updateJitsiServerControls();
+  updateButtonState();
+}
+
+void QEventDetailsWidget::updateJitsiServerControls() {
+  const bool jitsi = mOnlineSessionSwitch->isChecked() && mProviderKindControl->currentIndex() == 2;
+  mJitsiServerWidget->setVisible(jitsi);
+  if (auto *label = mUI->formLayout->labelForField(mJitsiServerWidget)) label->setVisible(jitsi);
+  const bool external = jitsi && mJitsiServerMode->currentIndex() == 1;
+  const bool existing = external && mCurrentEvent &&
+      mCurrentEvent->providerKind() == std::optional{pcm::meeting::ProviderKind::ExternalJitsi} &&
+      !mCurrentEvent->meetingUrl().isEmpty();
+  if (existing) {
+    mJitsiServerHint->setText(tr("This meeting keeps its existing Jitsi link."));
+  } else if (external) {
+    const auto server = pcm::app_settings::externalJitsiServerUrl();
+    mJitsiServerHint->setText(server.isEmpty()
+        ? tr("Set an external Jitsi server in Settings → Calls before creating this meeting.")
+        : tr("Server: %1. Its administrator controls access to the room.").arg(server));
+  } else {
+    mJitsiServerHint->setText(tr("Sessio creates the meeting and invitation."));
+  }
+  // These links are generated on save; editing them would imply changing a
+  // server or room without changing the selected provider.
+  mMeetingUrlEdit->setReadOnly(jitsi || mSeriesBacked);
   updateButtonState();
 }
 
@@ -1378,6 +1430,9 @@ void QEventDetailsWidget::onOpenMeetingClicked() {
   case pcm::meeting::JoinAction::Kind::Url:
     pcm::meeting::openMeetingUrl(action.target, this);
     break;
+  case pcm::meeting::JoinAction::Kind::JitsiUrl:
+    emit openExternalJitsiMeetingRequested(action.target, mCurrentEvent ? mCurrentEvent->getId() : 0);
+    break;
   case pcm::meeting::JoinAction::Kind::None:
     break;
   }
@@ -1404,6 +1459,12 @@ void QEventDetailsWidget::onCopyMeetingInviteClicked() {
     withSeriesInvitation([clientName, startMs](const QString &url, const QString &) {
       pcm::meeting::copyMeetingInvite(url, clientName, startMs);
     });
+    return;
+  }
+  if (mCurrentEvent && mCurrentEvent->providerKind() ==
+      std::optional{pcm::meeting::ProviderKind::ExternalJitsi}) {
+    if (!pcm::meeting::parseJitsiRoomUrl(mMeetingUrlEdit->text())) return;
+    pcm::meeting::copyMeetingUrl(mMeetingUrlEdit->text());
     return;
   }
   if (!pcm::meeting::isValidInvitationUrl(mMeetingUrlEdit->text())) {
@@ -1532,7 +1593,18 @@ bool QEventDetailsWidget::validateInput() {
   // The meeting link only applies to the external-link provider; a LiveKit
   // meeting is created by the backend and has no link to enter.
   const bool wantsLiveKit = pcm::meeting::isBackendHosted(selectedProviderKind());
-  if (mOnlineSessionSwitch->isChecked() && !wantsLiveKit) {
+  const bool wantsExternalJitsi = selectedProviderKind() == pcm::meeting::ProviderKind::ExternalJitsi;
+  if (mOnlineSessionSwitch->isChecked() && wantsExternalJitsi) {
+    const bool existing = mCurrentEvent &&
+        mCurrentEvent->providerKind() == std::optional{pcm::meeting::ProviderKind::ExternalJitsi} &&
+        pcm::meeting::parseJitsiRoomUrl(mCurrentEvent->meetingUrl()).has_value();
+    if (!existing && !pcm::meeting::parseJitsiServerUrl(pcm::app_settings::externalJitsiServerUrl())) {
+      QMessageBox::warning(this, tr("Jitsi server"),
+          tr("Set a valid external Jitsi server in Settings → Calls before creating this meeting."));
+      return false;
+    }
+  }
+  if (mOnlineSessionSwitch->isChecked() && !wantsLiveKit && !wantsExternalJitsi) {
     const auto meetingUrl = mMeetingUrlEdit->text().trimmed();
     if (meetingUrl.isEmpty()) {
       const auto answer = QMessageBox::question(
@@ -1582,6 +1654,24 @@ bool QEventDetailsWidget::updateMeetingViaCoordinator() {
     // created per date by the server. Never create or replace a single meeting
     // here - that would copy one scheduled room to every occurrence.
     applyProviderFields(pcm::meeting::ProviderKind::LiveKit, QString{}, std::nullopt, QString{});
+    return true;
+  }
+
+  if (selectedProviderKind() == pcm::meeting::ProviderKind::ExternalJitsi) {
+    // The direct room has no scheduled backend object. Editing time or the
+    // configured default server must not invalidate invitations already sent.
+    if (mCurrentEvent->providerKind() == std::optional{pcm::meeting::ProviderKind::ExternalJitsi} &&
+        pcm::meeting::parseJitsiRoomUrl(mCurrentEvent->meetingUrl())) {
+      return true;
+    }
+    const auto server = pcm::meeting::parseJitsiServerUrl(pcm::app_settings::externalJitsiServerUrl());
+    if (!server) return false; // validateInput reports the configuration error.
+    supersedeCurrentLiveKitMeeting();
+    // Local generation also works in editor contexts without a coordinator;
+    // no token backend operation is needed for an external Jitsi room.
+    const auto roomUrl = pcm::meeting::createJitsiRoomUrl(*server);
+    applyProviderFields(pcm::meeting::ProviderKind::ExternalJitsi, QString{}, std::nullopt, roomUrl);
+    mMeetingUrlEdit->setText(roomUrl);
     return true;
   }
 
@@ -1880,7 +1970,8 @@ void QEventDetailsWidget::applySeriesCallState() {
   // is locked so a stray click cannot detach one occurrence from its series.
   mOnlineSessionSwitch->setEnabled(!mSeriesBacked);
   mProviderKindControl->setEnabled(!mSeriesBacked);
-  mMeetingUrlEdit->setReadOnly(mSeriesBacked);
+  mJitsiServerMode->setEnabled(!mSeriesBacked);
+  updateJitsiServerControls();
   mCopyMeetingPasscodeButton->setVisible(mSeriesBacked);
   if (mSeriesBacked) {
     mMeetingUrlEdit->setText(QString{});

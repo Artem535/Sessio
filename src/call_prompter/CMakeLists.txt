@@ -14,6 +14,7 @@ add_library(${TARGET_NAME} STATIC
   live_points_pipeline.h
   live_points_pipeline.cpp
   summary_pipeline.h
+  summary_limits.h
   summary_pipeline.cpp
   prompter_engine.h
   cloud_engine.h

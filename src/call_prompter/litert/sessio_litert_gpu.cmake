@@ -25,11 +25,18 @@ function(_compile_object _source _object)
     WORKING_DIRECTORY "${SESSIO_CPU_BUILD}" COMMAND_ERROR_IS_FATAL ANY)
 endfunction()
 _compile_object("${_hook}/sessio_litert.cpp" "${_out}/sessio_litert.o")
+include("${_hook}/sessio_litert_llguidance.cmake")
+sessio_litert_prepare_llguidance(
+  "${SESSIO_CPU_BUILD}/runtime/components/constrained_decoding/llg_constraint_provider.cc"
+  "${_out}/llg_constraint_provider.cc")
+list(APPEND _compile "-I${SESSIO_CPU_BUILD}/third_party/llguidance/parser")
+_compile_object("${_out}/llg_constraint_provider.cc" "${_out}/llg_constraint_provider.o")
 # Reuse all expensive archives, but explicitly force the compiled-model options
 # to WebGPU (not upstream's platform auto-selection / possible OpenCL backend).
 _compile_object("${SESSIO_CPU_BUILD}/runtime/executor/llm_executor_settings_utils.cc" "${_out}/webgpu_options.o")
 set(_link)
 set(_skip FALSE)
+set(_shim_added FALSE)
 foreach(_arg IN LISTS _original)
   if(_skip)
     set(_skip FALSE)
@@ -39,8 +46,11 @@ foreach(_arg IN LISTS _original)
     list(APPEND _link -o "${_lib}/libsessio_litert.so")
     set(_skip TRUE)
   elseif(_arg MATCHES "^CMakeFiles/sessio_litert.dir/.*\\.o$")
-    list(APPEND _link "${_out}/sessio_litert.o" "${_out}/webgpu_options.o"
-      -Wl,--no-as-needed "${_lib}/libLiteRt.so" -Wl,--as-needed)
+    if(NOT _shim_added)
+      list(APPEND _link "${_out}/sessio_litert.o" "${_out}/webgpu_options.o" "${_out}/llg_constraint_provider.o"
+        -Wl,--no-as-needed "${_lib}/libLiteRt.so" -Wl,--as-needed)
+      set(_shim_added TRUE)
+    endif()
   elseif(_arg MATCHES "^-Wl,--dependency-file=" OR _arg STREQUAL "-Wl,--whole-archive" OR _arg STREQUAL "-Wl,--no-whole-archive")
     continue()
   elseif(_arg MATCHES "[/\\]vendors[/\\]samsung[/\\]" OR _arg MATCHES "libpython" OR _arg MATCHES "^-Wl,-rpath,")

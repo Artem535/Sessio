@@ -1,6 +1,6 @@
 import { encodeChunk } from './chunk.js';
 import { ParticipantRegistry } from './participants.js';
-import { copy } from './copy.js';
+import { copy, locale, setLocale } from './copy.js';
 
 const SAMPLE_RATE = 16000;
 const CHUNK_SAMPLES = SAMPLE_RATE / 50; // 20 ms
@@ -18,6 +18,14 @@ const bridge = await new Promise((resolve) => {
   const channel = new QWebChannel(qt.webChannelTransport, (ch) => resolve(ch.objects.bridge));
   console.debug('sessio-call: host channel', channel ? 'opened' : 'missing');
 });
+
+// The host passes its UI locale; a standalone page falls back to the browser's.
+setLocale(new URLSearchParams(window.location.search).get('lang') ||
+  (typeof navigator !== 'undefined' ? navigator.language : 'en'));
+document.documentElement.lang = locale();
+// Inside Sessio the native toolbar drives mic/camera/leave; the page keeps its
+// own controls only when opened without a host (development, fake adapter).
+if (bridge) document.body.classList.add('hosted');
 
 function notify(name, ...args) {
   if (!bridge || typeof bridge[name] !== 'function') {
@@ -38,7 +46,26 @@ const grid = $('grid');
 const tiles = new Map(); // participantId -> {el, video, name}
 
 function setStatus(key) {
-  $('status').textContent = copy(key);
+  $('status').textContent = key ? copy(key) : '';
+}
+
+function remoteCount() {
+  let count = 0;
+  peers.forEach((peer) => {
+    if (!peer.isLocal) count += 1;
+  });
+  return count;
+}
+
+// While a call is live the strip only has something to say until the second
+// participant arrives; terminal statuses are set explicitly by teardown().
+function refreshStatus() {
+  if (!joining) return;
+  if (!conference) {
+    setStatus('connecting');
+    return;
+  }
+  setStatus(remoteCount() ? null : 'waiting');
 }
 
 function ensureTile(id, name, isLocal) {
@@ -235,6 +262,7 @@ function forgetParticipant(id, notifyCpp) {
   }
   removeTile(id);
   if (notifyCpp) notify('participantLeft', id);
+  refreshStatus();
 }
 
 function announceParticipant(id, name, isLocal) {
@@ -242,6 +270,7 @@ function announceParticipant(id, name, isLocal) {
   peerFor(id, isLocal);
   ensureTile(id, name, isLocal);
   notify('participantJoined', id, name || id, !!isLocal);
+  refreshStatus();
 }
 
 // Terminal paths (join failure, lost connection, kicked) release everything,
@@ -249,7 +278,7 @@ function announceParticipant(id, name, isLocal) {
 const handlers = {
   onJoined(localId) {
     if (!joining) return;
-    setStatus('connected');
+    refreshStatus();
     notify('joined', localId);
   },
   onFailed(reason) {

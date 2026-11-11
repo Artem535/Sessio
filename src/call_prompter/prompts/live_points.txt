@@ -6,11 +6,12 @@ Keep concrete decisions, problems, constraints, outcomes and important context.
 State WHAT matters, not a turn-by-turn account of WHO spoke. Merge related facts.
 Do not repeat or paraphrase known_points or another point in this reply.
 Preserve negations and final corrections. No advice, diagnoses, inferred motives
-or invented commitments. Options stay tentative. Each text <=80 characters.
+or invented commitments. Label an option as proposed; call it a decision only
+when the speakers explicitly chose or accepted it. Each text <=80 characters.
 Return ONLY JSON: {"key_points":[{"text":"takeaway","evidence_ids":["id"]}]}
 Cite 1-8 distinct literal utterance ids that directly support each takeaway.
 Example: "Hello. Can you hear me? Yes, thanks. He... well... bye." -> {"key_points":[]}
-Example input: "Use OBS; built-in recording makes huge files." (id=3).
+Example input: "We agreed to use OBS; built-in recording makes huge files." (id=3).
 Output: {"key_points":[{"text":"Для записи выбран OBS: файлы меньше.","evidence_ids":["3"]}]}
 Use SHORT sentences like this example. Omit secondary detail to stay <=80 characters.
 Nothing substantive: {"key_points":[]}.

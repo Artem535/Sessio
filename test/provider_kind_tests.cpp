@@ -37,3 +37,8 @@ TEST(ProviderKindTest, UnknownStringParsesToNullopt) {
   EXPECT_FALSE(pcm::meeting::providerKindFromString("SomethingElse").has_value());
   EXPECT_FALSE(pcm::meeting::providerKindFromString("").has_value());
 }
+TEST(ProviderKindTest, ExternalJitsiRoundTripsWithoutBackendOwnership) {
+  using namespace pcm::meeting;
+  EXPECT_EQ(providerKindFromString(providerKindToString(ProviderKind::ExternalJitsi)), ProviderKind::ExternalJitsi);
+  EXPECT_FALSE(isBackendHosted(ProviderKind::ExternalJitsi));
+}

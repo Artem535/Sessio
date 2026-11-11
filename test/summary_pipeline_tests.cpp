@@ -115,6 +115,17 @@ TEST(SummaryPipeline, LeafPayloadCarriesCalendarAndAgreements) {
   EXPECT_TRUE(model.schemas.front().contains("\"2026-12-27\""));
 }
 
+TEST(SummaryPipeline, LivePointsAreHintsOnlyForTheirSourceChunk) {
+  auto context = ctx();
+  context.livePoints = QJsonArray{item("Verified hint", {"u0"}), item("Wrong source", {"missing"})};
+  Model model;
+  processSummary(longCall(2), context, model.generate());
+  const auto first = parsed(model.payloads[0]);
+  ASSERT_EQ(first["live_points"].toArray().size(), 1);
+  EXPECT_EQ(first["live_points"].toArray()[0].toObject()["text"].toString(), "Verified hint");
+  EXPECT_FALSE(parsed(model.payloads[1]).contains("live_points"));
+}
+
 TEST(SummaryPipeline, LateFactsSurviveAndDuplicatesCollapse) {
   Model model;
   model.leaf = [](const QJsonObject &input) {
@@ -137,11 +148,11 @@ TEST(SummaryPipeline, ListsOverLimitKeepEarlyAndLateItems) {
     reply["key_points"] = QJsonArray{item("A " + id, {id}), item("B " + id, {id}), item("C " + id, {id})};
     return reply;
   };
-  const auto out = processSummary(longCall(6), ctx(), model.generate());
+  const auto out = processSummary(longCall(8), ctx(), model.generate());
   const auto points = texts(out["key_points"].toArray());
-  EXPECT_EQ(points.size(), 10);
+  EXPECT_EQ(points.size(), 20);
   EXPECT_EQ(points.first(), "A u0");
-  EXPECT_EQ(points.last(), "C u5");
+  EXPECT_EQ(points.last(), "C u7");
 }
 
 TEST(SummaryPipeline, OverviewBuiltFromChunkNotesInOrder) {
@@ -171,10 +182,10 @@ TEST(SummaryPipeline, ManyNotesAreReducedBeforeTheFinalOverview) {
     reply["note"] = item(id + " " + QString(230, QChar(u'н')), {id});
     return reply;
   };
-  const auto out = processSummary(longCall(12), ctx(), model.generate());
+  const auto out = processSummary(longCall(30), ctx(), model.generate());
   EXPECT_GT(overviewCalls, 1);
   EXPECT_FALSE(out["overview"].toObject()["text"].toString().isEmpty());
-  for (const auto &payload : model.payloads) EXPECT_LE(payload.size(), 2944);
+  for (const auto &payload : model.payloads) EXPECT_LE(payload.size(), 8192 - 2048 - 128);
 }
 
 TEST(SummaryPipeline, OverviewFallbackJoinsNotes) {
@@ -228,7 +239,7 @@ TEST(SummaryPipeline, LeafRepliesOverLimitsAreRejected) {
     }
     return false;
   };
-  EXPECT_TRUE(rejects([](QJsonObject &r) { r["note"] = item(QString(241, QChar(u'я')), {"u1"}); }));
+  EXPECT_TRUE(rejects([](QJsonObject &r) { r["note"] = item(QString(401, QChar(u'я')), {"u1"}); }));
   EXPECT_TRUE(rejects([](QJsonObject &r) {
     QJsonArray many;
     for (int i = 0; i < 4; ++i) many.append(item(QStringLiteral("П%1").arg(i), {"u1"}));
@@ -304,7 +315,7 @@ TEST(SummaryPipeline, SplittingPreservesSupplementaryUnicodeWithoutReplacementCh
     return leafReply(input);
   };
   processSummary({source("u1", text)}, ctx(), [&](const QString &system, const QByteArray &payload, const QByteArray &schema) {
-    EXPECT_LE(system.toUtf8().size() + payload.size() + 1024 + 128, 4096);
+    EXPECT_LE(system.toUtf8().size() + payload.size() + 2048 + 128, 8192);
     return model.generate()(system, payload, schema);
   });
   EXPECT_EQ(delivered, text);
@@ -469,4 +480,46 @@ TEST(SummaryPipeline, FallbackOverviewDoesNotRepeatTheSameSentence) {
   model.overview = [](const QJsonObject &) { return QJsonObject{{"overview", item("Итог.", {"missing"})}}; };
   const auto out = processSummary(longCall(2), ctx(), model.generate());
   EXPECT_EQ(out["overview"].toObject()["text"].toString(), "Обсудили проект и сроки сдачи.");
+}
+
+TEST(SummaryPipeline, MeetingsWithDifferentStructuredDatesStaySeparate) {
+  Model model;
+  model.leaf = [](const QJsonObject &input) {
+    auto reply = leafReply(input);
+    const auto id = firstId(input);
+    reply["tasks"] = QJsonArray{task("Обсудить проект на встрече", {id}, true,
+                                     id == "u0" ? "2026-10-30" : "2026-10-31", "12:00")};
+    return reply;
+  };
+  EXPECT_EQ(processSummary(longCall(2), ctx(), model.generate())["tasks"].toArray().size(), 2);
+}
+
+TEST(SummaryPipeline, SameWordsWithDifferentRecipientsStaySeparate) {
+  EXPECT_EQ(twoChunkSummary({"Отправить готовый отчёт Ивану до пятницы"},
+                            {"Отправить готовый отчёт Петру до пятницы"})["tasks"].toArray().size(), 2);
+}
+
+TEST(SummaryPipeline, SourceNumberMentionedAsContentIsPreserved) {
+  Model model;
+  model.leaf = [](const QJsonObject &input) {
+    auto reply = leafReply(input);
+    reply["key_points"] = QJsonArray{item("Бюджет проекта 4821 рублей (реплика 4821).", {"4821"}),
+                                     item("Расходы (бюджет 4821 рублей).", {"4821"})};
+    return reply;
+  };
+  const auto out = processSummary({source("4821", "Бюджет проекта 4821 рублей.")}, ctx(), model.generate());
+  EXPECT_EQ(texts(out["key_points"].toArray()),
+            (QStringList{"Бюджет проекта 4821 рублей.", "Расходы (бюджет 4821 рублей)."}));
+}
+
+TEST(SummaryPipeline, MeetingsWithDifferentStructuredTimesStaySeparate) {
+  Model model;
+  model.leaf = [](const QJsonObject &input) {
+    auto reply = leafReply(input);
+    const auto id = firstId(input);
+    reply["tasks"] = QJsonArray{task("Обсудить проект на встрече", {id}, true, "2026-10-30",
+                                     id == "u0" ? "12:00" : "17:00")};
+    return reply;
+  };
+  EXPECT_EQ(processSummary(longCall(2), ctx(), model.generate())["tasks"].toArray().size(), 2);
 }

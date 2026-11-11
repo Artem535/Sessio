@@ -154,7 +154,7 @@ TEST(SettingsDialogLayoutTest, EveryPageIsAVerticallyScrollableScrollArea) {
   auto *stack = dialog.findChild<QStackedWidget *>();
   ASSERT_NE(stack, nullptr);
 #ifdef SESSIO_CALL_TRANSCRIPTION
-  ASSERT_EQ(stack->count(), 7);
+  ASSERT_EQ(stack->count(), 8); // includes the Cloud models page
 #else
   ASSERT_EQ(stack->count(), 6);
 #endif

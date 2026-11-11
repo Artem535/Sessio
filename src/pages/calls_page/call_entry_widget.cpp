@@ -1,11 +1,14 @@
 #include "call_entry_widget.h"
 #include "accent_color.h"
 #include "app_settings.h"
+#include "jitsi_url.h"
+#include <QDesktopServices>
 
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QApplication>
+#include <QComboBox>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
@@ -96,13 +99,19 @@ CallEntryWidget::CallEntryWidget(const bool showOwnMeetings, QWidget *parent)
   joinLayout->setContentsMargins(16, 14, 16, 14);
   joinLayout->setSpacing(6);
   joinLayout->addWidget(makeGroupTitle(tr("Join a meeting"), joinGroup));
+  auto *joinMode = new QComboBox(joinGroup);
+  joinMode->setObjectName("joinMode");
+  joinMode->addItems({tr("Sessio invitation"), tr("Jitsi link")});
+  joinLayout->addWidget(joinMode);
   joinLayout->addSpacing(4);
-  joinLayout->addWidget(makeCaption(tr("Invitation code or link"), joinGroup));
+  auto *addressCaption = makeCaption(tr("Invitation code or link"), joinGroup);
+  joinLayout->addWidget(addressCaption);
   mCodeEdit = new QLineEdit(joinGroup);
   mCodeEdit->setObjectName("joinCodeEdit");
   mCodeEdit->setPlaceholderText(tr("Invitation code or link"));
   joinLayout->addWidget(mCodeEdit);
-  joinLayout->addWidget(makeCaption(tr("Passcode"), joinGroup));
+  auto *passcodeCaption = makeCaption(tr("Passcode"), joinGroup);
+  joinLayout->addWidget(passcodeCaption);
   mPasscodeEdit = new QLineEdit(joinGroup);
   mPasscodeEdit->setObjectName("joinPasscodeEdit");
   mPasscodeEdit->setPlaceholderText(tr("Passcode (6 digits)"));
@@ -119,6 +128,11 @@ CallEntryWidget::CallEntryWidget(const bool showOwnMeetings, QWidget *parent)
   mErrorLabel->setWordWrap(true);
   mErrorLabel->setVisible(false);
   joinLayout->addWidget(mErrorLabel);
+  mFallbackBrowserButton = new QPushButton(tr("Open in browser"), joinGroup);
+  mFallbackBrowserButton->setObjectName("jitsiFallbackBrowserButton");
+  mFallbackBrowserButton->hide();
+  joinLayout->addWidget(mFallbackBrowserButton);
+  connect(mFallbackBrowserButton, &QPushButton::clicked, this, &CallEntryWidget::openJitsiFallback);
   joinLayout->addStretch();
   groups->addWidget(joinGroup, 4, Qt::AlignTop);
 
@@ -144,8 +158,15 @@ CallEntryWidget::CallEntryWidget(const bool showOwnMeetings, QWidget *parent)
   }
   layout->addStretch();
 
-  connect(connectButton, &QPushButton::clicked, this, [this]() {
-    emit joinByCodeRequested(mCodeEdit->text(), mPasscodeEdit->text());
+  connect(joinMode, &QComboBox::currentIndexChanged, this, [this, addressCaption, passcodeCaption](int index) {
+    addressCaption->setText(index == 0 ? tr("Invitation code or link") : tr("Jitsi link"));
+    passcodeCaption->setVisible(index == 0);
+    mPasscodeEdit->setVisible(index == 0);
+    mCodeEdit->setPlaceholderText(index == 0 ? tr("Invitation code or link") : tr("https://meet.example.org/room"));
+  });
+  connect(connectButton, &QPushButton::clicked, this, [this, joinMode]() {
+    if (joinMode->currentIndex() == 1) emit joinJitsiRequested(mCodeEdit->text());
+    else emit joinByCodeRequested(mCodeEdit->text(), mPasscodeEdit->text());
   });
 }
 
@@ -204,6 +225,7 @@ void CallEntryWidget::preselectOwnMeeting(const QString &meetingRef) {
 }
 
 void CallEntryWidget::prefillJoinCode(const QString &code, const QString &passcode) {
+  if (auto *mode = findChild<QComboBox *>("joinMode")) mode->setCurrentIndex(0);
   mCodeEdit->setText(code);
   mPasscodeEdit->setText(passcode);
   emit workspaceChanged();
@@ -213,12 +235,14 @@ void CallEntryWidget::prefillJoinCode(const QString &code, const QString &passco
 void CallEntryWidget::showError(const QString &message) {
   mErrorLabel->setText(message);
   mErrorLabel->setVisible(true);
+  mFallbackBrowserButton->setVisible(!mJitsiFallbackUrl.isEmpty());
   emit workspaceChanged();
 }
 
 void CallEntryWidget::clearError() {
   mErrorLabel->clear();
   mErrorLabel->setVisible(false);
+  mFallbackBrowserButton->hide();
   emit workspaceChanged();
 }
 
@@ -288,6 +312,20 @@ void CallEntryWidget::joinInvitation(const QString &code, const QString &passcod
   prefillJoinCode(code, passcode);
   emit joinByCodeRequested(code, passcode);
 }
+void CallEntryWidget::joinJitsi(const QString &url) { emit joinJitsiRequested(url); }
+void CallEntryWidget::openJitsiInBrowser(const QString &url) {
+  if (!pcm::meeting::parseJitsiRoomUrl(url)) {
+    showError(tr("Enter a valid HTTPS Jitsi room link without login, query or fragment."));
+    return;
+  }
+  QDesktopServices::openUrl(QUrl(url.trimmed()));
+}
+void CallEntryWidget::setJitsiFallbackUrl(const QString &url) {
+  mJitsiFallbackUrl = url;
+  mFallbackBrowserButton->setVisible(!error().isEmpty() && !url.isEmpty());
+  emit workspaceChanged();
+}
+void CallEntryWidget::openJitsiFallback() { openJitsiInBrowser(mJitsiFallbackUrl); }
 void CallEntryWidget::openMaterial(const QString &id) {
   for (const auto &item : mMaterials)
     if (item.toMap().value("id").toString() == id) { emit materialRequested(id.toLongLong()); return; }

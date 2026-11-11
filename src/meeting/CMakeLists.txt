@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 set(TARGET_NAME ${PROJECT_NAME}_meeting)
 
-find_package(Qt6 REQUIRED COMPONENTS Core)
+find_package(Qt6 REQUIRED COMPONENTS Core Network)
 
 qt_add_library(${TARGET_NAME} STATIC
         provider_kind.h
@@ -17,6 +17,8 @@ qt_add_library(${TARGET_NAME} STATIC
         livekit_meeting_provider.cpp
         meeting_join.h
         meeting_join.cpp
+        jitsi_url.h
+        jitsi_url.cpp
         meeting_coordinator.h
         meeting_coordinator.cpp
         schedule_snapshot.h
@@ -36,6 +38,7 @@ qt_add_library(${TARGET_NAME} STATIC
 
 target_link_libraries(${TARGET_NAME} PUBLIC
         Qt6::Core
+        Qt6::Network
         ${PROJECT_NAME}_token_client
         ${PROJECT_NAME}_database
         pcm_schedule

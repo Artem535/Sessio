@@ -10,6 +10,7 @@
 #include <QComboBox>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHostAddress>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPointer>
@@ -44,7 +45,7 @@ CloudSettingsPanel::CloudSettingsPanel(QWidget *parent) : QWidget(parent) {
     return dialog.exec() == QDialog::Accepted;
   };
   auto *layout = new QVBoxLayout(this);
-  auto *intro = new QLabel(tr("Optional. Cloud models write the meeting summary, key points and agreements much faster than the local model. Call text is sent to the provider you choose below, so cloud models are off until you accept the terms."), this);
+  auto *intro = new QLabel(tr("Optional. Use a cloud model for meeting summaries, key points and agreements. Call text is sent to the provider you choose below, so cloud models are off until you accept the terms."), this);
   intro->setWordWrap(true);
   layout->addWidget(intro);
 
@@ -117,6 +118,9 @@ CloudSettingsPanel::CloudSettingsPanel(QWidget *parent) : QWidget(parent) {
   layout->addStretch(1);
 
   namespace settings = pcm::app_settings;
+  connect(mUrl, &QLineEdit::textChanged, this, &CloudSettingsPanel::invalidateProbe);
+  connect(mModel, &QLineEdit::textChanged, this, &CloudSettingsPanel::invalidateProbe);
+  connect(mKey, &QLineEdit::textChanged, this, &CloudSettingsPanel::invalidateProbe);
   connect(mUrl, &QLineEdit::editingFinished, this, [this] {
     settings::setCloudBaseUrl(mUrl->text());
     refresh();
@@ -128,12 +132,17 @@ CloudSettingsPanel::CloudSettingsPanel(QWidget *parent) : QWidget(parent) {
     const auto key = mKey->text().trimmed();
     if (key.isEmpty()) return;
     mKey->clear();
-    mStoredKey = key;
+    mPendingKey = key;
+    mKeyBusy = true;
+    mKeyStatus = tr("Saving key…");
     refresh();
     emit keyChanged(key);
   });
   connect(mRemoveKey, &QPushButton::clicked, this, [this] {
-    mStoredKey.clear(); mKey->clear();
+    mPendingKey.clear(); mKey->clear();
+    mKeyBusy = true;
+    mKeyStatus = tr("Removing key…");
+    invalidateProbe();
     refresh();
     emit keyChanged({});
   });
@@ -142,6 +151,10 @@ CloudSettingsPanel::CloudSettingsPanel(QWidget *parent) : QWidget(parent) {
     settings::setCloudModel(mModel->text());
     if (mUrl->text().trimmed().isEmpty() || mModel->text().trimmed().isEmpty()) {
       mConsentState->setText(tr("Enter the provider address and the model first."));
+      return;
+    }
+    if (!validProvider()) {
+      mConsentState->setText(tr("Enter an HTTPS provider address, or HTTP for a local provider, without credentials, query or fragment."));
       return;
     }
     const bool accepted = mAskConsent && mAskConsent(hostOf(mUrl->text()), settings::cloudPseudonymize());
@@ -167,7 +180,56 @@ CloudSettingsPanel::CloudSettingsPanel(QWidget *parent) : QWidget(parent) {
 
 void CloudSettingsPanel::setStoredKey(const QString &key) {
   mStoredKey = key;
+  mKeyStatus.clear();
+  invalidateProbe();
   refresh();
+}
+
+void CloudSettingsPanel::beginKeyRead() {
+  mKeyBusy = true;
+  mKeyStatus = tr("Reading key from the system keychain…");
+  refresh();
+}
+
+void CloudSettingsPanel::keyReadFinished(bool ok, const QString &key) {
+  mKeyBusy = false;
+  if (ok) {
+    setStoredKey(key);
+    emit keyAvailable(key);
+  } else {
+    mKeyStatus = tr("The key could not be read from the system keychain. Unlock the keychain and reopen settings to retry.");
+    refresh();
+  }
+}
+
+void CloudSettingsPanel::keyWriteFinished(bool ok) {
+  mKeyBusy = false;
+  if (ok) {
+    setStoredKey(mPendingKey);
+    emit keyAvailable(mStoredKey);
+  } else {
+    mKeyStatus = mPendingKey.isEmpty()
+        ? tr("The key could not be removed from the system keychain. Try again.")
+        : tr("The key could not be saved in the system keychain. Unlock the keychain and enter it again.");
+    refresh();
+  }
+  mPendingKey.clear();
+}
+
+void CloudSettingsPanel::invalidateProbe() {
+  ++mProbeGeneration;
+  mTestResult->clear();
+  mTest->setEnabled(!mKeyBusy);
+}
+
+bool CloudSettingsPanel::validProvider() const {
+  const QUrl url(mUrl->text().trimmed(), QUrl::StrictMode);
+  const auto host = url.host();
+  const bool local = host.compare(QLatin1String("localhost"), Qt::CaseInsensitive) == 0
+      || QHostAddress(host).isLoopback();
+  return url.isValid() && !host.isEmpty()
+      && (url.scheme() == QLatin1String("https") || (url.scheme() == QLatin1String("http") && local))
+      && url.userInfo().isEmpty() && !url.hasQuery() && !url.hasFragment();
 }
 
 void CloudSettingsPanel::refresh() {
@@ -178,8 +240,11 @@ void CloudSettingsPanel::refresh() {
       : tr("Cloud models are off. Nothing is sent anywhere."));
   mEnable->setVisible(!consent);
   mRevoke->setVisible(consent);
-  mKeyState->setText(mStoredKey.isEmpty() ? tr("No key stored.") : tr("A key is stored in the system keychain."));
-  mRemoveKey->setEnabled(!mStoredKey.isEmpty());
+  mKeyState->setText(!mKeyStatus.isEmpty() ? mKeyStatus
+      : mStoredKey.isEmpty() ? tr("No key stored.") : tr("A key is stored in the system keychain."));
+  mKey->setEnabled(!mKeyBusy);
+  mRemoveKey->setEnabled(!mKeyBusy && !mStoredKey.isEmpty());
+  mTest->setEnabled(!mKeyBusy);
   for (auto *box : {mAgreements, mLivePoints, mSummary}) box->setEnabled(consent);
   const struct { QComboBox *box; const char *feature; } rows[] = {
       {mAgreements, "agreements"}, {mLivePoints, "live_points"}, {mSummary, "summary"}};
@@ -199,13 +264,18 @@ void CloudSettingsPanel::runTest() {
     mTestResult->setText(tr("Enter the provider address and the model first."));
     return;
   }
+  if (!validProvider()) {
+    mTestResult->setText(tr("Enter an HTTPS provider address, or HTTP for a local provider, without credentials, query or fragment."));
+    return;
+  }
   mTest->setEnabled(false);
   mTestResult->setText(tr("Testing…"));
   QPointer<CloudSettingsPanel> guard(this);
-  std::thread([guard, config] {
+  const auto generation = ++mProbeGeneration;
+  std::thread([guard, config, generation] {
     const auto probe = pcm::prompter::probeCloud(config);
-    QMetaObject::invokeMethod(qApp, [guard, probe] {
-      if (!guard) return;
+    QMetaObject::invokeMethod(qApp, [guard, probe, generation] {
+      if (!guard || guard->mProbeGeneration != generation) return;
       guard->mTest->setEnabled(true);
       guard->mTestResult->setText(probe.ok ? tr("Connected. The provider supports strict JSON schema output.")
                                            : reasonText(probe.reason));

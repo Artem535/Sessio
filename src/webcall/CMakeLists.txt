@@ -26,6 +26,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES AUTOMOC ON)
 
 target_link_libraries(${TARGET_NAME} PUBLIC
         ${PROJECT_NAME}_video
+        ${PROJECT_NAME}_meeting
         Qt6::Core
         Qt6::Network
         Qt6::WebChannel

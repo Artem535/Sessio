@@ -2,9 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.40] - 2026-11-11
+
+- Jitsi calls now use the same in-call toolbar as LiveKit: the microphone and
+  camera buttons stay native, and the embedded call page no longer draws its
+  own duplicate row of controls.
+- The embedded Jitsi page follows the application language, and its status
+  line appears only while connecting or waiting for the second participant.
+
 ## [0.2.39] - 2026-11-11
 
 - Refreshed the in-call microphone, camera and speaker selection panel.
+
+- Added joining external Jitsi rooms by URL and creating calendar meetings on
+  a selected external server, independently of Sessio invitations. Deployment
+  prefixes and server websocket/BOSH settings are respected.
+- Cloud model settings report keychain loading, saving and removal failures,
+  discard obsolete connection checks and validate provider addresses.
+- Fixed the local Gemma constrained-decoding adapter for SentencePiece byte
+  tokens and UTF-8 prefixes. Calibrated extraction prompts and supplied relative
+  date hints computed from the call date.
+- Summary deduplication preserves different recipients and meeting dates/times;
+  source-ID cleanup preserves numbers spoken in the conversation.
+- Fixed compressed Qlementine dropdown lists inside styled cards throughout
+  the application, and recursive popup creation during widget initialization.
+- Fixed clean Linux runtime builds by downloading the pinned ANTLR revision
+  from a SHA256-verified archive instead of a shallow Git clone.
+- Reclaimed Linux CI runner SDK and temporary staging space before packaging
+  to avoid exhausting the disk while preparing installers.
 
 ## [0.2.38] - 2026-10-29
 

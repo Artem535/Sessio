@@ -62,6 +62,7 @@ signals:
    * to MainWindow's Calls tab instead of opening a URL.
    */
   void openLiveKitMeetingRequested(QString meetingRef);
+  void openExternalJitsiMeetingRequested(QString url, qint64 eventId);
 
 public:
   // Opens the new-event dialog pre-filled from `t`. Returns the created event's

@@ -192,6 +192,15 @@ jobs:
             libxkbcommon0 \
             libdbus-1-3
 
+      - name: Free Linux runner disk space
+        if: runner.os == 'Linux'
+        run: |
+          df -h /
+          # This job uses the downloaded Qt SDK and vcpkg, not these SDKs.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          df -h /
+
       - name: Restore Qt cache (Linux)
         if: runner.os == 'Linux'
         id: cache-qt-linux
@@ -404,6 +413,19 @@ jobs:
         run: |
           cmake --install build-release --prefix "${{ github.workspace }}/build-release/transcription-install"
           cmake -DINSTALL_ROOT="${{ github.workspace }}/build-release/transcription-install" -P test/transcription_install_smoke.cmake
+
+      - name: Reclaim Linux staging space before packaging
+        if: runner.os == 'Linux'
+        run: |
+          df -h /
+          du -sh build-release/transcription-install vcpkg/buildtrees vcpkg/packages .cache/vcpkg || true
+          # Cache uploads above are complete. Keep the installed dependency tree,
+          # Qt, models and app objects; packaging needs them. Discard duplicate
+          # staging and dependency build/download data before creating RPM/AppDir.
+          rm -rf build-release/transcription-install vcpkg/buildtrees vcpkg/packages
+          rm -rf "$VCPKG_DEFAULT_BINARY_CACHE" "$VCPKG_DOWNLOADS"
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE" "$VCPKG_DOWNLOADS"
+          df -h /
 
       - name: Install bundle
         if: runner.os != 'Windows'

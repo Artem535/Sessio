@@ -885,6 +885,30 @@ TEST(DatabaseTest, PersistsProviderFieldsOnEvent) {
   EXPECT_EQ(*updated->invitation_state, "pending");
 }
 
+TEST(DatabaseTest, ExternalJitsiRoundTripsWithoutBackendCredentials) {
+  TempDbFixture fixture("tmp_dir_external_jitsi_event");
+  int64_t id = 0;
+  {
+    pcm::database::Database db{fixture.conf};
+    DuckEvent event;
+    event.name = "External meeting";
+    event.start_date = 1730000000000;
+    event.end_date = 1730003600000;
+    event.is_online = true;
+    event.provider_kind = "ExternalJitsi";
+    event.meeting_url = "https://meet.example.invalid/prefix/room";
+    id = db.add_event(event);
+    ASSERT_GT(id, 0);
+  }
+  pcm::database::Database reopened{fixture.conf};
+  const auto event = reopened.get_event(id);
+  ASSERT_NE(event, nullptr);
+  EXPECT_EQ(event->provider_kind, std::optional<std::string>{"ExternalJitsi"});
+  EXPECT_EQ(event->meeting_url, "https://meet.example.invalid/prefix/room");
+  EXPECT_FALSE(event->meeting_ref);
+  EXPECT_FALSE(event->invitation_state);
+}
+
 TEST(DatabaseTest, PersistsProviderFieldsOnEventSeries) {
   TempDbFixture fixture("tmp_dir_provider_series");
   pcm::database::Database db{fixture.conf};

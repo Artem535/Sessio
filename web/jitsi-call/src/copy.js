@@ -1,7 +1,6 @@
 const strings = {
   en: {
     connecting: 'Connecting…',
-    connected: 'Connected',
     lost: 'Connection lost, the call has ended',
     kicked: 'You were removed from the call',
     left: 'Call ended',
@@ -14,7 +13,6 @@ const strings = {
   },
   ru: {
     connecting: 'Подключение…',
-    connected: 'Соединение установлено',
     lost: 'Соединение потеряно, звонок завершён',
     kicked: 'Вас удалили из звонка',
     left: 'Звонок завершён',
@@ -27,10 +25,20 @@ const strings = {
   },
 };
 
+let currentLanguage = typeof navigator !== 'undefined' ? navigator.language : 'en';
+
 export function pickLocale(language) {
   return /^ru\b/i.test(language || '') ? 'ru' : 'en';
 }
 
-export function copy(key, language = typeof navigator !== 'undefined' ? navigator.language : 'en') {
-  return strings[pickLocale(language)][key] ?? strings.en[key] ?? key;
+export function setLocale(language) {
+  if (language) currentLanguage = language;
+}
+
+export function locale() {
+  return pickLocale(currentLanguage);
+}
+
+export function copy(key) {
+  return strings[locale()][key] ?? strings.en[key] ?? key;
 }

@@ -9,7 +9,7 @@ namespace pcm::meeting {
 
 /// What "join this meeting" should do for an event.
 struct JoinAction {
-  enum class Kind { None, LiveKit, Url } kind = Kind::None;
+  enum class Kind { None, LiveKit, Url, JitsiUrl } kind = Kind::None;
   QString target;
 };
 

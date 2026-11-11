@@ -11,7 +11,7 @@ namespace pcm::prompter {
 namespace {
 
 constexpr qsizetype kMaxReplyChars = 48000;
-constexpr int kSchemaOutputTokens = 1024;
+constexpr int kSchemaOutputTokens = 2048;
 
 class GemmaEngine final : public PrompterEngine {
 public:

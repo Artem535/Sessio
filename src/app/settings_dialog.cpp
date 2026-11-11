@@ -1,4 +1,5 @@
 #include "settings_dialog.h"
+#include "jitsi_url.h"
 #ifdef SESSIO_CALL_TRANSCRIPTION
 #include "transcription_settings_panel.h"
 #include "cloud_settings_panel.h"
@@ -269,7 +270,7 @@ void SettingsDialog::setupUi() {
   mSettingsSections->addItem(tr("Backup"), {}, {}, QStringLiteral("backup"));
   mSettingsSections->addItem(tr("Events"), {}, {}, QStringLiteral("events"));
   mSettingsSections->addItem(tr("Online"), {}, {}, QStringLiteral("online"));
-  mSettingsSections->addItem(tr("LiveKit"), {}, {}, QStringLiteral("livekit"));
+  mSettingsSections->addItem(tr("Calls"), {}, {}, QStringLiteral("livekit"));
   mSettingsSections->setItemsShouldExpand(true);
   rootLayout->addWidget(mSettingsSections);
 
@@ -675,6 +676,31 @@ void SettingsDialog::setupLiveKitSection() {
   });
   liveKitPageLayout->addWidget(nameBox);
 
+  auto *jitsiBox = new QGroupBox(tr("External Jitsi server"), liveKitPage);
+  auto *jitsiLayout = new QVBoxLayout(jitsiBox);
+  auto *jitsiUrl = new QLineEdit(pcm::app_settings::externalJitsiServerUrl(), jitsiBox);
+  jitsiUrl->setObjectName("externalJitsiServerUrlEdit");
+  jitsiUrl->setPlaceholderText("https://meet.example.org/");
+  auto *jitsiHint = new QLabel(tr("Used when creating external Jitsi meetings. The server must allow guest access."), jitsiBox);
+  jitsiHint->setWordWrap(true);
+  auto *jitsiStatus = new QLabel(jitsiBox);
+  auto *jitsiSave = new QPushButton(tr("Save"), jitsiBox);
+  jitsiSave->setObjectName("externalJitsiSaveButton");
+  jitsiLayout->addWidget(jitsiHint);
+  jitsiLayout->addWidget(jitsiUrl);
+  jitsiLayout->addWidget(jitsiStatus);
+  jitsiLayout->addWidget(jitsiSave, 0, Qt::AlignRight);
+  connect(jitsiSave, &QPushButton::clicked, this, [jitsiUrl, jitsiStatus] {
+    const auto address = pcm::meeting::parseJitsiServerUrl(jitsiUrl->text());
+    if (!jitsiUrl->text().trimmed().isEmpty() && !address) {
+      jitsiStatus->setText(tr("Enter a valid HTTPS server address without login, query or fragment."));
+      return;
+    }
+    pcm::app_settings::setExternalJitsiServerUrl(address ? address->toString(QUrl::FullyEncoded) : QString{});
+    jitsiStatus->setText(tr("Saved"));
+  });
+  liveKitPageLayout->addWidget(jitsiBox);
+
   auto *liveKitBox = new QGroupBox(tr("Token backend"), liveKitPage);
   auto *liveKitLayout = new QVBoxLayout(liveKitBox);
   liveKitLayout->setContentsMargins(16, 16, 16, 16);
@@ -793,18 +819,24 @@ void SettingsDialog::setupCloudSection() {
   auto *keys = new CloudKeyStore(this);
   mSettingsSections->addItem(tr("Cloud models"), {}, {}, QStringLiteral("cloud"));
   mSettingsStack->addWidget(makeScrollPage(panel, mSettingsStack));
-  connect(keys, &CloudKeyStore::readFinished, panel, [panel](bool ok, QString key, QString) {
-    if (!ok) return;
-    panel->setStoredKey(key);
-    pcm::app_settings::setCloudApiKeyCached(key);
-  });
+  connect(keys, &CloudKeyStore::readFinished, panel,
+          [panel](bool ok, const QString &key, const QString &) { panel->keyReadFinished(ok, key); });
+  connect(keys, &CloudKeyStore::writeFinished, panel,
+          [panel](bool ok, const QString &) { panel->keyWriteFinished(ok); });
+  connect(panel, &CloudSettingsPanel::keyAvailable, panel, &pcm::app_settings::setCloudApiKeyCached);
   connect(panel, &CloudSettingsPanel::keyChanged, keys, [keys](QString key) {
-    pcm::app_settings::setCloudApiKeyCached(key);
     if (key.isEmpty()) keys->remove(); else keys->write(key);
   });
-  connect(panel, &CloudSettingsPanel::consentAccepted, keys, &CloudKeyStore::read);
-  // Read the key only for someone who has opted in: no keychain prompt otherwise.
-  if (pcm::app_settings::cloudConsentValid()) keys->read();
+  // Reading credentials for setup/testing sends no transcript. Transmission
+  // remains gated separately by address-bound consent.
+  const auto cloudIndex = mSettingsStack->count() - 1;
+  connect(mSettingsStack, &QStackedWidget::currentChanged, panel,
+          [panel, keys, cloudIndex, read = false](int index) mutable {
+    if (index != cloudIndex || read) return;
+    read = true;
+    panel->beginKeyRead();
+    keys->read();
+  });
 #endif
 }
 

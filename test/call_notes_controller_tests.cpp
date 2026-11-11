@@ -78,6 +78,21 @@ TEST_F(CallNotesTest, AiSummaryIsStoredWithCallWithoutAcceptStep) {
   EXPECT_EQ(reopened.manualText(), "My own text");
 }
 
+TEST_F(CallNotesTest, FinalRequestIncludesLivePointsWithTheirSources) {
+  const auto p = phrase();
+  c->setGenerationEnabled(true);
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady);
+  c->flush();
+  ASSERT_EQ(requests.count(), 1);
+  c->handleResult(reply(requests[0][0].toJsonObject(), p));
+  c->finishCall();
+  c->requestFinal();
+  ASSERT_EQ(requests.count(), 2);
+  const auto request = requests[1][0].toJsonObject();
+  EXPECT_EQ(request["live_points"].toArray(), c->livePoints());
+  EXPECT_EQ(request["live_points"].toArray().size(), 1);
+}
+
 TEST_F(CallNotesTest, DuplicateLivePointDoesNotAccumulateAcrossUpdates) {
   const auto first = phrase(); c->setGenerationEnabled(true);
   QSignalSpy requests(c.get(), &CallNotesController::requestReady);

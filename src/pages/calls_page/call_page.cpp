@@ -805,12 +805,12 @@ void CallPage::setWebView(QWidget *view) {
   mWebView = view;
   mVideoStage->setContentWidget(view);
   const bool native = view == nullptr;
-  // The web page has its own mic/camera/share/device controls (and Jitsi owns the devices).
+  // The web page owns screen share, device selection and the tile layout (Jitsi owns the
+  // devices), while mic/camera stay native so one toolbar drives every call kind.
   // Visibility is touched only on a mode switch, so a native session keeps whatever the
   // native flow chose, and leaving web mode restores exactly what was there before.
   if (!native && !wasWeb) {
-    for (QWidget *widget : {static_cast<QWidget *>(mMicrophoneToggleButton), static_cast<QWidget *>(mCameraToggleButton),
-                            static_cast<QWidget *>(mScreenShareButton), static_cast<QWidget *>(mDevicesButton),
+    for (QWidget *widget : {static_cast<QWidget *>(mScreenShareButton), static_cast<QWidget *>(mDevicesButton),
                             mLayoutControls.data()})
       if (widget) {
         mSavedControlVisibility.append({widget, !widget->isHidden()});

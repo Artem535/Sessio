@@ -33,7 +33,7 @@ struct RuntimeInfo {
 
 struct ModelOptions {
   int threads = 4;
-  int contextTokens = 4096;
+  int contextTokens = 8192;
   std::string cacheDir; // disk cache root; empty uses upstream's model-adjacent cache
   // Load the MTP drafter. Only used by generate() calls without reusePrefix.
   bool speculativeDecoding = false;
