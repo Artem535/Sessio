@@ -53,6 +53,28 @@ Config Config::fromEnv() {
   const char *ttlEnv = std::getenv("TOKEN_TTL_SECONDS");
   config.tokenTtlSeconds = ttlEnv ? std::atoi(ttlEnv) : 600;
 
+  // A partial set would pass startup and then fail on the first Jitsi
+  // meeting, so refuse it here and name the first variable that is missing.
+  const char *jitsiNames[] = {"JITSI_URL", "JITSI_APP_ID", "JITSI_APP_SECRET"};
+  std::string *jitsiFields[] = {&config.jitsiUrl, &config.jitsiAppId, &config.jitsiAppSecret};
+  bool anyJitsi = false;
+  for (int i = 0; i < 3; ++i) {
+    const char *value = std::getenv(jitsiNames[i]);
+    if (value && value[0] != '\0') {
+      *jitsiFields[i] = value;
+      anyJitsi = true;
+    }
+  }
+  if (anyJitsi) {
+    for (int i = 0; i < 3; ++i) {
+      if (jitsiFields[i]->empty()) {
+        throw std::runtime_error(std::string("missing required environment variable ") +
+                                 jitsiNames[i] + " (JITSI_URL, JITSI_APP_ID and JITSI_APP_SECRET "
+                                                 "must be set together)");
+      }
+    }
+  }
+
   return config;
 }
 

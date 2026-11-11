@@ -376,3 +376,56 @@ TEST(TokenBackendClientScheduleTest, OriginalStartIsFormattedWithSecondPrecision
   EXPECT_EQ(pcm::tokenclient::formatOriginalStartUtc(1791903600000), "2026-10-13T15:00:00Z");
   EXPECT_EQ(pcm::tokenclient::formatOriginalStartUtc(1791903600999), "2026-10-13T15:00:00Z");
 }
+
+TEST(TokenBackendClientTest, ParsesProviderField) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, R"({
+    "endpointUrl": "https://jitsi.example.test", "roomName": "room-j",
+    "token": "jwt-j", "expiresAt": 999, "provider": "jitsi"
+  })");
+  TokenBackendClient client(server.baseUrl().toString());
+  QSignalSpy receivedSpy(&client, &TokenBackendClient::tokenReceived);
+  client.requestSpecialistToken("secret", "ref-j");
+  ASSERT_TRUE(receivedSpy.wait(2000));
+  EXPECT_EQ(receivedSpy.at(0).at(0).value<TokenResult>().provider, QStringLiteral("jitsi"));
+}
+
+TEST(TokenBackendClientTest, DefaultsProviderToLiveKit) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, R"({
+    "endpointUrl": "wss://livekit.example.test", "roomName": "room-1",
+    "token": "jwt-1", "expiresAt": 999
+  })");
+  TokenBackendClient client(server.baseUrl().toString());
+  QSignalSpy receivedSpy(&client, &TokenBackendClient::tokenReceived);
+  client.requestSpecialistToken("secret", "ref-1");
+  ASSERT_TRUE(receivedSpy.wait(2000));
+  EXPECT_EQ(receivedSpy.at(0).at(0).value<TokenResult>().provider, QStringLiteral("livekit"));
+}
+
+TEST(TokenBackendClientTest, CreateMeetingSendsJitsiProvider) {
+  const char *reply = R"({
+    "meetingRef": "ref-1", "invitationUrl": "https://x/code-1", "passcode": "111111",
+    "scheduledStart": "2026-10-01T10:00:00Z", "scheduledEnd": "2026-10-01T10:50:00Z"
+  })";
+  {
+    FakeTokenBackendServer server;
+    server.setNextResponse(200, reply);
+    TokenBackendClient client(server.baseUrl().toString());
+    QSignalSpy createdSpy(&client, &TokenBackendClient::meetingCreated);
+    client.requestCreateMeeting("secret", "2026-10-01T10:00:00Z", "2026-10-01T10:50:00Z",
+                                QStringLiteral("jitsi"));
+    ASSERT_TRUE(createdSpy.wait(2000));
+    EXPECT_EQ(QJsonDocument::fromJson(server.lastBody).object().value("provider").toString(),
+              QStringLiteral("jitsi"));
+  }
+  {
+    FakeTokenBackendServer server;
+    server.setNextResponse(200, reply);
+    TokenBackendClient client(server.baseUrl().toString());
+    QSignalSpy createdSpy(&client, &TokenBackendClient::meetingCreated);
+    client.requestCreateMeeting("secret", "2026-10-01T10:00:00Z", "2026-10-01T10:50:00Z");
+    ASSERT_TRUE(createdSpy.wait(2000));
+    EXPECT_FALSE(QJsonDocument::fromJson(server.lastBody).object().contains("provider"));
+  }
+}

@@ -1,5 +1,6 @@
 #include "transcription_settings_panel.h"
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -8,12 +9,59 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
+#include <QLineEdit>
+#include <QFileDialog>
 
 TranscriptionSettingsPanel::TranscriptionSettingsPanel(QWidget *parent) : QWidget(parent) {
   auto *layout = new QVBoxLayout(this);
   mEnabled = new QCheckBox(tr("Enable call transcription"), this);
   mEnabled->setObjectName("transcriptionEnabled");
   layout->addWidget(mEnabled);
+  mAutoStart = new QCheckBox(tr("Start transcription automatically when joining a call"), this);
+  mAutoStart->setObjectName("transcriptionAutoStart");
+  layout->addWidget(mAutoStart);
+  mPrompterAutoStart = new QCheckBox(tr("Start the prompter automatically"), this);
+  mPrompterAutoStart->setObjectName("prompterAutoStart");
+  layout->addWidget(mPrompterAutoStart);
+  connect(mEnabled, &QCheckBox::toggled, this, [this](bool enabled) {
+    if (!enabled) { mAutoStart->setChecked(false); mPrompterAutoStart->setChecked(false); }
+  });
+  connect(mAutoStart, &QCheckBox::toggled, this, [this](bool enabled) {
+    if (enabled) mEnabled->setChecked(true);
+    else mPrompterAutoStart->setChecked(false);
+    emit autoStartToggled(enabled);
+  });
+  connect(mPrompterAutoStart, &QCheckBox::toggled, this, [this](bool enabled) {
+    if (enabled) mAutoStart->setChecked(true);
+    emit prompterAutoStartToggled(enabled);
+  });
+  auto *runtime = new QGroupBox(tr("Local prompter (experimental)"), this);
+  auto *runtimeForm = new QFormLayout(runtime);
+  auto *row = new QWidget(runtime);
+  auto *rowLayout = new QHBoxLayout(row);
+  rowLayout->setContentsMargins(0, 0, 0, 0);
+  mPrompterModel = new QLineEdit(row); mPrompterModel->setObjectName("prompterModel");
+  auto *browse = new QPushButton(tr("Browse…"), row);
+  rowLayout->addWidget(mPrompterModel, 1); rowLayout->addWidget(browse);
+  runtimeForm->addRow(tr("Gemma model (.litertlm)"), row);
+  connect(mPrompterModel, &QLineEdit::editingFinished, this, [this] { emit prompterModelChanged(mPrompterModel->text()); });
+  connect(browse, &QPushButton::clicked, this, [this] {
+    const auto path = QFileDialog::getOpenFileName(this, tr("Select a local file"), mPrompterModel->text());
+    if (!path.isEmpty()) { mPrompterModel->setText(path); emit prompterModelChanged(path); }
+  });
+  mPrompterAcceleration = new QComboBox(runtime); mPrompterAcceleration->setObjectName("prompterAcceleration");
+  mPrompterAcceleration->addItem(tr("Automatic (GPU, otherwise CPU)"), QStringLiteral("auto"));
+  mPrompterAcceleration->addItem(tr("GPU only"), QStringLiteral("gpu"));
+  mPrompterAcceleration->addItem(tr("CPU only"), QStringLiteral("cpu"));
+  mPrompterAcceleration->setToolTip(tr("The GPU is several times faster and uses less memory, but on an integrated GPU it can make the desktop stutter. The CPU needs about 10 GB of RAM. Applies the next time the model starts."));
+  runtimeForm->addRow(tr("Acceleration"), mPrompterAcceleration);
+  connect(mPrompterAcceleration, &QComboBox::currentIndexChanged, this, [this] {
+    emit prompterAccelerationChanged(mPrompterAcceleration->currentData().toString());
+  });
+  auto *runtimeNote = new QLabel(tr("Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review."), runtime);
+  runtimeNote->setWordWrap(true);
+  runtimeForm->addRow(runtimeNote);
+  layout->addWidget(runtime);
   mModel = new QLabel(this);
   mModel->setObjectName("transcriptionModelInfo");
   mModel->setTextFormat(Qt::PlainText);
@@ -105,6 +153,16 @@ pcm::transcription::TranscriptionTuning TranscriptionSettingsPanel::tuning() con
 void TranscriptionSettingsPanel::setEnabledState(bool enabled) {
   const QSignalBlocker block(mEnabled);
   mEnabled->setChecked(enabled);
+}
+void TranscriptionSettingsPanel::setAutoStartState(bool transcription, bool prompter) {
+  const QSignalBlocker a(mAutoStart), b(mPrompterAutoStart);
+  mAutoStart->setChecked(transcription);
+  mPrompterAutoStart->setChecked(prompter && transcription);
+}
+void TranscriptionSettingsPanel::setPrompterModel(const QString &model) { mPrompterModel->setText(model); }
+void TranscriptionSettingsPanel::setPrompterAcceleration(const QString &mode) {
+  const QSignalBlocker blocker(mPrompterAcceleration);
+  mPrompterAcceleration->setCurrentIndex(std::max(0, mPrompterAcceleration->findData(mode)));
 }
 void TranscriptionSettingsPanel::setModelInfo(const QString &id, bool installed) {
   mModel->setText(tr("Model: %1 — %2").arg(id, installed ? tr("installed") : tr("not installed")));

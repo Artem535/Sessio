@@ -4,6 +4,7 @@
 #include <QGraphicsView>
 #include <QLoggingCategory>
 #include <QPainter>
+#include <QDateTime>
 #include <QTime>
 #include <QVector>
 #include <QWidget>
@@ -40,6 +41,11 @@ public slots:
   // is visible; a no-op when it already is.
   void scrollToDayStart();
 
+public:
+  // Scene y of the current-time line, or nothing when the displayed day is
+  // not the day of `now`.
+  [[nodiscard]] std::optional<qreal> currentTimeLineY(const QDateTime &now) const;
+
 protected:
   void contextMenuEvent(QContextMenuEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
@@ -61,6 +67,7 @@ private:
   QDate mLastScrolledDate;
 
   void drawBackground(QPainter *painter, const QRectF &rect) override;
+  void drawForeground(QPainter *painter, const QRectF &rect) override;
   void showCreateEventMenu(const QPoint &viewportPos, const QPoint &globalPos);
   void updateSceneSize();
   void updateItemsSize() const;

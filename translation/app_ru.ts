@@ -2,6 +2,88 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="ru_RU">
 <context>
+    <name>AgreementsWidget</name>
+    <message>
+        <source>Agreements</source>
+        <translation>Договорённости</translation>
+    </message>
+</context>
+<context>
+    <name>AiSummaryWidget</name>
+    <message>
+        <source>AI summary</source>
+        <translation>Итог ИИ</translation>
+    </message>
+    <message>
+        <source>Delete AI summary</source>
+        <translation>Удалить итог ИИ</translation>
+    </message>
+    <message>
+        <source>Delete the AI summary of this meeting? Your own notes are kept.</source>
+        <translation>Удалить итог ИИ этой встречи? Ваши заметки останутся.</translation>
+    </message>
+    <message>
+        <source>Edit AI summary</source>
+        <translation>Изменить итог ИИ</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Изменить</translation>
+    </message>
+    <message>
+        <source>Save</source>
+        <translation>Сохранить</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Повторить</translation>
+    </message>
+    <message>
+        <source>Create again</source>
+        <translation>Создать заново</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>Удалить</translation>
+    </message>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Не удалось сохранить — не закрывайте страницу</translation>
+    </message>
+    <message>
+        <source>updating…</source>
+        <translation>обновляется…</translation>
+    </message>
+    <message>
+        <source>ready</source>
+        <translation>готов</translation>
+    </message>
+    <message>
+        <source>outdated</source>
+        <translation>устарел</translation>
+    </message>
+    <message>
+        <source>failed</source>
+        <translation>ошибка</translation>
+    </message>
+    <message>
+        <source>The transcript changed after this summary.</source>
+        <translation>Транскрипт изменился после этого итога.</translation>
+    </message>
+    <message>
+        <source>Update</source>
+        <translation>Обновить</translation>
+    </message>
+    <message>
+        <source>Turn on transcription to get a summary</source>
+        <translation>Включите транскрипцию, чтобы получить итог</translation>
+    </message>
+</context>
+<context>
     <name>AnalyticsPage</name>
     <message>
         <source>Total clients</source>
@@ -133,6 +215,14 @@
         <translation>Подключиться к встрече</translation>
     </message>
     <message>
+        <source>Sessio invitation</source>
+        <translation>Приглашение Sessio</translation>
+    </message>
+    <message>
+        <source>Jitsi link</source>
+        <translation>Ссылка Jitsi</translation>
+    </message>
+    <message>
         <source>Invitation code or link</source>
         <translation>Код приглашения или ссылка</translation>
     </message>
@@ -149,6 +239,10 @@
         <translation>Подключиться</translation>
     </message>
     <message>
+        <source>Open in browser</source>
+        <translation>Открыть в браузере</translation>
+    </message>
+    <message>
         <source>Your calls today</source>
         <translation>Ваши звонки на сегодня</translation>
     </message>
@@ -157,8 +251,161 @@
         <translation>Сегодня звонков нет</translation>
     </message>
     <message>
+        <source>https://meet.example.org/room</source>
+        <translation>https://meet.example.org/room</translation>
+    </message>
+    <message>
         <source>Join</source>
         <translation>Войти</translation>
+    </message>
+    <message>
+        <source>Meetings</source>
+        <translation>Встречи</translation>
+    </message>
+    <message>
+        <source>Enter a valid HTTPS Jitsi room link without login, query or fragment.</source>
+        <translation>Введите корректную HTTPS-ссылку на комнату Jitsi без логина, параметров и фрагмента.</translation>
+    </message>
+</context>
+<context>
+    <name>CallNotesController</name>
+    <message>
+        <source>Could not save call materials. Reopen the call and try again.</source>
+        <translation>Не удалось сохранить материалы. Откройте звонок заново и повторите попытку.</translation>
+    </message>
+    <message>
+        <source>Waiting for local processing</source>
+        <translation>В очереди на локальную обработку</translation>
+    </message>
+    <message>
+        <source>Summarizing the meeting…</source>
+        <translation>Составляется итог встречи…</translation>
+    </message>
+    <message>
+        <source>Updating key points…</source>
+        <translation>Обновляются ключевые моменты…</translation>
+    </message>
+    <message>
+        <source>Meeting summary saved with this call</source>
+        <translation>Итог встречи сохранён у этого звонка</translation>
+    </message>
+    <message>
+        <source>Key points updated through %1</source>
+        <translation>Ключевые моменты обновлены до %1</translation>
+    </message>
+    <message>
+        <source>The model&apos;s reply could not be used for this transcript. Write the note yourself or edit the transcript and retry.</source>
+        <translation>Ответ модели не подошёл для этой транскрипции. Напишите заметку сами или исправьте транскрипцию и повторите.</translation>
+    </message>
+    <message>
+        <source>The model&apos;s reply could not be used. Retry once more of the conversation is transcribed.</source>
+        <translation>Ответ модели не подошёл. Повторите, когда разговор продолжится.</translation>
+    </message>
+    <message>
+        <source>The transcript is too long for local notes.</source>
+        <translation>Транскрипция слишком длинная для локальных заметок.</translation>
+    </message>
+    <message>
+        <source>Could not save the generated notes. Try again.</source>
+        <translation>Не удалось сохранить заметки модели. Повторите попытку.</translation>
+    </message>
+    <message>
+        <source>The local model took too long. Try again.</source>
+        <translation>Локальная модель отвечала слишком долго. Повторите попытку.</translation>
+    </message>
+    <message>
+        <source>The local model did not respond. Try again.</source>
+        <translation>Локальная модель не ответила. Повторите попытку.</translation>
+    </message>
+    <message>
+        <source>The transcript changed. Generate the note again.</source>
+        <translation>Транскрипция изменилась. Сформируйте заметку заново.</translation>
+    </message>
+    <message>
+        <source>Processing cancelled. Your notes are saved.</source>
+        <translation>Обработка отменена. Ваши заметки сохранены.</translation>
+    </message>
+    <message>
+        <source>Processing was interrupted. You can retry.</source>
+        <translation>Обработка прервалась. Можно повторить попытку.</translation>
+    </message>
+    <message>
+        <source>A saved transcript and a local model are required.</source>
+        <translation>Нужны сохранённая транскрипция и локальная модель.</translation>
+    </message>
+    <message>
+        <source>Summarize the whole meeting when you are ready.</source>
+        <translation>Когда будете готовы, подведите итог всей встречи.</translation>
+    </message>
+    <message>
+        <source>Notes are saved with this call. A client is optional.</source>
+        <translation>Заметки сохраняются у звонка. Выбирать клиента необязательно.</translation>
+    </message>
+</context>
+<context>
+    <name>CallNotesPage</name>
+    <message>
+        <source>This meeting</source>
+        <translation>Эта встреча</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>История</translation>
+    </message>
+    <message>
+        <source>Meeting</source>
+        <translation>Встреча</translation>
+    </message>
+    <message>
+        <source>My notes</source>
+        <translation>Мои заметки</translation>
+    </message>
+    <message>
+        <source>Back to document</source>
+        <translation>Вернуться к документу</translation>
+    </message>
+    <message>
+        <source>Prompter</source>
+        <translation>Суфлёр</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n new</source>
+        <translation>
+            <numerusform>%n новая</numerusform>
+            <numerusform>%n новые</numerusform>
+            <numerusform>%n новых</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>CallNotesSources</name>
+    <message numerus="yes">
+        <source>%1 · %n phrases</source>
+        <translation>
+            <numerusform>%1 · %n фраза</numerusform>
+            <numerusform>%1 · %n фразы</numerusform>
+            <numerusform>%1 · %n фраз</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Source · %1</source>
+        <translation>Источник · %1</translation>
+    </message>
+    <message numerus="yes">
+        <source>whole meeting · %n phrases</source>
+        <translation>
+            <numerusform>вся встреча · %n фраза</numerusform>
+            <numerusform>вся встреча · %n фразы</numerusform>
+            <numerusform>вся встреча · %n фраз</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>through %1 · %n phrases</source>
+        <translation>
+            <numerusform>до %1 · %n фраза</numerusform>
+            <numerusform>до %1 · %n фразы</numerusform>
+            <numerusform>до %1 · %n фраз</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -174,6 +421,18 @@
     <message>
         <source>Call ended.</source>
         <translation>Звонок завершён.</translation>
+    </message>
+    <message>
+        <source>Back to calls</source>
+        <translation>К звонкам</translation>
+    </message>
+    <message>
+        <source>Video and notes</source>
+        <translation>Видео и заметки</translation>
+    </message>
+    <message>
+        <source>Expand notes</source>
+        <translation>Развернуть заметки</translation>
     </message>
     <message>
         <source>Waiting for others to join</source>
@@ -256,12 +515,105 @@
         <translation>Окна</translation>
     </message>
     <message>
+        <source>Camera</source>
+        <translation>Камера</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Микрофон</translation>
+    </message>
+    <message>
+        <source>Speaker</source>
+        <translation>Динамик</translation>
+    </message>
+    <message>
         <source>Notes</source>
         <translation>Заметки</translation>
     </message>
     <message>
         <source>Transcribe</source>
         <translation>Транскрибировать</translation>
+    </message>
+</context>
+<context>
+    <name>CallPrompterController</name>
+    <message>
+        <source>Prompter is off</source>
+        <translation>Суфлёр выключен</translation>
+    </message>
+    <message>
+        <source>Could not save prompter changes. Reopen the transcript and try again.</source>
+        <translation>Не удалось сохранить изменения суфлёра. Откройте транскрипцию заново и повторите попытку.</translation>
+    </message>
+    <message>
+        <source>Transcript unavailable</source>
+        <translation>Транскрипция недоступна</translation>
+    </message>
+    <message>
+        <source>Prompter is paused</source>
+        <translation>Суфлёр на паузе</translation>
+    </message>
+    <message>
+        <source>Could not open prompter data</source>
+        <translation>Не удалось открыть данные суфлёра</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+    <message>
+        <source>Start transcription first</source>
+        <translation>Сначала включите транскрипцию</translation>
+    </message>
+    <message>
+        <source>Waiting for completed phrases</source>
+        <translation>Ожидаю завершённые реплики</translation>
+    </message>
+    <message>
+        <source>Local prompter failed. Check its settings and retry.</source>
+        <translation>Ошибка локального суфлёра. Проверьте настройки и повторите попытку.</translation>
+    </message>
+    <message>
+        <source>Retrying a smaller part of the conversation</source>
+        <translation>Повторяю обработку меньшего фрагмента разговора</translation>
+    </message>
+    <message>
+        <source>Skipped a phrase the local model could not process</source>
+        <translation>Пропущена фраза, которую локальная модель не смогла обработать</translation>
+    </message>
+    <message>
+        <source>A phrase is too long. Review it in the transcript.</source>
+        <translation>Реплика слишком длинная. Проверьте её в транскрипции.</translation>
+    </message>
+    <message numerus="yes">
+        <source>Processing conversation · %n phrases waiting</source>
+        <translation>
+            <numerusform>Обрабатываю разговор · в очереди %n реплика</numerusform>
+            <numerusform>Обрабатываю разговор · в очереди %n реплики</numerusform>
+            <numerusform>Обрабатываю разговор · в очереди %n реплик</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <source>Processed through %1:%2 · %n phrases waiting</source>
+        <translation>
+            <numerusform>Обработано до %1:%2 · в очереди %n реплика</numerusform>
+            <numerusform>Обработано до %1:%2 · в очереди %n реплики</numerusform>
+            <numerusform>Обработано до %1:%2 · в очереди %n реплик</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>Call agreement (transcript #%1):
+%2%3</source>
+        <translation>Договорённость звонка (транскрипция №%1):
+%2%3</translation>
+    </message>
+    <message>
+        <source>Cancelled: </source>
+        <translation>Отменено: </translation>
+    </message>
+    <message>
+        <source>Could not save the agreement to client notes</source>
+        <translation>Не удалось сохранить договорённость в заметки клиента</translation>
     </message>
 </context>
 <context>
@@ -273,6 +625,13 @@
     <message>
         <source>Transcript</source>
         <translation>Транскрипция</translation>
+    </message>
+</context>
+<context>
+    <name>CallsPage</name>
+    <message>
+        <source>Enter a valid HTTPS Jitsi room link without login, query or fragment.</source>
+        <translation>Введите корректную HTTPS-ссылку на комнату Jitsi без логина, параметров и фрагмента.</translation>
     </message>
 </context>
 <context>
@@ -515,8 +874,12 @@
         <translation>Клиент не выбран</translation>
     </message>
     <message>
-        <source>%1 → Notes</source>
-        <translation>%1 → Заметки</translation>
+        <source>Meeting notes</source>
+        <translation>Заметки встречи</translation>
+    </message>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Не удалось сохранить — не закрывайте страницу</translation>
     </message>
     <message>
         <source>Note saved</source>
@@ -551,6 +914,38 @@
         <translation>Напишите заметку в Markdown...</translation>
     </message>
     <message>
+        <source>Bold</source>
+        <translation>Полужирный</translation>
+    </message>
+    <message>
+        <source>Italic</source>
+        <translation>Курсив</translation>
+    </message>
+    <message>
+        <source>List</source>
+        <translation>Список</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Просмотр</translation>
+    </message>
+    <message>
+        <source>Cancel edit</source>
+        <translation>Отменить правку</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Править</translation>
+    </message>
+    <message>
+        <source>Draft saved</source>
+        <translation>Черновик сохранён</translation>
+    </message>
+    <message>
+        <source>Save changes</source>
+        <translation>Сохранить изменения</translation>
+    </message>
+    <message>
         <source>Canceled</source>
         <translation>Отменено</translation>
     </message>
@@ -579,6 +974,14 @@
         <translation>Прикрепить файлы</translation>
     </message>
     <message>
+        <source>Unsaved changes</source>
+        <translation>Есть несохранённые изменения</translation>
+    </message>
+    <message>
+        <source>Discard the unsaved note and change participant?</source>
+        <translation>Отменить несохранённую заметку и сменить участника?</translation>
+    </message>
+    <message>
         <source>Add note</source>
         <translation>Добавить заметку</translation>
     </message>
@@ -589,6 +992,10 @@
     <message>
         <source>Link to a session</source>
         <translation>Привязать к сеансу</translation>
+    </message>
+    <message>
+        <source>My notes</source>
+        <translation>Мои заметки</translation>
     </message>
     <message>
         <source>Select a client to open notes.</source>
@@ -621,6 +1028,10 @@
     <message>
         <source>Unknown time</source>
         <translation>Время неизвестно</translation>
+    </message>
+    <message>
+        <source>✦ AI summary</source>
+        <translation>✦ Итог ИИ</translation>
     </message>
     <message>
         <source>Image: %1</source>
@@ -685,6 +1096,478 @@
     <message>
         <source>Rescheduled from %1 to %2</source>
         <translation>Перенесено с %1 на %2</translation>
+    </message>
+    <message>
+        <source>All materials</source>
+        <translation>Все материалы</translation>
+    </message>
+    <message>
+        <source>Sessions and protocols</source>
+        <translation>Сессии и протоколы</translation>
+    </message>
+    <message>
+        <source>Free notes</source>
+        <translation>Свободные заметки</translation>
+    </message>
+    <message>
+        <source>Agreements</source>
+        <translation>Договорённости</translation>
+    </message>
+    <message>
+        <source>Search notes and summaries…</source>
+        <translation>Поиск по заметкам и итогам…</translation>
+    </message>
+    <message>
+        <source>New note</source>
+        <translation>Новая заметка</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Экспорт</translation>
+    </message>
+    <message>
+        <source>Export journal</source>
+        <translation>Экспорт журнала</translation>
+    </message>
+    <message>
+        <source>Markdown (*.md)</source>
+        <translation>Markdown (*.md)</translation>
+    </message>
+    <message>
+        <source>Could not save the journal file.</source>
+        <translation>Не удалось сохранить файл журнала.</translation>
+    </message>
+    <message>
+        <source>Call materials</source>
+        <translation>Материалы звонка</translation>
+    </message>
+    <message>
+        <source>Note with attachments</source>
+        <translation>Заметка с вложениями</translation>
+    </message>
+    <message>
+        <source>Free note</source>
+        <translation>Свободная заметка</translation>
+    </message>
+    <message>
+        <source>No matching materials</source>
+        <translation>Подходящих материалов нет</translation>
+    </message>
+    <message>
+        <source>Print</source>
+        <translation>Печать</translation>
+    </message>
+    <message>
+        <source>Export note</source>
+        <translation>Экспортировать заметку</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Расшифровка</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Открыть расшифровку</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>Ещё</translation>
+    </message>
+    <message>
+        <source>AI summary</source>
+        <translation>Итог ИИ</translation>
+    </message>
+    <message>
+        <source>Agreements and homework</source>
+        <translation>Договорённости и домашние задания</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Ключевые моменты</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+    <message>
+        <source>Client card</source>
+        <translation>Карточка клиента</translation>
+    </message>
+    <message>
+        <source>Select participant</source>
+        <translation>Выберите участника</translation>
+    </message>
+</context>
+<context>
+    <name>ClientNotesWorkspace</name>
+    <message>
+        <source>Notes</source>
+        <translation>Заметки</translation>
+    </message>
+    <message>
+        <source>Select participant</source>
+        <translation>Выберите участника</translation>
+    </message>
+    <message>
+        <source>Participant</source>
+        <translation>Участник</translation>
+    </message>
+    <message>
+        <source>Client card</source>
+        <translation>Карточка клиента</translation>
+    </message>
+    <message>
+        <source>New note</source>
+        <translation>Новая заметка</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Экспорт</translation>
+    </message>
+    <message>
+        <source>Search notes and summaries…</source>
+        <translation>Поиск по заметкам и итогам…</translation>
+    </message>
+    <message>
+        <source>All materials</source>
+        <translation>Все материалы</translation>
+    </message>
+    <message>
+        <source>Sessions and protocols</source>
+        <translation>Сессии и протоколы</translation>
+    </message>
+    <message>
+        <source>Free notes</source>
+        <translation>Свободные заметки</translation>
+    </message>
+    <message>
+        <source>Agreements</source>
+        <translation>Договорённости</translation>
+    </message>
+    <message>
+        <source>Session</source>
+        <translation>Сеанс</translation>
+    </message>
+    <message>
+        <source>Free note</source>
+        <translation>Свободная заметка</translation>
+    </message>
+    <message>
+        <source>No notes found</source>
+        <translation>Заметки не найдены</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>История</translation>
+    </message>
+    <message>
+        <source>Read</source>
+        <translation>Читать</translation>
+    </message>
+    <message>
+        <source>Open meeting</source>
+        <translation>Открыть встречу</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Открыть расшифровку</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Расшифровка</translation>
+    </message>
+    <message>
+        <source>Select a note or create a new one.</source>
+        <translation>Выберите заметку или создайте новую.</translation>
+    </message>
+    <message>
+        <source>Select a participant to view their notes.</source>
+        <translation>Выберите участника, чтобы открыть его заметки.</translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation>Редактор</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Просмотр</translation>
+    </message>
+    <message>
+        <source>Write a note in Markdown…</source>
+        <translation>Напишите заметку в Markdown…</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Прикрепить файлы</translation>
+    </message>
+    <message>
+        <source>Link to a session</source>
+        <translation>Привязать к сеансу</translation>
+    </message>
+    <message>
+        <source>Add note</source>
+        <translation>Добавить заметку</translation>
+    </message>
+</context>
+<context>
+    <name>CloudConsentDialog</name>
+    <message>
+        <source>Use a cloud AI model</source>
+        <translation>Использовать облачную модель ИИ</translation>
+    </message>
+    <message>
+        <source>The text will be sent to: %1</source>
+        <translation>Текст будет отправлен: %1</translation>
+    </message>
+    <message>
+        <source>What is sent: phrases of the call transcript, the agreements found so far and the notes used for key points and the meeting summary. Audio and video are never sent.</source>
+        <translation>Что отправляется: реплики транскрипта звонка, найденные договорённости и заметки, по которым строятся ключевые пункты и итог встречи. Аудио и видео не отправляются.</translation>
+    </message>
+    <message>
+        <source>These texts can contain personal data, including health information. They may be processed in another country, under the provider&apos;s terms and not under Sessio&apos;s control.</source>
+        <translation>Эти тексты могут содержать персональные данные, в том числе сведения о здоровье. Они могут обрабатываться в другой стране, по правилам провайдера и вне контроля Sessio.</translation>
+    </message>
+    <message>
+        <source>Names, phone numbers and e-mail addresses of the client and of you are replaced by labels before sending. Other details said aloud, such as third parties or places, are not hidden.</source>
+        <translation>Имена, телефоны и адреса электронной почты клиента и ваши заменяются метками перед отправкой. Другие детали из разговора, например третьи лица или места, не скрываются.</translation>
+    </message>
+    <message>
+        <source>Hiding names and contact details is turned off: the text is sent as it is.</source>
+        <translation>Скрытие имён и контактов отключено: текст отправляется как есть.</translation>
+    </message>
+    <message>
+        <source>You choose the provider and are responsible for having the right to send this data to it. Consent applies to this address only: a different address asks again. You can withdraw consent at any time.</source>
+        <translation>Провайдера выбираете вы и отвечаете за наличие права передавать ему эти данные. Согласие действует только для этого адреса: при смене адреса оно будет запрошено снова. Согласие можно отозвать в любой момент.</translation>
+    </message>
+    <message>
+        <source>I understand and accept</source>
+        <translation>Я понимаю и принимаю</translation>
+    </message>
+    <message>
+        <source>Enable cloud models</source>
+        <translation>Включить облачные модели</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+</context>
+<context>
+    <name>CloudFailure</name>
+    <message>
+        <source>Cloud unavailable</source>
+        <translation>Облако недоступно</translation>
+    </message>
+    <message>
+        <source>the API key was rejected</source>
+        <translation>ключ API отклонён</translation>
+    </message>
+    <message>
+        <source>the model was not found</source>
+        <translation>модель не найдена</translation>
+    </message>
+    <message>
+        <source>no API key is set</source>
+        <translation>ключ API не задан</translation>
+    </message>
+    <message>
+        <source>the provider does not support structured output</source>
+        <translation>провайдер не поддерживает структурированный вывод</translation>
+    </message>
+    <message>
+        <source>the provider is limiting requests, try again later</source>
+        <translation>провайдер ограничивает запросы, попробуйте позже</translation>
+    </message>
+    <message>
+        <source>the provider reported an error</source>
+        <translation>провайдер сообщил об ошибке</translation>
+    </message>
+    <message>
+        <source>no connection to the provider</source>
+        <translation>нет связи с провайдером</translation>
+    </message>
+    <message>
+        <source>the provider took too long to answer</source>
+        <translation>провайдер слишком долго отвечает</translation>
+    </message>
+    <message>
+        <source>the provider rejected the request</source>
+        <translation>провайдер отклонил запрос</translation>
+    </message>
+</context>
+<context>
+    <name>CloudSettingsPanel</name>
+    <message>
+        <source>No API key is set.</source>
+        <translation>Ключ API не задан.</translation>
+    </message>
+    <message>
+        <source>The provider rejected the API key.</source>
+        <translation>Провайдер отклонил ключ API.</translation>
+    </message>
+    <message>
+        <source>The provider does not know this model.</source>
+        <translation>Провайдер не знает такой модели.</translation>
+    </message>
+    <message>
+        <source>The provider does not support strict JSON schema output (response_format json_schema), which Sessio requires.</source>
+        <translation>Провайдер не поддерживает строгий вывод по JSON-схеме (response_format json_schema), который нужен Sessio.</translation>
+    </message>
+    <message>
+        <source>The provider is limiting requests. Try again later.</source>
+        <translation>Провайдер ограничивает запросы. Попробуйте позже.</translation>
+    </message>
+    <message>
+        <source>The provider reported an error.</source>
+        <translation>Провайдер сообщил об ошибке.</translation>
+    </message>
+    <message>
+        <source>No connection to the provider.</source>
+        <translation>Нет связи с провайдером.</translation>
+    </message>
+    <message>
+        <source>The provider took too long to answer.</source>
+        <translation>Провайдер слишком долго отвечает.</translation>
+    </message>
+    <message>
+        <source>The provider rejected the request.</source>
+        <translation>Провайдер отклонил запрос.</translation>
+    </message>
+    <message>
+        <source>Optional. Use a cloud model for meeting summaries, key points and agreements. Call text is sent to the provider you choose below, so cloud models are off until you accept the terms.</source>
+        <translation>По желанию используйте облачную модель для итогов встреч, ключевых пунктов и договорённостей. Текст разговора отправляется выбранному ниже провайдеру, поэтому облачные модели выключены до принятия условий.</translation>
+    </message>
+    <message>
+        <source>Provider (OpenAI-compatible)</source>
+        <translation>Провайдер (совместимый с OpenAI)</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Адрес</translation>
+    </message>
+    <message>
+        <source>Model</source>
+        <translation>Модель</translation>
+    </message>
+    <message>
+        <source>API key</source>
+        <translation>Ключ API</translation>
+    </message>
+    <message>
+        <source>Remove key</source>
+        <translation>Удалить ключ</translation>
+    </message>
+    <message>
+        <source>The model&apos;s context window. Recorded for future use; summaries currently use small parts of the call.</source>
+        <translation>Окно контекста модели. Сохраняется на будущее; итог сейчас строится по небольшим частям звонка.</translation>
+    </message>
+    <message>
+        <source>Context size (tokens)</source>
+        <translation>Размер контекста (токены)</translation>
+    </message>
+    <message>
+        <source>Test connection</source>
+        <translation>Проверить подключение</translation>
+    </message>
+    <message>
+        <source>Privacy</source>
+        <translation>Конфиденциальность</translation>
+    </message>
+    <message>
+        <source>Hide names, phone numbers and e-mail addresses before sending</source>
+        <translation>Скрывать имена, телефоны и адреса электронной почты перед отправкой</translation>
+    </message>
+    <message>
+        <source>Enable cloud models…</source>
+        <translation>Включить облачные модели…</translation>
+    </message>
+    <message>
+        <source>Withdraw consent</source>
+        <translation>Отозвать согласие</translation>
+    </message>
+    <message>
+        <source>Where each task runs</source>
+        <translation>Где выполняется каждая задача</translation>
+    </message>
+    <message>
+        <source>Local model</source>
+        <translation>Локальная модель</translation>
+    </message>
+    <message>
+        <source>Cloud model</source>
+        <translation>Облачная модель</translation>
+    </message>
+    <message>
+        <source>Agreements during the call</source>
+        <translation>Договорённости во время звонка</translation>
+    </message>
+    <message>
+        <source>Key points during the call</source>
+        <translation>Ключевые пункты во время звонка</translation>
+    </message>
+    <message>
+        <source>Meeting summary after the call</source>
+        <translation>Итог встречи после звонка</translation>
+    </message>
+    <message>
+        <source>If the cloud is unavailable, Sessio says so and does not switch to the local model on its own.</source>
+        <translation>Если облако недоступно, Sessio сообщит об этом и не переключится на локальную модель сам.</translation>
+    </message>
+    <message>
+        <source>Saving key…</source>
+        <translation>Сохранение ключа…</translation>
+    </message>
+    <message>
+        <source>Removing key…</source>
+        <translation>Удаление ключа…</translation>
+    </message>
+    <message>
+        <source>Enter the provider address and the model first.</source>
+        <translation>Сначала укажите адрес провайдера и модель.</translation>
+    </message>
+    <message>
+        <source>Enter an HTTPS provider address, or HTTP for a local provider, without credentials, query or fragment.</source>
+        <translation>Введите HTTPS-адрес провайдера или HTTP-адрес локального провайдера без логина, пароля, параметров и фрагмента.</translation>
+    </message>
+    <message>
+        <source>Reading key from the system keychain…</source>
+        <translation>Чтение ключа из системного хранилища…</translation>
+    </message>
+    <message>
+        <source>The key could not be read from the system keychain. Unlock the keychain and reopen settings to retry.</source>
+        <translation>Не удалось прочитать ключ из системного хранилища. Разблокируйте хранилище и откройте настройки заново.</translation>
+    </message>
+    <message>
+        <source>The key could not be removed from the system keychain. Try again.</source>
+        <translation>Не удалось удалить ключ из системного хранилища. Попробуйте ещё раз.</translation>
+    </message>
+    <message>
+        <source>The key could not be saved in the system keychain. Unlock the keychain and enter it again.</source>
+        <translation>Не удалось сохранить ключ в системном хранилище. Разблокируйте хранилище и введите ключ заново.</translation>
+    </message>
+    <message>
+        <source>Cloud models are enabled for %1.</source>
+        <translation>Облачные модели включены для %1.</translation>
+    </message>
+    <message>
+        <source>Cloud models are off. Nothing is sent anywhere.</source>
+        <translation>Облачные модели выключены. Ничего никуда не отправляется.</translation>
+    </message>
+    <message>
+        <source>No key stored.</source>
+        <translation>Ключ не сохранён.</translation>
+    </message>
+    <message>
+        <source>A key is stored in the system keychain.</source>
+        <translation>Ключ хранится в системной связке ключей.</translation>
+    </message>
+    <message>
+        <source>Testing…</source>
+        <translation>Проверяем…</translation>
+    </message>
+    <message>
+        <source>Connected. The provider supports strict JSON schema output.</source>
+        <translation>Подключено. Провайдер поддерживает строгий вывод по JSON-схеме.</translation>
     </message>
 </context>
 <context>
@@ -751,6 +1634,21 @@
     <message>
         <source>Join</source>
         <translation>Присоединиться</translation>
+    </message>
+</context>
+<context>
+    <name>Engine</name>
+    <message>
+        <source>Local model</source>
+        <translation>Локальная модель</translation>
+    </message>
+    <message>
+        <source>Cloud</source>
+        <translation>Облако</translation>
+    </message>
+    <message>
+        <source>Cloud · %1</source>
+        <translation>Облако · %1</translation>
     </message>
 </context>
 <context>
@@ -821,6 +1719,13 @@
     </message>
 </context>
 <context>
+    <name>KeyPointsWidget</name>
+    <message>
+        <source>Key points</source>
+        <translation>Ключевые пункты</translation>
+    </message>
+</context>
+<context>
     <name>MainWindow</name>
     <message>
         <source>: APP_TITLE</source>
@@ -843,6 +1748,10 @@
         <translation>Детали</translation>
     </message>
     <message>
+        <source>Meetings</source>
+        <translation>Встречи</translation>
+    </message>
+    <message>
         <source>Search clients</source>
         <translation>Поиск клиентов</translation>
     </message>
@@ -855,12 +1764,12 @@
         <translation>Показать неактивных</translation>
     </message>
     <message>
-        <source>Notes</source>
-        <translation>Заметки</translation>
+        <source>: NAV_MY_DAY</source>
+        <translation>Мой день</translation>
     </message>
     <message>
-        <source>Calls</source>
-        <translation>Звонки</translation>
+        <source>Notes</source>
+        <translation>Заметки</translation>
     </message>
     <message>
         <source>Transcripts</source>
@@ -891,6 +1800,10 @@
         <translation>Собрано на Qt, DuckDB и Qlementine.</translation>
     </message>
     <message>
+        <source>My day</source>
+        <translation>Мой день</translation>
+    </message>
+    <message>
         <source>Clients</source>
         <translation>Клиенты</translation>
     </message>
@@ -912,6 +1825,155 @@
     </message>
 </context>
 <context>
+    <name>MeetingHistory</name>
+    <message>
+        <source>%1 · %2 min</source>
+        <translation>%1 · %2 мин</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n note(s)</source>
+        <translation>
+            <numerusform>%n заметка</numerusform>
+            <numerusform>%n заметки</numerusform>
+            <numerusform>%n заметок</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>AI summary · %1</source>
+        <translation>Итог ИИ · %1</translation>
+    </message>
+    <message>
+        <source>AI summary</source>
+        <translation>Итог ИИ</translation>
+    </message>
+</context>
+<context>
+    <name>MeetingHistoryList</name>
+    <message>
+        <source>Show</source>
+        <translation>Показать</translation>
+    </message>
+    <message>
+        <source>Without a meeting</source>
+        <translation>Без встречи</translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation>Скрыть</translation>
+    </message>
+</context>
+<context>
+    <name>MeetingsWorkspace</name>
+    <message>
+        <source>Meetings</source>
+        <translation>Встречи</translation>
+    </message>
+    <message>
+        <source>Join a meeting</source>
+        <translation>Подключиться к встрече</translation>
+    </message>
+    <message>
+        <source>Meeting history</source>
+        <translation>История встреч</translation>
+    </message>
+    <message>
+        <source>Your calls today</source>
+        <translation>Ваши звонки сегодня</translation>
+    </message>
+    <message>
+        <source>Search meetings…</source>
+        <translation>Поиск по встречам…</translation>
+    </message>
+    <message>
+        <source>Scheduled</source>
+        <translation>Запланирована</translation>
+    </message>
+    <message>
+        <source>Call materials</source>
+        <translation>Материалы встречи</translation>
+    </message>
+    <message>
+        <source>No meetings to show</source>
+        <translation>Нет встреч для отображения</translation>
+    </message>
+    <message>
+        <source>Scheduled online meetings appear here.</source>
+        <translation>Здесь появятся запланированные онлайн-встречи.</translation>
+    </message>
+    <message>
+        <source>Materials appear here after a call.</source>
+        <translation>После звонка здесь появятся его материалы.</translation>
+    </message>
+    <message>
+        <source>Before joining, check your name. Camera and microphone settings are shown on the next screen.</source>
+        <translation>Перед подключением проверьте своё имя. На следующем экране можно проверить камеру и микрофон.</translation>
+    </message>
+    <message>
+        <source>Name in calls</source>
+        <translation>Имя в звонках</translation>
+    </message>
+    <message>
+        <source>Check devices and join</source>
+        <translation>Проверить устройства и подключиться</translation>
+    </message>
+    <message>
+        <source>Open in browser</source>
+        <translation>Открыть в браузере</translation>
+    </message>
+    <message>
+        <source>Meeting summary</source>
+        <translation>Итог встречи</translation>
+    </message>
+    <message>
+        <source>Open notes and materials</source>
+        <translation>Открыть заметки и материалы</translation>
+    </message>
+    <message>
+        <source>Transcripts</source>
+        <translation>Расшифровки</translation>
+    </message>
+    <message>
+        <source>Sessio invitation</source>
+        <translation>Приглашение Sessio</translation>
+    </message>
+    <message>
+        <source>Jitsi link</source>
+        <translation>Ссылка Jitsi</translation>
+    </message>
+    <message>
+        <source>Paste the Sessio invitation link, or enter its code and passcode. The invitation selects Jitsi automatically.</source>
+        <translation>Вставьте ссылку-приглашение Sessio или введите код и код доступа. Jitsi выбирается по приглашению автоматически.</translation>
+    </message>
+    <message>
+        <source>Paste a room link from a Jitsi server that allows guest access. Browser sign-in, passwords and lobby admission are not supported here.</source>
+        <translation>Вставьте ссылку на комнату сервера Jitsi с гостевым доступом. Вход через браузер, пароли и допуск из зала ожидания здесь не поддерживаются.</translation>
+    </message>
+    <message>
+        <source>To host a Jitsi call: create an event in Calendar, enable Online, select Jitsi, and save. Use Copy invite to send the invitation to participants.</source>
+        <translation>Чтобы провести звонок в Jitsi, создайте событие в Календаре, включите «Онлайн», выберите Jitsi и сохраните. Кнопкой «Скопировать приглашение» отправьте приглашение участникам.</translation>
+    </message>
+    <message>
+        <source>Invitation code or link</source>
+        <translation>Код приглашения или ссылка</translation>
+    </message>
+    <message>
+        <source>https://meet.example.org/room</source>
+        <translation>https://meet.example.org/room</translation>
+    </message>
+    <message>
+        <source>Passcode</source>
+        <translation>Код доступа</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation>Продолжить</translation>
+    </message>
+</context>
+<context>
     <name>MonthCalendarWidget</name>
     <message>
         <source>+%1 more</source>
@@ -927,6 +1989,464 @@
     <message>
         <source>Next year</source>
         <translation>Следующий год</translation>
+    </message>
+</context>
+<context>
+    <name>MyDay</name>
+    <message>
+        <source>Morning</source>
+        <translation>Утро</translation>
+    </message>
+    <message>
+        <source>Afternoon</source>
+        <translation>После полудня</translation>
+    </message>
+    <message>
+        <source>Evening</source>
+        <translation>Вечер</translation>
+    </message>
+    <message>
+        <source>My day</source>
+        <translation>Мой день</translation>
+    </message>
+    <message>
+        <source>Previous day</source>
+        <translation>Предыдущий день</translation>
+    </message>
+    <message>
+        <source>Today</source>
+        <translation>Сегодня</translation>
+    </message>
+    <message>
+        <source>Next day</source>
+        <translation>Следующий день</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n meeting(s)</source>
+        <translation>
+            <numerusform>%n встреча</numerusform>
+            <numerusform>%n встречи</numerusform>
+            <numerusform>%n встреч</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>planned income</source>
+        <translation>плановый доход</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n unpaid</source>
+        <translation>
+            <numerusform>%n не оплачена</numerusform>
+            <numerusform>%n не оплачены</numerusform>
+            <numerusform>%n не оплачено</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>All paid</source>
+        <translation>Всё оплачено</translation>
+    </message>
+    <message>
+        <source>open</source>
+        <translation>открыть</translation>
+    </message>
+    <message>
+        <source>Unpaid</source>
+        <translation>Неоплаченные</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n without notes</source>
+        <translation>
+            <numerusform>%n без заметки</numerusform>
+            <numerusform>%n без заметок</numerusform>
+            <numerusform>%n без заметок</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>All notes written</source>
+        <translation>Все заметки написаны</translation>
+    </message>
+    <message>
+        <source>this week</source>
+        <translation>за неделю</translation>
+    </message>
+    <message>
+        <source>Without notes</source>
+        <translation>Без заметок</translation>
+    </message>
+    <message>
+        <source>No meetings</source>
+        <translation>Встреч нет</translation>
+    </message>
+</context>
+<context>
+    <name>NotesEditor</name>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Заметки к встрече</translation>
+    </message>
+    <message>
+        <source>Close editor</source>
+        <translation>Закрыть редактор</translation>
+    </message>
+    <message>
+        <source>New note</source>
+        <translation>Новая заметка</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>Заметка</translation>
+    </message>
+    <message>
+        <source>Editor</source>
+        <translation>Редактор</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Просмотр</translation>
+    </message>
+    <message>
+        <source>What is important to keep from this meeting?</source>
+        <translation>Что важно сохранить об этой встрече?</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Прикрепить файлы</translation>
+    </message>
+    <message>
+        <source>Meeting context</source>
+        <translation>Контекст встречи</translation>
+    </message>
+    <message>
+        <source>Meeting summary</source>
+        <translation>Краткий итог встречи</translation>
+    </message>
+    <message>
+        <source>No summary yet</source>
+        <translation>Итог ещё не подготовлен</translation>
+    </message>
+    <message>
+        <source>Add to my notes</source>
+        <translation>Добавить в заметку</translation>
+    </message>
+    <message>
+        <source>For the next meeting</source>
+        <translation>К следующей встрече</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Ключевые моменты</translation>
+    </message>
+    <message>
+        <source>AI suggestions help recall the meeting. The note on the left is your own text.</source>
+        <translation>Итоги ИИ помогают вспомнить встречу. Текст слева — ваша собственная заметка.</translation>
+    </message>
+    <message>
+        <source>Unsaved changes</source>
+        <translation>Есть несохранённые изменения</translation>
+    </message>
+    <message>
+        <source>No unsaved changes</source>
+        <translation>Нет несохранённых изменений</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Отмена</translation>
+    </message>
+    <message>
+        <source>Save note</source>
+        <translation>Сохранить заметку</translation>
+    </message>
+</context>
+<context>
+    <name>NotesEditorDialog</name>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Заметки к встрече</translation>
+    </message>
+    <message>
+        <source>Unsaved changes</source>
+        <translation>Есть несохранённые изменения</translation>
+    </message>
+    <message>
+        <source>Close without saving your changes?</source>
+        <translation>Закрыть без сохранения изменений?</translation>
+    </message>
+</context>
+<context>
+    <name>NotesWidgetFrame</name>
+    <message>
+        <source>More actions</source>
+        <translation>Ещё действия</translation>
+    </message>
+</context>
+<context>
+    <name>NotesWorkspace</name>
+    <message>
+        <source>Add to calendar</source>
+        <translation>Добавить в календарь</translation>
+    </message>
+    <message>
+        <source>In calendar</source>
+        <translation>В календаре</translation>
+    </message>
+    <message>
+        <source>View source</source>
+        <translation>Посмотреть источник</translation>
+    </message>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Заметки встречи</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>История</translation>
+    </message>
+    <message>
+        <source>More</source>
+        <translation>Ещё</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Экспорт</translation>
+    </message>
+    <message>
+        <source>Advanced view</source>
+        <translation>Дополнительные действия</translation>
+    </message>
+    <message>
+        <source>Search meetings…</source>
+        <translation>Поиск по встречам…</translation>
+    </message>
+    <message>
+        <source>This meeting</source>
+        <translation>Эта встреча</translation>
+    </message>
+    <message>
+        <source>Meeting materials</source>
+        <translation>Материалы встречи</translation>
+    </message>
+    <message>
+        <source>Close transcript</source>
+        <translation>Закрыть расшифровку</translation>
+    </message>
+    <message>
+        <source>Open transcript</source>
+        <translation>Открыть расшифровку</translation>
+    </message>
+    <message>
+        <source>Payment status</source>
+        <translation>Статус оплаты</translation>
+    </message>
+    <message>
+        <source>Pending</source>
+        <translation>Не оплачено</translation>
+    </message>
+    <message>
+        <source>Paid</source>
+        <translation>Оплачено</translation>
+    </message>
+    <message>
+        <source>Canceled</source>
+        <translation>Отменено</translation>
+    </message>
+    <message>
+        <source>Refunded</source>
+        <translation>Возврат</translation>
+    </message>
+    <message>
+        <source>Skipped</source>
+        <translation>Без оплаты</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Редактировать</translation>
+    </message>
+    <message>
+        <source>Edit note</source>
+        <translation>Редактирование заметки</translation>
+    </message>
+    <message>
+        <source>My notes</source>
+        <translation>Мои заметки</translation>
+    </message>
+    <message>
+        <source>Write a note…</source>
+        <translation>Напишите заметку…</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Прикрепить файлы</translation>
+    </message>
+    <message>
+        <source>Cancel edit</source>
+        <translation>Отменить правку</translation>
+    </message>
+    <message>
+        <source>Save note</source>
+        <translation>Сохранить заметку</translation>
+    </message>
+    <message>
+        <source>Prompter</source>
+        <translation>Суфлёр</translation>
+    </message>
+    <message>
+        <source>Private suggestions. Check the source before saving.</source>
+        <translation>Подсказки видны только вам. Проверяйте источник перед сохранением.</translation>
+    </message>
+    <message>
+        <source>Start</source>
+        <translation>Начать</translation>
+    </message>
+    <message>
+        <source>Pause</source>
+        <translation>Пауза</translation>
+    </message>
+    <message>
+        <source>You could clarify</source>
+        <translation>Можно уточнить</translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation>Скрыть</translation>
+    </message>
+    <message>
+        <source>Needs source check</source>
+        <translation>Нужно проверить источник</translation>
+    </message>
+    <message>
+        <source>Earlier: %1</source>
+        <translation>Ранее: %1</translation>
+    </message>
+    <message>
+        <source>Source</source>
+        <translation>Источник</translation>
+    </message>
+    <message>
+        <source>Accept</source>
+        <translation>Принять</translation>
+    </message>
+    <message>
+        <source>Choose the agreement</source>
+        <translation>Выбрать договорённость</translation>
+    </message>
+    <message>
+        <source>Saved to notes</source>
+        <translation>Сохранено в заметки</translation>
+    </message>
+    <message>
+        <source>To notes</source>
+        <translation>В заметки</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>Отклонить</translation>
+    </message>
+    <message>
+        <source>Meeting summary</source>
+        <translation>Кратко о встрече</translation>
+    </message>
+    <message>
+        <source>Summarize the whole meeting: overview, key points, agreements and tasks, open questions.</source>
+        <translation>Итог всей встречи: обзор, ключевые моменты, договорённости и задачи, открытые вопросы.</translation>
+    </message>
+    <message>
+        <source>Summarize meeting</source>
+        <translation>Подвести итог встречи</translation>
+    </message>
+    <message>
+        <source>Prepared by AI</source>
+        <translation>Подготовлено ИИ</translation>
+    </message>
+    <message>
+        <source>Prepared by AI · %1</source>
+        <translation>Подготовлено ИИ · %1</translation>
+    </message>
+    <message>
+        <source>Add to my notes</source>
+        <translation>Добавить в мои заметки</translation>
+    </message>
+    <message>
+        <source>Retry</source>
+        <translation>Повторить</translation>
+    </message>
+    <message>
+        <source>Create again</source>
+        <translation>Создать заново</translation>
+    </message>
+    <message>
+        <source>Key points</source>
+        <translation>Ключевые моменты</translation>
+    </message>
+    <message>
+        <source>Agreements and tasks</source>
+        <translation>Договорённости и задачи</translation>
+    </message>
+    <message>
+        <source>Open questions</source>
+        <translation>Открытые вопросы</translation>
+    </message>
+    <message>
+        <source>For the next meeting</source>
+        <translation>На следующую встречу</translation>
+    </message>
+    <message>
+        <source>From the call</source>
+        <translation>Во время звонка</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Расшифровка</translation>
+    </message>
+    <message>
+        <source>Search transcript…</source>
+        <translation>Поиск по расшифровке…</translation>
+    </message>
+    <message>
+        <source>Edit transcript</source>
+        <translation>Редактировать расшифровку</translation>
+    </message>
+</context>
+<context>
+    <name>NotesWorkspaceBridge</name>
+    <message>
+        <source>Could not save — keep this page open</source>
+        <translation>Не удалось сохранить — не закрывайте страницу</translation>
+    </message>
+    <message>
+        <source>Draft saved</source>
+        <translation>Черновик сохранён</translation>
+    </message>
+    <message>
+        <source>Meeting notes</source>
+        <translation>Заметки встречи</translation>
+    </message>
+    <message>
+        <source>Save or cancel the current edit before opening another note.</source>
+        <translation>Сохраните или отмените текущую правку перед открытием другой заметки.</translation>
+    </message>
+    <message>
+        <source>This note changed in another window. Keep this editor open and copy your changes.</source>
+        <translation>Заметка изменилась в другом окне. Не закрывайте редактор и скопируйте свои изменения.</translation>
+    </message>
+    <message>
+        <source>Note saved</source>
+        <translation>Заметка сохранена</translation>
+    </message>
+    <message>
+        <source>Attach files</source>
+        <translation>Прикрепить файлы</translation>
+    </message>
+    <message>
+        <source>Could not update payment status.</source>
+        <translation>Не удалось обновить статус оплаты.</translation>
+    </message>
+    <message>
+        <source>Export</source>
+        <translation>Экспорт</translation>
+    </message>
+    <message>
+        <source>Markdown (*.md)</source>
+        <translation>Markdown (*.md)</translation>
     </message>
 </context>
 <context>
@@ -954,6 +2474,140 @@
     <message>
         <source>Client: %1</source>
         <translation>Клиент: %1</translation>
+    </message>
+</context>
+<context>
+    <name>PreviousMeetingWidget</name>
+    <message>
+        <source>Last time</source>
+        <translation>В прошлый раз</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>Открыть</translation>
+    </message>
+</context>
+<context>
+    <name>PrompterPanel</name>
+    <message>
+        <source>Start prompter</source>
+        <translation>Включить суфлёр</translation>
+    </message>
+    <message>
+        <source>Pause</source>
+        <translation>Пауза</translation>
+    </message>
+    <message>
+        <source>You could clarify</source>
+        <translation>Можно уточнить</translation>
+    </message>
+    <message>
+        <source>Hide</source>
+        <translation>Скрыть</translation>
+    </message>
+    <message>
+        <source>For review</source>
+        <translation>На проверку</translation>
+    </message>
+    <message>
+        <source>New agreements will appear here after completed phrases.</source>
+        <translation>Новые договорённости появятся здесь после завершения реплик.</translation>
+    </message>
+    <message>
+        <source>Accepted agreements</source>
+        <translation>Принятые договорённости</translation>
+    </message>
+    <message>
+        <source>Private suggestions. Check the source before saving.</source>
+        <translation>Подсказки видны только вам. Проверяйте источник перед сохранением.</translation>
+    </message>
+    <message>
+        <source>The source was changed or deleted. Review the transcript.</source>
+        <translation>Источник изменён или удалён. Проверьте транскрипцию.</translation>
+    </message>
+    <message>
+        <source>Source · %1:%2</source>
+        <translation>Источник · %1:%2</translation>
+    </message>
+    <message>
+        <source>Accept</source>
+        <translation>Принять</translation>
+    </message>
+    <message>
+        <source>Edit</source>
+        <translation>Исправить</translation>
+    </message>
+    <message>
+        <source>Dismiss</source>
+        <translation>Отклонить</translation>
+    </message>
+    <message>
+        <source>To notes</source>
+        <translation>В заметки</translation>
+    </message>
+    <message>
+        <source>Choose the agreement</source>
+        <translation>Выбрать договорённость</translation>
+    </message>
+    <message>
+        <source>New agreement</source>
+        <translation>Новая договорённость</translation>
+    </message>
+    <message>
+        <source>Review the target</source>
+        <translation>Проверка выбранной договорённости</translation>
+    </message>
+    <message>
+        <source>Agreement to change or cancel</source>
+        <translation>Какую договорённость изменить или отменить</translation>
+    </message>
+    <message>
+        <source>Review agreement</source>
+        <translation>Проверка договорённости</translation>
+    </message>
+    <message>
+        <source>Agreement</source>
+        <translation>Договорённость</translation>
+    </message>
+    <message>
+        <source>Needs clarification</source>
+        <translation>Требует уточнения</translation>
+    </message>
+    <message>
+        <source>Proposed cancellation</source>
+        <translation>Предлагается отменить</translation>
+    </message>
+    <message>
+        <source>Proposed change</source>
+        <translation>Предлагается изменить</translation>
+    </message>
+    <message>
+        <source>Previous agreement: %1</source>
+        <translation>Прежняя договорённость: %1</translation>
+    </message>
+    <message>
+        <source>Saved to notes</source>
+        <translation>Сохранено в заметки</translation>
+    </message>
+    <message>
+        <source>Agreement kept as a draft</source>
+        <translation>Договорённость сохранена как черновик</translation>
+    </message>
+    <message>
+        <source>Attach a client to this transcript to save the agreement in client notes.</source>
+        <translation>Привяжите клиента к этой транскрипции, чтобы сохранить договорённость в его заметки.</translation>
+    </message>
+    <message>
+        <source>%1 · #%2</source>
+        <translation>%1 · №%2</translation>
+    </message>
+    <message>
+        <source>Save to client notes</source>
+        <translation>Сохранить в заметки клиента</translation>
+    </message>
+    <message>
+        <source>Client</source>
+        <translation>Клиент</translation>
     </message>
 </context>
 <context>
@@ -1076,6 +2730,10 @@
         <translation>LiveKit</translation>
     </message>
     <message>
+        <source>Jitsi</source>
+        <translation>Jitsi</translation>
+    </message>
+    <message>
         <source>Scheduled</source>
         <translation>Запланирована</translation>
     </message>
@@ -1114,6 +2772,18 @@
     <message>
         <source>Provider</source>
         <translation>Провайдер</translation>
+    </message>
+    <message>
+        <source>Sessio</source>
+        <translation>Sessio</translation>
+    </message>
+    <message>
+        <source>External server</source>
+        <translation>Внешний сервер</translation>
+    </message>
+    <message>
+        <source>Jitsi server</source>
+        <translation>Сервер Jitsi</translation>
     </message>
     <message>
         <source>Copy passcode</source>
@@ -1172,6 +2842,10 @@
         <translation>Очно</translation>
     </message>
     <message>
+        <source>Online (Jitsi)</source>
+        <translation>Онлайн (Jitsi)</translation>
+    </message>
+    <message>
         <source>Online (LiveKit)</source>
         <translation>Онлайн (LiveKit)</translation>
     </message>
@@ -1214,6 +2888,30 @@
     <message>
         <source>Failed to create the LiveKit meeting: %1</source>
         <translation>Не удалось создать встречу LiveKit: %1</translation>
+    </message>
+    <message>
+        <source>This meeting keeps its existing Jitsi link.</source>
+        <translation>Эта встреча сохраняет существующую ссылку Jitsi.</translation>
+    </message>
+    <message>
+        <source>Set an external Jitsi server in Settings → Calls before creating this meeting.</source>
+        <translation>Перед созданием встречи укажите внешний сервер Jitsi в разделе «Настройки → Звонки».</translation>
+    </message>
+    <message>
+        <source>Server: %1. Its administrator controls access to the room.</source>
+        <translation>Сервер: %1. Доступ к комнате определяет его администратор.</translation>
+    </message>
+    <message>
+        <source>Sessio creates the meeting and invitation.</source>
+        <translation>Sessio создаёт встречу и приглашение.</translation>
+    </message>
+    <message>
+        <source>Recurring meetings use LiveKit for now</source>
+        <translation>Регулярные встречи пока используют LiveKit</translation>
+    </message>
+    <message>
+        <source>Set a valid external Jitsi server in Settings → Calls before creating this meeting.</source>
+        <translation>Перед созданием встречи укажите корректный внешний сервер Jitsi в разделе «Настройки → Звонки».</translation>
     </message>
     <message>
         <source>Overlaps with an existing event, %1.</source>
@@ -1716,6 +3414,10 @@ See you!</source>
         <source> s</source>
         <translation> с</translation>
     </message>
+    <message>
+        <source>General</source>
+        <translation>Общие</translation>
+    </message>
 </context>
 <context>
     <name>QShortcut</name>
@@ -1973,10 +3675,6 @@ See you!</source>
     <message>
         <source>Language</source>
         <translation>Язык</translation>
-    </message>
-    <message>
-        <source>LiveKit</source>
-        <translation>LiveKit</translation>
     </message>
     <message>
         <source>System default</source>
@@ -2325,6 +4023,22 @@ See you!</source>
         <translation>Имя в звонках</translation>
     </message>
     <message>
+        <source>External Jitsi server</source>
+        <translation>Внешний сервер Jitsi</translation>
+    </message>
+    <message>
+        <source>Used when creating external Jitsi meetings. The server must allow guest access.</source>
+        <translation>Используется для создания встреч на внешнем сервере Jitsi. Сервер должен разрешать гостевой доступ.</translation>
+    </message>
+    <message>
+        <source>Enter a valid HTTPS server address without login, query or fragment.</source>
+        <translation>Введите корректный HTTPS-адрес сервера без логина, параметров и фрагмента.</translation>
+    </message>
+    <message>
+        <source>Saved</source>
+        <translation>Сохранено</translation>
+    </message>
+    <message>
         <source>Stop transcription before deleting its data.</source>
         <translation>Остановите транскрипцию перед удалением её данных.</translation>
     </message>
@@ -2343,6 +4057,10 @@ See you!</source>
     <message>
         <source>Unable to delete transcripts.</source>
         <translation>Не удалось удалить транскрипции.</translation>
+    </message>
+    <message>
+        <source>Cloud models</source>
+        <translation>Облачные модели</translation>
     </message>
     <message>
         <source>Backup Encryption</source>
@@ -2510,6 +4228,107 @@ See you!</source>
     </message>
 </context>
 <context>
+    <name>SpeakerRename</name>
+    <message>
+        <source>Rename speaker</source>
+        <translation>Переименовать говорящего</translation>
+    </message>
+    <message>
+        <source>Name shown for this speaker in the whole transcript:</source>
+        <translation>Имя этого говорящего во всей транскрипции:</translation>
+    </message>
+    <message>
+        <source>Right-click to rename this speaker</source>
+        <translation>Нажмите правой кнопкой, чтобы переименовать говорящего</translation>
+    </message>
+    <message>
+        <source>Rename speaker…</source>
+        <translation>Переименовать говорящего…</translation>
+    </message>
+</context>
+<context>
+    <name>TimelineCard</name>
+    <message>
+        <source>Canceled</source>
+        <translation>Отменено</translation>
+    </message>
+    <message>
+        <source>unpaid</source>
+        <translation>не оплачено</translation>
+    </message>
+    <message>
+        <source>no note</source>
+        <translation>нет заметки</translation>
+    </message>
+    <message>
+        <source>in person</source>
+        <translation>очно</translation>
+    </message>
+    <message>
+        <source>personal</source>
+        <translation>личное</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Подключиться</translation>
+    </message>
+</context>
+<context>
+    <name>TodoColumn</name>
+    <message>
+        <source>No client</source>
+        <translation>Без клиента</translation>
+    </message>
+    <message>
+        <source>No meeting</source>
+        <translation>Без встречи</translation>
+    </message>
+    <message>
+        <source>To-dos for today</source>
+        <translation>Дела на сегодня</translation>
+    </message>
+    <message>
+        <source>To-dos</source>
+        <translation>Дела</translation>
+    </message>
+    <message>
+        <source>Clients</source>
+        <translation>Клиенты</translation>
+    </message>
+    <message>
+        <source>Meetings</source>
+        <translation>Встречи</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Переименовать</translation>
+    </message>
+    <message>
+        <source>from %1</source>
+        <translation>с %1</translation>
+    </message>
+    <message>
+        <source>No to-dos</source>
+        <translation>Дел нет</translation>
+    </message>
+    <message>
+        <source>Add to-do</source>
+        <translation>Добавить дело</translation>
+    </message>
+    <message>
+        <source>What needs to be done?</source>
+        <translation>Что нужно сделать?</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Добавить</translation>
+    </message>
+    <message>
+        <source>Done</source>
+        <translation>Готово</translation>
+    </message>
+</context>
+<context>
     <name>TranscriptClientDialog</name>
     <message>
         <source>Attach clients</source>
@@ -2521,10 +4340,37 @@ See you!</source>
     </message>
 </context>
 <context>
-    <name>TranscriptListPage</name>
+    <name>TranscriptLibrary</name>
     <message>
         <source>Transcripts</source>
-        <translation>Транскрипты</translation>
+        <translation>Расшифровки</translation>
+    </message>
+    <message>
+        <source>Search recordings and participants…</source>
+        <translation>Поиск записей и участников…</translation>
+    </message>
+    <message>
+        <source>Open</source>
+        <translation>Открыть</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>Другие действия</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Удалить расшифровку</translation>
+    </message>
+    <message>
+        <source>No recordings found</source>
+        <translation>Записи не найдены</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptListPage</name>
+    <message>
+        <source>Call materials</source>
+        <translation>Материалы звонков</translation>
     </message>
     <message>
         <source>No transcripts yet.
@@ -2580,6 +4426,10 @@ They appear here after a call with transcription turned on.</source>
         <source>Delete</source>
         <translation>Удалить</translation>
     </message>
+    <message>
+        <source>Call notes · %1</source>
+        <translation>Заметки звонка · %1</translation>
+    </message>
     <message numerus="yes">
         <source>%n transcripts</source>
         <translation>
@@ -2587,6 +4437,18 @@ They appear here after a call with transcription turned on.</source>
             <numerusform>%n транскрипта</numerusform>
             <numerusform>%n транскриптов</numerusform>
         </translation>
+    </message>
+    <message>
+        <source>Transcripts</source>
+        <translation>Расшифровки</translation>
+    </message>
+    <message>
+        <source>Search recordings and participants…</source>
+        <translation>Поиск записей и участников…</translation>
+    </message>
+    <message>
+        <source>Call notes</source>
+        <translation>Заметки встречи</translation>
     </message>
     <message>
         <source>Could not load transcripts. Please try again.</source>
@@ -2620,16 +4482,12 @@ They appear here after a call with transcription turned on.</source>
         <translation>Экспорт текста</translation>
     </message>
     <message>
-        <source>Export transcript</source>
-        <translation>Экспорт транскрипта</translation>
-    </message>
-    <message>
-        <source>Text files (*.txt)</source>
-        <translation>Текстовые файлы (*.txt)</translation>
-    </message>
-    <message>
         <source>More actions</source>
         <translation>Другие действия</translation>
+    </message>
+    <message>
+        <source>Call notes</source>
+        <translation>Заметки звонка</translation>
     </message>
     <message>
         <source>Delete this transcript and all its phrases?</source>
@@ -2708,6 +4566,10 @@ They appear here after a call with transcription turned on.</source>
         <translation>Редактировать</translation>
     </message>
     <message>
+        <source>Search transcript…</source>
+        <translation>Поиск по расшифровке…</translation>
+    </message>
+    <message>
         <source>Delete</source>
         <translation>Удалить</translation>
     </message>
@@ -2722,6 +4584,18 @@ They appear here after a call with transcription turned on.</source>
     <message>
         <source>Phrase text cannot be empty.</source>
         <translation>Текст реплики не может быть пустым.</translation>
+    </message>
+    <message>
+        <source>Read transcript</source>
+        <translation>Читать расшифровку</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>История</translation>
+    </message>
+    <message>
+        <source>Edit transcript</source>
+        <translation>Редактировать расшифровку</translation>
     </message>
 </context>
 <context>
@@ -2763,6 +4637,10 @@ They appear here after a call with transcription turned on.</source>
         <translation>Отозвать согласие</translation>
     </message>
     <message>
+        <source>Export text</source>
+        <translation>Экспорт текста</translation>
+    </message>
+    <message>
         <source>Transcription is off</source>
         <translation>Транскрипция выключена</translation>
     </message>
@@ -2793,6 +4671,73 @@ They appear here after a call with transcription turned on.</source>
     <message>
         <source>Participant</source>
         <translation>Участник</translation>
+    </message>
+</context>
+<context>
+    <name>TranscriptReader</name>
+    <message>
+        <source>Back to transcripts</source>
+        <translation>К расшифровкам</translation>
+    </message>
+    <message>
+        <source>Recordings</source>
+        <translation>Записи встреч</translation>
+    </message>
+    <message>
+        <source>Find a recording</source>
+        <translation>Найти запись</translation>
+    </message>
+    <message>
+        <source>Transcript</source>
+        <translation>Расшифровка</translation>
+    </message>
+    <message>
+        <source>History</source>
+        <translation>История</translation>
+    </message>
+    <message>
+        <source>Call notes</source>
+        <translation>Заметки встречи</translation>
+    </message>
+    <message>
+        <source>More actions</source>
+        <translation>Другие действия</translation>
+    </message>
+    <message>
+        <source>Export text</source>
+        <translation>Экспорт текста</translation>
+    </message>
+    <message>
+        <source>Attach clients</source>
+        <translation>Привязать клиентов</translation>
+    </message>
+    <message>
+        <source>Mark reviewed</source>
+        <translation>Отметить как проверенную</translation>
+    </message>
+    <message>
+        <source>Edit transcript</source>
+        <translation>Редактировать расшифровку</translation>
+    </message>
+    <message>
+        <source>Delete transcript</source>
+        <translation>Удалить расшифровку</translation>
+    </message>
+    <message>
+        <source>Search transcript…</source>
+        <translation>Поиск по расшифровке…</translation>
+    </message>
+    <message>
+        <source>All speakers</source>
+        <translation>Все говорящие</translation>
+    </message>
+    <message>
+        <source>Rename speaker…</source>
+        <translation>Переименовать говорящего…</translation>
+    </message>
+    <message>
+        <source>No matching phrases</source>
+        <translation>Подходящие фразы не найдены</translation>
     </message>
 </context>
 <context>
@@ -2858,6 +4803,54 @@ They appear here after a call with transcription turned on.</source>
     <message>
         <source>Enable call transcription</source>
         <translation>Включить транскрипцию звонков</translation>
+    </message>
+    <message>
+        <source>Start transcription automatically when joining a call</source>
+        <translation>Автоматически включать транскрипцию при входе в звонок</translation>
+    </message>
+    <message>
+        <source>Start the prompter automatically</source>
+        <translation>Автоматически включать суфлёр</translation>
+    </message>
+    <message>
+        <source>Local prompter (experimental)</source>
+        <translation>Локальный суфлёр (экспериментальный)</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>Обзор…</translation>
+    </message>
+    <message>
+        <source>Select a local file</source>
+        <translation>Выберите локальный файл</translation>
+    </message>
+    <message>
+        <source>Gemma model (.litertlm)</source>
+        <translation>Модель Gemma (.litertlm)</translation>
+    </message>
+    <message>
+        <source>Automatic (GPU, otherwise CPU)</source>
+        <translation>Автоматически (GPU, иначе CPU)</translation>
+    </message>
+    <message>
+        <source>GPU only</source>
+        <translation>Только GPU</translation>
+    </message>
+    <message>
+        <source>CPU only</source>
+        <translation>Только CPU</translation>
+    </message>
+    <message>
+        <source>The GPU is several times faster and uses less memory, but on an integrated GPU it can make the desktop stutter. The CPU needs about 10 GB of RAM. Applies the next time the model starts.</source>
+        <translation>GPU в несколько раз быстрее и расходует меньше памяти, но на встроенной видеокарте рабочий стол может подтормаживать. CPU требует около 10 ГБ ОЗУ. Применяется при следующем запуске модели.</translation>
+    </message>
+    <message>
+        <source>Acceleration</source>
+        <translation>Ускорение</translation>
+    </message>
+    <message>
+        <source>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</source>
+        <translation>Выберите скачанную модель Gemma. Модель работает на этом компьютере, ничего не скачивается автоматически. Подсказки суфлёра требуют вашей проверки.</translation>
     </message>
     <message>
         <source>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</source>
@@ -2966,6 +4959,10 @@ They appear here after a call with transcription turned on.</source>
 <context>
     <name>pcm::Application</name>
     <message>
+        <source>Call materials</source>
+        <translation>Материалы встречи</translation>
+    </message>
+    <message>
         <source>Encrypted Backup</source>
         <translation>Зашифрованная резервная копия</translation>
     </message>
@@ -3028,6 +5025,14 @@ Your previous data was kept.</source>
         <translation>Выйти</translation>
     </message>
     <message>
+        <source>Export transcript</source>
+        <translation>Экспорт транскрипта</translation>
+    </message>
+    <message>
+        <source>Could not save the transcript file.</source>
+        <translation>Не удалось сохранить файл транскрипта.</translation>
+    </message>
+    <message>
         <source>Consent withdrawn</source>
         <translation>Согласие отозвано</translation>
     </message>
@@ -3042,6 +5047,18 @@ Your previous data was kept.</source>
     <message>
         <source>Keep as draft</source>
         <translation>Оставить как черновик</translation>
+    </message>
+    <message>
+        <source>live</source>
+        <translation>идёт</translation>
+    </message>
+    <message>
+        <source>ended</source>
+        <translation>завершена</translation>
+    </message>
+    <message>
+        <source>Meeting review</source>
+        <translation>Разбор встречи</translation>
     </message>
     <message>
         <source>Transcript</source>
@@ -3092,7 +5109,41 @@ Your previous data was kept.</source>
     </message>
 </context>
 <context>
+    <name>pcm::meeting::MeetingCoordinator</name>
+    <message>
+        <source>Enter a valid HTTPS Jitsi server address.</source>
+        <translation>Введите корректный HTTPS-адрес сервера Jitsi.</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::my_day::MyDayBridge</name>
+    <message numerus="yes">
+        <source>next in %n min</source>
+        <translation>
+            <numerusform>следующая через %n мин</numerusform>
+            <numerusform>следующая через %n мин</numerusform>
+            <numerusform>следующая через %n мин</numerusform>
+        </translation>
+    </message>
+    <message>
+        <source>next at %1</source>
+        <translation>следующая в %1</translation>
+    </message>
+    <message>
+        <source>All done for today</source>
+        <translation>На сегодня всё</translation>
+    </message>
+    <message>
+        <source>first at %1</source>
+        <translation>первая в %1</translation>
+    </message>
+</context>
+<context>
     <name>pcm::transcriptionui::CallTranscriptionController</name>
+    <message>
+        <source>The speaker could not be renamed. Please try again.</source>
+        <translation>Не удалось переименовать говорящего. Попробуйте ещё раз.</translation>
+    </message>
     <message>
         <source>Transcription is turned off in Settings</source>
         <translation>Транскрипция выключена в настройках</translation>
@@ -3175,6 +5226,25 @@ Your previous data was kept.</source>
     <message>
         <source>Screen sharing stopped</source>
         <translation>Показ экрана остановлен</translation>
+    </message>
+</context>
+<context>
+    <name>pcm::webcall::WebCallProvider</name>
+    <message>
+        <source>The call page stopped unexpectedly</source>
+        <translation>Страница звонка неожиданно остановилась</translation>
+    </message>
+    <message>
+        <source>Invalid call address</source>
+        <translation>Некорректный адрес звонка</translation>
+    </message>
+    <message>
+        <source>Could not start the local audio bridge</source>
+        <translation>Не удалось запустить локальный аудиомост</translation>
+    </message>
+    <message>
+        <source>The call page failed to load</source>
+        <translation>Не удалось загрузить страницу звонка</translation>
     </message>
 </context>
 </TS>

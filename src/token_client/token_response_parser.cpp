@@ -21,6 +21,9 @@ std::optional<TokenResult> parseTokenResponse(const QByteArray &json) {
   result.roomName = obj.value("roomName").toString();
   result.token = obj.value("token").toString();
   result.expiresAt = static_cast<qint64>(obj.value("expiresAt").toDouble());
+  if (const auto provider = obj.value("provider").toString(); !provider.isEmpty()) {
+    result.provider = provider;
+  }
   return result;
 }
 

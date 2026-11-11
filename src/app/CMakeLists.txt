@@ -18,6 +18,8 @@ qt_add_library(${TARGET_NAME} STATIC
         backup_encryption_policy.cpp
         credential_store.cpp
         token_backend_credential_store.cpp
+        cloud_key_store.cpp
+        cloud_key_store.h
         store_credential_reader.cpp
         keychain_series_invitation_store.cpp
         app_lock_service.cpp
@@ -57,6 +59,7 @@ add_dependencies(${TARGET_NAME}
         ${PROJECT_NAME}_meeting
         ${PROJECT_NAME}_widgets
         ${PROJECT_NAME}_calls_page
+        ${PROJECT_NAME}_my_day_page
         ${PROJECT_NAME}_token_client
 
 )
@@ -74,6 +77,7 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         ${PROJECT_NAME}_meeting
         ${PROJECT_NAME}_widgets
         ${PROJECT_NAME}_calls_page
+        ${PROJECT_NAME}_my_day_page
         ${PROJECT_NAME}_token_client
         qlementine
         Qt6::Widgets

@@ -64,6 +64,12 @@ public:
                              std::optional<int> durationMinutes = std::nullopt);
 
   /**
+   * @brief Fills the title and, with a client, makes it a work event for that
+   * client. Call after startCreatingNewEvent().
+   */
+  void applyTemplate(const QString &title, std::optional<int64_t> clientId);
+
+  /**
    * @brief Configures widget for usage inside a modal dialog.
    */
   void setDialogMode(bool enabled);
@@ -108,6 +114,8 @@ public:
   // LiveKit provider (the owner then publishes it and requests the permanent
   // invitation instead of the form creating a single meeting).
   [[nodiscard]] bool wantsNewLiveKitSeries() const;
+  [[nodiscard]] pcm::meeting::ProviderKind selectedProviderKind() const;
+  void updateProviderAvailability();
   [[nodiscard]] QString recurrenceRule() const;
   [[nodiscard]] std::optional<int64_t> recurrenceUntilMs() const;
   void setRecurrenceRule(const QString &rule,
@@ -157,6 +165,7 @@ signals:
    * event, instead of trying to open a URL.
    */
   void openLiveKitMeetingRequested(QString meetingRef);
+  void openExternalJitsiMeetingRequested(QString url, qint64 eventId);
 
   /**
    * @brief The user asked to move this legacy LiveKit series to a permanent
@@ -196,6 +205,7 @@ private:
   // --- Initialization ---
   void initUi();
   void initConnections();
+  void updateJitsiServerControls();
   void initDefaultStyle();
   void initEditStyle();
   void initDefaultStates() const;
@@ -257,6 +267,9 @@ private:
   oclero::qlementine::Switch *mEventTypeSwitch = nullptr;
   oclero::qlementine::Switch *mOnlineSessionSwitch = nullptr;
   oclero::qlementine::SegmentedControl *mProviderKindControl = nullptr;
+  QWidget *mJitsiServerWidget = nullptr;
+  QComboBox *mJitsiServerMode = nullptr;
+  QLabel *mJitsiServerHint = nullptr;
   oclero::qlementine::SegmentedControl *mRepeatTypeControl = nullptr;
   QWidget *mRecurringOptionsWidget = nullptr;
   QSpinBox *mRepeatIntervalSpinBox = nullptr;
@@ -301,6 +314,7 @@ private:
   // a failed create or a rejected save never leaves the stored event pointing
   // at an already-invalidated meeting.
   QString mSupersededLiveKitMeetingRef;
+  pcm::meeting::ProviderKind mSupersededMeetingKind = pcm::meeting::ProviderKind::LiveKit;
   // Schedule the current LiveKit meeting was created for; re-applying with an
   // unchanged schedule keeps the meeting (and the client's invitation) as is.
   QDateTime mMeetingScheduledStart;

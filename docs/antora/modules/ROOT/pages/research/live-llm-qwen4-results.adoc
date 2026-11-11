@@ -1,0 +1,195 @@
+[[qwen35-4b-int8-cpu-spike-2026-10-12]]
+= Qwen3.5-4B INT8 CPU spike, 2026-10-12
+
+== Method and artifact identity
+
+Next-family check after Gemma E2B/E4B. Same Ryzen 7 7840HS, Fedora 44,
+27 GiB RAM, LiteRT-LM 0.18.0, four CPU threads, context 4096, greedy
+sampling, thinking disabled through Qwen's own template, no prompt
+cache, fresh session per request. Sequential CPU-only scopes
+MemoryMax=10G, MemorySwapMax=0. Host had about 16 GiB available before
+downloads; background conditions differ from the earlier Gemma runs,
+another latency limitation.
+
+Export:
+https://huggingface.co/litert-community/Qwen3.5-4B[litert-community/Qwen3.5-4B],
+revision `b706afd6d1b710ce4f40a76a2d3d1641612ed5d7`, file
+`Qwen3.5-4B++_++int8.litertlm`, 4,407,428,464 bytes, verified size and
+SHA256
+`a360b83d0bcc2e8ab3e83df78e83ec028e4c0687ae95970af6f470473da67a50`. The
+export is text-only, INT8 dynamic linears/embedding, with float
+convolutions and delta rule, FP32 activations. Vision and MTP heads are
+dropped; MTP is explicitly disabled. Compiled-weight caches allowed;
+short excluded warmup.
+
+Reference tokenizer/template:
+https://huggingface.co/Qwen/Qwen3.5-4B[Qwen/Qwen3.5-4B], revision
+`851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a`. Rendered instructions/user
+text are unchanged; model-specific control tokens and empty thinking
+block differ. Unlike Gemma, Qwen template has no literal BOS prefix;
+runner normalizes BOS only when present and checks native token IDs and
+actual prefill counts against reference. Same raw long-case text has
+2775 Qwen tokens, versus 2986 Gemma tokens; short control has 267 versus
+271.
+
+Probe set unchanged: six short cases x four repeats, two long/control
+cases x four repeats, seven original rolling windows plus three mutation
+windows x two replays. Max output 160 short / 256 long and operations.
+Fixed original window boundaries are reused from Gemma in
+`rolling-windows.json`; no repartition by Qwen tokenization. The state
+starts empty and is created only by model operations. No oracle state or
+prompt tuning on Qwen. Mutation acceptance requires Friday 20:00 meeting
+only after Monday notes are cancelled, retained through weather.
+
+This compares deployment artifacts and task outcomes, not matched
+quantization, runtime efficiency, or parameter count in isolation.
+Two/four repeats of a small synthetic set are not independent real-world
+samples. No ASR/video contention, production workload, or persistent KV
+reuse is tested.
+
+Reproduce with `bash spikes/live-llm-bench/run++_++qwen4.sh` after
+verifying weights. Raw outputs/metadata/logs remain local in
+results/qwen4-++*++.json.
+
+== LiteRT diagnostics before semantic comparison
+
+Initial session creation failed because the Gemma-oriented harness
+explicitly requested an audio backend. Qwen export has no audio encoder.
+Selecting text-only execution removes this harness error; no GPU backend
+is selected.
+
+The completed 24-request short run has unstable response text across
+greedy fresh sessions in one shared engine and frequent failure to obey
+the requested JSON schema. Some outputs hit the 160-token cap. Long
+replay was interrupted after this finding; operation replay was not
+attempted in this configuration. These are not valid conditions for a
+clean model-quality comparison.
+
+Explicit FP32 activation did not repair the agreement probe: two
+sessions in one fresh engine still gave different malformed answers.
+Model metadata declares prefer++_++activation++_++type=fp32; default
+loader logs mention fp16, but this discrepancy is not established as the
+cause. A byte-for-byte check of the exported embedded template and the
+HF template confirms identical rendering for our single-turn probe.
+Token-ID checks also pass.
+
+Two high-level Conversation API probes, each with a new engine, produce
+identical but malformed text: incomplete JSON with a trailing fence,
+missing Friday/time, and numeric evidence 0/1 instead of the source IDs
+u1/u2. This excludes shared engine reuse as the sole explanation.
+Export, CPU backend, and model behavior are not isolated by these
+diagnostics; no general verdict against Qwen is made.
+
+Diagnostic runner: qwen++_++diagnostic.py; local outputs/logs include
+FP32 and Conversation API variants. A separate GGUF Q8++_++0/llama.cpp
+path will be evaluated to avoid depending on this problematic LiteRT
+artifact.
+
+LiteRT short-run latency: first text median 2.439 s, full response
+median 5.200 s; only 3/24 outputs parse even after exact fence removal,
+none are raw JSON. These latency numbers include malformed/semantically
+wrong outputs and are not usable-answer latency. Kernel peak RSS 5657280
+KiB (about 5.40 GiB). Raw quality and varying lengths prevent a clean
+ranking against the earlier Gemma exports.
+
+[[separate-llamacpp-fallback]]
+== Separate llama.cpp fallback
+
+GGUF:
+https://huggingface.co/unsloth/Qwen3.5-4B-GGUF[unsloth/Qwen3.5-4B-GGUF],
+revision `e87f176479d0855a907a41277aca2f8ee7a09523`, file
+`Qwen3.5-4B-Q8++_++0.gguf`, 4,482,403,488 bytes, verified size and
+SHA256
+`10cc391b403021dd11c614679d2fd92f611c3681d29e29651b717316965d61e1`. GGUF
+Q8++_++0 is not tensor-equivalent to LiteRT dynamic INT8; exact source
+checkpoint equivalence is also unverified. This fallback checks a
+different available artifact/runtime path, rather than isolating a
+runtime bug. Same CPU llama.cpp build 10635/fc35562ba, four threads,
+context 4096, no GPU offload, no prompt cache; Qwen's own tokenized
+no-thinking prompt is passed to native /completion. Two repeats of
+short/long cases and two operation replays. The shorter repeat count
+suffices for a repeatability probe; it does not estimate tail latency.
+Full original dialogue/window text remains unchanged.
+
+=== GGUF short and long findings
+
+Short 12-response run: first text median 2.905 s, full response median
+6.950 s. All six outputs are identical across two repeats and parse
+after fence removal. Meeting: Friday 18:00, evidence only u2.
+Proposal/negation/weather: empty agreements. Correction: Monday
+deadline, but numeric evidence ++[++1,2,3++]++ instead of source IDs.
+Task: “Запишу три ситуации”, evidence u2, losing some specificity from
+the task. JSON parseability does not establish schema validity or
+evidence correctness.
+
+Control 267-token request: full response about 13.5 s, both complete
+agreements and correct evidence. The same full history is 2775 Qwen
+tokens (2986 Gemma tokens): first text about 45 s and full response
+about 54 s. It drops both accepted facts and misclassifies the explicit
+diary refusal as an agreement. Different context representation is not a
+remedy in this artifact. Sampled server RSS peaks are 4800 MiB short /
+5194 MiB across control{plus}long. Host swap observations reflect other
+processes; the model server scope disallows swap.
+
+GGUF/reference tokenizer parity passed for the initial short prompt (191
+tokens). Native /completion receives explicit reference token IDs, with
+thinking disabled. Server default allocation has four slots, one request
+active at a time; per-slot context is 4096. Memory therefore includes
+the server's configured slot capacity, not the theoretical minimum for a
+single slot.
+
+=== GGUF final operation replay and verification
+
+Twenty completed updates, two ten-window replays, all response texts
+identical at corresponding steps. The original seven-window portion (14
+observations) has median first text 13.324 s and complete update 17.297
+s. Mean sum of original seven updates per replay: 127.211 s. The full
+long-history median first text/full response is 44.995/53.868 s;
+short-control median is 4.314/13.526 s. Peak sampled server RSS across
+operation runs is 6471 MiB, about 6.32 GiB. Some mutation-step latency
+differs materially across repeats despite identical text; background
+conditions and output length limit causal latency conclusions.
+
+The first operation creates a Friday 18:00 meeting under ID
+`meeting++_++friday++_++1800`. At the Monday notes window the model
+upserts this same meeting ID with combined text: “Встреча в пятницу в
+18:00. Клиент пришлет записи в понедельник.” Evidence becomes b2/b3
+only, losing meeting provenance. Neutral windows preserve this conflated
+record. Rescheduling updates the combined record to Friday 20:00, but
+still includes notes; evidence becomes d1/d2 only. Cancellation of notes
+emits `remove meeting++_++friday++_++1800` with evidence e1, deleting
+both facts. Final weather leaves the state empty. Both replays fail the
+required final single Friday 20:00 meeting.
+
+All 36 GGUF responses parse after exact Markdown fence removal and
+finish under the output cap. Short/long responses and operation
+transitions repeat exactly. This is schema/semantic failure, not a
+truncation explanation. In particular, numeric evidence in the short
+correction is a schema violation even though the JSON itself parses.
+Provenance checks in the ledger accept real current IDs; they cannot
+detect conflated actions or wrong-target removal.
+
+== Verdict
+
+The LiteRT INT8 artifact is not a validated deployment path on this
+host: raw format/quality instability remains after text-only, FP32,
+template parity, and fresh-engine high-level API diagnostics. Its root
+cause is unresolved and cannot be attributed to the Qwen family alone.
+Long/operation benchmarks on that artifact were halted rather than
+reported as a valid model comparison.
+
+The GGUF Q8++_++0 fallback is repeatable but fails long-history and
+operation quality, and exceeds the near-two-second update aspiration. On
+the original seven-window operation workload, earlier E2B/E4B LiteRT
+medians were 1.616/3.424 s versus Qwen GGUF's 17.297 s; all three still
+fail agreement-mutation safety. Quantization, runtime, tokenization,
+export, date/background load, and memory allocation differ; these are
+practical artifact results, not a universal runtime/model ranking.
+
+The current Qwen paths do not justify replacing Gemma for this pilot.
+E4B remains the best validated complete extraction on this single long
+fixture, with no automatic mutation approval. A subsequent experiment
+should separate extraction of individual facts from target selection and
+deletion, retain source evidence, and compare another model family on a
+broader labeled set. No product code was integrated, and no real
+call/ASR/video/KV-reuse acceptance has been established.

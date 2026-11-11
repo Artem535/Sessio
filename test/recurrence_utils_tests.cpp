@@ -306,7 +306,7 @@ TEST(RecurrenceUtilsTest, ResolveNoteLinkFindsMaterializedRowForSinceMaterialize
 TEST(RecurrenceUtilsTest, ComputeDaySummaryEmptyDayHasNoSessions) {
   const auto date = QDate::currentDate();
   const auto noon =
-      QDateTime(date, QTime(12, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(12, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
 
   const auto summary = pcm::recurrence::computeDaySummary(
       {}, {}, QTime(9, 0), QTime(18, 0), date, noon, 50);
@@ -323,16 +323,16 @@ TEST(RecurrenceUtilsTest, ComputeDaySummaryEmptyDayHasNoSessions) {
 TEST(RecurrenceUtilsTest, ComputeDaySummaryFullyBookedDayHasNoFreeWindow) {
   const auto date = QDate::currentDate();
   const auto startMs =
-      QDateTime(date, QTime(9, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(9, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto endMs =
-      QDateTime(date, QTime(18, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(18, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto beforeStartMs =
-      QDateTime(date, QTime(8, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(8, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
 
   const QVector<DuckEvent> events{workSessionAt(1, startMs, endMs)};
   const QVector<QPair<QDateTime, QDateTime>> busy{
-      {QDateTime::fromMSecsSinceEpoch(startMs, QTimeZone::systemTimeZone()),
-       QDateTime::fromMSecsSinceEpoch(endMs, QTimeZone::systemTimeZone())}};
+      {QDateTime::fromMSecsSinceEpoch(startMs, QTimeZone(QTimeZone::LocalTime)),
+       QDateTime::fromMSecsSinceEpoch(endMs, QTimeZone(QTimeZone::LocalTime))}};
 
   const auto summary = pcm::recurrence::computeDaySummary(
       events, busy, QTime(9, 0), QTime(18, 0), date, beforeStartMs, 50);
@@ -345,11 +345,11 @@ TEST(RecurrenceUtilsTest, ComputeDaySummaryFullyBookedDayHasNoFreeWindow) {
 TEST(RecurrenceUtilsTest, ComputeDaySummaryFreeWindowRespectsBusyIntervalsNotJustEvents) {
   const auto date = QDate::currentDate();
   const auto eventStartMs =
-      QDateTime(date, QTime(10, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(10, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto eventEndMs =
-      QDateTime(date, QTime(11, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(11, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto beforeMs =
-      QDateTime(date, QTime(8, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(8, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
 
   const QVector<DuckEvent> events{workSessionAt(1, eventStartMs, eventEndMs)};
   // Busy interval starts at the work day's start (no gap ahead of it) and
@@ -357,8 +357,8 @@ TEST(RecurrenceUtilsTest, ComputeDaySummaryFreeWindowRespectsBusyIntervalsNotJus
   // event) - proving the search follows busyIntervals, not the event's own
   // start/end.
   const QVector<QPair<QDateTime, QDateTime>> busy{
-      {QDateTime(date, QTime(9, 0, 0), QTimeZone::systemTimeZone()),
-       QDateTime(date, QTime(14, 0, 0), QTimeZone::systemTimeZone())}};
+      {QDateTime(date, QTime(9, 0, 0), QTimeZone(QTimeZone::LocalTime)),
+       QDateTime(date, QTime(14, 0, 0), QTimeZone(QTimeZone::LocalTime))}};
 
   const auto summary = pcm::recurrence::computeDaySummary(
       events, busy, QTime(9, 0), QTime(18, 0), date, beforeMs, 50);
@@ -373,32 +373,32 @@ TEST(RecurrenceUtilsTest, ComputeDaySummaryExcludesCanceledFromCountsButKeepsItB
   // is true - its own slot is already in the past by `now` below, so it
   // can't itself supply the free window this test checks for.
   const auto qualifyingStartMs =
-      QDateTime(date, QTime(9, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(9, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto qualifyingEndMs =
-      QDateTime(date, QTime(9, 15, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(9, 15, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   // A canceled event later in the day - excluded from counts, but its
   // interval is still passed via busyIntervals (exactly what
   // QEventInfoPage::currentBusyIntervals() does today - it doesn't filter
   // by status).
   const auto canceledStartMs =
-      QDateTime(date, QTime(10, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(10, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto canceledEndMs =
-      QDateTime(date, QTime(11, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(11, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   // "Now" sits inside the canceled event's slot, so there's no earlier gap
   // for the search to find - the only candidate gap is whatever remains
   // after the canceled interval ends.
   const auto nowMs =
-      QDateTime(date, QTime(10, 30, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(10, 30, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
 
   const QVector<DuckEvent> events{
       workSessionAt(1, qualifyingStartMs, qualifyingEndMs),
       workSessionAt(2, canceledStartMs, canceledEndMs, QStringLiteral("Anna"),
                     /*eventStatId=*/3)};
   const QVector<QPair<QDateTime, QDateTime>> busy{
-      {QDateTime::fromMSecsSinceEpoch(qualifyingStartMs, QTimeZone::systemTimeZone()),
-       QDateTime::fromMSecsSinceEpoch(qualifyingEndMs, QTimeZone::systemTimeZone())},
-      {QDateTime::fromMSecsSinceEpoch(canceledStartMs, QTimeZone::systemTimeZone()),
-       QDateTime::fromMSecsSinceEpoch(canceledEndMs, QTimeZone::systemTimeZone())}};
+      {QDateTime::fromMSecsSinceEpoch(qualifyingStartMs, QTimeZone(QTimeZone::LocalTime)),
+       QDateTime::fromMSecsSinceEpoch(qualifyingEndMs, QTimeZone(QTimeZone::LocalTime))},
+      {QDateTime::fromMSecsSinceEpoch(canceledStartMs, QTimeZone(QTimeZone::LocalTime)),
+       QDateTime::fromMSecsSinceEpoch(canceledEndMs, QTimeZone(QTimeZone::LocalTime))}};
 
   const auto summary = pcm::recurrence::computeDaySummary(
       events, busy, QTime(9, 0), QTime(18, 0), date, nowMs, 50);
@@ -415,9 +415,9 @@ TEST(RecurrenceUtilsTest, ComputeDaySummaryExcludesCanceledFromCountsButKeepsItB
 TEST(RecurrenceUtilsTest, ComputeDaySummaryPastDayOmitsNextSessionAndFreeWindow) {
   const auto date = QDate::currentDate().addDays(-1);
   const auto startMs =
-      QDateTime(date, QTime(10, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(10, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto endMs =
-      QDateTime(date, QTime(11, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(11, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto nowMs = QDateTime::currentDateTime().toUTC().toMSecsSinceEpoch();
 
   const QVector<DuckEvent> events{workSessionAt(1, startMs, endMs)};
@@ -434,11 +434,11 @@ TEST(RecurrenceUtilsTest, ComputeDaySummaryPastDayOmitsNextSessionAndFreeWindow)
 TEST(RecurrenceUtilsTest, ComputeDaySummaryTodayAfterWorkHoursOmitsNextAndFreeWindow) {
   const auto date = QDate::currentDate();
   const auto startMs =
-      QDateTime(date, QTime(10, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(10, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto endMs =
-      QDateTime(date, QTime(11, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(11, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto lateNowMs =
-      QDateTime(date, QTime(23, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(23, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
 
   const QVector<DuckEvent> events{workSessionAt(1, startMs, endMs)};
 
@@ -453,14 +453,14 @@ TEST(RecurrenceUtilsTest, ComputeDaySummaryTodayAfterWorkHoursOmitsNextAndFreeWi
 TEST(RecurrenceUtilsTest, ComputeDaySummaryUpcomingCappedAtThreeChronological) {
   const auto date = QDate::currentDate();
   const auto beforeMs =
-      QDateTime(date, QTime(8, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(8, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
 
   QVector<DuckEvent> events;
   for (int hour = 9; hour < 14; ++hour) {
     const auto startMs =
-        QDateTime(date, QTime(hour, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+        QDateTime(date, QTime(hour, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
     const auto endMs =
-        QDateTime(date, QTime(hour, 30, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+        QDateTime(date, QTime(hour, 30, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
     events.append(workSessionAt(hour, startMs, endMs));
   }
 
@@ -476,11 +476,11 @@ TEST(RecurrenceUtilsTest, ComputeDaySummaryUpcomingCappedAtThreeChronological) {
 TEST(RecurrenceUtilsTest, ComputeDaySummaryClientCountCountsDistinctClientsNotSessions) {
   const auto date = QDate::currentDate();
   const auto beforeMs =
-      QDateTime(date, QTime(8, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(8, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto mkTimes = [&](const int hour) {
     return std::make_pair(
-        QDateTime(date, QTime(hour, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch(),
-        QDateTime(date, QTime(hour, 30, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch());
+        QDateTime(date, QTime(hour, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch(),
+        QDateTime(date, QTime(hour, 30, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch());
   };
   const auto [start1, end1] = mkTimes(9);
   const auto [start2, end2] = mkTimes(10);
@@ -502,25 +502,25 @@ TEST(RecurrenceUtilsTest, ComputeDaySummaryClientCountCountsDistinctClientsNotSe
 TEST(RecurrenceUtilsTest, ComputeDaySummarySkipsTooSmallGapAndFindsLargerOneAfter) {
   const auto date = QDate::currentDate();
   const auto beforeMs =
-      QDateTime(date, QTime(8, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(8, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto session1StartMs =
-      QDateTime(date, QTime(8, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(8, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto session1EndMs =
-      QDateTime(date, QTime(9, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(9, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto session2StartMs =
-      QDateTime(date, QTime(9, 15, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(9, 15, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
   const auto session2EndMs =
-      QDateTime(date, QTime(10, 0, 0), QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+      QDateTime(date, QTime(10, 0, 0), QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
 
   const QVector<DuckEvent> events{
       workSessionAt(1, session1StartMs, session1EndMs),
       workSessionAt(2, session2StartMs, session2EndMs),
   };
   const QVector<QPair<QDateTime, QDateTime>> busy{
-      {QDateTime::fromMSecsSinceEpoch(session1StartMs, QTimeZone::systemTimeZone()),
-       QDateTime::fromMSecsSinceEpoch(session1EndMs, QTimeZone::systemTimeZone())},
-      {QDateTime::fromMSecsSinceEpoch(session2StartMs, QTimeZone::systemTimeZone()),
-       QDateTime::fromMSecsSinceEpoch(session2EndMs, QTimeZone::systemTimeZone())},
+      {QDateTime::fromMSecsSinceEpoch(session1StartMs, QTimeZone(QTimeZone::LocalTime)),
+       QDateTime::fromMSecsSinceEpoch(session1EndMs, QTimeZone(QTimeZone::LocalTime))},
+      {QDateTime::fromMSecsSinceEpoch(session2StartMs, QTimeZone(QTimeZone::LocalTime)),
+       QDateTime::fromMSecsSinceEpoch(session2EndMs, QTimeZone(QTimeZone::LocalTime))},
   };
 
   // minFreeWindowMinutes=50 means we need at least 50 minutes free.

@@ -1,24 +1,29 @@
 #include "transcript_page.h"
+#include "transcript_export.h"
 #include "phrase_card_paint.h"
 #include "transcript_client_dialog.h"
-#include <QFileDialog>
-#include <QSaveFile>
 #include <QComboBox>
 #include <QApplication>
 #include <QFrame>
+#include <QHBoxLayout>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QDateTime>
 #include <QLabel>
+#include <QLineEdit>
 #include <QLocale>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
+#include <QSplitter>
 #include <QVBoxLayout>
 #include <QToolButton>
+#include <QTimer>
+#include <QScopeGuard>
 #include <QWidgetAction>
 #include <algorithm>
 
@@ -99,11 +104,10 @@ QString timestamp(int64_t milliseconds) {
 TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
                                int64_t eventId, const QString &title, QWidget *parent)
     : QWidget(parent), mDb(std::move(db)) {
-  auto *outer = new QHBoxLayout(this);
-  outer->setContentsMargins(24, 24, 24, 24);
+  auto *outer = new QVBoxLayout(this);
+  outer->setContentsMargins(16, 16, 16, 16);
   auto *content = new QWidget(this);
-  content->setMaximumWidth(940);
-  outer->addStretch(); outer->addWidget(content, 1); outer->addStretch();
+  outer->addWidget(content);
   auto *layout = new QVBoxLayout(content);
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(10);
@@ -112,8 +116,22 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
   navigation->addWidget(back); navigation->addStretch();
   mAttach = button(tr("Attach clients"), "transcriptAttachClients", this);
   navigation->addWidget(mAttach);
+  mNotesToggle = button(tr("Call notes"), "transcriptCallNotes", this);
+  mNotesToggle->setCheckable(true);
+  mNotesToggle->setEnabled(false);
+  navigation->addWidget(mNotesToggle);
+  mSourceToggle = button(tr("Transcript"), "transcriptSourceToggle", this);
+  mSourceToggle->setCheckable(true);
+  mSourceToggle->hide();
+  navigation->addWidget(mSourceToggle);
+  connect(mSourceToggle, &QPushButton::toggled, this, [this](bool visible) {
+    mTranscriptHost->setVisible(visible || !mNotesVisible);
+  });
+  connect(mNotesToggle, &QPushButton::clicked, this, &TranscriptPage::setNotesVisible);
   auto *exportButton = button(tr("Export text"), "transcriptExport", this);
   navigation->addWidget(exportButton);
+  mReview = button(tr("Mark reviewed"), "markReviewed", this);
+  navigation->addWidget(mReview);
   auto *more = new QToolButton(this);
   more->setAccessibleName(tr("More actions"));
   more->setObjectName("transcriptMoreActions");
@@ -130,8 +148,6 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
   auto font = mTitle->font(); font.setPointSize(22); font.setBold(true); mTitle->setFont(font);
   auto *heading = new QHBoxLayout;
   heading->addWidget(mTitle, 1);
-  mReview = button(tr("Mark reviewed"), "markReviewed", this);
-  heading->addWidget(mReview);
   layout->addLayout(heading);
   mClient = label({}, "transcriptClient", this); layout->addWidget(mClient);
   mMetadata = label({}, "transcriptMetadata", this);
@@ -140,26 +156,46 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
   metadata->addWidget(mStatus); metadata->addWidget(mMetadata); metadata->addStretch();
   layout->addLayout(metadata);
   mNotice = label({}, "transcriptNotice", this); layout->addWidget(mNotice);
-  auto *scroll = new QScrollArea(this); scroll->setWidgetResizable(true);
+  mSplitter = new QSplitter(Qt::Horizontal, this);
+  mSplitter->setObjectName("transcriptNotesSplitter");
+  mSplitter->setChildrenCollapsible(false);
+  mSplitter->setHandleWidth(8);
+  outer->addWidget(mSplitter, 1);
+  auto *transcript = mTranscriptHost = new QWidget(mSplitter);
+  transcript->setObjectName("transcriptSourcePanel");
+  auto *transcriptLayout = new QVBoxLayout(transcript);
+  transcriptLayout->setContentsMargins(0, 0, 0, 0);
+  mSearch = new QLineEdit(transcript);
+  mSearch->setObjectName("transcriptSearch");
+  mSearch->setPlaceholderText(tr("Search transcript…"));
+  mSearch->setClearButtonEnabled(true);
+  transcriptLayout->addWidget(mSearch);
+  connect(mSearch, &QLineEdit::textChanged, this, &TranscriptPage::filterPhrases);
+  auto *scroll = new QScrollArea(transcript); scroll->setWidgetResizable(true);
   scroll->setFrameShape(QFrame::NoFrame);
   scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  scroll->viewport()->installEventFilter(this);
   auto *rows = new QWidget(scroll); mRows = new QVBoxLayout(rows);
   rows->setAutoFillBackground(false);
   mRows->setContentsMargins(0, 8, 12, 8); mRows->setSpacing(10);
-  mRows->setAlignment(Qt::AlignTop); scroll->setWidget(rows); layout->addWidget(scroll, 1);
+  mRows->setAlignment(Qt::AlignTop); scroll->setWidget(rows); transcriptLayout->addWidget(scroll, 1);
+  mNotesHost = new QWidget(mSplitter);
+  auto *notesLayout = new QVBoxLayout(mNotesHost);
+  notesLayout->setContentsMargins(0, 0, 0, 0);
+  mSplitter->addWidget(mNotesHost);
+  mSplitter->addWidget(transcript);
+  mSplitter->setStretchFactor(0, 3);
+  mSplitter->setStretchFactor(1, 2);
+  mNotesHost->hide();
   mConfirm = [this](const QString &message) {
     return QMessageBox::question(this, tr("Delete transcript"), message,
                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes;
   };
   connect(exportButton, &QPushButton::clicked, this, [this] {
+    if (mSelector->currentIndex() < 0) return;
     QPointer<TranscriptPage> guard(this);
-    try {
-      const auto bytes = exportText().toUtf8();
-      const auto path = QFileDialog::getSaveFileName(this, tr("Export transcript"), {}, tr("Text files (*.txt)"));
-      if (!guard || path.isEmpty()) return;
-      QSaveFile file(path);
-      if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) reportFailure();
-    } catch (...) { if (guard) reportFailure(); }
+    const bool saved = pcm::transcriptionui::exportTranscriptWithDialog(this, *mDb, {mSelector->currentData().toLongLong()});
+    if (guard && !saved) reportFailure();
   });
   connect(mAttach, &QPushButton::clicked, this, [this] {
     const auto id = mSelector->currentData().toLongLong();
@@ -209,9 +245,124 @@ TranscriptPage::TranscriptPage(std::shared_ptr<pcm::database::Database> db,
 void TranscriptPage::setConfirmHook(std::function<bool(const QString &)> hook) {
   if (hook) mConfirm = std::move(hook);
 }
+void TranscriptPage::setNotesView(QWidget *view) {
+  if (mNotesView == view) return;
+  if (mNotesView) {
+    mNotesHost->layout()->removeWidget(mNotesView);
+    mNotesView->hide();
+    mNotesView->setParent(nullptr);
+  }
+  mNotesView = view;
+  if (view) mNotesHost->layout()->addWidget(view);
+  mNotesToggle->setEnabled(view != nullptr);
+  mSourceToggle->setVisible(view != nullptr);
+  setNotesVisible(view != nullptr && !mQuickReader);
+  if (view && !mSplitInitialized) {
+    mSplitter->setSizes({760, 440});
+    mSplitInitialized = true;
+  }
+  emit readerChanged();
+}
+
+bool TranscriptPage::eventFilter(QObject *object, QEvent *event) {
+  if (event->type() == QEvent::Resize)
+    QTimer::singleShot(0, this, &TranscriptPage::updatePhraseSizes);
+  return QWidget::eventFilter(object, event);
+}
+
+void TranscriptPage::updatePhraseSizes() {
+  for (int i = 0; i < mRows->count(); ++i) {
+    auto *card = mRows->itemAt(i)->widget();
+    if (card && card->layout()) {
+      const int height = card->layout()->totalHeightForWidth(card->width());
+      if (height > 0) card->setMinimumHeight(height);
+    }
+  }
+}
+
+void TranscriptPage::setNotesVisible(bool visible) {
+  mNotesVisible = visible && mNotesView;
+  mNotesHost->setVisible(mNotesVisible);
+  // The embedded workspace supplies its own document heading and client context.
+  mTitle->setVisible(!mNotesVisible);
+  mClient->setVisible(!mNotesVisible);
+  mMetadata->setVisible(!mNotesVisible);
+  mStatus->setVisible(!mNotesVisible);
+  mNotesToggle->setChecked(mNotesVisible);
+  mTranscriptHost->setVisible(!mNotesVisible || mSourceToggle->isChecked());
+  emit readerChanged();
+}
+
+void TranscriptPage::activateTranscript(qint64 id) {
+  if (mActivatedTranscriptId == id) return;
+  mActivatedTranscriptId = id;
+  emit transcriptActivated(id);
+}
+
+bool TranscriptPage::focusPhrase(qint64 phraseId) {
+  const auto transcript = mDb->get_transcript_id_for_phrase(phraseId);
+  if (!transcript) return false;
+  if (*transcript != mActivatedTranscriptId) {
+    if (mEditing) return false;
+    reloadTranscript(*transcript, tr("Transcript"));
+  }
+  mSearch->clear();
+  if (mQuickReader) {
+    if (mNotesVisible) mSourceToggle->setChecked(true);
+    setReaderMode(true);
+    mTranscriptHost->setVisible(true);
+    emit readerPhraseFocused(QString::number(phraseId));
+    return true;
+  }
+  if (mNotesVisible) mSourceToggle->setChecked(true);
+  auto *phrase = findChild<QWidget *>("phraseCard_" + QString::number(phraseId));
+  if (!phrase) return false;
+  mTranscriptHost->findChild<QScrollArea *>()->ensureWidgetVisible(phrase);
+  phrase->setFocus();
+  return true;
+}
+
+void TranscriptPage::filterPhrases() {
+  const auto query = mSearch->text().trimmed();
+  for (int i = 0; i < mRows->count(); ++i) {
+    auto *card = mRows->itemAt(i)->widget();
+    if (!card) continue;
+    const auto *text = card->findChild<QLabel *>("phraseText");
+    const auto *speaker = card->findChild<QLabel *>("phraseSpeaker");
+    card->setVisible(query.isEmpty() || (text && text->text().contains(query, Qt::CaseInsensitive)) ||
+                     (speaker && speaker->text().contains(query, Qt::CaseInsensitive)));
+  }
+}
 int TranscriptPage::transcriptCount() const { return mSelector->count(); }
 void TranscriptPage::reportFailure() {
   mNotice->setText(tr("Could not update the transcript. Please try again."));
+}
+QString TranscriptPage::speakerName(const DuckTranscriptPhrase &phrase) {
+  return phrase.speaker_name ? QString::fromStdString(*phrase.speaker_name) :
+      phrase.track_role == "practitioner" ? tr("Practitioner") : tr("Participant");
+}
+void TranscriptPage::promptSpeakerRename(const QString &trackRole) {
+  if (mEditing || mSelector->currentIndex() < 0) return;
+  try {
+    QString current;
+    for (const auto &phrase : mDb->get_transcript_phrases(mSelector->currentData().toLongLong()))
+      if (QString::fromStdString(phrase.track_role) == trackRole) { current = speakerName(phrase); break; }
+    if (current.isEmpty()) return;
+    if (const auto name = pcm::transcriptionui::askSpeakerName(this, mRenamePrompt, current))
+      renameSpeaker(trackRole, *name);
+  } catch (...) { reportFailure(); }
+}
+bool TranscriptPage::renameSpeaker(const QString &trackRole, const QString &name) {
+  const auto value = name.simplified();
+  if (mEditing) { mNotice->setText(tr("Save or cancel the current edit first.")); return false; }
+  if (value.isEmpty() || mSelector->currentIndex() < 0) return false;
+  try {
+    const auto id = mSelector->currentData().toLongLong();
+    if (!mayMutate(id)) return false;
+    if (!mDb->rename_transcript_speaker(id, trackRole.toStdString(), value.toStdString())) { reportFailure(); return false; }
+    showTranscript(); emit transcriptsChanged(); emit speakersRenamed(id);
+    return true;
+  } catch (...) { reportFailure(); return false; }
 }
 bool TranscriptPage::mayMutate(int64_t transcriptId) {
   const auto row = mDb->get_transcript(transcriptId);
@@ -263,16 +414,11 @@ void TranscriptPage::reloadTranscript(int64_t transcriptId, const QString &title
   showTranscript();
 }
 QString TranscriptPage::exportText() const {
-  QStringList lines;
   if (mSelector->currentIndex() < 0) return {};
-  for (const auto &phrase : mDb->get_transcript_phrases(mSelector->currentData().toLongLong())) {
-    const auto speaker = phrase.speaker_name ? QString::fromStdString(*phrase.speaker_name) :
-        phrase.track_role == "practitioner" ? tr("Practitioner") : tr("Participant");
-    lines << timestamp(phrase.start_ms) + " " + speaker + ": " + QString::fromStdString(phrase.text);
-  }
-  return lines.join("\n") + "\n";
+  return pcm::transcriptionui::transcriptExportText(*mDb, mSelector->currentData().toLongLong());
 }
 void TranscriptPage::showTranscript() {
+  const auto notify = qScopeGuard([this] { emit readerChanged(); });
   mEditing = false;
   mSelector->setEnabled(true);
   findChild<QPushButton *>("backToEvent")->setEnabled(true);
@@ -283,12 +429,14 @@ void TranscriptPage::showTranscript() {
   mAttach->setEnabled(false);
   mClient->setText(tr("No clients attached"));
   if (!mSelector->count()) {
+    activateTranscript(0);
     mNotice->setText(mTranscriptId ? tr("Transcript unavailable.") : tr("No transcripts for this event."));
     return;
   }
   try {
     const auto row = mDb->get_transcript(mSelector->currentData().toLongLong());
-    if (!row) { mNotice->setText(tr("Transcript unavailable.")); return; }
+    if (!row) { activateTranscript(0); mNotice->setText(tr("Transcript unavailable.")); return; }
+    activateTranscript(row->id);
     const auto phrases = mDb->get_transcript_phrases(row->id);
     const bool recording = row->status == "recording";
     QStringList names;
@@ -313,8 +461,7 @@ void TranscriptPage::showTranscript() {
       widget->setObjectName("phraseCard_" + QString::number(phrase.id));
       auto *layout = new QVBoxLayout(widget);
       layout->setContentsMargins(18, 12, 18, 14); layout->setSpacing(8);
-      const auto speaker = phrase.speaker_name ? QString::fromStdString(*phrase.speaker_name) :
-          phrase.track_role == "practitioner" ? tr("Practitioner") : tr("Participant");
+      const auto speaker = speakerName(phrase);
       auto *header = new QHBoxLayout;
       auto *dot = label(QStringLiteral("●"), "speakerMarker", widget);
       auto markerPalette = dot->palette();
@@ -323,6 +470,10 @@ void TranscriptPage::showTranscript() {
       dot->setPalette(markerPalette);
       header->addWidget(dot);
       auto *speakerLabel = label(speaker, "phraseSpeaker", widget);
+      if (!recording) {
+        const auto role = QString::fromStdString(phrase.track_role);
+        pcm::transcriptionui::offerSpeakerRename(speakerLabel, [this, role] { promptSpeakerRename(role); });
+      }
       auto speakerFont = speakerLabel->font(); speakerFont.setBold(true); speakerFont.setPointSize(11);
       speakerLabel->setFont(speakerFont);
       header->addWidget(speakerLabel); header->addStretch();
@@ -357,8 +508,11 @@ void TranscriptPage::showTranscript() {
         try { if (!mayMutate(phrase.transcript_id)) return; }
         catch (...) { reportFailure(); return; }
         mEditing = true;
+        emit readerChanged();
         mSelector->setEnabled(false);
-        for (auto *action : findChildren<QPushButton *>()) action->setEnabled(false);
+        for (auto *action : findChild<QScrollArea *>()->findChildren<QPushButton *>()) action->setEnabled(false);
+        for (auto *action : {mReview, mAttach, mDelete}) action->setEnabled(false);
+        findChild<QPushButton *>("backToEvent")->setEnabled(false);
         auto *editor = new QPlainTextEdit(text->text(), widget); editor->setObjectName("phraseEditor");
         auto *save = button(tr("Save"), "savePhrase", widget);
         auto *cancel = button(tr("Cancel"), "cancelPhrase", widget);
@@ -380,5 +534,7 @@ void TranscriptPage::showTranscript() {
       });
       mRows->addWidget(widget);
     }
+    filterPhrases();
+    QTimer::singleShot(0, this, &TranscriptPage::updatePhraseSizes);
   } catch (...) { reportFailure(); }
 }

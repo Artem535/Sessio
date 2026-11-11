@@ -1,0 +1,14 @@
+import { createRequire } from "module";
+import { writeFileSync, mkdirSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+const require = createRequire(import.meta.url);
+const { cues } = require("./data.js");
+const here = path.dirname(fileURLToPath(import.meta.url));
+const out = process.env.OUT || path.join(here, "out");
+mkdirSync(out, { recursive: true });
+const ts = (t) => { const ms = Math.round(t * 1000); const p = (n, w = 2) => String(n).padStart(w, "0");
+  return `${p(Math.floor(ms / 3600000))}:${p(Math.floor(ms / 60000) % 60)}:${p(Math.floor(ms / 1000) % 60)},${p(ms % 1000, 3)}`; };
+const srt = cues().map((c, i) => `${i + 1}\n${ts(c.t0)} --> ${ts(c.t1 - 0.05)}\n${c.text}\n`).join("\n");
+writeFileSync(path.join(out, "sessio-specialist-setup.ru.srt"), srt);
+console.log("cues:", cues().length);

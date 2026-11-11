@@ -26,7 +26,7 @@ using pcm::meeting::ProviderKind;
 namespace {
 
 QDateTime at(const int hour, const int minute) {
-  return QDateTime(QDate(2026, 10, 27), QTime(hour, minute), QTimeZone::systemTimeZone());
+  return QDateTime(QDate(2026, 10, 27), QTime(hour, minute), QTimeZone(QTimeZone::LocalTime));
 }
 
 struct SavedEvent {

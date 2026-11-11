@@ -26,6 +26,9 @@ std::vector<fs::path> modelRootCandidates(const fs::path& app_dir, Platform plat
     case Platform::MacOS: out.push_back(app_dir / ".." / "Resources" / "models"); break;
     case Platform::Windows: out.push_back(app_dir / "models"); break;
   }
+  // A binary run from its build directory: CMake downloads the models there
+  // (SESSIO_MODELS_DIR's default).
+  out.push_back(app_dir / "transcription-models");
   return out;
 }
 
@@ -41,6 +44,9 @@ LocateResult locateModels(const fs::path& app_dir, Platform platform, std::strin
       if (!fs::is_regular_file(*p, ec)) { missing = p; break; }
     }
     if (!missing) return {std::move(paths), {}};
+    // Prefer the diagnosis of a partly installed tree over an absent fallback.
+    std::error_code ec;
+    if (!error.empty() && !fs::is_directory(root, ec)) continue;
     error = "Model file not found: " + missing->filename().string() + " (looked in " + root.string() + ")";
   }
   if (error.empty()) error = "Transcription models are not installed";

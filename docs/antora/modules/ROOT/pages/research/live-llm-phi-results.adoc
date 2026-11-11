@@ -1,0 +1,101 @@
+= Phi-4-mini-instruct CPU spike, 2026-10-12
+
+== Method
+
+Next family after Gemma and Qwen. Same synthetic Russian transcripts,
+system instructions, seven fixed rolling windows and three mutation
+windows. Official Phi chat template and tokenizer; no prompt tuning,
+grammar or prompt cache. Four CPU threads, context 4096, greedy
+sampling, seed 146, excluded short warmup. Two repeats for six short
+cases and two long/control cases; two rolling replays. Output caps: 160
+short, 256 long/operations.
+
+GGUF: bartowski/microsoft++_++Phi-4-mini-instruct-GGUF revision
+`7ff82c2aaa4dde30121698a973765f39be5288c0`,
+`microsoft++_++Phi-4-mini-instruct-Q4++_++K++_++M.gguf`, 2,491,874,688
+bytes, expected SHA256
+`01999f17c39cc3074afae5e9c539bc82d45f2dd7faa3917c66cbef76fce8c0c2`.
+Exact byte size and upstream SHA256 verified after download. Reference
+tokenizer and template from microsoft/Phi-4-mini-instruct revision
+`cfbefacb99257ffa30c83adab238a50856ac3083`.
+
+Ryzen 7 7840HS, Fedora 44, 27 GiB RAM. Host initially had 7.5 GiB
+available and 7.4/8 GiB swap occupied by other applications. Single-slot
+CPU llama.cpp build 10635/fc35562ba; process scope MemoryMax=4G,
+MemorySwapMax=0. Background load, quantization and number of server
+slots differ from Qwen; latency and RSS comparisons describe tested
+packages, not isolated model effects. The same long text is 2712 Phi
+input tokens, short control 248.
+
+Source review: xref:research/live-llm-next-model-sources.adoc[next model sources].
+Reproduction: `spikes/live-llm-bench/fetch++_++phi++_++gguf.py` and
+`run++_++phi++_++gguf.sh`.
+
+== Runtime verification and limitations
+
+Native GGUF tokenization matches the official tokenizer on the initial
+probe: 173 tokens, exact token IDs. All 36 measured responses are
+parseable JSON and none reach the output cap. Raw responses match across
+both repeats for every short/long case and each rolling transition.
+Parseable JSON does not imply the required object shape: correction and
+short-control outputs are top-level arrays.
+
+Server reports Phi SWA disabled in this llama.cpp build. Results apply
+to this specific artifact/backend configuration, not all Phi
+implementations. The cgroup reaches its 4 GiB limit
+(`memory.peak=4294967296`, `max=250`), but records zero OOM/OOM kills
+and zero swap usage. Reclaim at the cap can affect latency. Sampled RSS
+peaks at 4101.68 MiB (4.006 GiB); RSS and cgroup memory accounting
+differ. Host swap is essentially full throughout the run.
+
+== Measured latency
+
+[cols=",>,>,>",options="header",]
+|===
+|Scenario |Requests |Median first text |Median full response
+|Six short cases, two repeats |12 |2.303 s |4.299 s
+|Short control |2 |3.679 s |10.404 s
+|Full long history, 2712 input tokens |2 |41.794 s |47.711 s
+|Seven original operation windows, two replays |14 |10.585 s |12.355 s
+|===
+
+These are response latencies, including wrong answers. They do not
+measure time to a useful accepted suggestion. No live ASR/video-call
+concurrency tested.
+
+== Semantic results
+
+* Short accepted meeting: time retained, but text lacks the meeting
+action and cites only acceptance `u2`. Task retained its useful
+qualifier.
+* Proposal, negation and weather cases each produce a false agreement.
+* Correction gives a top-level array and incomplete agreement text.
+* Short control splits proposal and acceptance into separate agreements,
+and omits the complete notes action.
+* Full long history loses the meeting and returns both superseded
+tomorrow and corrected Monday notes promises, without resolving the
+correction.
+* Rolling steps 0–6 return no operations, including both accepted
+agreements. Step 7 creates `meeting++_++time++_++change`, Friday 20:00.
+On step 8, cancellation of notes incorrectly proposes removing that
+meeting, citing old `d2` evidence. The host rejects it because no
+evidence belongs to the current cancellation window. Step 9 preserves
+the meeting. Both replays follow the same path.
+
+Final state therefore happens to contain the expected meeting, but the
+process fails: original agreements were missed and a wrong deletion was
+blocked by the host. Final-state equality alone would mask these
+failures.
+
+== Conclusion
+
+Phi Q4++_++K++_++M is repeatable and runs within a bounded CPU scope,
+but does not improve the tested agreement extraction/state workflow. Do
+not promote this package to automatic ledger mutations. Gemma E4B
+remains the strongest tested direct long extraction on this single
+fixture; all tested paths still fail mutation safety. The fixed fixture
+and small repeat count do not establish general model quality.
+
+Local raw artifacts: `results/phi-gguf-++{++short,long,patch}.json`,
+their metadata, `phi-token-parity.json`, `phi-memory-scope.txt`, and
+download/server logs.

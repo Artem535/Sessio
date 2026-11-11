@@ -1,6 +1,7 @@
 FROM ubuntu:24.04 AS build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake git ninja-build curl zip unzip tar pkg-config \
+    ca-certificates autoconf autoconf-archive automake libtool \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 https://github.com/microsoft/vcpkg /opt/vcpkg \
     && /opt/vcpkg/bootstrap-vcpkg.sh

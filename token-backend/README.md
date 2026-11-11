@@ -55,7 +55,14 @@ must exist at that same path on the machine that runs the binary:
 | `LIVEKIT_API_SECRET` | yes | — | Must match the self-hosted LiveKit server's secret |
 | `LIVEKIT_WS_ENDPOINT` | **yes** | — | Returned to clients as the connection URL |
 | `INVITATION_BASE_URL` | **yes** | — | Legacy code prefix or a `std::format` URL template |
-| `TOKEN_TTL_SECONDS` | no | `600` | LiveKit JWT lifetime |
+| `TOKEN_TTL_SECONDS` | no | `600` | LiveKit and Jitsi JWT lifetime |
+| `JITSI_URL` | no* | — | Base URL of the self-hosted Jitsi (e.g. `https://jitsi.example.com`), returned as `endpointUrl` for Jitsi meetings |
+| `JITSI_APP_ID` | no* | — | Jitsi JWT `iss`; must match `app_id` in the Jitsi server's JWT auth config |
+| `JITSI_APP_SECRET` | no* | — | Jitsi JWT HS256 signing secret; must match `app_secret` on the Jitsi server |
+
+\* The three `JITSI_*` variables are all-or-none: set none to run LiveKit only
+(creating a `jitsi` meeting then answers `400 jitsi_not_configured`); setting
+only some aborts startup naming the first missing one.
 
 All of these are read once at startup by `Config::fromEnv()`. A missing or
 empty **required** variable aborts the process with an error naming it —
@@ -118,8 +125,14 @@ Creates a meeting, its LiveKit room, and its first invitation.
 Request:
 
 ```json
-{ "scheduledStart": "2026-10-01T10:00:00Z", "scheduledEnd": "2026-10-01T10:50:00Z" }
+{ "scheduledStart": "2026-10-01T10:00:00Z", "scheduledEnd": "2026-10-01T10:50:00Z",
+  "provider": "livekit" }
 ```
+
+`provider` is optional: `"livekit"` (default) or `"jitsi"`. It is fixed for the
+life of the meeting (re-issuing the invitation keeps it). `"jitsi"` without the
+`JITSI_*` configuration answers `400 {"error":"jitsi_not_configured"}`; any other
+value answers `400 {"error":"invalid_provider"}`.
 
 Response `200`:
 
@@ -176,11 +189,17 @@ Response `200`:
   "endpointUrl": "ws://46.173.25.218:7880",
   "roomName": "rm_XyZ789...",
   "token": "<LiveKit JWT>",
-  "expiresAt": 1790000000
+  "expiresAt": 1790000000,
+  "provider": "livekit"
 }
 ```
 
-`expiresAt` is a Unix timestamp in seconds.
+`expiresAt` is a Unix timestamp in seconds. `provider` (`"livekit"` or
+`"jitsi"`, present on every token response, including the client-token one)
+tells the app how to join. For a Jitsi meeting `endpointUrl` is `JITSI_URL`,
+`roomName` is the lowercase room name, and `token` is a Jitsi JWT
+(`moderator: true` for the specialist, `false` for the client). Series-mapped
+meetings are always `livekit`.
 
 | Status | Meaning |
 |---|---|

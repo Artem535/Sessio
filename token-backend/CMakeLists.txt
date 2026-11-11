@@ -34,7 +34,9 @@ add_library(token_backend_lib STATIC
   src/db/invitations_repository.cpp
   src/crypto/random_token.cpp
   src/crypto/hashing.cpp
+  src/crypto/jwt_hs256.cpp
   src/crypto/livekit_jwt.cpp
+  src/crypto/jitsi_jwt.cpp
   src/auth/authorizer.h
   src/auth/static_token_authorizer.h
   src/service/meeting_service.cpp

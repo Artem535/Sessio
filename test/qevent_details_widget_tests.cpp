@@ -2,11 +2,13 @@
 #include "event_item.h"
 #include "fake_token_backend_server.h"
 #include "meeting_coordinator.h"
+#include "app_settings.h"
 
 #include <oclero/qlementine/widgets/SegmentedControl.hpp>
 
 #include <QAbstractButton>
 #include <QApplication>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -44,7 +46,7 @@ constexpr auto kCreateResponse = R"({
 })";
 
 QDateTime at(const int hour, const int minute) {
-  return QDateTime(QDate(2026, 10, 1), QTime(hour, minute), QTimeZone::systemTimeZone());
+  return QDateTime(QDate(2026, 10, 1), QTime(hour, minute), QTimeZone(QTimeZone::LocalTime));
 }
 
 // QEventDetailsWidget reports errors through modal QMessageBoxes, which would
@@ -69,6 +71,11 @@ public:
 
 private:
   QTimer mTimer;
+};
+
+struct ExternalJitsiServerSetting {
+  QString previous = pcm::app_settings::externalJitsiServerUrl();
+  ~ExternalJitsiServerSetting() { pcm::app_settings::setExternalJitsiServerUrl(previous); }
 };
 
 struct SavedMeeting {
@@ -137,6 +144,113 @@ std::unique_ptr<QEventItem> makeLiveKitEvent(const QString &meetingRef) {
 }
 
 } // namespace
+
+TEST(QEventDetailsWidgetTest, RetypingAnEventTitleUpdatesApplyAvailability) {
+  EventDetailsFixture fixture(nullptr);
+  auto event = std::make_unique<QEventItem>(7, "Original", at(10, 0), at(10, 50));
+  fixture.widget.startEditingEvent(event.get(), std::nullopt);
+  ASSERT_TRUE(fixture.apply->isEnabled());
+  fixture.title->clear();
+  EXPECT_FALSE(fixture.apply->isEnabled());
+  fixture.title->setText("Renamed");
+  EXPECT_TRUE(fixture.apply->isEnabled());
+  fixture.apply->click();
+  EXPECT_EQ(event->getTitle(), "Renamed");
+}
+
+TEST(QEventDetailsWidgetTest, JitsiDisabledForRecurringEvents) {
+  MeetingCoordinator coordinator("", "");
+  EventDetailsFixture fixture(&coordinator);
+  ASSERT_TRUE(fixture.allFound());
+  auto *repeat = static_cast<oclero::qlementine::SegmentedControl *>(
+      fixture.widget.findChild<QWidget *>("repeatTypeControl"));
+  ASSERT_NE(repeat, nullptr);
+  constexpr int kLiveKit = 1;
+  constexpr int kJitsi = 2;
+
+  EXPECT_TRUE(fixture.provider->isItemEnabled(kJitsi));
+  repeat->setCurrentData(QStringLiteral("weekly"));
+  EXPECT_FALSE(fixture.provider->isItemEnabled(kJitsi));
+  EXPECT_FALSE(fixture.provider->toolTip().isEmpty());
+
+  repeat->setCurrentData(QStringLiteral("none"));
+  EXPECT_TRUE(fixture.provider->isItemEnabled(kJitsi));
+  fixture.provider->setCurrentIndex(kJitsi);
+  auto *serverMode = fixture.widget.findChild<QComboBox *>("jitsiServerMode");
+  ASSERT_NE(serverMode, nullptr);
+  serverMode->setCurrentIndex(1);
+  repeat->setCurrentData(QStringLiteral("daily"));
+  EXPECT_EQ(fixture.provider->currentIndex(), kLiveKit);
+  EXPECT_EQ(fixture.widget.selectedProviderKind(), ProviderKind::LiveKit);
+
+  repeat->setCurrentData(QStringLiteral("none"));
+  EXPECT_TRUE(fixture.provider->isItemEnabled(kJitsi));
+  EXPECT_TRUE(fixture.provider->toolTip().isEmpty());
+}
+
+TEST(QEventDetailsWidgetTest, ExternalJitsiCreatesDirectLinkWithoutBackendRequest) {
+  const ExternalJitsiServerSetting restoreSetting;
+  pcm::app_settings::setExternalJitsiServerUrl(QStringLiteral("https://meet.example.test/team/"));
+  FakeTokenBackendServer server;
+  MeetingCoordinator coordinator(server.baseUrl().toString(), "bearer-secret");
+  EventDetailsFixture form(&coordinator, &server);
+  form.widget.startCreatingNewEvent(QDate(2026, 10, 1), QTime(10, 0), 50);
+  form.title->setText("External session");
+  form.online->setChecked(true);
+  form.provider->setCurrentIndex(2);
+  auto *mode = form.widget.findChild<QComboBox *>("jitsiServerMode");
+  ASSERT_NE(mode, nullptr);
+  mode->setCurrentIndex(1);
+  form.apply->click();
+  ASSERT_EQ(form.saves.size(), 1u);
+  EXPECT_EQ(form.saves.front().kind, ProviderKind::ExternalJitsi);
+  EXPECT_TRUE(form.saves.front().meetingUrl.startsWith("https://meet.example.test/team/"));
+  EXPECT_TRUE(form.saves.front().meetingRef.isEmpty());
+  EXPECT_FALSE(form.saves.front().invitationState.has_value());
+  EXPECT_TRUE(server.requestPaths.isEmpty());
+}
+
+TEST(QEventDetailsWidgetTest, ExternalJitsiRescheduleKeepsRoomAndOpensInsideSessio) {
+  const ExternalJitsiServerSetting restoreSetting;
+  pcm::app_settings::setExternalJitsiServerUrl("https://new.example.test/changed/");
+  FakeTokenBackendServer server;
+  MeetingCoordinator coordinator(server.baseUrl().toString(), "bearer-secret");
+  EventDetailsFixture form(&coordinator, &server);
+  auto event = makeLiveKitEvent("");
+  event->setProviderKind(ProviderKind::ExternalJitsi);
+  event->setInvitationState(std::nullopt);
+  event->setMeetingUrl("https://old.example.test/prefix/original-room");
+  form.widget.startEditingEvent(event.get());
+  QSignalSpy joined(&form.widget, &QEventDetailsWidget::openExternalJitsiMeetingRequested);
+  form.openMeeting->click();
+  ASSERT_EQ(joined.size(), 1);
+  EXPECT_EQ(joined.front().front().toString(), event->meetingUrl());
+  form.timeTo->setTime(QTime(11, 0));
+  form.apply->click();
+  ASSERT_EQ(form.saves.size(), 1u);
+  EXPECT_EQ(form.saves.front().kind, ProviderKind::ExternalJitsi);
+  EXPECT_EQ(form.saves.front().meetingUrl, "https://old.example.test/prefix/original-room");
+  EXPECT_TRUE(server.requestPaths.isEmpty());
+}
+
+TEST(QEventDetailsWidgetTest, ExternalJitsiRequiresConfiguredServerBeforeSaving) {
+  const ExternalJitsiServerSetting restoreSetting;
+  pcm::app_settings::setExternalJitsiServerUrl({});
+  MeetingCoordinator coordinator("", "");
+  EventDetailsFixture form(&coordinator);
+  MessageBoxCloser closer;
+  form.widget.startCreatingNewEvent(QDate(2026, 10, 1), QTime(10, 0), 50);
+  form.title->setText("External session");
+  form.online->setChecked(true);
+  form.provider->setCurrentIndex(2);
+  auto *mode = form.widget.findChild<QComboBox *>("jitsiServerMode");
+  ASSERT_NE(mode, nullptr);
+  mode->setCurrentIndex(1);
+  form.apply->click();
+  EXPECT_TRUE(form.saves.empty());
+  ASSERT_FALSE(closer.texts.isEmpty());
+  EXPECT_TRUE(closer.texts.front().contains("Jitsi"));
+}
 
 TEST(QEventDetailsWidgetTest, NewLiveKitEventIsNotSavedUntilCreateCompletesAndNeverWhenItFails) {
   MeetingCoordinator coordinator("", "");
@@ -348,6 +462,23 @@ TEST(QEventDetailsWidgetTest, OpenOnLiveKitEventRequestsNativeJoinByMeetingRef) 
 
   ASSERT_EQ(openSpy.count(), 1);
   EXPECT_EQ(openSpy.at(0).at(0).toString(), QStringLiteral("ref-old"));
+}
+
+TEST(QEventDetailsWidgetTemplate, ApplyTemplateFillsTitleAndClient) {
+  QEventDetailsWidget widget;
+  widget.setDialogMode(true);
+  QObject::connect(&widget, &QEventDetailsWidget::provideFillClientComboBox, &widget, [](QComboBox *box) {
+    box->clear();
+    box->addItem("Другой", QVariant::fromValue<int64_t>(3));
+    box->addItem("Анна", QVariant::fromValue<int64_t>(7));
+  });
+  widget.startCreatingNewEvent(QDate(2026, 11, 5), QTime(15, 0), 50);
+  widget.applyTemplate("Сессия с Анной", 7);
+  EXPECT_TRUE(widget.isCreatingNewEvent());
+  EXPECT_EQ(widget.findChild<QLineEdit *>("mTitle")->text(), "Сессия с Анной");
+  EXPECT_EQ(widget.selectedClientId(), 7);
+  EXPECT_EQ(widget.findChild<QTimeEdit *>("mTimeFrom")->time(), QTime(15, 0));
+  EXPECT_EQ(widget.findChild<QTimeEdit *>("mTimeTo")->time(), QTime(15, 50));
 }
 
 int main(int argc, char **argv) {

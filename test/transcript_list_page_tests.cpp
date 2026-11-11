@@ -11,6 +11,9 @@
 #include <QFrame>
 #include <QLabel>
 #include <QTemporaryDir>
+#include <QQuickWidget>
+#include <QQuickItem>
+#include <QLineEdit>
 #include <gtest/gtest.h>
 
 class TranscriptListTest : public ::testing::Test {
@@ -23,6 +26,39 @@ protected:
   pcm::config::Config conf;
   std::shared_ptr<pcm::database::Database> db;
 };
+
+TEST_F(TranscriptListTest, QuickLibraryLoadsAndOpensPersistedRecording) {
+  const auto id = db->add_transcript(std::nullopt, "live_local_v1");
+  TranscriptListPage page(db);
+  page.enableQuickWorkspace();
+  auto *quick = page.findChild<QQuickWidget *>("transcriptLibraryQuickWorkspace");
+  ASSERT_NE(quick, nullptr);
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *header = page.headerControls();
+  EXPECT_EQ(header, page.headerControls());
+  EXPECT_TRUE(quick->rootObject()->property("externalHeader").toBool());
+  auto *search = header->findChild<QLineEdit *>("transcriptsHeaderSearch");
+  ASSERT_NE(search, nullptr);
+  search->setText("synthetic search");
+  EXPECT_EQ(quick->rootObject()->property("query").toString(), "synthetic search");
+  ASSERT_EQ(page.records().size(), 1);
+  QSignalSpy open(&page, &TranscriptListPage::openTranscriptRequested);
+  page.openRecord(QString::number(id), false);
+  ASSERT_EQ(open.count(), 1);
+  EXPECT_EQ(open.first().first().toLongLong(), id);
+}
+
+TEST_F(TranscriptListTest, ManualOnlyCallCanBeReopenedWithoutTranscriptClientOrCalendarEvent) {
+  const auto id = db->create_call_material(std::nullopt);
+  ASSERT_TRUE(db->save_call_material(id, 0, R"({"manual_text":"Notes without speech recognition"})"));
+  db.reset(); db = std::make_shared<pcm::database::Database>(conf);
+  TranscriptListPage page(db);
+  EXPECT_EQ(page.transcriptCount(), 0);
+  auto *open = page.findChild<QPushButton *>("openCallMaterial_" + QString::number(id));
+  ASSERT_NE(open, nullptr);
+  QSignalSpy requested(&page, &TranscriptListPage::openCallMaterialRequested); open->click();
+  ASSERT_EQ(requested.count(), 1); EXPECT_EQ(requested[0][0].toLongLong(), id);
+}
 
 TEST_F(TranscriptListTest, StandaloneSurvivesRestartOpenEditExportBindUnbindAndDelete) {
   DuckClient client; client.name = "Existing client";

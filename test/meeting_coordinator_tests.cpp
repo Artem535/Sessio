@@ -25,6 +25,25 @@ TEST(MeetingCoordinatorTest, DispatchesCreateToExternalUrlProvider) {
   EXPECT_EQ(listener.lastDescriptor->meetingRef, QStringLiteral("https://meet.example.invalid/room-9"));
 }
 
+TEST(MeetingCoordinatorTest, ExternalJitsiCreatesAndCancelsLocallyWithoutSendingBearer) {
+  FakeTokenBackendServer server;
+  pcm::meeting::MeetingCoordinator coordinator(server.baseUrl().toString(), "must-stay-local");
+  QSignalSpy created(&coordinator, &pcm::meeting::MeetingCoordinator::meetingCreated);
+  coordinator.createMeeting(pcm::meeting::ProviderKind::ExternalJitsi,
+                            {.rawMeetingUrl = "https://external.test/deployment/"});
+  ASSERT_EQ(created.size(), 1);
+  const auto descriptor = created.at(0).at(0).value<pcm::meeting::MeetingDescriptor>();
+  ASSERT_TRUE(descriptor.meetingUrl);
+  EXPECT_TRUE(descriptor.meetingUrl->startsWith("https://external.test/deployment/sessio-"));
+  EXPECT_TRUE(descriptor.meetingRef.isEmpty());
+  EXPECT_FALSE(descriptor.invitationState);
+  QSignalSpy canceled(&coordinator, &pcm::meeting::MeetingCoordinator::meetingCanceled);
+  coordinator.cancelMeeting(pcm::meeting::ProviderKind::ExternalJitsi, "");
+  EXPECT_EQ(canceled.size(), 1);
+  QCoreApplication::processEvents();
+  EXPECT_TRUE(server.requestPaths.isEmpty());
+}
+
 TEST(MeetingCoordinatorTest, DispatchesCreateToLiveKitProviderWhichFails) {
   // Base URL/credential are empty (real ones are threaded through in Task
   // 17), so LiveKitMeetingProvider's real HTTP call below fails against an
@@ -45,6 +64,31 @@ TEST(MeetingCoordinatorTest, DispatchesCreateToLiveKitProviderWhichFails) {
   EXPECT_FALSE(listener.lastDescriptor.has_value());
   ASSERT_TRUE(listener.lastCreateError.has_value());
   EXPECT_FALSE(listener.lastCreateError->isEmpty());
+}
+
+TEST(MeetingCoordinatorTest, CoordinatorRoutesJitsiToBackend) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, R"({
+    "meetingRef": "ref-j", "invitationUrl": "https://x/code-j", "passcode": "555555",
+    "scheduledStart": "2026-10-01T10:00:00Z", "scheduledEnd": "2026-10-01T10:50:00Z"
+  })");
+  pcm::meeting::MeetingCoordinator coordinator(server.baseUrl().toString(), "bearer-secret");
+  QSignalSpy createdSpy(&coordinator, &pcm::meeting::MeetingCoordinator::meetingCreated);
+  coordinator.createMeeting(pcm::meeting::ProviderKind::Jitsi,
+                            {.scheduledStartIso = "2026-10-01T10:00:00Z",
+                             .scheduledEndIso = "2026-10-01T10:50:00Z"});
+  ASSERT_TRUE(createdSpy.wait(2000));
+  EXPECT_EQ(server.lastPath, QStringLiteral("/v1/meetings"));
+  EXPECT_TRUE(server.lastBody.contains("\"provider\":\"jitsi\""));
+  const auto descriptor = createdSpy.at(0).at(0).value<pcm::meeting::MeetingDescriptor>();
+  EXPECT_EQ(descriptor.kind, pcm::meeting::ProviderKind::Jitsi);
+  EXPECT_EQ(descriptor.meetingRef, QStringLiteral("ref-j"));
+
+  server.setNextResponse(204, QByteArray());
+  QSignalSpy canceledSpy(&coordinator, &pcm::meeting::MeetingCoordinator::meetingCanceled);
+  coordinator.cancelMeeting(pcm::meeting::ProviderKind::Jitsi, "ref-j");
+  ASSERT_TRUE(canceledSpy.wait(2000));
+  EXPECT_EQ(server.lastPath, QStringLiteral("/v1/meetings/ref-j/invalidate"));
 }
 
 TEST(MeetingCoordinatorTest, DispatchesCancelToExternalUrlProvider) {

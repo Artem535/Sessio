@@ -25,7 +25,7 @@ QString describe(const std::optional<DuckEvent> &event) {
   if (!event.has_value() || !event->start_date.has_value()) {
     return {};
   }
-  return QDateTime::fromMSecsSinceEpoch(*event->start_date, QTimeZone::systemTimeZone())
+  return QDateTime::fromMSecsSinceEpoch(*event->start_date, QTimeZone(QTimeZone::LocalTime))
       .toString("dd.MM.yyyy HH:mm");
 }
 } // namespace

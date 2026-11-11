@@ -4,6 +4,9 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 #include <QLocale>
 #include <QMessageBox>
 #include <QMouseEvent>
@@ -12,6 +15,12 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <QQuickWidget>
+#include <QQmlContext>
+#include <QScopeGuard>
+#include <QQuickItem>
+#include <QQuickWindow>
+#include <QLineEdit>
 
 namespace {
 class Card final : public QFrame {
@@ -60,7 +69,7 @@ TranscriptListPage::TranscriptListPage(std::shared_ptr<pcm::database::Database> 
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(10);
   auto *header = new QHBoxLayout;
-  auto *title = new QLabel(tr("Transcripts"), content);
+  auto *title = new QLabel(tr("Call materials"), content);
   title->setObjectName("transcriptsTitle");
   auto font = title->font(); font.setPointSize(22); font.setBold(true); title->setFont(font);
   header->addWidget(title); header->addStretch();
@@ -90,6 +99,12 @@ TranscriptListPage::TranscriptListPage(std::shared_ptr<pcm::database::Database> 
   };
   reload();
 }
+
+TranscriptListPage::~TranscriptListPage() {
+  delete mQuick;
+  mQuick = nullptr;
+}
+
 void TranscriptListPage::setConfirmHook(std::function<bool(const QString &)> hook) {
   if (hook) mConfirm = std::move(hook);
 }
@@ -182,16 +197,113 @@ void TranscriptListPage::addCard(const DuckTranscript &row) {
 }
 
 void TranscriptListPage::reload() {
+  const auto notify = qScopeGuard([this] { emit recordsChanged(); });
   while (auto *item = mRows->takeAt(0)) { delete item->widget(); delete item; }
   mNotice->clear(); mCount = 0;
+  int standaloneCalls = 0;
   try {
     for (const auto &row : mDb->get_transcripts()) { addCard(row); ++mCount; }
+    for (const auto &material : mDb->get_call_materials()) {
+      if (!mDb->get_call_material_transcript_ids(material.id).empty()) continue;
+      const auto json = QJsonDocument::fromJson(QByteArray::fromStdString(material.json)).object();
+      if (json["manual_text"].toString().trimmed().isEmpty()) continue;
+      auto *card = new Card([this, id = material.id] { emit openCallMaterialRequested(id); }, mList);
+      card->setObjectName("callMaterial_" + QString::number(material.id));
+      auto *body = new QVBoxLayout(card); body->setContentsMargins(18, 14, 18, 14);
+      auto *heading = new QLabel(tr("Call notes · %1").arg(QLocale().toString(
+          QDateTime::fromMSecsSinceEpoch(material.created_at), QLocale::ShortFormat)), card);
+      heading->setTextFormat(Qt::PlainText); heading->setWordWrap(true); body->addWidget(heading);
+      auto *text = new QLabel(json["manual_text"].toString().left(180), card);
+      text->setTextFormat(Qt::PlainText); text->setWordWrap(true); body->addWidget(text);
+      auto *open = new QPushButton(tr("Open"), card); open->setObjectName("openCallMaterial_" + QString::number(material.id)); body->addWidget(open);
+      connect(open, &QPushButton::clicked, this, [this, id = material.id] { emit openCallMaterialRequested(id); });
+      mRows->addWidget(card); ++standaloneCalls;
+    }
   } catch (...) {
     while (auto *item = mRows->takeAt(0)) { delete item->widget(); delete item; }
     mCount = 0;
     mNotice->setText(tr("Could not load transcripts. Please try again."));
   }
-  mEmpty->setVisible(mCount == 0 && mNotice->text().isEmpty());
+  mEmpty->setVisible(mCount == 0 && standaloneCalls == 0 && mNotice->text().isEmpty());
   mSummary->setText(tr("%n transcripts", nullptr, mCount));
   mSummary->setVisible(mCount > 0);
+}
+
+void TranscriptListPage::enableQuickWorkspace() {
+  if (mQuick) return;
+  Q_INIT_RESOURCE(notes_workspace_qml);
+  if (qEnvironmentVariableIsEmpty("QT_QUICK_BACKEND"))
+    QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+  for (auto *child : findChildren<QWidget *>(QString{}, Qt::FindDirectChildrenOnly)) child->hide();
+  auto *outer = qobject_cast<QHBoxLayout *>(layout());
+  while (auto *item = outer->takeAt(0)) delete item;
+  outer->setContentsMargins(0, 0, 0, 0);
+  mQuick = new QQuickWidget(this);
+  mQuick->setObjectName("transcriptLibraryQuickWorkspace");
+  mQuick->setResizeMode(QQuickWidget::SizeRootObjectToView);
+  mQuick->setClearColor(palette().color(QPalette::Base));
+  mQuick->rootContext()->setContextProperty("libraryBridge", this);
+  outer->addWidget(mQuick, 1);
+  mQuick->setSource(QUrl("qrc:/sessio/notes/TranscriptLibrary.qml"));
+}
+QString TranscriptListPage::notice() const { return mNotice->text(); }
+QWidget *TranscriptListPage::headerControls() {
+  if (mExternalHeader) return mExternalHeader;
+  enableQuickWorkspace();
+  mExternalHeader = new QWidget(this);
+  mExternalHeader->setObjectName("transcriptLibraryHeaderControls");
+  auto *row = new QHBoxLayout(mExternalHeader);
+  row->setContentsMargins(0, 0, 0, 0);
+  row->setSpacing(16);
+  auto *title = new QLabel(tr("Transcripts"), mExternalHeader);
+  auto heading = title->font(); heading.setPointSize(16); heading.setBold(true); title->setFont(heading);
+  row->addWidget(title);
+  auto *search = new QLineEdit(mExternalHeader);
+  search->setObjectName("transcriptsHeaderSearch");
+  search->setPlaceholderText(tr("Search recordings and participants…"));
+  search->setClearButtonEnabled(true);
+  row->addWidget(search, 1);
+  connect(search, &QLineEdit::textChanged, this, [this](const QString &text) {
+    if (mQuick->rootObject()) mQuick->rootObject()->setProperty("query", text);
+  });
+  if (mQuick->rootObject()) mQuick->rootObject()->setProperty("externalHeader", true);
+  return mExternalHeader;
+}
+QVariantList TranscriptListPage::records() const {
+  QVariantList result;
+  try {
+    for (const auto &row : mDb->get_transcripts()) {
+      QStringList names;
+      for (const auto id : mDb->get_transcript_client_ids(row.id))
+        if (const auto client = mDb->get_client(id)) names.append(QString::fromStdString(client->name.value_or("") + " " + client->last_name.value_or("")).trimmed());
+      result.append(QVariantMap{{"id", QString::number(row.id)}, {"material", false},
+        {"title", names.isEmpty() ? tr("No clients attached") : names.join(", ")},
+        {"date", QDateTime::fromMSecsSinceEpoch(row.created_at).toLocalTime().toString("dd.MM.yyyy · HH:mm")},
+        {"status", row.status == "recording" ? tr("Recording") : row.status == "reviewed" ? tr("Reviewed") : tr("Draft")},
+        {"recording", row.status == "recording"}, {"count", static_cast<int>(mDb->get_transcript_phrases(row.id).size())}});
+    }
+    for (const auto &material : mDb->get_call_materials()) {
+      if (!mDb->get_call_material_transcript_ids(material.id).empty()) continue;
+      const auto state = QJsonDocument::fromJson(QByteArray::fromStdString(material.json)).object();
+      if (state["manual_text"].toString().isEmpty() && state["manual_entries"].toArray().isEmpty()) continue;
+      result.append(QVariantMap{{"id", QString::number(material.id)}, {"material", true}, {"title", tr("Call notes")},
+        {"date", QDateTime::fromMSecsSinceEpoch(material.created_at).toLocalTime().toString("dd.MM.yyyy · HH:mm")},
+        {"status", tr("Call materials")}, {"recording", true}, {"count", 0}});
+    }
+  } catch (...) { result.clear(); }
+  return result;
+}
+void TranscriptListPage::openRecord(const QString &id, bool material) {
+  bool ok = false;
+  const auto value = id.toLongLong(&ok);
+  if (!ok) return;
+  try {
+    if (material) { if (mDb->get_call_material(value).id > 0) emit openCallMaterialRequested(value); }
+    else if (mDb->get_transcript(value)) emit openTranscriptRequested(value);
+  } catch (...) { mNotice->setText(tr("Could not load transcripts. Please try again.")); emit recordsChanged(); }
+}
+void TranscriptListPage::removeRecord(const QString &id) {
+  QPointer<TranscriptListPage> guard(this);
+  deleteTranscript(id.toLongLong());
+  if (guard) emit recordsChanged();
 }

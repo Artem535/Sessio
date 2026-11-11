@@ -22,6 +22,15 @@ TEST_F(CallSidePanelTest, DefaultsToNotes) {
   EXPECT_EQ(stack()->currentIndex(), 0);
   EXPECT_EQ(switcher()->currentIndex(), 0);
 }
+TEST_F(CallSidePanelTest, PrompterCountBadgesNotesWithoutSwitchingPages) {
+  panel.showTranscript();
+  panel.setPrompterPendingCount(2);
+  EXPECT_TRUE(panel.transcriptShown());
+  EXPECT_EQ(switcher()->getItemBadge(0), QStringLiteral("2"));
+  panel.setPrompterPendingCount(0);
+  EXPECT_TRUE(switcher()->getItemBadge(0).isEmpty());
+  EXPECT_EQ(stack()->count(), 2);
+}
 TEST_F(CallSidePanelTest, SwitcherSwitchesPages) {
   QSignalSpy changed(&panel, &CallSidePanel::pageChanged);
   switcher()->setCurrentIndex(1);

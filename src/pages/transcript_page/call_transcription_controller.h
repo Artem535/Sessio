@@ -14,6 +14,7 @@ struct ControllerHooks {
   std::function<pcm::calltranscription::EngineFactory()> engineFactory;
   std::function<bool()> modelsAvailable;
   std::function<bool()> transcriptionEnabled;
+  std::function<bool()> autoStartEnabled;
   std::function<void(int64_t)> eventMaterialised;
 };
 class CallTranscriptionController final : public QObject {
@@ -36,9 +37,17 @@ signals:
   void transcribeButtonState(bool active, QString tooltip);
   void requestOpenTranscriptTab();
   void transcriptReady(qint64 transcriptId);
+  void transcriptStarted(qint64 transcriptId);
+  void phraseAdded(DuckTranscriptPhrase phrase);
+  void transcriptionStopped();
+  void consentRevoked();
+  void transcriptDeleted(qint64 transcriptId);
+  // A speaker of the transcript shown in the panel got a new name.
+  void speakersRenamed(qint64 transcriptId);
 
 private:
   void releaseSession(pcm::calltranscription::TranscriptionSession *session);
+  void tryAutoStart();
   std::shared_ptr<pcm::database::Database> mDb;
   QPointer<TranscriptPanel> mPanel;
   QPointer<CallSidePanel> mSidePanel;
@@ -52,6 +61,9 @@ private:
   bool mShutdown = false;
   bool mInRevokeCallback = false;
   bool mSessionHadFailure = false;
+  bool mAutoStartAttempted = false;
+  bool mStartingAutomatically = false;
   quint64 mAttachmentGeneration = 0;
+  int64_t mShownTranscriptId = 0;
 };
 } // namespace pcm::transcriptionui

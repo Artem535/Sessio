@@ -351,14 +351,14 @@ void QEventInfoPage::onCalendarClicked(const QDate &date) {
 
 void QEventInfoPage::openEventOnDay(const int64_t eventId, const qint64 dayMs) {
   const auto date =
-      QDateTime::fromMSecsSinceEpoch(dayMs, QTimeZone::systemTimeZone()).date();
+      QDateTime::fromMSecsSinceEpoch(dayMs, QTimeZone(QTimeZone::LocalTime)).date();
   onCalendarClicked(date);
   editEventWithDialog(eventId);
 }
 
 void QEventInfoPage::showEventOnDay(const int64_t eventId, const qint64 dayMs) {
   onCalendarClicked(
-      QDateTime::fromMSecsSinceEpoch(dayMs, QTimeZone::systemTimeZone()).date());
+      QDateTime::fromMSecsSinceEpoch(dayMs, QTimeZone(QTimeZone::LocalTime)).date());
   onTimelineEventSelected(eventId);
 }
 
@@ -483,6 +483,8 @@ void QEventInfoPage::showInspector(const std::optional<DuckEvent> &event, bool f
   connect(mInspector, &QEventDetailsWidget::editRequested, this, &QEventInfoPage::editSelectedEvent);
   connect(mInspector, &QEventDetailsWidget::openLiveKitMeetingRequested,
           this, &QEventInfoPage::openLiveKitMeetingRequested);
+  connect(mInspector, &QEventDetailsWidget::openExternalJitsiMeetingRequested,
+          this, &QEventInfoPage::openExternalJitsiMeetingRequested);
   // Keep the details at their natural height: a vertically stretched details
   // widget spreads its rows across the whole panel.
   mInspectorLayout->insertWidget(0, mInspector, 0, Qt::AlignTop);
@@ -592,6 +594,8 @@ void QEventInfoPage::openQuickEventDialog(const QTime &startTime,
   layout.setContentsMargins(0, 0, 0, 0);
 
   auto *detailsWidget = new QEventDetailsWidget(&dialog);
+  connect(detailsWidget, &QEventDetailsWidget::openExternalJitsiMeetingRequested, this,
+          [this, &dialog](const QString &url, qint64 id) { dialog.reject(); emit openExternalJitsiMeetingRequested(url, id); });
   detailsWidget->setMeetingCoordinator(mMeetingCoordinator);
   connect(detailsWidget, &QEventDetailsWidget::openLiveKitMeetingRequested, this,
           [this, &dialog](const QString &meetingRef) {
@@ -626,6 +630,51 @@ void QEventInfoPage::openQuickEventDialog(const QTime &startTime,
   mActiveEventDetailsWidget.clear();
 }
 
+std::optional<int64_t> QEventInfoPage::createEventFromTemplate(const EventTemplate &t) {
+  auto dialog = QDialog(this);
+  dialog.setModal(true);
+  dialog.setWindowTitle(tr(": EVENT_ADD_BUTTON"));
+
+  auto layout = QVBoxLayout(&dialog);
+  layout.setContentsMargins(0, 0, 0, 0);
+
+  auto *detailsWidget = new QEventDetailsWidget(&dialog);
+  connect(detailsWidget, &QEventDetailsWidget::openExternalJitsiMeetingRequested, this,
+          [this, &dialog](const QString &url, qint64 id) { dialog.reject(); emit openExternalJitsiMeetingRequested(url, id); });
+  detailsWidget->setMeetingCoordinator(mMeetingCoordinator);
+  detailsWidget->setDialogMode(true);
+  detailsWidget->setConflictChecker(
+      [this](const DuckEvent &event) { return checkEventConflict(event); });
+  layout.addWidget(detailsWidget);
+
+  mActiveEventDetailsWidget = detailsWidget;
+  mLastCreatedEventId = 0;
+
+  connect(detailsWidget, &QEventDetailsWidget::provideEventSave, this,
+          &QEventInfoPage::onEventSaved);
+  connect(detailsWidget, &QEventDetailsWidget::provideEditingCanceled, this,
+          &QEventInfoPage::onEditingCanceled);
+  connect(detailsWidget, &QEventDetailsWidget::provideDialogAccept, &dialog,
+          &QDialog::accept);
+  connect(detailsWidget, &QEventDetailsWidget::provideEditingCanceled, &dialog,
+          &QDialog::reject);
+  connect(detailsWidget, &QEventDetailsWidget::provideFillClientComboBox, this,
+          [this](QComboBox *comboBox) {
+            emit provideFillClientComboBox(comboBox);
+          });
+
+  detailsWidget->startCreatingNewEvent(t.date, t.time, t.durationMinutes);
+  detailsWidget->applyTemplate(t.title, t.clientId);
+
+  dialog.resize(560, 700);
+  const bool saved = dialog.exec() == QDialog::Accepted;
+
+  mActiveEventDetailsWidget.clear();
+  const auto created = std::exchange(mLastCreatedEventId, 0);
+  if (!saved || created <= 0) return std::nullopt;
+  return created;
+}
+
 void QEventInfoPage::openEventDialog(const std::optional<DuckEvent> &event,
                                      const std::optional<int64_t> clientId) {
   auto dialog = QDialog(this);
@@ -637,6 +686,8 @@ void QEventInfoPage::openEventDialog(const std::optional<DuckEvent> &event,
   layout.setContentsMargins(0, 0, 0, 0);
 
   auto *detailsWidget = new QEventDetailsWidget(&dialog);
+  connect(detailsWidget, &QEventDetailsWidget::openExternalJitsiMeetingRequested, this,
+          [this, &dialog](const QString &url, qint64 id) { dialog.reject(); emit openExternalJitsiMeetingRequested(url, id); });
   detailsWidget->setMeetingCoordinator(mMeetingCoordinator);
   connect(detailsWidget, &QEventDetailsWidget::openLiveKitMeetingRequested, this,
           [this, &dialog](const QString &meetingRef) {
@@ -817,6 +868,7 @@ void QEventInfoPage::onEventSaved(QEventItem *event) {
     }
     eventDetails.id = id;
     event->setId(id);
+    mLastCreatedEventId = id;
   } else if (eventDetails.is_virtual_occurrence) {
     const auto scope = eventDetails.series_id.has_value()
                            ? askRecurringEditScope(this)
@@ -918,9 +970,9 @@ QVector<QPair<QDateTime, QDateTime>> QEventInfoPage::currentBusyIntervals() cons
     }
 
     const auto start =
-        QDateTime::fromMSecsSinceEpoch(*event.start_date, QTimeZone::systemTimeZone());
+        QDateTime::fromMSecsSinceEpoch(*event.start_date, QTimeZone(QTimeZone::LocalTime));
     const auto end =
-        QDateTime::fromMSecsSinceEpoch(*event.end_date, QTimeZone::systemTimeZone());
+        QDateTime::fromMSecsSinceEpoch(*event.end_date, QTimeZone(QTimeZone::LocalTime));
     if (!start.isValid() || !end.isValid() || start >= end) {
       continue;
     }

@@ -10,6 +10,8 @@ struct TokenResult {
   QString roomName;
   QString token;
   qint64 expiresAt = 0;
+  // Which call stack this token is for; older backends omit the field.
+  QString provider = QStringLiteral("livekit");
 };
 
 // Outcome of one schedule-series HTTP call, correlated by the series UUID (and

@@ -12,6 +12,7 @@ add_executable(token_backend_tests
   config_tests.cpp
   hashing_tests.cpp
   livekit_jwt_tests.cpp
+  jitsi_jwt_tests.cpp
   accounts_repository_tests.cpp
   static_token_authorizer_tests.cpp
   meetings_repository_tests.cpp

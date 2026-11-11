@@ -245,7 +245,7 @@ bool TranscriptionSession::start(std::optional<int64_t> eventId, const QString &
   auto control = sh.control;
   auto bridge = sh.bridge;
   sh.writer = std::make_shared<PhraseWriter>(
-      [db = sh.db, control, bridge, this](const DuckTranscriptPhrase &phrase) -> int64_t {
+      [db = sh.db, control, bridge, this](DuckTranscriptPhrase &phrase) -> int64_t {
         int64_t rowId = 0;
         {
           // Holding the lock across the insert is what guarantees that nothing
@@ -253,7 +253,7 @@ bool TranscriptionSession::start(std::optional<int64_t> eventId, const QString &
           std::lock_guard lock(control->decisionMutex);
           if (control->revokeRequested.load() || control->abort.load()) return 0;
           try {
-            rowId = db->add_transcript_phrase(phrase);
+            rowId = db->add_transcript_phrase(phrase, &phrase.speaker_name);
           } catch (...) {
           }
         }

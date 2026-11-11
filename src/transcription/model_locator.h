@@ -21,7 +21,8 @@ enum class Platform { Linux, MacOS, Windows };
 Platform currentPlatform();
 
 // Directories that may hold <root>/gigaam-v3-rnnt/* and <root>/silero_vad.onnx,
-// in lookup order. `env_override` is the value of SESSIO_MODELS_DIR (may be empty).
+// in lookup order: SESSIO_MODELS_DIR (`env_override`, may be empty), the
+// installed location, then <app_dir>/transcription-models of a build tree.
 std::vector<std::filesystem::path> modelRootCandidates(const std::filesystem::path& app_dir,
                                                        Platform platform,
                                                        std::string_view env_override);

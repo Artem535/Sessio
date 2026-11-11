@@ -200,6 +200,9 @@ protected:
     config_->liveKitApiKey = "test-key";
     config_->liveKitApiSecret = "test-secret";
     config_->tokenTtlSeconds = 600;
+    config_->jitsiUrl = "https://jitsi.test";
+    config_->jitsiAppId = "sessio";
+    config_->jitsiAppSecret = "jitsi-secret";
     config_->invitationBaseUrl = kInvitationBase;
 
     service_ = new pcm::tokenbackend::MeetingService(*authorizer_, *meetings_, *invitations_,
@@ -987,4 +990,56 @@ TEST_F(HttpIntegrationTest, ConcurrentReissuesNeverError500AndLeaveOneWorkingInv
                 .status,
             410)
       << "the original invitation must have been retired";
+}
+
+// --- providers --------------------------------------------------------------
+
+TEST_F(HttpIntegrationTest, JitsiMeetingEndToEnd) {
+  auto response = request("POST", "/v1/meetings", bearer(),
+                          "{\"provider\":\"jitsi\",\"scheduledStart\":\"" + isoFromNow(-60) +
+                              "\",\"scheduledEnd\":\"" + isoFromNow(60 * 60) + "\"}");
+  ASSERT_EQ(response.status, 200) << response.body;
+  const auto ref = jsonString(response.body, "meetingRef");
+  const auto url = jsonString(response.body, "invitationUrl");
+  const auto code = url.substr(url.rfind('/') + 1);
+
+  const auto specialist = request("POST", "/v1/meetings/" + ref + "/specialist-token", bearer());
+  ASSERT_EQ(specialist.status, 200) << specialist.body;
+  EXPECT_EQ(jsonString(specialist.body, "provider"), "jitsi");
+  EXPECT_EQ(jsonString(specialist.body, "endpointUrl"), "https://jitsi.test");
+
+  const auto client = request("POST", clientTokenPath(code), {},
+                              "{\"passcode\":\"" + jsonString(response.body, "passcode") + "\"}");
+  ASSERT_EQ(client.status, 200) << client.body;
+  EXPECT_EQ(jsonString(client.body, "provider"), "jitsi");
+  EXPECT_EQ(jsonString(client.body, "endpointUrl"), "https://jitsi.test");
+  EXPECT_EQ(jsonString(client.body, "roomName"), jsonString(specialist.body, "roomName"));
+}
+
+TEST_F(HttpIntegrationTest, LiveKitResponsesCarryProvider) {
+  auto meeting = createMeeting();
+  const auto specialist =
+      request("POST", "/v1/meetings/" + meeting.meetingRef + "/specialist-token", bearer());
+  ASSERT_EQ(specialist.status, 200);
+  EXPECT_EQ(jsonString(specialist.body, "provider"), "livekit");
+  const auto client = request("POST", clientTokenPath(meeting.invitationCode), {},
+                              "{\"passcode\":\"" + meeting.passcode + "\"}");
+  ASSERT_EQ(client.status, 200);
+  EXPECT_EQ(jsonString(client.body, "provider"), "livekit");
+}
+
+TEST_F(HttpIntegrationTest, CreateMeetingRejectsUnknownProviderAndUnconfiguredJitsi) {
+  const auto window = "\"scheduledStart\":\"" + isoFromNow(-60) + "\",\"scheduledEnd\":\"" +
+                      isoFromNow(60 * 60) + "\"";
+  const auto bad = request("POST", "/v1/meetings", bearer(), "{\"provider\":\"zoom\"," + window + "}");
+  EXPECT_EQ(bad.status, 400);
+  EXPECT_EQ(jsonString(bad.body, "error"), "invalid_provider");
+
+  const auto saved = *config_;
+  config_->jitsiUrl.clear();
+  const auto unconfigured =
+      request("POST", "/v1/meetings", bearer(), "{\"provider\":\"jitsi\"," + window + "}");
+  *config_ = saved;
+  EXPECT_EQ(unconfigured.status, 400);
+  EXPECT_EQ(jsonString(unconfigured.body, "error"), "jitsi_not_configured");
 }

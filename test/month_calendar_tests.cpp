@@ -23,7 +23,7 @@
 namespace {
 
 qint64 localMs(const QDate &date, const QTime &time = QTime(0, 0)) {
-  return QDateTime(date, time, QTimeZone::systemTimeZone()).toMSecsSinceEpoch();
+  return QDateTime(date, time, QTimeZone(QTimeZone::LocalTime)).toMSecsSinceEpoch();
 }
 
 DuckEvent eventAt(const QDate &date, const QTime &time = QTime(9, 0), int seconds = 3600) {
@@ -447,6 +447,10 @@ int main(int argc, char **argv) {
   // Set before constructing Qt; restoration is unnecessary in this dedicated process.
   qputenv("TZ", "Europe/Berlin");
   tzset();
+  // A desktop platform theme (e.g. gtk3) replaces the palette and painting
+  // these pixel checks rely on; keep the result independent of the host.
+  qunsetenv("QT_QPA_PLATFORMTHEME");
+  qunsetenv("QT_QPA_PLATFORMTHEME_QT6");
   QApplication app(argc, argv);
   QCoreApplication::setOrganizationName("SessioMonthCalendarTests");
   QCoreApplication::setApplicationName("MonthCalendarTests");

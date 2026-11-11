@@ -20,7 +20,7 @@
 namespace {
 
 QString eventTime(const DuckEvent &event) {
-  return QDateTime::fromMSecsSinceEpoch(event.start_date.value_or(0), QTimeZone::systemTimeZone())
+  return QDateTime::fromMSecsSinceEpoch(event.start_date.value_or(0), QTimeZone(QTimeZone::LocalTime))
       .toString(QStringLiteral("HH:mm"));
 }
 
@@ -507,7 +507,7 @@ void MonthCalendarWidget::rebuild() {
     mGrid->addWidget(label, 0, column);
     mGrid->setColumnStretch(column, 1);
   }
-  const auto tz = QTimeZone::systemTimeZone();
+  const auto tz = QTimeZone(QTimeZone::LocalTime);
   for (int i = 0; i < rows * 7; ++i) {
     const auto date = mFirst.addDays(i);
     const auto startMs = QDateTime(date, QTime(0, 0), tz).toMSecsSinceEpoch();

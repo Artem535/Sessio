@@ -1,5 +1,7 @@
 #include "db/migrations.h"
 
+#include <string>
+
 namespace pcm::tokenbackend {
 
 void runMigrations(SqliteConnection &conn) {
@@ -92,6 +94,26 @@ void runMigrations(SqliteConnection &conn) {
       PRIMARY KEY(series_uid, original_start_ms)
     );
   )sql");
+
+  // SQLite has no ADD COLUMN IF NOT EXISTS, so check the schema first to keep
+  // this safe on every start. Existing rows are LiveKit meetings.
+  bool hasProvider = false;
+  {
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(conn.raw(), "PRAGMA table_info(meetings);", -1, &stmt, nullptr) ==
+        SQLITE_OK) {
+      while (sqlite3_step(stmt) == SQLITE_ROW) {
+        if (std::string(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1))) ==
+            "provider") {
+          hasProvider = true;
+        }
+      }
+    }
+    sqlite3_finalize(stmt);
+  }
+  if (!hasProvider) {
+    conn.exec("ALTER TABLE meetings ADD COLUMN provider TEXT NOT NULL DEFAULT 'livekit';");
+  }
 }
 
 } // namespace pcm::tokenbackend

@@ -10,6 +10,7 @@ CallSidePanel::CallSidePanel(QWidget *notesPage, QWidget *transcriptPanel, QWidg
       mStack(new QStackedWidget(this)) {
   auto *layout = new QVBoxLayout(this);
   layout->setContentsMargins(0, 0, 0, 0);
+  layout->setSpacing(8);
   mSwitcher->addItem(tr("Notes"));
   mSwitcher->addItem(tr("Transcript"));
   mSwitcher->setItemsShouldExpand(true);
@@ -23,7 +24,7 @@ CallSidePanel::CallSidePanel(QWidget *notesPage, QWidget *transcriptPanel, QWidg
   connect(mSwitcher, &oclero::qlementine::SegmentedControl::currentIndexChanged,
           this, [this] {
     const int index = mSwitcher->currentIndex();
-    if (index != 0 && (index != 1 || !mTranscriptionAvailable)) {
+    if (index != 0 && (!mTranscriptionAvailable || index != 1)) {
       showNotes();
       return;
     }
@@ -49,3 +50,6 @@ void CallSidePanel::showTranscript() {
 }
 
 bool CallSidePanel::transcriptShown() const { return mStack->currentIndex() == 1; }
+void CallSidePanel::setPrompterPendingCount(int count) {
+  mSwitcher->setItemBadge(0, count > 0 ? QString::number(count) : QString());
+}

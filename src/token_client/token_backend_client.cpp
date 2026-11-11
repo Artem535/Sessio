@@ -4,11 +4,14 @@
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLoggingCategory>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QTimeZone>
 
 #include <algorithm>
+
+Q_LOGGING_CATEGORY(logTokenClient, "pcm.tokenclient")
 
 namespace pcm::tokenclient {
 
@@ -60,6 +63,7 @@ QNetworkReply *TokenBackendClient::sendPost(const QString &path, const QByteArra
                                             const QString &bearerCredential) {
   QNetworkRequest request(QUrl(mBaseUrl + path));
   request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+  request.setTransferTimeout(mScheduleTimeoutMs);
   if (!bearerCredential.isEmpty()) {
     request.setRawHeader("Authorization", "Bearer " + bearerCredential.toUtf8());
   }
@@ -71,11 +75,13 @@ void TokenBackendClient::post(const QString &path, const QByteArray &body,
   auto *reply = sendPost(path, body, bearerCredential);
   connect(reply, &QNetworkReply::finished, this, [this, reply]() {
     reply->deleteLater();
-    const auto responseBody = reply->readAll();
+    const auto responseBody = reply->isOpen() ? reply->readAll() : QByteArray{};
     const auto httpStatus =
         reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
     if (reply->error() != QNetworkReply::NoError || httpStatus != 200) {
+      qCWarning(logTokenClient) << "Token request failed:" << reply->error() << reply->errorString()
+                                << "status:" << httpStatus;
       emit tokenRequestFailed(parseErrorMessage(responseBody));
       return;
     }
@@ -91,20 +97,27 @@ void TokenBackendClient::post(const QString &path, const QByteArray &body,
 
 void TokenBackendClient::requestCreateMeeting(const QString &bearerCredential,
                                               const QString &scheduledStartIso,
-                                              const QString &scheduledEndIso) {
+                                              const QString &scheduledEndIso,
+                                              const QString &provider) {
   QJsonObject bodyObject;
   bodyObject["scheduledStart"] = scheduledStartIso;
   bodyObject["scheduledEnd"] = scheduledEndIso;
+  // Omitted for livekit so requests stay byte-identical for older backends.
+  if (provider != QStringLiteral("livekit")) {
+    bodyObject["provider"] = provider;
+  }
   const QByteArray body = QJsonDocument(bodyObject).toJson(QJsonDocument::Compact);
 
   auto *reply = sendPost(QStringLiteral("/v1/meetings"), body, bearerCredential);
   connect(reply, &QNetworkReply::finished, this, [this, reply]() {
     reply->deleteLater();
-    const auto responseBody = reply->readAll();
+    const auto responseBody = reply->isOpen() ? reply->readAll() : QByteArray{};
     const auto httpStatus =
         reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
     if (reply->error() != QNetworkReply::NoError || httpStatus != 200) {
+      qCWarning(logTokenClient) << "Create meeting failed:" << reply->error() << reply->errorString()
+                                << "status:" << httpStatus;
       emit meetingCreateFailed(parseErrorMessage(responseBody));
       return;
     }
@@ -124,7 +137,7 @@ void TokenBackendClient::requestInvalidateMeeting(const QString &bearerCredentia
                         bearerCredential);
   connect(reply, &QNetworkReply::finished, this, [this, reply]() {
     reply->deleteLater();
-    const auto responseBody = reply->readAll();
+    const auto responseBody = reply->isOpen() ? reply->readAll() : QByteArray{};
     const auto httpStatus =
         reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
@@ -171,7 +184,7 @@ void TokenBackendClient::sendSchedule(const QByteArray &verb, const QString &pat
                 reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             result.timedOut = reply->error() == QNetworkReply::TimeoutError ||
                              reply->error() == QNetworkReply::OperationCanceledError;
-            result.body = reply->readAll();
+            result.body = reply->isOpen() ? reply->readAll() : QByteArray{};
             if (!result.ok()) {
               const auto parsed = QJsonDocument::fromJson(result.body).object();
               result.errorCode = parsed.value("error").toString();

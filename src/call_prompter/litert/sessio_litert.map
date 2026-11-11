@@ -1,0 +1,10 @@
+{
+  global:
+    extern "C++" {
+      sessio::litert::*;
+      "typeinfo for sessio::litert::Model";
+      "typeinfo name for sessio::litert::Model";
+      "vtable for sessio::litert::Model";
+    };
+  local: *;
+};

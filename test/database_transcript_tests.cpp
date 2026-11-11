@@ -87,6 +87,69 @@ TEST_F(TranscriptDbTest, StandaloneTranscriptSurvivesCleanup) {
   ASSERT_NE(db_->get_transcript(id), nullptr);
   EXPECT_EQ(db_->get_transcripts().size(), 1);
 }
+TEST_F(TranscriptDbTest, PrompterStateSurvivesReopenRejectsStaleRevisionAndDeletesWithTranscript) {
+  const auto id = db_->add_transcript(std::nullopt, "live_local_v1");
+  ASSERT_TRUE(db_->save_prompter_state(id, 0, "{\"cards\":[]}"));
+  EXPECT_FALSE(db_->save_prompter_state(id, 0, "stale"));
+  EXPECT_EQ(db_->get_prompter_state(id).revision, 1);
+  db_.reset();
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
+  db_ = std::make_unique<pcm::database::Database>(conf);
+  EXPECT_EQ(db_->get_prompter_state(id).json, "{\"cards\":[]}");
+  ASSERT_TRUE(db_->delete_transcript(id));
+  EXPECT_EQ(db_->get_prompter_state(id).revision, 0);
+  EXPECT_FALSE(db_->save_prompter_state(id, 0, "{}"));
+}
+TEST_F(TranscriptDbTest, PrompterNoteRequiresLinkedClientAndIsIdempotent) {
+  const auto id = db_->add_transcript(std::nullopt, "live_local_v1");
+  ASSERT_TRUE(db_->set_transcript_status(id, "draft"));
+  const auto clients = db_->get_clients();
+  ASSERT_GE(clients.size(), 2u);
+  ASSERT_TRUE(db_->set_transcript_clients(id, {clients[0]->id}));
+  EXPECT_EQ(db_->save_prompter_note(id, "card1", clients[1]->id, "Agreement"), 0);
+  const auto before = db_->get_client_notes(clients[0]->id).size();
+  const auto note = db_->save_prompter_note(id, "card1", clients[0]->id, "Agreement");
+  ASSERT_GT(note, 0);
+  EXPECT_EQ(db_->save_prompter_note(id, "card1", clients[0]->id, "Agreement"), note);
+  EXPECT_EQ(db_->get_client_notes(clients[0]->id).size(), before + 1);
+  ASSERT_TRUE(db_->delete_transcript(id));
+  EXPECT_EQ(db_->get_client_notes(clients[0]->id).size(), before + 1);
+}
+TEST_F(TranscriptDbTest, PrompterMigrationUpdatesMigrationTimeOnlyOnce) {
+  db_.reset();
+  {
+    duckdb::DuckDB raw(dir_ + "/database.db"); duckdb::Connection conn(raw);
+    ASSERT_FALSE(conn.Query("UPDATE ApplicationMetadata SET schema_version=2,last_migration_at=TIMESTAMP '2000-01-01'")->HasError());
+  }
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
+  db_ = std::make_unique<pcm::database::Database>(conf);
+  const auto migrated = db_->get_application_metadata();
+  EXPECT_EQ(migrated.schema_version, 4);
+  EXPECT_GT(migrated.last_migration_at, 1700000000000);
+  db_.reset(); db_ = std::make_unique<pcm::database::Database>(conf);
+  EXPECT_EQ(db_->get_application_metadata().last_migration_at, migrated.last_migration_at);
+}
+TEST_F(TranscriptDbTest, FailedTranscriptDeletePreservesPhrasesAndPrompterState) {
+  const auto id = db_->add_transcript(std::nullopt, "scope");
+  DuckTranscriptPhrase p; p.transcript_id = id; p.track_role = "participant";
+  p.speaker_name = "Guest"; p.start_ms = 0; p.end_ms = 100; p.text = "Keep text";
+  ASSERT_GT(db_->add_transcript_phrase(p), 0);
+  ASSERT_TRUE(db_->save_prompter_state(id, 0, "{\"cards\":[]}"));
+  db_.reset();
+  {
+    duckdb::DuckDB raw(dir_ + "/database.db"); duckdb::Connection conn(raw);
+    ASSERT_FALSE(conn.Query("CREATE TABLE TranscriptDeletionGuard (transcript_id INTEGER REFERENCES Transcript(id))")->HasError());
+    ASSERT_FALSE(conn.Query("INSERT INTO TranscriptDeletionGuard VALUES (" + std::to_string(id) + ")")->HasError());
+  }
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
+  db_ = std::make_unique<pcm::database::Database>(conf);
+  EXPECT_FALSE(db_->delete_transcript(id));
+  EXPECT_EQ(db_->count_transcript_phrases(id), 1);
+  EXPECT_EQ(db_->get_prompter_state(id).revision, 1);
+  EXPECT_FALSE(db_->delete_all_transcripts());
+  EXPECT_EQ(db_->count_transcript_phrases(id), 1);
+  EXPECT_EQ(db_->get_prompter_state(id).revision, 1);
+}
 
 TEST_F(TranscriptDbTest, EventWithoutClientAllowsTranscription) {
   const auto id = db_->add_transcript(makeEvent(), "live_local_v1");
@@ -431,8 +494,8 @@ TEST_F(TranscriptDbTest, ExistingDataSurvivesTheTranscriptMigration) {
   EXPECT_NE(db_->get_event(event_id), nullptr);
 }
 
-TEST_F(TranscriptDbTest, SchemaVersionIsTwo) {
-  EXPECT_EQ(db_->get_application_metadata().schema_version, 2);
+TEST_F(TranscriptDbTest, SchemaVersionIsFour) {
+  EXPECT_EQ(db_->get_application_metadata().schema_version, 4);
 }
 
 TEST_F(TranscriptDbTest, LegacyMigrationBackfillsOnceAndPreservesManualUnlinkAfterReopen) {
@@ -455,7 +518,7 @@ TEST_F(TranscriptDbTest, LegacyMigrationBackfillsOnceAndPreservesManualUnlinkAft
   }
   pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
   db_ = std::make_unique<pcm::database::Database>(conf);
-  EXPECT_EQ(db_->get_application_metadata().schema_version, 2);
+  EXPECT_EQ(db_->get_application_metadata().schema_version, 4);
   EXPECT_EQ(db_->get_transcript_client_ids(id), std::vector<int64_t>{clientId});
   const auto migrated = db_->get_transcript(id);
   ASSERT_NE(migrated, nullptr);
@@ -788,6 +851,60 @@ TEST_F(TranscriptDbTest, RenameSpeakerChangesOnlyThatRoleAndIsNotATextEdit) {
   EXPECT_FALSE(db_->rename_transcript_speaker(31337, "participant", "X"));
 }
 
+TEST_F(TranscriptDbTest, PhrasesAddedAfterARenameKeepTheNewSpeakerName) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  auto unnamed = phrase(t, "participant", "", 0, 1000, "a");
+  unnamed.speaker_name.reset();
+  ASSERT_GT(db_->add_transcript_phrase(unnamed), 0);
+  ASSERT_TRUE(db_->rename_transcript_speaker(t, "participant", "Anna"));
+
+  unnamed.start_ms = 1000; unnamed.end_ms = 2000;
+  std::optional<std::string> stored;
+  ASSERT_GT(db_->add_transcript_phrase(unnamed, &stored), 0);
+  EXPECT_EQ(stored.value_or(""), "Anna");
+  auto own = unnamed; own.track_role = "practitioner"; own.start_ms = 2000; own.end_ms = 3000;
+  ASSERT_GT(db_->add_transcript_phrase(own, &stored), 0);
+  EXPECT_FALSE(stored.has_value());
+
+  const auto phrases = db_->get_transcript_phrases(t);
+  ASSERT_EQ(phrases.size(), 3u);
+  EXPECT_EQ(phrases[1].speaker_name.value_or(""), "Anna");
+  EXPECT_FALSE(phrases[2].speaker_name.has_value());
+}
+
+TEST_F(TranscriptDbTest, RenameOverridesTheNameTheRecogniserGivesLaterPhrases) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  const auto other = db_->add_transcript(makeEvent(1750000000000), "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "Guest", 0, 1000, "a")), 0);
+  ASSERT_TRUE(db_->rename_transcript_speaker(t, "participant", "Anna"));
+  std::optional<std::string> stored;
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "Guest", 1000, 2000, "b"), &stored), 0);
+  EXPECT_EQ(stored.value_or(""), "Anna");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(other, "participant", "Guest", 0, 1000, "c"), &stored), 0);
+  EXPECT_EQ(stored.value_or(""), "Guest");
+  ASSERT_TRUE(db_->rename_transcript_speaker(t, "participant", "Anna K."));
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "Guest", 2000, 3000, "d"), &stored), 0);
+  EXPECT_EQ(stored.value_or(""), "Anna K.");
+  ASSERT_TRUE(db_->delete_transcript(other));
+  ASSERT_TRUE(db_->delete_transcript(t));
+  const auto again = db_->add_transcript(makeEvent(1760000000000), "live_local_v1");
+  ASSERT_EQ(again, t);  // ids are reused, so a deleted transcript must not leave names behind
+  ASSERT_GT(db_->add_transcript_phrase(phrase(again, "participant", "Guest", 0, 1000, "e"), &stored), 0);
+  EXPECT_EQ(stored.value_or(""), "Guest");
+}
+
+TEST_F(TranscriptDbTest, RenamedSpeakerSurvivesReopeningTheDatabase) {
+  const auto t = db_->add_transcript(makeEvent(), "live_local_v1");
+  ASSERT_GT(db_->add_transcript_phrase(phrase(t, "participant", "Speaker 1", 0, 1000, "a")), 0);
+  ASSERT_TRUE(db_->rename_transcript_speaker(t, "participant", "Anna"));
+  db_.reset();
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir_)}};
+  db_ = std::make_unique<pcm::database::Database>(conf);
+  const auto phrases = db_->get_transcript_phrases(t);
+  ASSERT_EQ(phrases.size(), 1u);
+  EXPECT_EQ(phrases[0].speaker_name.value_or(""), "Anna");
+}
+
 namespace {
 
 // Records error-level log lines so a test can observe the release-build
@@ -881,3 +998,6 @@ TEST_F(TranscriptDbTest, StatusAndRevokeWorkFromAnotherThreadDuringScheduleTrans
   EXPECT_TRUE(revokeOk);
   EXPECT_TRUE(errors.empty()) << "unexpected error log: " << (errors.empty() ? "" : errors[0]);
 }
+
+// Keep these in the existing target; no root/test CMake changes are needed.
+#include "call_material_database_tests.cpp"

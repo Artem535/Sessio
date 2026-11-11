@@ -3,14 +3,18 @@
 namespace pcm::meeting {
 
 LiveKitMeetingProvider::LiveKitMeetingProvider(QString tokenBackendBaseUrl,
-                                               QString bearerCredential, QObject *parent)
+                                               QString bearerCredential, QObject *parent,
+                                               QString backendProvider)
     : MeetingProvider(parent),
       mClient(std::make_unique<pcm::tokenclient::TokenBackendClient>(std::move(tokenBackendBaseUrl))),
-      mBearerCredential(std::move(bearerCredential)) {
+      mBearerCredential(std::move(bearerCredential)),
+      mBackendProvider(std::move(backendProvider)) {
+  const auto kind = mBackendProvider == QStringLiteral("jitsi") ? ProviderKind::Jitsi
+                                                                : ProviderKind::LiveKit;
   connect(mClient.get(), &pcm::tokenclient::TokenBackendClient::meetingCreated, this,
-          [this](const pcm::tokenclient::MeetingCreateResult &result) {
+          [this, kind](const pcm::tokenclient::MeetingCreateResult &result) {
             MeetingDescriptor descriptor;
-            descriptor.kind = ProviderKind::LiveKit;
+            descriptor.kind = kind;
             descriptor.meetingRef = result.meetingRef;
             descriptor.meetingUrl = result.invitationUrl;
             descriptor.invitationState = result.invitationUrl + "|" + result.passcode;
@@ -25,7 +29,8 @@ LiveKitMeetingProvider::LiveKitMeetingProvider(QString tokenBackendBaseUrl,
 }
 
 void LiveKitMeetingProvider::create(const MeetingCreateRequest &request) {
-  mClient->requestCreateMeeting(mBearerCredential, request.scheduledStartIso, request.scheduledEndIso);
+  mClient->requestCreateMeeting(mBearerCredential, request.scheduledStartIso, request.scheduledEndIso,
+                            mBackendProvider);
 }
 
 void LiveKitMeetingProvider::cancel(const QString &meetingRef) {

@@ -1,5 +1,6 @@
 #include "transcript_panel.h"
 #include "phrase_card_paint.h"
+#include "accent_color.h"
 #include <QHBoxLayout>
 #include <QFrame>
 #include <QLabel>
@@ -37,10 +38,13 @@ QString timestamp(std::int64_t milliseconds) {
 
 TranscriptPanel::TranscriptPanel(QWidget *parent) : QWidget(parent) {
   auto *layout = new QVBoxLayout(this);
+  layout->setContentsMargins(16, 16, 16, 12); layout->setSpacing(12);
   auto *header = new QHBoxLayout;
-  header->addWidget(label(tr("Transcript"), "transcriptTitle", this));
+  auto *title = label(tr("Transcript"), "transcriptTitle", this);
+  auto titleFont = title->font(); titleFont.setWeight(QFont::DemiBold); title->setFont(titleFont);
+  header->addWidget(title);
   auto *badge = label(tr("Local"), "transcriptLocal", this);
-  badge->setFrameStyle(QFrame::StyledPanel); header->addStretch(); header->addWidget(badge);
+  header->addStretch(); header->addWidget(badge);
   layout->addLayout(header);
   mStatus = label({}, "transcriptStatus", this); layout->addWidget(mStatus);
   mReason = label({}, "transcriptStartReason", this); layout->addWidget(mReason); mReason->hide();
@@ -61,10 +65,12 @@ TranscriptPanel::TranscriptPanel(QWidget *parent) : QWidget(parent) {
     auto *result = new QPushButton(text, this); result->setObjectName(name); result->setAccessibleName(text); buttons->addWidget(result); return result;
   };
   mStart = button(tr("Start"), "transcriptStart"); mStop = button(tr("Stop"), "transcriptStop"); mRevoke = button(tr("Revoke consent"), "transcriptRevoke");
+  mExport = button(tr("Export text"), "transcriptExport"); mExport->setEnabled(false);
   layout->addLayout(buttons);
   connect(mStart, &QPushButton::clicked, this, &TranscriptPanel::startRequested);
   connect(mStop, &QPushButton::clicked, this, &TranscriptPanel::stopRequested);
   connect(mRevoke, &QPushButton::clicked, this, &TranscriptPanel::revokeRequested);
+  connect(mExport, &QPushButton::clicked, this, &TranscriptPanel::exportRequested);
   setStartAvailable(false, {}); setState(pcm::calltranscription::SessionState::Idle);
 }
 void TranscriptPanel::setState(pcm::calltranscription::SessionState state) {
@@ -90,28 +96,38 @@ void TranscriptPanel::setStartAvailable(bool available, const QString &reason) {
 }
 void TranscriptPanel::addPhrase(const DuckTranscriptPhrase &phrase) {
   auto *row = new PhraseCard(mScroll->widget());
+  row->setProperty("phraseId", static_cast<qint64>(phrase.id));
+  row->setFocusPolicy(Qt::StrongFocus);
   row->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
   auto *layout = new QVBoxLayout(row);
   layout->setContentsMargins(18, 12, 18, 14); layout->setSpacing(8);
   const bool practitioner = phrase.track_role == "practitioner";
-  const QString name = phrase.speaker_name && !phrase.speaker_name->empty() ? QString::fromStdString(*phrase.speaker_name) : (practitioner ? tr("You") : tr("Participant"));
+  const auto role = QString::fromStdString(phrase.track_role);
+  const QString name = phrase.speaker_name && !phrase.speaker_name->empty() ? QString::fromStdString(*phrase.speaker_name)
+      : mSpeakerNames.value(role, practitioner ? tr("You") : tr("Participant"));
   row->setProperty("practitioner", practitioner);
   auto *meta = new QHBoxLayout;
   auto *dot = label(QStringLiteral("●"), "speakerMarker", row);
   auto markerPalette = dot->palette();
-  markerPalette.setColor(QPalette::WindowText, practitioner ? palette().color(QPalette::Highlight) : QColor("#65bda9"));
+  markerPalette.setColor(QPalette::WindowText, practitioner ? pcm::widgets::accentColor(palette()) : palette().color(QPalette::WindowText));
   dot->setPalette(markerPalette);
+  dot->setWordWrap(false); dot->setFixedWidth(dot->fontMetrics().horizontalAdvance(QStringLiteral("●")) + 2);
   meta->addWidget(dot);
   auto *speaker = label(name, "phraseSpeaker", row);
-  QFont font = speaker->font(); font.setBold(true); font.setPointSize(11); speaker->setFont(font);
+  speaker->setProperty("trackRole", role);
+  pcm::transcriptionui::offerSpeakerRename(speaker, [this, role] { requestSpeakerRename(role); });
+  QFont font = speaker->font(); font.setWeight(QFont::DemiBold); speaker->setFont(font);
   meta->addWidget(speaker); meta->addStretch();
   const auto range = phrase.end_ms > phrase.start_ms ? timestamp(phrase.start_ms) + QStringLiteral(" – ") + timestamp(phrase.end_ms) : timestamp(phrase.start_ms);
-  meta->addWidget(label(range, "phraseTime", row));
+  auto *time = label(range, "phraseTime", row); time->setWordWrap(false);
+  time->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  time->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+  meta->addWidget(time, 0, Qt::AlignRight | Qt::AlignTop);
   layout->addLayout(meta);
   auto *text = label(QString::fromStdString(phrase.text), "phraseText", row);
-  auto textFont = text->font(); textFont.setPointSize(12); text->setFont(textFont);
   text->setTextInteractionFlags(Qt::TextSelectableByMouse); layout->addWidget(text);
   mRows->insertWidget(mRows->count() - 1, row); ++mPhraseCount;
+  mExport->setEnabled(true);
 }
 void TranscriptPanel::setDelayed(bool delayed) { mDelayed->setVisible(delayed); }
 void TranscriptPanel::setNotice(const QString &text) { message(mNotice, text); }
@@ -119,6 +135,28 @@ void TranscriptPanel::setAudioGap(bool interrupted) { mAudioGap->setVisible(inte
 void TranscriptPanel::setError(const QString &text) { message(mError, text); }
 void TranscriptPanel::clearPhrases() {
   while (mRows->count() > 1) { auto *item = mRows->takeAt(0); delete item->widget(); delete item; }
-  mPhraseCount = 0; mFollowing = true;
+  mPhraseCount = 0; mFollowing = true; mSpeakerNames.clear();
+  mExport->setEnabled(false);
+}
+void TranscriptPanel::requestSpeakerRename(const QString &trackRole) {
+  QString current = mSpeakerNames.value(trackRole, trackRole == QStringLiteral("practitioner") ? tr("You") : tr("Participant"));
+  for (const auto *speaker : findChildren<QLabel *>("phraseSpeaker"))
+    if (speaker->property("trackRole").toString() == trackRole) { current = speaker->text(); break; }
+  if (const auto name = pcm::transcriptionui::askSpeakerName(this, mRenamePrompt, current))
+    emit speakerRenameRequested(trackRole, *name);
+}
+void TranscriptPanel::setSpeakerName(const QString &trackRole, const QString &name) {
+  mSpeakerNames.insert(trackRole, name);
+  for (auto *speaker : findChildren<QLabel *>("phraseSpeaker"))
+    if (speaker->property("trackRole").toString() == trackRole) speaker->setText(name);
 }
 int TranscriptPanel::phraseCount() const { return mPhraseCount; }
+bool TranscriptPanel::focusPhrase(qint64 phraseId) {
+  for (int i = 0; i < mRows->count(); ++i) {
+    auto *widget = mRows->itemAt(i)->widget();
+    if (widget && widget->property("phraseId").toLongLong() == phraseId) {
+      mFollowing = false; mScroll->ensureWidgetVisible(widget); widget->setFocus(); return true;
+    }
+  }
+  return false;
+}

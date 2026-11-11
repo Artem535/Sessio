@@ -9,7 +9,56 @@
 #include <QTest>
 #include <QSettings>
 #include <QTemporaryDir>
+#include <QQuickWidget>
+#include <QQuickItem>
+#include <QPalette>
 #include <gtest/gtest.h>
+
+TEST(CallEntryWidgetTest, QuickWorkspacePreservesJoinAndHistoryContracts) {
+  CallEntryWidget widget(true);
+  widget.enableQuickWorkspace();
+  widget.resize(1400, 900); widget.show();
+  auto *quick = widget.findChild<QQuickWidget *>("meetingsQuickWorkspace");
+  ASSERT_NE(quick, nullptr);
+  ASSERT_EQ(quick->status(), QQuickWidget::Ready);
+  auto *header = widget.headerControls();
+  EXPECT_EQ(header, widget.headerControls());
+  EXPECT_TRUE(quick->rootObject()->property("externalHeader").toBool());
+  widget.setUpcomingMeetings({{"ref-1", "Synthetic meeting", QDateTime::currentDateTime(), true, 7},
+    {"ref-2", "Unavailable", QDateTime::currentDateTime(), false, 8}});
+  QSignalSpy own(&widget, &CallEntryWidget::ownMeetingJoinRequested);
+  widget.joinOwn("ref-2"); widget.joinOwn("missing");
+  EXPECT_EQ(own.count(), 0);
+  widget.joinOwn("ref-1");
+  EXPECT_EQ(own.count(), 1);
+  widget.preselectOwnMeeting("ref-2");
+  EXPECT_EQ(quick->rootObject()->property("selectedId").toString(), "ref-2");
+  widget.setDisplayName("Synthetic name");
+  QSignalSpy invitation(&widget, &CallEntryWidget::joinByCodeRequested);
+  widget.joinInvitation("demo-code", "123456");
+  auto *dialog = quick->rootObject()->findChild<QObject *>("qmlMeetingInvitation");
+  ASSERT_NE(dialog, nullptr);
+  EXPECT_TRUE(dialog->property("visible").toBool());
+  dialog->setProperty("visible", false);
+  EXPECT_EQ(widget.displayName(), "Synthetic name");
+  EXPECT_EQ(invitation.count(), 1);
+  EXPECT_EQ(widget.code(), "demo-code");
+  widget.setMaterialHistory({QVariantMap{{"id", "17"}, {"title", "Saved meeting"}, {"date", "26.10.2026"},
+    {"transcripts", QVariantList{QVariantMap{{"id", "23"}, {"title", "Recording"}}}}}});
+  QSignalSpy material(&widget, &CallEntryWidget::materialRequested), transcript(&widget, &CallEntryWidget::transcriptRequested);
+  widget.openMaterial("17"); widget.openMaterial("unknown"); widget.openTranscript("23"); widget.openTranscript("unknown");
+  EXPECT_EQ(material.count(), 1); EXPECT_EQ(transcript.count(), 1);
+  if (qEnvironmentVariableIsSet("SESSIO_MEETINGS_SCREENSHOT")) {
+    if (qEnvironmentVariableIsSet("SESSIO_PREVIEW_POPUP")) {
+      auto *mode = quick->rootObject()->findChild<QQuickItem *>("qmlMeetingMode");
+      if (mode) {
+        auto *popup = mode->property("popup").value<QObject *>();
+        if (popup) QMetaObject::invokeMethod(popup, "open");
+      }
+    }
+    QTest::qWait(100); widget.grab().save(qEnvironmentVariable("SESSIO_MEETINGS_SCREENSHOT"));
+  }
+}
 
 TEST(CallEntryWidgetTest, SpecialistModeShowsOwnMeetingsListAndEmitsJoinRequest) {
   CallEntryWidget widget(/*showOwnMeetings=*/true);
@@ -177,6 +226,18 @@ int main(int argc, char **argv) {
   QSettings::setDefaultFormat(QSettings::IniFormat);
   QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir.path());
   QApplication app(argc, argv);
+  if (qEnvironmentVariableIsSet("SESSIO_PREVIEW_THEME")) {
+    auto colors = app.palette();
+    colors.setColor(QPalette::Window, QColor("#282b33"));
+    colors.setColor(QPalette::Base, QColor("#1f2127"));
+    colors.setColor(QPalette::Text, QColor("#f0eff5"));
+    colors.setColor(QPalette::WindowText, QColor("#f0eff5"));
+    colors.setColor(QPalette::ButtonText, QColor("#f0eff5"));
+    colors.setColor(QPalette::Mid, QColor("#3c414f"));
+    colors.setColor(QPalette::Highlight, QColor("#b49af5"));
+    colors.setColor(QPalette::HighlightedText, QColor("#231a35"));
+    app.setPalette(colors);
+  }
   app.setOrganizationName("SessioTests");
   app.setApplicationName("CallEntryWidget");
   ::testing::InitGoogleTest(&argc, argv);

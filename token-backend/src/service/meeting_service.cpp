@@ -4,8 +4,11 @@
 #include "db/series_repository.h"
 
 #include "crypto/hashing.h"
+#include "crypto/jitsi_jwt.h"
 #include "crypto/random_token.h"
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <ctime>
 #include <iomanip>
@@ -71,6 +74,12 @@ std::optional<ServiceError> meetingUsabilityError(const Meeting &meeting) {
   return std::nullopt;
 }
 
+std::string lowercaseAscii(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return value;
+}
+
 } // namespace
 
 MeetingService::MeetingService(Authorizer &authorizer, MeetingsRepository &meetings,
@@ -85,13 +94,19 @@ MeetingService::~MeetingService() = default;
 Result<MeetingService::CreateMeetingOutcome>
 MeetingService::createMeeting(const std::string &bearerCredential,
                                const std::string &scheduledStart,
-                               const std::string &scheduledEnd) {
+                               const std::string &scheduledEnd, const std::string &provider) {
   auto accountId = authorizer_.authorize(bearerCredential);
   if (!accountId) {
     return {std::nullopt, ServiceError::Unauthorized};
   }
+  if (provider != "livekit" && provider != "jitsi") {
+    return {std::nullopt, ServiceError::InvalidProvider};
+  }
+  if (provider == "jitsi" && !config_.jitsiConfigured()) {
+    return {std::nullopt, ServiceError::JitsiNotConfigured};
+  }
 
-  auto meeting = meetings_.create(*accountId, scheduledStart, scheduledEnd);
+  auto meeting = meetings_.create(*accountId, scheduledStart, scheduledEnd, provider);
   auto invitation = invitations_.create(meeting.id, *accountId);
 
   CreateMeetingOutcome outcome;
@@ -139,6 +154,24 @@ MeetingService::reissueInvitation(const std::string &bearerCredential,
   return {outcome, std::nullopt};
 }
 
+Result<TokenResult> MeetingService::jitsiToken(const Meeting &meeting, const std::string &identity,
+                                                 const std::string &name, bool moderator) {
+  // Jitsi room names are case-insensitive on the server side but the JWT
+  // `room` claim is compared literally, so both sides use one lowercase form.
+  const auto room = lowercaseAscii(meeting.roomName);
+  const auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+                              std::chrono::system_clock::now().time_since_epoch())
+                              .count();
+  TokenResult result;
+  result.endpointUrl = config_.jitsiUrl;
+  result.roomName = room;
+  result.jwt = mintJitsiJwt(config_.jitsiAppId, config_.jitsiAppSecret, room,
+                            JitsiUser{identity, name, moderator}, config_.tokenTtlSeconds);
+  result.expiresAtUnix = nowSeconds + config_.tokenTtlSeconds;
+  result.provider = "jitsi";
+  return {result, std::nullopt};
+}
+
 Result<TokenResult> MeetingService::issueSpecialistToken(const std::string &bearerCredential,
                                                            const std::string &meetingRef, const std::string &displayName) {
   auto lock = meetings_.connection().lock();
@@ -156,11 +189,12 @@ Result<TokenResult> MeetingService::issueSpecialistToken(const std::string &bear
     return {std::nullopt, *usability};
   }
 
-  VideoGrants grants;
-  grants.room = meeting->roomName;
   const auto name = normaliseDisplayName(displayName, false);
   if (!name) return {std::nullopt, ServiceError::InvalidDisplayName};
   std::string identity = "practitioner-" + meeting->meetingRef + "-" + generateUrlSafeToken(16);
+  if (meeting->provider == "jitsi") return jitsiToken(*meeting, identity, *name, true);
+  VideoGrants grants;
+  grants.room = meeting->roomName;
   auto jwt = mintLiveKitJwt(config_.liveKitApiKey, config_.liveKitApiSecret, identity, grants,
                              config_.tokenTtlSeconds, R"({"role":"practitioner"})", *name);
 
@@ -218,11 +252,12 @@ Result<TokenResult> MeetingService::issueClientToken(const std::string &invitati
 
   if (mapped) return *series_->mappedToken(*meeting, true, displayName);
 
-  VideoGrants grants;
-  grants.room = meeting->roomName;
   const auto name = normaliseDisplayName(displayName, false);
   if (!name) return {std::nullopt, ServiceError::InvalidDisplayName};
   std::string identity = "client-" + meeting->meetingRef + "-" + generateUrlSafeToken(16);
+  if (meeting->provider == "jitsi") return jitsiToken(*meeting, identity, *name, false);
+  VideoGrants grants;
+  grants.room = meeting->roomName;
   auto jwt = mintLiveKitJwt(config_.liveKitApiKey, config_.liveKitApiSecret, identity, grants,
                              config_.tokenTtlSeconds, R"({"role":"client"})", *name);
 
