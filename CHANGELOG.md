@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.39] - 2026-11-11
+
+- Refreshed the in-call microphone, camera and speaker selection panel.
+
 ## [0.2.38] - 2026-10-29
 
 - Added optional cloud models for the meeting summary, the key points during a

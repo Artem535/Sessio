@@ -495,6 +495,18 @@
         <translation>Окна</translation>
     </message>
     <message>
+        <source>Camera</source>
+        <translation>Камера</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Микрофон</translation>
+    </message>
+    <message>
+        <source>Speaker</source>
+        <translation>Динамик</translation>
+    </message>
+    <message>
         <source>Notes</source>
         <translation>Заметки</translation>
     </message>

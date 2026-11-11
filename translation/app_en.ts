@@ -491,6 +491,18 @@
         <translation>Windows</translation>
     </message>
     <message>
+        <source>Camera</source>
+        <translation>Camera</translation>
+    </message>
+    <message>
+        <source>Microphone</source>
+        <translation>Microphone</translation>
+    </message>
+    <message>
+        <source>Speaker</source>
+        <translation>Speaker</translation>
+    </message>
+    <message>
         <source>Notes</source>
         <translation>Notes</translation>
     </message>

@@ -1013,10 +1013,24 @@ void CallPage::onMediaError(const QString &reason) {
 void CallPage::showDevicesPopover() {
   auto *menu = new QMenu(this);
   menu->setAttribute(Qt::WA_DeleteOnClose);
+  menu->setObjectName("devicesPopover");
+  menu->setStyleSheet(QStringLiteral(
+      "QMenu#devicesPopover { background: #1d1a24; border: 1px solid #3d3549; border-radius: 14px; }"
+      "QMenu#devicesPopover QLabel { color: #aaa3b7; font-size: 14px; }"
+      "QMenu#devicesPopover QComboBox { color: #aaa3b7; background: #292433; "
+      "border: 1px solid #3d3549; border-radius: 9px; padding: 0 16px; min-height: 43px; }"
+      "QMenu#devicesPopover QComboBox:hover { border-color: #6a607a; }"
+      "QMenu#devicesPopover QComboBox::drop-down { border: none; width: 28px; }"));
+  auto *content = new QWidget(menu);
+  auto *contentLayout = new QVBoxLayout(content);
+  contentLayout->setContentsMargins(16, 18, 16, 16);
+  contentLayout->setSpacing(14);
+  content->setMinimumWidth(358);
+  auto *action = new QWidgetAction(menu);
+  action->setDefaultWidget(content);
+  menu->addAction(action);
 
-  // Builds one combo row (object name + entries + selection callback) and
-  // adds it to `menu` via a QWidgetAction, since QMenu cannot host a plain
-  // QComboBox as a regular action. Devices are re-looked-up by id inside
+  // Build labelled combo rows inside the menu's QWidgetAction. Devices are re-looked-up by id inside
   // each callback (via QMediaDevices::videoInputs()/audioInputs()/
   // audioOutputs()) rather than captured by value, because
   // DeviceManager::cameras()/microphones()/speakers() are themselves
@@ -1024,10 +1038,21 @@ void CallPage::showDevicesPopover() {
   // re-querying is as cheap as using a captured snapshot, and stays correct
   // if a device is unplugged between opening the popover and picking an
   // entry.
-  auto addDeviceRow = [menu](const QString &objectName, const auto &devices, const QByteArray &currentId,
+  auto addDeviceRow = [menu, content, contentLayout](const QString &objectName, const QString &caption,
+                              int position, const auto &devices, const QByteArray &currentId,
                               auto onSelected) -> QComboBox * {
-    auto *combo = new QComboBox(menu);
+    auto *row = new QWidget(content);
+    auto *rowLayout = new QVBoxLayout(row);
+    rowLayout->setContentsMargins(0, 0, 0, 0);
+    rowLayout->setSpacing(6);
+    auto *label = new QLabel(caption, row);
+    auto *combo = new QComboBox(row);
     combo->setObjectName(objectName);
+    label->setBuddy(combo);
+    combo->setAccessibleName(caption);
+    rowLayout->addWidget(label);
+    rowLayout->addWidget(combo);
+    contentLayout->insertWidget(position, row);
     for (const auto &device : devices) {
       combo->addItem(device.description(), device.id());
       if (device.id() == currentId) {
@@ -1041,15 +1066,12 @@ void CallPage::showDevicesPopover() {
       }
       onSelected(combo->itemData(index).toByteArray());
     });
-    auto *action = new QWidgetAction(menu);
-    action->setDefaultWidget(combo);
-    menu->addAction(action);
     return combo;
   };
 
   auto *provider = mSession ? mSession->provider() : nullptr;
 
-  mDeviceCameraCombo = addDeviceRow(QStringLiteral("deviceCameraCombo"), mDeviceManager->cameras(),
+  mDeviceCameraCombo = addDeviceRow(QStringLiteral("deviceCameraCombo"), tr("Camera"), 0, mDeviceManager->cameras(),
                                      QByteArray(), [provider](const QByteArray &id) {
                                        if (!provider) {
                                          return;
@@ -1062,7 +1084,7 @@ void CallPage::showDevicesPopover() {
                                        }
                                      });
   const auto microphone = provider ? provider->selectedMicrophone() : QAudioDevice{};
-  mDeviceMicrophoneCombo = addDeviceRow(QStringLiteral("deviceMicrophoneCombo"), mDeviceManager->microphones(),
+  mDeviceMicrophoneCombo = addDeviceRow(QStringLiteral("deviceMicrophoneCombo"), tr("Microphone"), 0, mDeviceManager->microphones(),
                                          microphone.id(), [provider, devices = mDeviceManager](const QByteArray &id) {
                                            if (!provider) {
                                              return;
@@ -1086,7 +1108,7 @@ void CallPage::showDevicesPopover() {
               combo->setCurrentIndex(device.isNull() ? -1 : combo->findData(device.id()));
             });
   }
-  mDeviceSpeakerCombo = addDeviceRow(QStringLiteral("deviceSpeakerCombo"), mDeviceManager->speakers(),
+  mDeviceSpeakerCombo = addDeviceRow(QStringLiteral("deviceSpeakerCombo"), tr("Speaker"), 2, mDeviceManager->speakers(),
                                       QByteArray(), [provider](const QByteArray &id) {
                                         if (!provider) {
                                           return;
