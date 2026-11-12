@@ -26,21 +26,3 @@ JSON пользователя: event (kind, participants, action, date, time), r
 <output>
 Только JSON без Markdown: {"reasoning":"...","matches":["ID"]}. Нет совпадений: {"reasoning":"...","matches":[]}.
 </output>
-<examples>
-<example id="1">
-<input>event cancel "Доставить посылку в среду"; records: r1 "Созвон в среду", r2 "Доставить посылку в среду".</input>
-<output>{"reasoning":"r2 совпадает по предмету; r1 — другой предмет, общий день не в счёт.","matches":["r2"]}</output>
-</example>
-<example id="2">
-<input>event accept "Важная встреча завтра в 12:00"; records: r1 "Встреча завтра в 17:00"; new_utterances: [x1] А: Потом будет важная встреча в 12:00 тоже завтра.</input>
-<output>{"reasoning":"«тоже» назначает отдельную встречу, не переносит прежнюю.","matches":[]}</output>
-</example>
-<example id="3">
-<input>event accept "Созвон в четверг в 15:00"; records: r1 "Созвон в четверг в 12:00"; new_utterances: [x1] А: Перенесём созвон на 15:00 вместо 12:00. [x2] Б: Да, переносим.</input>
-<output>{"reasoning":"Явный перенос: предмет тот же, новый срок заменяет старый.","matches":["r1"]}</output>
-</example>
-<example id="4">
-<input>event cancel "Вера отправит акт Илье"; records: r1 "Пётр отправит акт Илье", r2 "Вера отправит акт Илье".</input>
-<output>{"reasoning":"Исполнители разные: Пётр против Веры; совпадает r2.","matches":["r2"]}</output>
-</example>
-</examples>

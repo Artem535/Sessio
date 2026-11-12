@@ -28,13 +28,3 @@ JSON пользователя: known_points (уже записанные пун�
 <output>
 Только JSON без Markdown: {"reasoning":"...","key_points":[{"text":"пункт","evidence_ids":["id"]}]}. Нет содержательного: {"reasoning":"...","key_points":[]}.
 </output>
-<examples>
-<example id="1">
-<input>[1] Привет, слышно? [2] Да, спасибо. Ну... пока.</input>
-<output>{"reasoning":"Проверка связи и прощание, фактов нет.","key_points":[]}</output>
-</example>
-<example id="2">
-<input>[3] Договорились использовать OBS: встроенная запись даёт огромные файлы.</input>
-<output>{"reasoning":"Явное решение о инструменте с причиной.","key_points":[{"text":"Для записи выбран OBS: файлы меньше.","evidence_ids":["3"]}]}</output>
-</example>
-</examples>

@@ -34,17 +34,3 @@ JSON пользователя: new_utterances (реплики с id и гово�
 {"reasoning":"...","events":[{"kind":"accept","participants":["..."],"action":"...","evidence_ids":["..."],"meeting":true,"date":"YYYY-MM-DD","time":"HH:MM"}]}
 Нет событий: {"reasoning":"...","events":[]}.
 </output>
-<examples>
-<example id="1">
-<input>call_date="2026-12-10", date_hints={"завтра":"2026-12-11"}. [x1] Сергей: Завтра в 10:00 у меня консультация. [x2] Сергей: И ещё встреча завтра в 18:00.</input>
-<output>{"reasoning":"Обе реплики — сообщения Сергея о запланированных встречах; даты из date_hints.","events":[{"kind":"accept","participants":["Сергей"],"action":"Консультация Сергея завтра в 10:00","evidence_ids":["x1"],"meeting":true,"date":"2026-12-11","time":"10:00"},{"kind":"accept","participants":["Сергей"],"action":"Ещё одна встреча Сергея завтра в 18:00","evidence_ids":["x2"],"meeting":true,"date":"2026-12-11","time":"18:00"}]}</output>
-</example>
-<example id="2">
-<input>[x1] Илья: Я пришлю Вере смету. [x2] Вера: Договорились, жду.</input>
-<output>{"reasoning":"Обещание Ильи принято Верой явно; срока нет.","events":[{"kind":"accept","participants":["Илья","Вера"],"action":"Илья пришлёт Вере смету","evidence_ids":["x1","x2"],"meeting":false,"date":"","time":""}]}</output>
-</example>
-<example id="3">
-<input>[x1] Вера: Может, доставите посылку во вторник? [x2] Илья: Пока не знаю.</input>
-<output>{"reasoning":"Предложение без принятия — не событие.","events":[]}</output>
-</example>
-</examples>

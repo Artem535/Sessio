@@ -31,9 +31,3 @@ JSON пользователя: call_date, calendar (даты с днями не�
 Только JSON без Markdown:
 {"reasoning":"...","note":{"text":"","evidence_ids":[]},"key_points":[],"tasks":[{"text":"","evidence_ids":[],"meeting":false,"date":"","time":""}],"open_questions":[]}
 </output>
-<examples>
-<example id="1">
-<input>[u1] Анна: Перенесём созвон на пятницу в 15:00. [u2] Борис: Да. [u3] Анна: Пришлю смету до четверга.</input>
-<output>{"reasoning":"Перенос принят обеими; обещание сметы со сроком; неясного нет.","note":{"text":"Созвон перенесён на пятницу в 15:00 по согласию сторон; Анна обещает смету до четверга.","evidence_ids":["u1","u2","u3"]},"key_points":[{"text":"Созвон перенесён на пятницу в 15:00.","evidence_ids":["u1","u2"]}],"tasks":[{"text":"Анна пришлёт смету до четверга","evidence_ids":["u3"],"meeting":false,"date":"","time":""}],"open_questions":[]}</output>
-</example>
-</examples>

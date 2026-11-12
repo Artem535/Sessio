@@ -25,9 +25,3 @@ JSON пользователя: notes (заметки частей по поря�
 <output>
 Только JSON без Markdown: {"reasoning":"...","overview":{"text":"","evidence_ids":[]}}
 </output>
-<examples>
-<example id="1">
-<input>notes: [n1] Созвон перенесён на пятницу в 15:00. [n2] Анна обещает смету до четверга; бюджет открыт.</input>
-<output>{"reasoning":"Темы: перенос и смета; открыт бюджет; завершения нет.","overview":{"text":"Разговор о переносе созвона на пятницу в 15:00 и смете: Анна пришлёт её до четверга. Вопрос о бюджете открыт.","evidence_ids":["n1","n2"]}}</output>
-</example>
-</examples>
