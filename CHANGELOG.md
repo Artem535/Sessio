@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.41] - 2026-11-12
+
+- Editing the same event more than once (for example marking it completed,
+  then paid, then rescheduling it) no longer fails after the first edit once
+  the event has change-log history.
+
 ## [0.2.40] - 2026-11-11
 
 - Jitsi calls now use the same in-call toolbar as LiveKit: the microphone and
