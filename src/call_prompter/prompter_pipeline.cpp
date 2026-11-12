@@ -277,6 +277,14 @@ QByteArray closeObjects(QByteArray schema) {
   return schema.replace(R"("type":"object",)", R"("type":"object","additionalProperties":false,)");
 }
 
+QByteArray withReasoning(QByteArray schema) {
+  const auto marker = QByteArrayLiteral("\"properties\":{");
+  const auto at = schema.indexOf(marker);
+  if (at < 0) return schema;
+  const auto insert = at + marker.size();
+  return schema.left(insert) + QByteArrayLiteral("\"reasoning\":{\"type\":\"string\"},") + schema.mid(insert);
+}
+
 QJsonValue parseModelReply(const QString &raw) {
   auto value = raw.trimmed();
   if (value.startsWith("```")) {
@@ -378,7 +386,7 @@ QJsonObject processRequest(const QJsonObject &request, const Generate &generate)
   }
   const QString window = lines.join('\n');
   const auto call = [&generate](const QString &system, const Payload &payload, const QByteArray &schema) {
-    return generate(system, dumpPayload(payload), schema);
+    return generate(system, dumpPayload(payload), withReasoning(schema));
   };
   // Matching and the deadline hint only refine extracted events. When the
   // model fails on them (overflowing context, unusable reply), the event stays

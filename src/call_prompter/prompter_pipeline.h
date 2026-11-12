@@ -59,6 +59,9 @@ QJsonArray calendarDays(const QDate &from, int days = 60);
 // reflect-cpp's property order, which llguidance follows.
 QByteArray restrictStrings(QByteArray schema, const QString &key, const QStringList &values);
 QByteArray closeObjects(QByteArray schema);
+// Adds a leading "reasoning" string property so constrained decoding lets the
+// model think before the answer fields; parsers ignore the extra field.
+QByteArray withReasoning(QByteArray schema);
 QByteArray dumpPayload(const Payload &payload);
 
 // Parses a raw model reply, tolerating surrounding whitespace and a Markdown

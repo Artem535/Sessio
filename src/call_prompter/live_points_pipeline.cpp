@@ -64,7 +64,7 @@ QJsonObject processLivePoints(const QJsonArray &newUtterances, const QStringList
     while (!reference.isEmpty() && pack().size() > limit) reference.removeAt(0);
     const QByteArray payload = pack();
     try {
-      for (const auto &point : checkedPoints(generate(system, payload, schemaFor(allowed)), allowed)) {
+      for (const auto &point : checkedPoints(generate(system, payload, withReasoning(schemaFor(allowed))), allowed)) {
         const auto text = point.toObject()["text"].toString();
         if (seen.contains(pointKey(text))) continue;
         seen.insert(pointKey(text));

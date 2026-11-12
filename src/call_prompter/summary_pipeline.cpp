@@ -309,7 +309,7 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
   const auto call = [&](const QString &system, const QByteArray &payload, const QByteArray &schema) {
     if (system.toUtf8().size() + payload.size() > kContextInputBytes || ++calls > kMaxCalls)
       throw PipelineError("notes generation budget exceeded");
-    return generate(system, payload, schema);
+    return generate(system, payload, withReasoning(schema));
   };
   const auto usable = [](const PipelineError &error) {
     return failureReason(QString::fromLatin1(error.what())) == QLatin1String("invalid_output");
