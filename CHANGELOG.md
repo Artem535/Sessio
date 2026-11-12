@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.42] - 2026-11-12
+
+- Call notes and meeting summaries use restructured prompts organised into
+  XML groups, with a step-by-step reasoning field before each answer, for
+  more accurate key points, agreements and meeting overviews.
+
 ## [0.2.41] - 2026-11-12
 
 - Editing the same event more than once (for example marking it completed,
