@@ -179,11 +179,15 @@ private:
     auto config = ::litert::lm::SessionConfig::CreateDefault();
     config.SetApplyPromptTemplateInSession(false);
     config.SetMaxOutputTokens(options.maxOutputTokens);
-    // LiteRT-LM v0.18.0 cannot resize the speculative drafter's KV cache after
-    // RewindToCheckpoint ("Cannot auto-resize tensor kv_cache_v_N"), so prefix
-    // reuse decodes without it. Greedy outputs were identical either way on the
-    // smoke scenarios; Session::Clone() was not, so it is not used.
-    config.SetEnableSpeculativeDecoding(mSpeculative && !options.reusePrefix);
+    // LiteRT-LM (observed on v0.18.0, not yet re-verified on v0.19.0) could
+    // not resize the speculative drafter's KV cache after RewindToCheckpoint
+    // ("Cannot auto-resize tensor kv_cache_v_N"), so prefix reuse still decodes
+    // without it. Greedy outputs were identical either way on the smoke
+    // scenarios; Session::Clone() was not, so it is not used.
+    ::litert::lm::SpeculativeDecodingConfig speculative;
+    speculative.mode = mSpeculative && !options.reusePrefix ? ::litert::lm::SpeculativeDecodingMode::kOn
+                                                            : ::litert::lm::SpeculativeDecodingMode::kOff;
+    config.SetSpeculativeDecodingConfig(speculative);
     // Same sampler as the validated Python runtime: top-p type with k=1 and
     // temperature 0, which is greedy.
     auto &sampler = config.GetMutableSamplerParams();

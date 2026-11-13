@@ -6,7 +6,7 @@
 # GPU: like the Linux Vulkan runtime, the LiteRT C API is linked dynamically
 # against upstream's prebuilt libLiteRt, whose WebGPU (Dawn) accelerator runs on
 # Direct3D on Windows and Metal on macOS. All prebuilt libraries (SHA-checked
-# against the v0.18.0 LFS pointers) ship next to libsessio_litert; on Windows
+# against the v0.19.0 LFS pointers) ship next to libsessio_litert; on Windows
 # also the DirectX shader compiler Dawn needs. Without a hardware GPU the app
 # falls back to the CPU at load time.
 #
@@ -20,7 +20,7 @@
 #         or lib/*.dylib (macOS); ship every runtime library together.
 set -euo pipefail
 
-version=v0.18.0
+version=v0.19.0
 prefix="${1:-$HOME/.cache/sessio-litert-lm-bazel}"
 mkdir -p "$prefix"
 prefix="$(cd "$prefix" && pwd)"
@@ -29,10 +29,10 @@ hook_dir="$(cd "$(dirname "$0")/../src/call_prompter/litert" && pwd)"
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*)
     platform=windows; target=sessio_litert.dll; prebuilt_os=windows_x86_64
-    prebuilt_libs=(libLiteRt.dll libLiteRtWebGpuAccelerator.dll libLiteRtTopKWebGpuSampler.dll libwebgpu_dawn.dll webgpu_dawn.dll) ;;
+    prebuilt_libs=(libLiteRt.dll libLiteRtWebGpuAccelerator.dll libwebgpu_dawn.dll webgpu_dawn.dll) ;;
   Darwin)
     platform=macos; target=libsessio_litert.dylib; prebuilt_os=macos_arm64
-    prebuilt_libs=(libLiteRt.dylib libLiteRtWebGpuAccelerator.dylib libLiteRtTopKWebGpuSampler.dylib libwebgpu_dawn.dylib) ;;
+    prebuilt_libs=(libLiteRt.dylib libLiteRtWebGpuAccelerator.dylib libwebgpu_dawn.dylib) ;;
   *) echo "Use scripts/build-litert-lm.sh on $(uname -s)" >&2; exit 1 ;;
 esac
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }

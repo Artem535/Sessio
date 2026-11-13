@@ -1,10 +1,11 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
-    branches: ["main", "devel", "devel-qt", "feat/118-call-transcription", "codex/151-call-prompter", "feat/jitsi-web-calls"]
+    branches: ["main", "devel", "devel-qt", "feat/118-call-transcription", "codex/151-call-prompter", "feat/jitsi-web-calls", "worktree-videoprovider-domain-layer"]
   pull_request:
-    branches: ["main", "devel", "devel-qt"]
+    branches: ["main", "devel", "devel-qt", "worktree-videoprovider-domain-layer"]
 
 permissions:
   contents: read
@@ -17,7 +18,7 @@ env:
   VCPKG_COMMIT: 62159a45e18f3a9ac0548628dcaf74fcb60c6ff9
 
 jobs:
-  # The call prompter runtime (libsessio_litert on LiteRT-LM v0.18.0, Vulkan
+  # The call prompter runtime (libsessio_litert on LiteRT-LM v0.19.0, Vulkan
   # with CPU fallback). The upstream super-build takes hours, so install/ is
   # cached and rebuilt only when the build scripts or the shim change: the shim
   # has no stable ABI, so a runtime built from an older sessio_litert.h must
@@ -40,7 +41,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/sessio-litert
-          key: litert-lm-v0.18.0-${{ runner.os }}-${{ hashFiles('scripts/build-litert-lm.sh', 'scripts/build-litert-lm-gpu.sh', 'src/call_prompter/litert/**', 'test/litert_gpu_runtime_smoke.cpp') }}
+          key: litert-lm-v0.19.0-${{ runner.os }}-${{ hashFiles('scripts/build-litert-lm.sh', 'scripts/build-litert-lm-gpu.sh', 'src/call_prompter/litert/**', 'test/litert_gpu_runtime_smoke.cpp') }}
 
       - name: Free disk space
         if: steps.cache-litert.outputs.cache-hit != 'true'

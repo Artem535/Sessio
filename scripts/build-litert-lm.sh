@@ -14,13 +14,11 @@
 # Env:   JOBS (default 2), CC/CXX (default gcc/g++).
 set -euo pipefail
 
-version=v0.18.0
-# v0.18.0 tracks TensorFlow master and LiteRT/RE2 main. Pin them: TensorFlow
-# f83e881 (2026-09-28) removed the TFLite proto CMakeLists the v0.18.0 shims
-# still add, so TFLite stays on its parent; LiteRT and RE2 stay at the
-# v0.18.0 release date (2026-10-06).
-tflite_tag=b4449a41869c3dbac7b4db333d019a941584e7a5
-litert_tag=65fd9cca2192d3595552777e740ee618b48504fe
+version=v0.19.0
+# Pin the release's CMake TensorFlow revision and the LiteRT revision used by
+# its Bazel workspace; otherwise upstream's moving main can change the ABI.
+tflite_tag=fadb2ca7b5c17ba3b9380f32487cef62eebcf2c9
+litert_tag=dcb657e8a537b2dc944e53e14c7eb43bcd9ededa
 re2_tag=2da0056814cf180480a19f5cf811e7e1c054bf6d
 prefix="$(realpath -m "${1:-$HOME/.cache/sessio-litert-lm}")"
 jobs="${JOBS:-2}"

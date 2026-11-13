@@ -1,4 +1,4 @@
-# LiteRT-LM v0.18.0's tokenizer callback accepts text, not arbitrary bytes.
+# LiteRT-LM v0.19.0's tokenizer callback accepts text, not arbitrary bytes.
 # llguidance can force an incomplete UTF-8 prefix when enum values share only
 # the first byte (e.g. Анна/Борис). Its string-tokenizer mode prevents passing
 # that prefix to TextToTokenIds(), where it becomes the replacement character.

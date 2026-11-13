@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Incremental Vulkan runtime assembly from the pinned v0.18.0 CPU archive tree.
+# Incremental Vulkan runtime assembly from the pinned v0.19.0 CPU archive tree.
 # Compiles the CURRENT Sessio shim and WebGPU options object, never an app build
 # or a multi-hour upstream superbuild. Run inside Ubuntu distrobox.
 # Usage: bash scripts/build-litert-lm-gpu.sh [GPU root] [existing CPU root]
@@ -11,7 +11,7 @@ task_repo=$(cd -- "$(dirname -- "$0")/.." && pwd)
 [[ "$task_root" != "$task_cpu" ]] || { echo 'GPU and CPU roots must differ' >&2; exit 1; }
 for task_tool in cmake curl sha256sum patchelf; do command -v "$task_tool" >/dev/null; done
 [[ "$(uname -sm)" == 'Linux x86_64' ]] || { echo 'This prebuilt set is Linux x86_64 only' >&2; exit 1; }
-[[ "$(git -C "$task_cpu/src" describe --tags --exact-match)" == 'v0.18.0' ]]
+[[ "$(git -C "$task_cpu/src" describe --tags --exact-match)" == 'v0.19.0' ]]
 task_build=$task_cpu/build/litert_lm/build
 [[ -f "$task_build/CMakeFiles/sessio_litert.dir/link.txt" ]] || {
   echo 'A completed CPU archive tree is required; this script never starts a superbuild' >&2; exit 1;
@@ -19,8 +19,8 @@ task_build=$task_cpu/build/litert_lm/build
 mkdir -p "$task_root/prebuilt" "$task_root/build" "$task_root/install/lib" "$task_root/install/include"
 sha256sum "$task_cpu/install/lib/libsessio_litert.so" > "$task_root/build/cpu-install-before.sha256"
 : > "$task_root/prebuilt/SHA256SUMS"
-for task_lib in libLiteRt.so libLiteRtWebGpuAccelerator.so libLiteRtTopKWebGpuSampler.so libwebgpu_dawn.so libGemmaModelConstraintProvider.so; do
-  task_pointer=$(git -C "$task_cpu/src" show "v0.18.0:prebuilt/linux_x86_64/$task_lib")
+for task_lib in libLiteRt.so libLiteRtWebGpuAccelerator.so libwebgpu_dawn.so libGemmaModelConstraintProvider.so; do
+  task_pointer=$(git -C "$task_cpu/src" show "v0.19.0:prebuilt/linux_x86_64/$task_lib")
   task_expected=$(printf '%s\n' "$task_pointer" | sed -n 's/oid sha256://p')
   [[ "$task_expected" =~ ^[0-9a-f]{64}$ ]] || { echo "Invalid release pointer: $task_lib" >&2; exit 1; }
   task_file=$task_root/prebuilt/$task_lib
@@ -29,7 +29,7 @@ for task_lib in libLiteRt.so libLiteRtWebGpuAccelerator.so libLiteRtTopKWebGpuSa
       cp -- "$PREBUILT_DIR/$task_lib" "$task_file"
     else
       curl --fail --location --proto '=https' --proto-redir '=https' --retry 1 --connect-timeout 20 --max-time 180 \
-        "https://media.githubusercontent.com/media/google-ai-edge/LiteRT-LM/v0.18.0/prebuilt/linux_x86_64/$task_lib" -o "$task_file"
+        "https://media.githubusercontent.com/media/google-ai-edge/LiteRT-LM/v0.19.0/prebuilt/linux_x86_64/$task_lib" -o "$task_file"
     fi
   fi
   printf '%s  %s\n' "$task_expected" "$task_file" | sha256sum --check

@@ -51,15 +51,15 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.LITERT_PREFIX }}/install
-          key: litert-runtime-${{ runner.os }}-v0.18.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}
+          key: litert-runtime-${{ runner.os }}-v0.19.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}
 
       - name: Restore Bazel cache
         if: steps.cache-runtime.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BAZEL_DISK_CACHE }}
-          key: litert-bazel-${{ runner.os }}-v0.18.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}
-          restore-keys: litert-bazel-${{ runner.os }}-v0.18.0-
+          key: litert-bazel-${{ runner.os }}-v0.19.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}
+          restore-keys: litert-bazel-${{ runner.os }}-v0.19.0-
 
       - name: Set up Java 17
         if: steps.cache-runtime.outputs.cache-hit != 'true'
@@ -111,20 +111,20 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ env.BAZEL_DISK_CACHE }}
-          key: litert-bazel-${{ runner.os }}-v0.18.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}-${{ github.run_id }}
+          key: litert-bazel-${{ runner.os }}-v0.19.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}-${{ github.run_id }}
 
       - name: Verify runtime
         run: |
           ls -lR "$LITERT_PREFIX/install"
           if [[ "$RUNNER_OS" == macOS ]]; then
             dir="$LITERT_PREFIX/install/lib"
-            for f in libsessio_litert.dylib libLiteRt.dylib libLiteRtWebGpuAccelerator.dylib libLiteRtTopKWebGpuSampler.dylib libwebgpu_dawn.dylib; do
+            for f in libsessio_litert.dylib libLiteRt.dylib libLiteRtWebGpuAccelerator.dylib libwebgpu_dawn.dylib; do
               test -f "$dir/$f" || { echo "::error::$f missing from the runtime"; exit 1; }
             done
             nm -gU "$dir/libsessio_litert.dylib" | c++filt | grep 'sessio::litert::loadModel' >/dev/null || { echo "::error::loadModel is not exported"; exit 1; }
             otool -L "$dir/libsessio_litert.dylib" | tee /dev/stderr | grep '@rpath/libLiteRt.dylib' >/dev/null
           else
-            for f in bin/sessio_litert.dll bin/libLiteRt.dll bin/libLiteRtWebGpuAccelerator.dll bin/libLiteRtTopKWebGpuSampler.dll bin/libwebgpu_dawn.dll bin/dxcompiler.dll bin/dxil.dll lib/sessio_litert.lib; do
+            for f in bin/sessio_litert.dll bin/libLiteRt.dll bin/libLiteRtWebGpuAccelerator.dll bin/libwebgpu_dawn.dll bin/dxcompiler.dll bin/dxil.dll lib/sessio_litert.lib; do
               test -f "$LITERT_PREFIX/install/$f" || { echo "::error::$f missing from the runtime"; exit 1; }
             done
           fi

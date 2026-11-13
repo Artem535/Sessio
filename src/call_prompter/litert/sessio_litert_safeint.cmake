@@ -1,4 +1,4 @@
-# LiteRT-LM v0.18.0 replaces LiteRT's root CMakeLists.txt with its shim,
+# LiteRT-LM v0.19.0 replaces LiteRT's root CMakeLists.txt with its shim,
 # omitting SafeInt's download while core/model still includes <build>/safeint.
 # Restore the header-only dependency at the revision pinned by LiteRT itself.
 include(FetchContent)

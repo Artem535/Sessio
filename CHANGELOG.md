@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.43] - 2026-11-13
+
+- The call prompter runtime is built on LiteRT-LM v0.19.0, matching the GPU
+  composite export used by the fine-tuned Qwen3.5 model. Dependency pins
+  (TensorFlow, LiteRT, zlib) keep the CI runtime reproducible, and speculative
+  decoding follows the new runtime API.
+
 ## [0.2.42] - 2026-11-12
 
 - Call notes and meeting summaries use restructured prompts organised into

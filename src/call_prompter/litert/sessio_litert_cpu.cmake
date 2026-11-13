@@ -1,4 +1,4 @@
-# Compatibility fixes for LiteRT-LM v0.18.0's LiteRT CMake shim.
+# Compatibility fixes for LiteRT-LM v0.19.0's LiteRT CMake shim.
 include("${CMAKE_CURRENT_LIST_DIR}/sessio_litert_safeint.cmake")
 
 # The shim imports TFLite's archives, but leaves the plain `farmhash` link
