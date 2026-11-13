@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.44] - 2026-11-13
+
+- Fix constrained local-model generation on WebGPU devices that reject the
+  GPU logit-mask buffer, while keeping model inference on the GPU.
+
 ## [0.2.43] - 2026-11-13
 
 - The call prompter runtime is built on LiteRT-LM v0.19.0, matching the GPU

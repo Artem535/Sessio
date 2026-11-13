@@ -38,9 +38,11 @@ int main(int argc, char **argv) try {
   const std::string suffix = "<|turn>user\nAgreement: Boris will send the estimate on Friday. Extract the action.\n<turn|>\n<|turn>model\n";
   GenerateOptions generate;
   generate.maxOutputTokens = 128;
+  generate.jsonSchema = R"({"type":"object","properties":{"action":{"type":"string"}},"required":["action"],"additionalProperties":false})";
   std::string reply;
   GenerateStats stats;
   require(model->generate(prefix, suffix, generate, &reply, &stats) == Status::Ok, "JSON generation failed");
+  require(stats.constrained, "JSON schema was not applied");
   const auto json = nlohmann::json::parse(reply);
   require(json.is_object() && json.contains("action") && json["action"].is_string(), "invalid action JSON");
   require(stats.decodeTokens > 2, "not a meaningful JSON response");
