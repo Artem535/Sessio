@@ -29,10 +29,10 @@ hook_dir="$(cd "$(dirname "$0")/../src/call_prompter/litert" && pwd)"
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*)
     platform=windows; target=sessio_litert.dll; prebuilt_os=windows_x86_64
-    prebuilt_libs=(libLiteRt.dll libLiteRtWebGpuAccelerator.dll libwebgpu_dawn.dll webgpu_dawn.dll) ;;
+    prebuilt_libs=(libLiteRt.dll libLiteRtWebGpuAccelerator.dll libwebgpu_dawn.dll webgpu_dawn.dll libGemmaModelConstraintProvider.dll libGemmaModelConstraintProvider.lib) ;;
   Darwin)
     platform=macos; target=libsessio_litert.dylib; prebuilt_os=macos_arm64
-    prebuilt_libs=(libLiteRt.dylib libLiteRtWebGpuAccelerator.dylib libwebgpu_dawn.dylib) ;;
+    prebuilt_libs=(libLiteRt.dylib libLiteRtWebGpuAccelerator.dylib libwebgpu_dawn.dylib libGemmaModelConstraintProvider.dylib) ;;
   *) echo "Use scripts/build-litert-lm.sh on $(uname -s)" >&2; exit 1 ;;
 esac
 sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
@@ -68,6 +68,11 @@ for lib in "${prebuilt_libs[@]}"; do
   [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || { echo "Invalid LFS pointer: $lib" >&2; exit 1; }
   fetch "https://media.githubusercontent.com/media/google-ai-edge/LiteRT-LM/$version/prebuilt/$prebuilt_os/$lib" \
     "$expected" "$pkg/prebuilt/$lib"
+  # v0.19.0 targets (e.g. runtime/components:webgpu_dawn_shared_lib) link these
+  # files straight from the source tree, where the skip-smudge clone leaves LFS
+  # pointers that ld rejects ("unknown file type"). Overwrite them with the
+  # same verified downloads.
+  cp -f "$pkg/prebuilt/$lib" "$prefix/src/prebuilt/$prebuilt_os/$lib"
 done
 if [[ "$platform" == windows ]]; then
   # Linking libLiteRt.dll needs an import library, which upstream does not ship.
