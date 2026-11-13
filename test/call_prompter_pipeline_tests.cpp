@@ -1,6 +1,7 @@
 #include "prompter_pipeline.h"
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QTemporaryFile>
 #include <deque>
 #include <array>
 #include <gtest/gtest.h>
@@ -196,6 +197,30 @@ TEST(PipelineFormatTest, DumpEscapesControlCharactersLikePython) {
 TEST(PipelineFormatTest, GemmaPromptTrimsTurnsAndOpensTheModelTurn) {
   EXPECT_EQ(renderGemmaPrompt("  SYS\n\n", " U \n"),
             QString("<|turn>system\nSYS<turn|>\n<|turn>user\nU<turn|>\n<|turn>model\n"));
+}
+
+TEST(PipelineFormatTest, QwenPromptUsesChatMlAndClosesTheThinkingTurn) {
+  EXPECT_EQ(qwenSystemTurn(" SYS \n") + qwenUserTurn(" U \n"),
+            QString("<|im_start|>system\nSYS<|im_end|>\n<|im_start|>user\nU<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"));
+}
+
+TEST(PipelineFormatTest, DiscardsTopLevelReasoningBeforeValidatingModelReply) {
+  const auto reply = parseModelReply(R"({"reasoning":"проверено","key_points":[]})").toObject();
+  EXPECT_FALSE(reply.contains("reasoning"));
+  EXPECT_TRUE(reply.value("key_points").isArray());
+}
+
+TEST(PipelineFormatTest, RecognizesQwenChatTemplateInLitertMetadata) {
+  QTemporaryFile file;
+  ASSERT_TRUE(file.open());
+  ASSERT_GT(file.write("LITERTLM metadata <|im_start|> <|endoftext|>"), 0);
+  ASSERT_TRUE(file.flush());
+  EXPECT_TRUE(isQwenLitertModel(file.fileName()));
+  ASSERT_TRUE(file.resize(0));
+  ASSERT_TRUE(file.seek(0));
+  ASSERT_GT(file.write("LITERTLM metadata <|turn> <turn|>"), 0);
+  ASSERT_TRUE(file.flush());
+  EXPECT_FALSE(isQwenLitertModel(file.fileName()));
 }
 
 TEST(PipelineFormatTest, ReplyParserAcceptsFencesAndRejectsProse) {

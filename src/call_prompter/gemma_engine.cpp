@@ -15,8 +15,8 @@ constexpr int kSchemaOutputTokens = 2048;
 
 class GemmaEngine final : public PrompterEngine {
 public:
-  GemmaEngine(std::unique_ptr<sessio::litert::Model> model, bool reusePrefix)
-      : mModel(std::move(model)), mReusePrefix(reusePrefix) {}
+  GemmaEngine(std::unique_ptr<sessio::litert::Model> model, bool reusePrefix, bool qwen)
+      : mModel(std::move(model)), mReusePrefix(reusePrefix), mQwen(qwen) {}
 
   QJsonValue generate(const QString &system, const QByteArray &payload, const QByteArray &schema) override {
     std::string reply;
@@ -30,8 +30,10 @@ public:
     sessio::litert::GenerateStats stats;
     QElapsedTimer timer;
     timer.start();
-    const auto status = mModel->generate(gemmaSystemTurn(system).toStdString(),
-                                         gemmaUserTurn(QString::fromUtf8(payload)).toStdString(), options, &reply,
+    const auto systemTurn = mQwen ? qwenSystemTurn(system) : gemmaSystemTurn(system);
+    const auto userTurn = mQwen ? qwenUserTurn(QString::fromUtf8(payload)) : gemmaUserTurn(QString::fromUtf8(payload));
+    const auto status = mModel->generate(systemTurn.toStdString(),
+                                         userTurn.toStdString(), options, &reply,
                                          &stats);
     // Counts and timings only: never prompt or reply text.
     qCInfo(logPrompterModel).nospace()
@@ -56,6 +58,7 @@ public:
 private:
   std::unique_ptr<sessio::litert::Model> mModel;
   const bool mReusePrefix;
+  const bool mQwen;
 };
 
 } // namespace
@@ -65,14 +68,20 @@ bool gemmaRuntimeAvailable() { return true; }
 std::unique_ptr<PrompterEngine> createGemmaEngine(const QString &modelPath, const QString &cacheDir,
                                                   const GemmaOptions &gemma) {
   sessio::litert::ModelOptions options;
+  const bool qwen = isQwenLitertModel(modelPath);
   options.cacheDir = cacheDir.toStdString();
   options.speculativeDecoding = !gemma.reusePrefix;
   options.backend = gemma.acceleration == GemmaOptions::Acceleration::Cpu ? sessio::litert::Backend::CPU
                                                                            : sessio::litert::Backend::GPU;
+  // Current Qwen3.5 LiteRT graphs can initialize on GPU but fail during
+  // inference. Auto uses the verified CPU path; an explicit GPU selection is
+  // still respected and may fail if its runtime cannot execute the graph.
+  if (qwen && gemma.acceleration == GemmaOptions::Acceleration::Auto)
+    options.backend = sessio::litert::Backend::CPU;
   options.allowCpuFallback = gemma.acceleration == GemmaOptions::Acceleration::Auto;
   auto model = sessio::litert::loadModel(modelPath.toStdString(), options, nullptr);
   if (!model) return nullptr;
-  return std::make_unique<GemmaEngine>(std::move(model), gemma.reusePrefix);
+  return std::make_unique<GemmaEngine>(std::move(model), gemma.reusePrefix, qwen);
 }
 
 } // namespace pcm::prompter

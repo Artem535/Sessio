@@ -286,6 +286,12 @@ QByteArray withReasoning(QByteArray schema) {
 }
 
 QJsonValue parseModelReply(const QString &raw) {
+  const auto stripReasoning = [](QJsonValue reply) -> QJsonValue {
+    if (!reply.isObject()) return reply;
+    auto object = reply.toObject();
+    if (object.value("reasoning").isString()) object.remove("reasoning");
+    return object;
+  };
   auto value = raw.trimmed();
   if (value.startsWith("```")) {
     const auto newline = value.indexOf('\n');
@@ -298,7 +304,7 @@ QJsonValue parseModelReply(const QString &raw) {
   // Wrapping accepts scalar replies too, like Python's json.loads.
   QJsonParseError error;
   const auto doc = QJsonDocument::fromJson("[" + value.toUtf8() + "]", &error);
-  if (error.error == QJsonParseError::NoError && doc.array().size() == 1) return doc.array().first();
+  if (error.error == QJsonParseError::NoError && doc.array().size() == 1) return stripReasoning(doc.array().first());
   // The model sometimes wraps one object in a sentence or a second fence.
   // Take the first complete object; the caller still validates its schema.
   const auto start = value.indexOf('{');
@@ -307,7 +313,7 @@ QJsonValue parseModelReply(const QString &raw) {
   auto parsed = QJsonDocument::fromJson(object, &error);
   if (error.error == QJsonParseError::GarbageAtEnd) parsed = QJsonDocument::fromJson(object.left(error.offset), &error);
   if (error.error != QJsonParseError::NoError || !parsed.isObject()) throw PipelineError("reply is not JSON");
-  return parsed.object();
+  return stripReasoning(parsed.object());
 }
 
 QString gemmaSystemTurn(const QString &system) {
@@ -316,6 +322,26 @@ QString gemmaSystemTurn(const QString &system) {
 
 QString gemmaUserTurn(const QString &user) {
   return QStringLiteral("<|turn>user\n") + user.trimmed() + QStringLiteral("<turn|>\n<|turn>model\n");
+}
+
+QString qwenSystemTurn(const QString &system) {
+  return QStringLiteral("<|im_start|>system\n") + system.trimmed() + QStringLiteral("<|im_end|>\n");
+}
+
+QString qwenUserTurn(const QString &user) {
+  return QStringLiteral("<|im_start|>user\n") + user.trimmed() +
+      QStringLiteral("<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n");
+}
+
+bool isQwenLitertModel(const QString &path) {
+  QFile model(path);
+  if (!model.open(QIODevice::ReadOnly)) return false;
+  // LiteRT-LM stores the chat template in its leading metadata section.
+  // Qwen's ChatML template and padding token distinguish it from Gemma and
+  // the other currently supported model formats.
+  const auto metadata = model.read(128 * 1024);
+  return metadata.startsWith("LITERTLM") && metadata.contains("<|im_start|>") &&
+         metadata.contains("<|endoftext|>");
 }
 
 QString renderGemmaPrompt(const QString &system, const QString &user) {

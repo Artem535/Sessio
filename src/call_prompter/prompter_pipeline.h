@@ -75,5 +75,8 @@ QString renderGemmaPrompt(const QString &system, const QString &user);
 // <|turn> special token, so it can be processed once and its KV cache reused.
 QString gemmaSystemTurn(const QString &system);
 QString gemmaUserTurn(const QString &user);
+QString qwenSystemTurn(const QString &system);
+QString qwenUserTurn(const QString &user);
+bool isQwenLitertModel(const QString &path);
 
 } // namespace pcm::prompter
