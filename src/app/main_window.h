@@ -48,7 +48,7 @@ public:
   /**
    * @brief Enum to identify the available pages in the application.
    */
-  enum class Pages { myDay, clientInfo, eventInfo, analytics, clientCard, clientNotes, calls, transcript, transcriptList };
+  enum class Pages { myDay, clientInfo, eventInfo, analytics, clientCard, clientNotes, calls, transcript, transcriptList, meetingReview };
 
   /**
    * @brief Constructor for the MainWindow class.
@@ -95,6 +95,7 @@ public:
   void registerTranscriptListPage(QWidget *page);
   void openTranscriptListPage();
   void openTranscriptPage();
+  Q_INVOKABLE void openMeetingReview(QWidget *page);
   void returnToEvent(int64_t eventId, qint64 dayMs);
   void openClientCard(const std::optional<DuckClient> &client);
   // Opens the card of the client with this id (no-op if the client no longer exists).

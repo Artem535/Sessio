@@ -20,6 +20,7 @@ namespace {
 constexpr std::chrono::milliseconds kGracefulTimeout{5000};
 constexpr std::chrono::milliseconds kNoWait{0};
 constexpr int kMaxConsecutiveStoreFailures = 3;
+constexpr auto kAudioArrivalGap = std::chrono::milliseconds(250);
 } // namespace
 
 // Posts work to the session's QObject from any thread. After detach() (called
@@ -82,6 +83,9 @@ struct SessionShared {
   // was just removed until its segmenter erased the old track.
   std::mutex tracksMutex;
   std::map<QString, std::string> tracks;
+  // Expected arrival of the next PCM chunk; guarded by tracksMutex. Some
+  // providers stop delivering samples while muted without reporting a gap.
+  std::map<QString, std::chrono::steady_clock::time_point> nextAudioArrival;
   std::set<QString> interruptedTracks;  // guarded by tracksMutex
   uint64_t generation = 0;
 
@@ -186,6 +190,18 @@ TranscriptionSession::TranscriptionSession(std::shared_ptr<pcm::database::Databa
                 changed = shared_->interruptedTracks.empty();
               }
               if (changed) emit audioGapChanged(false);
+            });
+    connect(provider_, &pcm::video::VideoProvider::audioTimelineResumed, this,
+            [this](const QString &id) {
+              if (state() != SessionState::Loading && state() != SessionState::Recording) return;
+              std::lock_guard lock(shared_->tracksMutex);
+              const auto track = shared_->tracks.find(id);
+              if (track == shared_->tracks.end()) return;
+              if (auto engine = shared_->currentEngine()) {
+                const auto offset = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - shared_->clockStart).count();
+                engine->resetTrack(track->second, offset);
+              }
             });
     connect(provider_, &pcm::video::VideoProvider::connectionLost, this,
             [this](const QString &) { stop(); });
@@ -362,6 +378,7 @@ void TranscriptionSession::addTrackFor(const QString &id) {
     if (shared_->tracks.count(id)) return;  // duplicate join signal
     engineId = id.toStdString() + "#" + std::to_string(++shared_->generation);
     shared_->tracks.emplace(id, engineId);
+    shared_->nextAudioArrival[id] = std::chrono::steady_clock::now();
   }
   TrackInfo info{engineId,
                  participant->isLocal ? TrackRole::Practitioner : TrackRole::Participant,
@@ -397,6 +414,7 @@ void TranscriptionSession::removeTrackFor(const QString &id) {
     if (it == shared_->tracks.end()) return;
     engineId = std::move(it->second);
     shared_->tracks.erase(it);
+    shared_->nextAudioArrival.erase(id);
   }
   shared_->executor.post([sh = shared_, engineId = std::move(engineId)] {
     if (auto e = sh->currentEngine()) {
@@ -414,7 +432,20 @@ void TranscriptionSession::onAudio(const QString &participantId, const int16_t *
   if (shared_->interruptedTracks.count(participantId)) return;
   const auto it = shared_->tracks.find(participantId);
   if (it == shared_->tracks.end()) return;
-  if (auto e = shared_->currentEngine()) e->pushAudio(it->second, samples, count, sampleRate);
+  if (auto e = shared_->currentEngine()) {
+    const auto now = std::chrono::steady_clock::now();
+    const auto previous = shared_->nextAudioArrival.find(participantId);
+    if (previous != shared_->nextAudioArrival.end() && now > previous->second + kAudioArrivalGap) {
+      const auto offset = std::chrono::duration_cast<std::chrono::milliseconds>(
+          now - shared_->clockStart).count();
+      e->resetTrack(it->second, offset);
+    }
+    const auto duration = sampleRate > 0
+        ? std::chrono::microseconds(static_cast<int64_t>(count) * 1000000 / sampleRate)
+        : std::chrono::microseconds::zero();
+    shared_->nextAudioArrival[participantId] = now + duration;
+    e->pushAudio(it->second, samples, count, sampleRate);
+  }
 }
 
 void TranscriptionSession::beginShutdown(bool graceful) {

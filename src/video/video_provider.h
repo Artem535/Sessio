@@ -93,6 +93,9 @@ signals:
   void participantLeft(QString id);
   void audioInterrupted(QString id);
   void audioResumed(QString id);
+  // Emitted before PCM resumes after an intentional mute; unlike a device
+  // interruption this is normal user action and must not show a warning.
+  void audioTimelineResumed(QString id);
   void microphoneChanged(QAudioDevice device);
   void screenSharingChanged(bool sharing);
   void reconnecting();

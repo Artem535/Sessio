@@ -9,6 +9,7 @@
 #include <QCameraDevice>
 #include <QAction>
 #include <QComboBox>
+#include <QClipboard>
 #include "combo_fit.h"
 #include <QGuiApplication>
 #include <QScreen>
@@ -735,6 +736,13 @@ void CallPage::buildConnectedScreen() {
   controlBarLayout->addWidget(mScreenShareButton);
   controlBarLayout->addWidget(mDevicesButton);
   controlBarLayout->addWidget(mFullscreenToggleButton);
+  mCopyInvitationButton = new QPushButton(tr("Copy invitation"), mControlBar);
+  mCopyInvitationButton->setObjectName("copyQuickMeetingInvitation");
+  mCopyInvitationButton->hide();
+  connect(mCopyInvitationButton, &QPushButton::clicked, this, [this] {
+    if (!mInvitationUrl.isEmpty()) QGuiApplication::clipboard()->setText(mInvitationUrl);
+  });
+  controlBarLayout->addWidget(mCopyInvitationButton);
   controlBarLayout->addWidget(leaveButton);
   mVideoStage->setControlBarWidget(mControlBar);
 
@@ -751,6 +759,11 @@ void CallPage::buildConnectedScreen() {
   layout->addWidget(mMediaErrorBanner);
 
   mStack->addWidget(mConnectedView);
+}
+
+void CallPage::setInvitationUrl(const QString &url) {
+  mInvitationUrl = url;
+  if (mCopyInvitationButton) mCopyInvitationButton->setVisible(!url.isEmpty());
 }
 
 void CallPage::attachSession(pcm::video::VideoSession *session) {

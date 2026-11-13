@@ -19,7 +19,7 @@
 TranscriptPage::~TranscriptPage() {
   if (mExternalHeader) {
     for (auto *menu : mExternalHeader->findChildren<QMenu *>()) delete menu;
-    delete mExternalHeader;
+    delete mExternalHeader.data();
     mExternalHeader = nullptr;
   }
   delete mQuickReader;

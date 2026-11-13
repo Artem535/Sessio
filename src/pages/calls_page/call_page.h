@@ -92,6 +92,7 @@ public:
   void setSidePanelExpandedByDefault(bool expanded);
   void setTranscribeButtonVisible(bool visible);
   void setTranscribeButtonState(bool active, const QString &tooltip);
+  void setInvitationUrl(const QString &url);
   void openSidePanel();
   void setNotesFocused(bool focused);
   bool hasSidePanelWidget() const { return mSidePanel != nullptr; }
@@ -193,6 +194,8 @@ private:
   QToolButton *mFullscreenToggleButton{nullptr};
   QToolButton *mDevicesButton{nullptr};
   QToolButton *mScreenShareButton{nullptr};
+  QPushButton *mCopyInvitationButton{nullptr};
+  QString mInvitationUrl;
   QWidget *mSharingBanner{nullptr};
   QString mFeaturedScreenKey;
   QToolButton *mTranscribeButton{nullptr};

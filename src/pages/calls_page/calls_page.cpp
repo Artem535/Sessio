@@ -5,6 +5,7 @@
 #include "jitsi_url.h"
 
 #include <QStackedWidget>
+#include <QDateTime>
 #include <QUrl>
 #include <QUrlQuery>
 #include <QVBoxLayout>
@@ -58,6 +59,7 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
   layout->addWidget(mStack);
 
   mEntryWidget = new CallEntryWidget(specialistMode, this);
+  mQuickMeetingClient = new pcm::tokenclient::TokenBackendClient(mTokenClient->baseUrl(), this);
   connect(mEntryWidget, &CallEntryWidget::materialRequested, this, &CallsPage::materialRequested);
   connect(mEntryWidget, &CallEntryWidget::transcriptRequested, this, &CallsPage::transcriptRequested);
   mCallPage = new CallPage(mDeviceManager, this);
@@ -77,13 +79,63 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
   // started N joins).
   connect(mTokenClient, &pcm::tokenclient::TokenBackendClient::tokenReceived, this,
           [this](const pcm::tokenclient::TokenResult &result) {
-            startJoin(result);
+            if (!mQuickMeetingPending) startJoin(result);
           });
   connect(mTokenClient, &pcm::tokenclient::TokenBackendClient::tokenRequestFailed, mEntryWidget,
           &CallEntryWidget::showError);
 
+  connect(mEntryWidget, &CallEntryWidget::quickMeetingRequested, this, [this] {
+    if (mQuickMeetingPending || hasActiveCall() || !mBearerCredentialProvider) return;
+    const auto credential = mBearerCredentialProvider();
+    if (credential.isEmpty()) {
+      mEntryWidget->showError(tr("Configure your meeting account first."));
+      return;
+    }
+    mEntryWidget->clearError();
+    mCurrentEventId.reset();
+    mQuickMeetingPending = true;
+    mQuickMeetingClient->setBaseUrl(mTokenClient->baseUrl());
+    const auto start = QDateTime::currentDateTimeUtc();
+    // The backend permits joins until 15 minutes after scheduledEnd (ADR-12).
+    // Account for that grace period so the invitation lasts 24 hours total.
+    constexpr int kBackendGraceSeconds = 15 * 60;
+    mQuickMeetingClient->requestCreateMeeting(credential, start.toString(Qt::ISODate),
+        start.addSecs(24 * 60 * 60 - kBackendGraceSeconds).toString(Qt::ISODate));
+  });
+  connect(mQuickMeetingClient, &pcm::tokenclient::TokenBackendClient::meetingCreateFailed,
+          this, [this](const QString &reason) {
+    mQuickMeetingPending = false;
+    mEntryWidget->showError(reason);
+  });
+  connect(mQuickMeetingClient, &pcm::tokenclient::TokenBackendClient::meetingCreated,
+          this, [this](const pcm::tokenclient::MeetingCreateResult &result) {
+    if (!mQuickMeetingPending) return;
+    if (result.meetingRef.isEmpty() || result.invitationUrl.isEmpty()) {
+      mQuickMeetingPending = false;
+      mEntryWidget->showError(tr("The meeting response is incomplete."));
+      return;
+    }
+    mCallPage->setInvitationUrl(result.invitationUrl);
+    mQuickMeetingClient->requestSpecialistToken(mBearerCredentialProvider(), result.meetingRef,
+                                          mEntryWidget->displayName());
+  });
+  connect(mQuickMeetingClient, &pcm::tokenclient::TokenBackendClient::tokenReceived,
+          this, [this](const pcm::tokenclient::TokenResult &result) {
+    if (!mQuickMeetingPending) return;
+    mQuickMeetingPending = false;
+    startJoin(result);
+  });
+  connect(mQuickMeetingClient, &pcm::tokenclient::TokenBackendClient::tokenRequestFailed,
+          this, [this](const QString &reason) {
+    if (!mQuickMeetingPending) return;
+    mQuickMeetingPending = false;
+    mEntryWidget->showError(reason);
+  });
+
   connect(mEntryWidget, &CallEntryWidget::joinByCodeRequested, this,
           [this](const QString &code, const QString &passcode) {
+            if (mQuickMeetingPending || hasActiveCall()) return;
+            mCallPage->setInvitationUrl({});
             mEntryWidget->setJitsiFallbackUrl({});
             mCurrentEventId.reset(); // a code/passcode join never has a known Event
             mEntryWidget->clearError();
@@ -96,6 +148,8 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
 
   connect(mEntryWidget, &CallEntryWidget::ownMeetingJoinRequested, this,
           [this](const QString &meetingRef) {
+            if (mQuickMeetingPending || hasActiveCall()) return;
+            mCallPage->setInvitationUrl({});
             for (const auto &meeting : mUpcomingMeetings) {
               if (meeting.meetingRef == meetingRef && !meeting.jitsiUrl.isEmpty()) {
                 joinExternalJitsi(meeting.jitsiUrl, meeting.eventId);
@@ -204,7 +258,7 @@ void CallsPage::setUpcomingMeetings(const QList<UpcomingMeeting> &meetings) {
 void CallsPage::preselectOwnMeeting(const QString &meetingRef) {
   // An "Open Meeting" click arriving mid-call must not switch away from
   // (and so hide) the live call.
-  if (hasActiveCall()) {
+  if (mQuickMeetingPending || hasActiveCall()) {
     return;
   }
   mStack->setCurrentWidget(mEntryWidget);
@@ -213,7 +267,7 @@ void CallsPage::preselectOwnMeeting(const QString &meetingRef) {
 
 void CallsPage::prefillJoinCode(const QString &code, const QString &passcode) {
   // Same for a forwarded sessio:// link arriving mid-call.
-  if (hasActiveCall()) {
+  if (mQuickMeetingPending || hasActiveCall()) {
     return;
   }
   mStack->setCurrentWidget(mEntryWidget);
@@ -230,6 +284,7 @@ void CallsPage::setVideoProviderFactoryForTesting(
 }
 
 void CallsPage::joinExternalJitsi(const QString &url, std::optional<int64_t> eventId) {
+  if (mQuickMeetingPending) return;
   if (hasActiveCall()) return;
   mEntryWidget->setJitsiFallbackUrl({});
   const auto address = pcm::meeting::parseJitsiRoomUrl(url);
@@ -237,6 +292,7 @@ void CallsPage::joinExternalJitsi(const QString &url, std::optional<int64_t> eve
     mEntryWidget->showError(tr("Enter a valid HTTPS Jitsi room link without login, query or fragment."));
     return;
   }
+  mCallPage->setInvitationUrl({});
   mCurrentEventId = eventId;
   mEntryWidget->setJitsiFallbackUrl(url.trimmed());
   mEntryWidget->clearError();

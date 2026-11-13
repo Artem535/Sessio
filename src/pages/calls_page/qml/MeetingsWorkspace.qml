@@ -108,6 +108,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.margins: 24
             Copy { text: qsTr("Meetings"); font.pixelSize: 24; font.weight: Font.DemiBold; Layout.fillWidth: true }
+            Action { visible: meetingsBridge && meetingsBridge.canCreateMeeting; text: qsTr("Start a meeting"); onClicked: meetingsBridge.createQuickMeeting() }
             Action { text: qsTr("Join a meeting"); primary: true; onClicked: joinDialog.open() }
         }
         Rectangle { visible: !root.externalHeader; Layout.fillWidth: true; implicitHeight: 1; color: theme.mid }

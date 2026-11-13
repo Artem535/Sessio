@@ -24,6 +24,28 @@ TEST(MainWindowCallsTabTest, AddCallsPageAddsCallsTabAndPage) {
   EXPECT_NE(window.findChild<QPushButton *>(), nullptr); // sidebar buttons exist
 }
 
+TEST(MainWindowCallsTabTest, MeetingReviewIsEmbeddedInMainWindow) {
+  MainWindow window;
+  pcm::video::DeviceManager devices;
+  pcm::tokenclient::TokenBackendClient client("http://127.0.0.1:1");
+  window.addCallsPage(&devices, &client, [] { return QString(); });
+  auto *review = new QWidget;
+  const bool opened = QMetaObject::invokeMethod(&window, "openMeetingReview",
+                                                Q_ARG(QWidget *, review));
+  if (!opened) delete review;
+  ASSERT_TRUE(opened);
+  EXPECT_EQ(review->window(), &window);
+  EXPECT_FALSE(review->isWindow());
+  EXPECT_TRUE(window.findChild<QStackedWidget *>("stackedWidget")->currentWidget()->isAncestorOf(review));
+  QPointer<QWidget> retained = review;
+  auto *next = new QWidget;
+  ASSERT_TRUE(QMetaObject::invokeMethod(&window, "openMeetingReview", Q_ARG(QWidget *, next)));
+  QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+  ASSERT_TRUE(retained);
+  ASSERT_TRUE(QMetaObject::invokeMethod(&window, "openMeetingReview", Q_ARG(QWidget *, retained.data())));
+  EXPECT_FALSE(retained->isHidden());
+}
+
 TEST(MainWindowCallsTabTest, JoinLinkSwitchesToCallsTabWithPrefilledCode) {
   MainWindow window;
   pcm::video::DeviceManager deviceManager;
@@ -72,6 +94,11 @@ TEST(MainWindowCallsTabTest, StandaloneTranscriptListAndReviewNeedNoEventOrClien
   window.openTranscriptPage();
   QApplication::processEvents();
   EXPECT_EQ(window.findChild<QStackedWidget *>()->currentWidget(), review);
+  QPushButton *transcripts = nullptr;
+  for (auto *button : window.findChildren<QPushButton *>())
+    if (button->accessibleName() == QStringLiteral("Transcripts")) transcripts = button;
+  ASSERT_NE(transcripts, nullptr);
+  EXPECT_TRUE(transcripts->isChecked());
   EXPECT_EQ(review->transcriptCount(), 1);
   EXPECT_TRUE(db->get_clients().empty());
   EXPECT_FALSE(db->get_transcript(id)->event_id.has_value());

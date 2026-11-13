@@ -263,6 +263,10 @@
         <translation>Встречи</translation>
     </message>
     <message>
+        <source>Start a meeting</source>
+        <translation>Начать встречу</translation>
+    </message>
+    <message>
         <source>Enter a valid HTTPS Jitsi room link without login, query or fragment.</source>
         <translation>Введите корректную HTTPS-ссылку на комнату Jitsi без логина, параметров и фрагмента.</translation>
     </message>
@@ -499,6 +503,10 @@
         <translation>Завершить</translation>
     </message>
     <message>
+        <source>Copy invitation</source>
+        <translation>Копировать приглашение</translation>
+    </message>
+    <message>
         <source>Stop sharing screen</source>
         <translation>Остановить показ экрана</translation>
     </message>
@@ -629,6 +637,14 @@
 </context>
 <context>
     <name>CallsPage</name>
+    <message>
+        <source>Configure your meeting account first.</source>
+        <translation>Сначала настройте аккаунт для встреч.</translation>
+    </message>
+    <message>
+        <source>The meeting response is incomplete.</source>
+        <translation>Сервер вернул неполные данные встречи.</translation>
+    </message>
     <message>
         <source>Enter a valid HTTPS Jitsi room link without login, query or fragment.</source>
         <translation>Введите корректную HTTPS-ссылку на комнату Jitsi без логина, параметров и фрагмента.</translation>
@@ -1820,6 +1836,10 @@
         <translation>Транскрипция</translation>
     </message>
     <message>
+        <source>Meeting review</source>
+        <translation>Разбор встречи</translation>
+    </message>
+    <message>
         <source>Page</source>
         <translation>Страница</translation>
     </message>
@@ -1867,6 +1887,10 @@
     <message>
         <source>Meetings</source>
         <translation>Встречи</translation>
+    </message>
+    <message>
+        <source>Start a meeting</source>
+        <translation>Начать встречу</translation>
     </message>
     <message>
         <source>Join a meeting</source>
@@ -5055,10 +5079,6 @@ Your previous data was kept.</source>
     <message>
         <source>ended</source>
         <translation>завершена</translation>
-    </message>
-    <message>
-        <source>Meeting review</source>
-        <translation>Разбор встречи</translation>
     </message>
     <message>
         <source>Transcript</source>

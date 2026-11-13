@@ -89,6 +89,8 @@ private:
 
   pcm::video::DeviceManager *mDeviceManager;
   pcm::tokenclient::TokenBackendClient *mTokenClient;
+  pcm::tokenclient::TokenBackendClient *mQuickMeetingClient{nullptr};
+  bool mQuickMeetingPending{false};
   std::function<QString()> mBearerCredentialProvider;
   std::function<pcm::video::VideoProvider *(const QString &provider)> mVideoProviderFactory;
   QStackedWidget *mStack{nullptr};

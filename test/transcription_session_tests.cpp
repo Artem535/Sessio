@@ -191,6 +191,34 @@ TEST_F(SessionTest, LateStartUsesCallTimeOrigin) {
   EXPECT_GE(resumed.back().start_ms, 20000);
 }
 
+TEST_F(SessionTest, ResumeAfterTranscriptionStartsDuringMuteUsesCallClock) {
+  make();
+  join("local", "Local", true);
+  startAndWaitRecording(1);
+  QTest::qWait(150);
+  // The microphone was muted before this session subscribed to the provider,
+  // so this session did not receive the preceding interruption signal.
+  emit provider_->audioTimelineResumed("local");
+  feedPhrase("local");
+  ASSERT_TRUE(pump([&] { return phraseCount() == 1; }));
+  const auto rows = db_->get_transcript_phrases(session_->transcriptId());
+  ASSERT_EQ(rows.size(), 1u);
+  EXPECT_GE(rows.front().start_ms, 100);
+}
+
+TEST_F(SessionTest, AudioGapWithoutProviderSignalUsesWallClockForNextPhrase) {
+  make();
+  join("local", "Local", true);
+  startAndWaitRecording(1);
+  provider_->simulateAudio("local", silence(20));
+  QTest::qWait(400);
+  feedPhrase("local");
+  ASSERT_TRUE(pump([&] { return phraseCount() == 1; }));
+  const auto rows = db_->get_transcript_phrases(session_->transcriptId());
+  ASSERT_EQ(rows.size(), 1u);
+  EXPECT_GE(rows.front().start_ms, 300);
+}
+
 TEST_F(SessionTest, StandaloneLateStartAndAudioGapPreserveClockAndTranscript) {
   make();
   provider_->mCallElapsedMs = 20000;

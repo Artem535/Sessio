@@ -28,6 +28,7 @@ class CallEntryWidget final : public QWidget {
   Q_PROPERTY(QString code READ code NOTIFY workspaceChanged)
   Q_PROPERTY(QString passcode READ passcode NOTIFY workspaceChanged)
   Q_PROPERTY(QString jitsiFallbackUrl READ jitsiFallbackUrl NOTIFY workspaceChanged)
+  Q_PROPERTY(bool canCreateMeeting READ canCreateMeeting CONSTANT)
 
 public:
   explicit CallEntryWidget(bool showOwnMeetings, QWidget *parent = nullptr);
@@ -51,6 +52,8 @@ public:
   QString passcode() const;
   void setDisplayName(const QString &name);
   Q_INVOKABLE void joinOwn(const QString &ref);
+  Q_INVOKABLE void createQuickMeeting() { if (mShowOwnMeetings) emit quickMeetingRequested(); }
+  bool canCreateMeeting() const { return mShowOwnMeetings; }
   Q_INVOKABLE void joinInvitation(const QString &code, const QString &passcode);
   Q_INVOKABLE void joinJitsi(const QString &url);
   Q_INVOKABLE void openJitsiInBrowser(const QString &url);
@@ -70,6 +73,7 @@ signals:
   void materialRequested(qint64 id);
   void transcriptRequested(qint64 id);
   void ownMeetingJoinRequested(QString meetingRef);
+  void quickMeetingRequested();
   void joinByCodeRequested(QString code, QString passcode);
   void joinJitsiRequested(QString url);
   // The entry screen became visible: its meeting list may be stale.

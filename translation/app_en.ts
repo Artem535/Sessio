@@ -263,6 +263,10 @@
         <translation>Meetings</translation>
     </message>
     <message>
+        <source>Start a meeting</source>
+        <translation>Start a meeting</translation>
+    </message>
+    <message>
         <source>Enter a valid HTTPS Jitsi room link without login, query or fragment.</source>
         <translation>Enter a valid HTTPS Jitsi room link without login, query or fragment.</translation>
     </message>
@@ -495,6 +499,10 @@
         <translation>Leave</translation>
     </message>
     <message>
+        <source>Copy invitation</source>
+        <translation>Copy invitation</translation>
+    </message>
+    <message>
         <source>Stop sharing screen</source>
         <translation>Stop sharing screen</translation>
     </message>
@@ -623,6 +631,14 @@
 </context>
 <context>
     <name>CallsPage</name>
+    <message>
+        <source>Configure your meeting account first.</source>
+        <translation>Configure your meeting account first.</translation>
+    </message>
+    <message>
+        <source>The meeting response is incomplete.</source>
+        <translation>The meeting response is incomplete.</translation>
+    </message>
     <message>
         <source>Enter a valid HTTPS Jitsi room link without login, query or fragment.</source>
         <translation>Enter a valid HTTPS Jitsi room link without login, query or fragment.</translation>
@@ -1813,6 +1829,10 @@
         <translation>Transcript</translation>
     </message>
     <message>
+        <source>Meeting review</source>
+        <translation>Meeting review</translation>
+    </message>
+    <message>
         <source>Page</source>
         <translation>Page</translation>
     </message>
@@ -1859,6 +1879,10 @@
     <message>
         <source>Meetings</source>
         <translation>Meetings</translation>
+    </message>
+    <message>
+        <source>Start a meeting</source>
+        <translation>Start a meeting</translation>
     </message>
     <message>
         <source>Join a meeting</source>
@@ -5039,10 +5063,6 @@ Your previous data was kept.</translation>
     <message>
         <source>ended</source>
         <translation>ended</translation>
-    </message>
-    <message>
-        <source>Meeting review</source>
-        <translation>Meeting review</translation>
     </message>
     <message>
         <source>Transcript</source>

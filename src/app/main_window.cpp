@@ -232,7 +232,27 @@ void MainWindow::registerTranscriptPage(QWidget *page) {
   mPagesIndex.insertOrAssign(Pages::transcript, mUi->stackedWidget->addWidget(page));
   if (auto *transcript = qobject_cast<TranscriptPage *>(page)) setPageCustomWidget(Pages::transcript, transcript->headerControls());
 }
-void MainWindow::openTranscriptPage() { showPage(Pages::transcript, mBtnCalendar); }
+void MainWindow::openTranscriptPage() { showPage(Pages::transcript, mBtnTranscripts); }
+void MainWindow::openMeetingReview(QWidget *page) {
+  if (!page) return;
+  auto *host = mPages.value(Pages::meetingReview, nullptr);
+  if (!host) {
+    host = new QWidget(mUi->stackedWidget);
+    auto *layout = new QVBoxLayout(host);
+    layout->setContentsMargins(0, 0, 0, 0);
+    mPages.insertOrAssign(Pages::meetingReview, host);
+    mPagesIndex.insertOrAssign(Pages::meetingReview, mUi->stackedWidget->addWidget(host));
+  }
+  auto *layout = host->layout();
+  for (int i = 0; i < layout->count(); ++i)
+    if (auto *previous = layout->itemAt(i)->widget()) previous->hide();
+  if (page->parentWidget() != host) {
+    page->setParent(host);
+    layout->addWidget(page);
+  }
+  page->show();
+  showPage(Pages::meetingReview, mBtnCalls);
+}
 void MainWindow::registerTranscriptListPage(QWidget *page) {
   if (mPages.contains(Pages::transcriptList)) return;
   mPages.insertOrAssign(Pages::transcriptList, page);
@@ -540,6 +560,8 @@ QString MainWindow::pageTitle(const Pages page) const {
       return tr("Transcript");
     case Pages::transcriptList:
       return tr("Transcripts");
+    case Pages::meetingReview:
+      return tr("Meeting review");
   }
 
   return tr("Page");

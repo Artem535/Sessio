@@ -287,6 +287,12 @@ QWidget *CallEntryWidget::headerControls() {
   auto heading = title->font(); heading.setPointSize(16); heading.setBold(true); title->setFont(heading);
   row->addWidget(title);
   row->addStretch();
+  if (mShowOwnMeetings) {
+    auto *quick = new QPushButton(tr("Start a meeting"), mExternalHeader);
+    quick->setObjectName("quickMeetingButton");
+    row->addWidget(quick);
+    connect(quick, &QPushButton::clicked, this, &CallEntryWidget::quickMeetingRequested);
+  }
   auto *join = new QPushButton(tr("Join a meeting"), mExternalHeader);
   row->addWidget(join);
   connect(join, &QPushButton::clicked, this, &CallEntryWidget::invitationPrefilled);

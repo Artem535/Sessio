@@ -13,6 +13,19 @@ namespace pcm::video {
 // Exercise the same copied-value handlers used by the SDK delegate without
 // borrowing SDK callback pointers or requiring devices/network participants.
 struct LiveKitVideoProviderTestAccess {
+  static bool microphoneMuteReportsAudioGap() {
+    LiveKitVideoProvider provider;
+    provider.mRoom = std::make_unique<livekit::Room>();
+    provider.mLocalIdentity = QStringLiteral("local");
+    QStringList events;
+    QObject::connect(&provider, &VideoProvider::audioTimelineResumed,
+                     [&](const QString &id) { events << "resumed:" + id; });
+    provider.setMicrophoneEnabled(false);
+    provider.setMicrophoneEnabled(false);
+    provider.setMicrophoneEnabled(true);
+    provider.setMicrophoneEnabled(true);
+    return events == QStringList{"resumed:local"};
+  }
   static bool failureMuteNotificationCancelsCompletion(bool destroy) {
     class Source final : public AudioCaptureSource {
     public:
@@ -334,6 +347,10 @@ int main(int argc, char *argv[]) {
     std::exit(1);
   });
   watchdog.start(25000);
+  if (!pcm::video::LiveKitVideoProviderTestAccess::microphoneMuteReportsAudioGap()) {
+    std::cerr << "microphone mute did not report the audio gap\n";
+    return 1;
+  }
   if (!pcm::video::LiveKitVideoProviderTestAccess::destructionDuringMicrophoneResumeCancelsTransition())
     return 1;
   if (!pcm::video::LiveKitVideoProviderTestAccess::microphoneSwitchesCoalesceAndLeaveCancelsPending()) {

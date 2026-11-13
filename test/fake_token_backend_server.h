@@ -26,6 +26,9 @@ public:
     mStatusCode = statusCode;
     mBody = jsonBody;
   }
+  void setResponseForPath(const QString &path, int statusCode, const QByteArray &jsonBody) {
+    mResponses.insert(path, {statusCode, jsonBody});
+  }
 
   QString lastPath;
   QString lastMethod;
@@ -61,13 +64,16 @@ private slots:
       lastBody = mBuffer.mid(bodyStart);
       requestPaths.append(lastPath);
 
+      const auto configured = mResponses.value(lastPath, {mStatusCode, mBody});
+      const auto status = configured.first;
+      const auto body = configured.second;
       const QByteArray statusLine =
-          mStatusCode == 200 ? "HTTP/1.1 200 OK\r\n" : "HTTP/1.1 " + QByteArray::number(mStatusCode) + " Error\r\n";
+          status == 200 ? "HTTP/1.1 200 OK\r\n" : "HTTP/1.1 " + QByteArray::number(status) + " Error\r\n";
       QByteArray response = statusLine;
       response += "Content-Type: application/json\r\n";
-      response += "Content-Length: " + QByteArray::number(mBody.size()) + "\r\n";
+      response += "Content-Length: " + QByteArray::number(body.size()) + "\r\n";
       response += "Connection: close\r\n\r\n";
-      response += mBody;
+      response += body;
       socket->write(response);
       socket->disconnectFromHost();
       mBuffer.clear();
@@ -80,4 +86,5 @@ private:
   QByteArray mBuffer;
   int mStatusCode = 200;
   QByteArray mBody = "{}";
+  QHash<QString, QPair<int, QByteArray>> mResponses;
 };

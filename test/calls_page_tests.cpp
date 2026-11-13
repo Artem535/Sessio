@@ -18,6 +18,54 @@
 
 using pcm::video::test::FakeVideoProvider;
 
+TEST(CallsPageTest, QuickMeetingRequestsA24HourMeetingWithoutCalendarEvent) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(500, R"({"error":"test_failure"})");
+  pcm::video::DeviceManager deviceManager;
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  CallsPage page(true, &deviceManager, &client);
+  page.setBearerCredentialProvider([] { return QStringLiteral("test-credential"); });
+  auto *button = page.headerControls()->findChild<QPushButton *>("quickMeetingButton");
+  ASSERT_NE(button, nullptr);
+  button->click();
+  ASSERT_TRUE(QTest::qWaitFor([&] { return !server.requestPaths.empty(); }, 2000));
+  EXPECT_EQ(server.lastPath, QStringLiteral("/v1/meetings"));
+  const auto request = QJsonDocument::fromJson(server.lastBody).object();
+  const auto start = QDateTime::fromString(request.value("scheduledStart").toString(), Qt::ISODate);
+  const auto end = QDateTime::fromString(request.value("scheduledEnd").toString(), Qt::ISODate);
+  ASSERT_TRUE(start.isValid());
+  ASSERT_TRUE(end.isValid());
+  // The backend adds 15 minutes of invitation grace after scheduledEnd.
+  EXPECT_EQ(start.secsTo(end), 24 * 60 * 60 - 15 * 60);
+}
+
+TEST(CallsPageTest, QuickMeetingCreatesRoomThenStartsHostJoinAndKeepsInvitation) {
+  FakeTokenBackendServer server;
+  server.setResponseForPath("/v1/meetings", 200,
+      R"({"meetingRef":"quick-1","invitationUrl":"https://example.test/invite","passcode":"123456"})");
+  server.setResponseForPath("/v1/meetings/quick-1/specialist-token", 200,
+      R"({"endpointUrl":"wss://example.test","roomName":"quick-room","token":"token","expiresAt":123})");
+  pcm::video::DeviceManager devices;
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  CallsPage page(true, &devices, &client);
+  page.setBearerCredentialProvider([] { return QStringLiteral("test-credential"); });
+  FakeVideoProvider *provider = nullptr;
+  page.setVideoProviderFactoryForTesting([&](const QString &) { provider = new FakeVideoProvider(); return provider; });
+  auto *button = page.headerControls()->findChild<QPushButton *>("quickMeetingButton");
+  ASSERT_NE(button, nullptr);
+  auto *quickClient = page.findChild<pcm::tokenclient::TokenBackendClient *>();
+  ASSERT_NE(quickClient, nullptr);
+  // A second click after the room is created but before its host token arrives.
+  QObject::connect(quickClient, &pcm::tokenclient::TokenBackendClient::meetingCreated,
+                   &page, [button] { button->click(); }, Qt::SingleShotConnection);
+  button->click();
+  ASSERT_TRUE(QTest::qWaitFor([&] { return provider != nullptr; }, 2000));
+  EXPECT_EQ(server.requestPaths, (QStringList{"/v1/meetings", "/v1/meetings/quick-1/specialist-token"}));
+  auto *copy = page.findChild<QPushButton *>("copyQuickMeetingInvitation");
+  ASSERT_NE(copy, nullptr);
+  EXPECT_FALSE(copy->isHidden());
+}
+
 // CallsPage is exercised against a real TokenBackendClient talking to a fake
 // local HTTP server (same double as Task 4), rather than a hand-rolled fake
 // TokenBackendClient — TokenBackendClient is a concrete, final class with no

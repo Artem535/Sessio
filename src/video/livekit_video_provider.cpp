@@ -565,6 +565,7 @@ void LiveKitVideoProvider::updateLocalState() {
 }
 
 void LiveKitVideoProvider::setMicrophoneEnabled(bool enabled) {
+  const bool changed = mMicrophoneEnabled != enabled;
   if (mAudioTrack) {
     // mute()/unmute() are documented (local_audio_track.h) to throw
     // std::runtime_error on FFI failure. This is a local device/publish
@@ -582,6 +583,11 @@ void LiveKitVideoProvider::setMicrophoneEnabled(bool enabled) {
     }
   }
   mMicrophoneEnabled = enabled;
+  if (changed && enabled && mRoom && !mLocalIdentity.isEmpty()) {
+    QPointer<LiveKitVideoProvider> guard(this);
+    emit audioTimelineResumed(mLocalIdentity);
+    if (!guard) return;
+  }
   mAudioCapture->tap().setEnabled(mMicrophoneEnabled);
   updateLocalState();
 }

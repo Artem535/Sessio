@@ -1479,12 +1479,20 @@ void Application::connectSignals() {
       mMainWindow->openTranscriptPage();
       reviewPage->focusPhrase(id);
     });
-    auto openMaterials = [this, notes, prompter, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting, wireCalendar](qint64 materialId, qint64 transcriptId, bool postCall = false) {
-      auto *dialog = new NotesEditorDialog(mMainWindow.get());
-      dialog->setAttribute(Qt::WA_DeleteOnClose);
+    auto postCallViews = std::make_shared<QHash<qint64, QPointer<QWidget>>>();
+    auto openMaterials = [this, notes, prompter, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting, wireCalendar, postCallViews](qint64 materialId, qint64 transcriptId, bool postCall = false) {
+      if (materialId > 0) {
+        if (auto existing = postCallViews->value(materialId)) {
+          mMainWindow->openMeetingReview(existing);
+          return;
+        }
+      }
+      auto *dialog = postCall ? nullptr : new NotesEditorDialog(mMainWindow.get());
+      if (dialog) dialog->setAttribute(Qt::WA_DeleteOnClose);
+      auto *host = postCall ? new QWidget(mMainWindow.get()) : static_cast<QWidget *>(dialog);
       CallNotesController *saved = notes;
       if (postCall || notes->materialId() != materialId || materialId <= 0) {
-        saved = new CallNotesController(mDb, dialog);
+        saved = new CallNotesController(mDb, host);
         if (materialId > 0) saved->openMaterial(materialId); else saved->openTranscript(transcriptId);
         // The call owns its queued final, even when this review dialog closes.
         // Saved views share the same scheduler as automatic finalization.
@@ -1504,7 +1512,7 @@ void Application::connectSignals() {
           if (notes->materialId() == materialId) saved->refreshFromStorage();
         });
       }
-      auto *page = new CallNotesPage(mDb, saved, dialog);
+      auto *page = new CallNotesPage(mDb, saved, host);
       bindNotesEditor(page->editor(), saved);
       try {
         const auto material = mDb->get_call_material(saved->materialId());
@@ -1521,13 +1529,15 @@ void Application::connectSignals() {
       connect(page->editor(), &ClientNotesPage::openEventRequested, mMainWindow.get(), &MainWindow::returnToEvent);
       if (saved == notes)
         connect(page, &CallNotesPage::retryRequested, prompterPanel, &PrompterPanel::startRequested);
-      dialog->setPage(page, !postCall);
-      connect(dialog, &QDialog::accepted, this, [this] {
-        if (auto *journal = qobject_cast<ClientNotesPage *>(mMainWindow->getPage(MainWindow::Pages::clientNotes)))
-          journal->refresh();
-      });
-      connect(page, &CallNotesPage::sourceRequested, dialog, [this, saved, notes, panel, sidePanel, reviewPage, dialog, selectedEvent](qint64 phraseId) {
-        if (saved == notes && panel->focusPhrase(phraseId)) { sidePanel->showTranscript(); dialog->close(); return; }
+      if (dialog) {
+        dialog->setPage(page, true);
+        connect(dialog, &QDialog::accepted, this, [this] {
+          if (auto *journal = qobject_cast<ClientNotesPage *>(mMainWindow->getPage(MainWindow::Pages::clientNotes)))
+            journal->refresh();
+        });
+      }
+      connect(page, &CallNotesPage::sourceRequested, host, [this, saved, notes, panel, sidePanel, reviewPage, dialog, selectedEvent](qint64 phraseId) {
+        if (saved == notes && panel->focusPhrase(phraseId)) { sidePanel->showTranscript(); if (dialog) dialog->close(); return; }
         // The workspace may show another meeting picked from History, so the phrase
         // is resolved through the database, not through this window's own material.
         const auto transcript = mDb->get_transcript_id_for_phrase(phraseId).value_or(0);
@@ -1535,12 +1545,14 @@ void Application::connectSignals() {
         *selectedEvent = {0, 0};
         reviewPage->reloadTranscript(transcript, tr("Transcript")); mMainWindow->openTranscriptPage();
         reviewPage->focusPhrase(phraseId);
-        dialog->close();
+        if (dialog) dialog->close();
       });
       if (postCall) {
-        dialog->setWindowTitle(tr("Meeting review"));
-        dialog->setModal(false);
-        dialog->showMaximized();
+        auto *layout = new QVBoxLayout(host);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->addWidget(page);
+        if (materialId > 0) postCallViews->insert(materialId, host);
+        mMainWindow->openMeetingReview(host);
       } else {
         dialog->open();
       }

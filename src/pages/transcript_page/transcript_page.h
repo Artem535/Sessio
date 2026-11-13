@@ -2,6 +2,7 @@
 #include "database.h"
 #include "speaker_rename.h"
 #include <QWidget>
+#include <QPointer>
 #include <functional>
 #include <memory>
 #include <QVariantList>
@@ -74,7 +75,7 @@ private:
   bool mEditing = false;
   pcm::transcriptionui::SpeakerNamePrompt mRenamePrompt;
   class QQuickWidget *mQuickReader = nullptr;
-  QWidget *mExternalHeader = nullptr;
+  QPointer<QWidget> mExternalHeader;
   std::shared_ptr<pcm::database::Database> mDb;
   int64_t mEventId = 0;
   std::optional<int64_t> mTranscriptId;
