@@ -9,12 +9,12 @@
 // summary): source preflight and chunking, evidence-checked items, prompts.
 namespace pcm::prompter::notes {
 
-// Each serialized model payload stays within 2400 UTF-8 bytes, conservative
-// for the 8192-token context; the byte fallback is a token ceiling.
-constexpr qsizetype kPayloadBytes = 2400;
-// Input capacity after the 2048-token output and 128-token framing reserves
-// (GemmaEngine allows 2048 output tokens for schema-constrained calls).
-constexpr qsizetype kContextInputBytes = 8192 - 2048 - 128;
+// Byte fallback for the 32768-token context; the LiteRT tokenizer enforces
+// the actual token limit.
+constexpr qsizetype kPayloadBytes = 24000;
+// Input capacity after the 4096-token output and 128-token framing reserves
+// (GemmaEngine allows 4096 output tokens for schema-constrained calls).
+constexpr qsizetype kContextInputBytes = 32768 - 4096 - 128;
 constexpr qsizetype kMaxEvidenceIds = 8;
 
 QByteArray serialize(const QJsonObject &object);

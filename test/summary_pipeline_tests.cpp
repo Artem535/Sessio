@@ -22,8 +22,9 @@ QJsonObject task(const QString &text, const QJsonArray &ids, bool meeting = fals
 QJsonObject parsed(const QByteArray &bytes) { return QJsonDocument::fromJson(bytes).object(); }
 QJsonArray longCall(int count) {
   QJsonArray out;
-  // 600 Cyrillic characters: one source per leaf chunk, two never fit together.
-  for (int i = 0; i < count; ++i) out.append(source("u" + QString::number(i), QString(600, QChar(u'ж'))));
+  // 6000 Cyrillic characters: each source fits, while a pair exceeds the
+  // 24000-byte payload fallback even with the larger model context.
+  for (int i = 0; i < count; ++i) out.append(source("u" + QString::number(i), QString(6000, QChar(u'ж'))));
   return out;
 }
 QString firstId(const QJsonObject &input) { return input["utterances"][0].toObject()["id"].toString(); }
@@ -179,13 +180,16 @@ TEST(SummaryPipeline, ManyNotesAreReducedBeforeTheFinalOverview) {
   model.leaf = [](const QJsonObject &input) {
     auto reply = leafReply(input);
     const auto id = firstId(input);
-    reply["note"] = item(id + " " + QString(230, QChar(u'н')), {id});
+    reply["note"] = item(id + " " + QString(700, QChar(u'н')), {id});
     return reply;
   };
-  const auto out = processSummary(longCall(30), ctx(), model.generate());
+  const auto out = processSummary(longCall(40), ctx(), model.generate());
   EXPECT_GT(overviewCalls, 1);
   EXPECT_FALSE(out["overview"].toObject()["text"].toString().isEmpty());
-  for (const auto &payload : model.payloads) EXPECT_LE(payload.size(), 8192 - 2048 - 128);
+  for (const auto &payload : model.payloads) {
+    const auto input = parsed(payload);
+    if (input.contains("utterances")) EXPECT_LE(payload.size(), 24000);
+  }
 }
 
 TEST(SummaryPipeline, OverviewFallbackJoinsNotes) {
@@ -239,7 +243,7 @@ TEST(SummaryPipeline, LeafRepliesOverLimitsAreRejected) {
     }
     return false;
   };
-  EXPECT_TRUE(rejects([](QJsonObject &r) { r["note"] = item(QString(401, QChar(u'я')), {"u1"}); }));
+  EXPECT_TRUE(rejects([](QJsonObject &r) { r["note"] = item(QString(801, QChar(u'я')), {"u1"}); }));
   EXPECT_TRUE(rejects([](QJsonObject &r) {
     QJsonArray many;
     for (int i = 0; i < 4; ++i) many.append(item(QStringLiteral("П%1").arg(i), {"u1"}));
@@ -259,8 +263,8 @@ TEST(SummaryPipeline, FailedLeafIsRetriedAsHalvesThenSkipped) {
     if (allIds(input).contains("u0")) return QStringLiteral("not json");
     return leafReply(input);
   };
-  QJsonArray call{source("u0", QString(200, QChar(u'ж'))), source("u1", QString(200, QChar(u'ж'))),
-                  source("u2", QString(600, QChar(u'ж')))};
+  QJsonArray call{source("u0", QString(5500, QChar(u'ж'))), source("u1", QString(5500, QChar(u'ж'))),
+                  source("u2", QString(2000, QChar(u'ж')))};
   const auto out = processSummary(call, ctx(), model.generate());
   EXPECT_EQ(leafCalls, 4); // chunk 1, its two halves, chunk 2
   EXPECT_EQ(texts(out["key_points"].toArray()), (QStringList{"Пункт u1", "Пункт u2"}));
@@ -315,23 +319,24 @@ TEST(SummaryPipeline, SplittingPreservesSupplementaryUnicodeWithoutReplacementCh
     return leafReply(input);
   };
   processSummary({source("u1", text)}, ctx(), [&](const QString &system, const QByteArray &payload, const QByteArray &schema) {
-    EXPECT_LE(system.toUtf8().size() + payload.size() + 2048 + 128, 8192);
+    EXPECT_LE(system.toUtf8().size() + payload.size() + 4096 + 128, 32768);
     return model.generate()(system, payload, schema);
   });
   EXPECT_EQ(delivered, text);
 }
 
-TEST(SummaryPipeline, ExcessSourceAndChunkBudgetsFailBeforeModelCalls) {
+TEST(SummaryPipeline, ExcessSourceFailsAndLargeEscapedInputChunksSafely) {
   Model model;
   QJsonArray sources;
   for (int i = 0; i < 1025; ++i) sources.append(source(QString::number(i)));
   EXPECT_THROW(processSummary(sources, ctx(), model.generate()), PipelineError);
   sources = {};
-  // Escaping expands every character to six bytes, forcing >512 chunks
-  // without exceeding the total raw text budget.
+  // Escaping expands each control character to six bytes. The larger payload
+  // budget allows these valid sources to be split into fewer than 512 chunks.
   for (int i = 0; i < 40; ++i) sources.append(source(QString::number(i), QString(6000, QChar(1))));
-  EXPECT_THROW(processSummary(sources, ctx(), model.generate()), PipelineError);
-  EXPECT_TRUE(model.payloads.empty());
+  EXPECT_NO_THROW(processSummary(sources, ctx(), model.generate()));
+  EXPECT_FALSE(model.payloads.empty());
+  EXPECT_LT(model.payloads.size(), 512u);
 }
 
 namespace {

@@ -20,7 +20,7 @@ struct SummaryContext {
 // Result (format 2):
 //   {format:2, overview:{text,evidence_ids}, key_points:[{text,evidence_ids}],
 //    tasks:[{text,evidence_ids,meeting,date,time}], open_questions:[{text,evidence_ids}]}
-// overview <=3000 UTF-16 units, <=20 key points of <=120, <=12 tasks of <=160,
+// overview <=6000 UTF-16 units, <=20 key points of <=120, <=12 tasks of <=160,
 // <=10 open questions of <=160; every nonempty item cites 1-8 unique sources.
 //
 // Each chunk of the transcript gets one leaf call: a chunk note and that

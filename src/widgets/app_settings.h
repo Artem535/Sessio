@@ -47,6 +47,8 @@ QString callDisplayName();
 void setCallDisplayName(const QString &name);
 QString externalJitsiServerUrl();
 void setExternalJitsiServerUrl(const QString &url);
+QString quickMeetingProvider();
+void setQuickMeetingProvider(const QString &provider);
 
 bool confirmEventDeletion();
 void setConfirmEventDeletion(bool enabled);

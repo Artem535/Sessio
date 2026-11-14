@@ -382,6 +382,20 @@ CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : 
   auto *endedContent = new QWidget(mEndedScreen);
   endedSplit->addWidget(endedContent, 1);
   auto *endedLayout = new QVBoxLayout(endedContent);
+  mEndedDefaultContent = new QWidget(endedContent);
+  auto *defaultLayout = new QVBoxLayout(mEndedDefaultContent);
+  endedLayout->addWidget(mEndedDefaultContent, 1);
+  mPostCallPreparing = new QLabel(tr("Preparing meeting notes…"), endedContent);
+  mPostCallPreparing->setObjectName("postCallPreparing");
+  mPostCallPreparing->setAlignment(Qt::AlignCenter);
+  endedLayout->addWidget(mPostCallPreparing, 1);
+  mPostCallPreparing->hide();
+  mEndedReviewHost = new QWidget(endedContent);
+  mEndedReviewHost->setObjectName("postCallReviewHost");
+  auto *reviewLayout = new QVBoxLayout(mEndedReviewHost);
+  reviewLayout->setContentsMargins(0, 0, 0, 0);
+  endedLayout->addWidget(mEndedReviewHost, 1);
+  mEndedReviewHost->hide();
   mEndedSidePanelHost = new QWidget(mEndedScreen);
   mEndedSidePanelHost->setObjectName("endedSidePanelHost");
   mEndedSidePanelHost->setMinimumWidth(kSidePanelMinWidth);
@@ -390,11 +404,11 @@ CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : 
   endedPanelLayout->setContentsMargins(0, 0, 0, 0);
   endedSplit->addWidget(mEndedSidePanelHost);
   mEndedSidePanelHost->hide();
-  endedLayout->addStretch();
+  defaultLayout->addStretch();
   auto *endedHeadline = new QLabel(tr("Call ended."), mEndedScreen);
   endedHeadline->setAlignment(Qt::AlignCenter);
   endedHeadline->setFont(QFont(QStringLiteral("Inter Display"), 20));
-  endedLayout->addWidget(endedHeadline);
+  defaultLayout->addWidget(endedHeadline);
   // Shown only when the session failed with a reason (joinFailed()/
   // reconnectFailed()); a normal user-initiated leave shows nothing here.
   mEndedReasonLabel = new QLabel(mEndedScreen);
@@ -403,12 +417,12 @@ CallPage::CallPage(pcm::video::DeviceManager *deviceManager, QWidget *parent) : 
   mEndedReasonLabel->setAlignment(Qt::AlignCenter);
   mEndedReasonLabel->setFont(QFont(QStringLiteral("Inter"), 16));
   mEndedReasonLabel->setVisible(false);
-  endedLayout->addWidget(mEndedReasonLabel);
+  defaultLayout->addWidget(mEndedReasonLabel);
+  defaultLayout->addStretch();
   auto *backToCalls = new QPushButton(tr("Back to calls"), endedContent);
   backToCalls->setObjectName("endedBackToCalls");
   connect(backToCalls, &QPushButton::clicked, this, &CallPage::backToCallsRequested);
   endedLayout->addWidget(backToCalls, 0, Qt::AlignCenter);
-  endedLayout->addStretch();
   mStack->addWidget(mEndedScreen);
 
   mStack->setCurrentWidget(mDeviceCheck);
@@ -736,10 +750,15 @@ void CallPage::buildConnectedScreen() {
   controlBarLayout->addWidget(mScreenShareButton);
   controlBarLayout->addWidget(mDevicesButton);
   controlBarLayout->addWidget(mFullscreenToggleButton);
-  mCopyInvitationButton = new QPushButton(tr("Copy invitation"), mControlBar);
+  mCopyInvitationButton = new QToolButton(mControlBar);
   mCopyInvitationButton->setObjectName("copyQuickMeetingInvitation");
+  mCopyInvitationButton->setIcon(pcm::widgets::copyIcon());
+  mCopyInvitationButton->setIconSize(QSize(20, 20));
+  mCopyInvitationButton->setFixedSize(40, 40);
+  mCopyInvitationButton->setToolTip(tr("Copy invitation"));
+  mCopyInvitationButton->setAccessibleName(tr("Copy invitation"));
   mCopyInvitationButton->hide();
-  connect(mCopyInvitationButton, &QPushButton::clicked, this, [this] {
+  connect(mCopyInvitationButton, &QToolButton::clicked, this, [this] {
     if (!mInvitationUrl.isEmpty()) QGuiApplication::clipboard()->setText(mInvitationUrl);
   });
   controlBarLayout->addWidget(mCopyInvitationButton);
@@ -766,7 +785,23 @@ void CallPage::setInvitationUrl(const QString &url) {
   if (mCopyInvitationButton) mCopyInvitationButton->setVisible(!url.isEmpty());
 }
 
+void CallPage::setPostCallReview(QWidget *review) {
+  mPostCallPreparing->hide();
+  auto *layout = mEndedReviewHost->layout();
+  for (int i = 0; i < layout->count(); ++i)
+    if (auto *previous = layout->itemAt(i)->widget()) previous->hide();
+  if (review) {
+    if (review->parentWidget() != mEndedReviewHost) layout->addWidget(review);
+    review->show();
+  }
+  mEndedReviewHost->setVisible(review != nullptr);
+  mEndedDefaultContent->setVisible(review == nullptr);
+  mEndedSidePanelHost->setVisible(!review && mCallEnded && mSidePanel);
+}
+
 void CallPage::attachSession(pcm::video::VideoSession *session) {
+  setPostCallReview(nullptr);
+  mCallWasConnected = false;
   // A previously attached session that is still alive must stop driving
   // this page (CallsPage normally destroys it first, which disconnects it
   // anyway — this covers any caller that doesn't).
@@ -1257,6 +1292,7 @@ void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) 
   case VideoSessionState::WaitingForParticipants:
   case VideoSessionState::Connected:
   case VideoSessionState::Reconnecting:
+    mCallWasConnected = true;
     mCallEnded = false;
     if (mSidePanel && mSidePanel->parentWidget() == mEndedSidePanelHost) {
       mEndedSidePanelHost->layout()->removeWidget(mSidePanel);
@@ -1268,6 +1304,14 @@ void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) 
     mStack->setCurrentWidget(mConnectedView);
     break;
   case VideoSessionState::Leaving:
+    if (mCallWasConnected && mSidePanel) {
+      mCallEnded = true;
+      mEndedDefaultContent->hide();
+      mEndedReviewHost->hide();
+      mEndedSidePanelHost->hide();
+      mPostCallPreparing->show();
+      mStack->setCurrentWidget(mEndedScreen);
+    }
     break;
   case VideoSessionState::Ended:
   case VideoSessionState::Failed:
@@ -1281,6 +1325,12 @@ void CallPage::onSessionStateChanged(const pcm::video::VideoSessionState state) 
       if (auto *host = mSidePanel->parentWidget(); host && host->layout()) host->layout()->removeWidget(mSidePanel);
       mEndedSidePanelHost->layout()->addWidget(mSidePanel);
       mSidePanel->show(); mEndedSidePanelHost->show();
+    }
+    if (mCallWasConnected && mSidePanel) {
+      mEndedDefaultContent->hide();
+      mEndedReviewHost->hide();
+      mEndedSidePanelHost->hide();
+      mPostCallPreparing->show();
     }
     mStack->setCurrentWidget(mEndedScreen);
     emit callEnded();

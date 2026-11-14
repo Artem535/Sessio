@@ -185,7 +185,7 @@ private:
   std::function<QString(qint64, const QString &, const QString &)> mMaterialAttachmentResolver;
   bool mJournalMode = false;
   QQuickWidget *mQuickWorkspace = nullptr;
-  QWidget *mExternalHeader = nullptr;
+  QPointer<QWidget> mExternalHeader;
   QWidget *mFeedSurface = nullptr;
   QWidget *mJournalTools = nullptr;
   QSplitter *mJournal = nullptr;

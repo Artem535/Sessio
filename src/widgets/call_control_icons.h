@@ -13,6 +13,7 @@ namespace pcm::widgets {
 [[nodiscard]] QIcon fullscreenIcon(bool active);
 [[nodiscard]] QIcon screenShareIcon(bool active);
 [[nodiscard]] QIcon notesIcon();
+[[nodiscard]] QIcon copyIcon();
 [[nodiscard]] QIcon transcriptIcon(bool active);
 
 } // namespace pcm::widgets

@@ -240,6 +240,14 @@ QString externalJitsiServerUrl() {
 void setExternalJitsiServerUrl(const QString &url) {
   QSettings().setValue("calls/externalJitsiServerUrl", url.trimmed());
 }
+QString quickMeetingProvider() {
+  const auto provider = QSettings().value("calls/quickMeetingProvider", QStringLiteral("livekit")).toString();
+  return provider == QStringLiteral("jitsi") ? provider : QStringLiteral("livekit");
+}
+void setQuickMeetingProvider(const QString &provider) {
+  QSettings().setValue("calls/quickMeetingProvider",
+                       provider == QStringLiteral("jitsi") ? QStringLiteral("jitsi") : QStringLiteral("livekit"));
+}
 
 bool confirmEventDeletion() {
   QSettings settings;

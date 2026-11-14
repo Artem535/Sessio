@@ -1234,6 +1234,25 @@ void Application::connectSignals() {
       notesPage->setAgreements(prompter->records());
     });
     auto *worker = new PrompterWorker(this);
+    const auto configuredPrompterModel = pcm::app_settings::prompterModel();
+    auto activePrompterModel = std::make_shared<QString>(configuredPrompterModel.isEmpty()
+        ? PrompterWorker::bundledModel() : configuredPrompterModel);
+    auto activePrompterAcceleration = std::make_shared<QString>(pcm::app_settings::prompterAcceleration());
+    // Switch local models after the current request completes when its model
+    // path or acceleration changes. The worker preserves queued requests and
+    // leaves cloud-only requests alone.
+    connect(mMainWindow.get(), &MainWindow::settingsSaved, worker,
+            [worker, activePrompterModel, activePrompterAcceleration] {
+      const auto configured = pcm::app_settings::prompterModel();
+      const auto model = configured.isEmpty() ? PrompterWorker::bundledModel() : configured;
+      const auto acceleration = pcm::app_settings::prompterAcceleration();
+      const bool modelChanged = model != *activePrompterModel;
+      const bool accelerationChanged = acceleration != *activePrompterAcceleration;
+      *activePrompterModel = model;
+      *activePrompterAcceleration = acceleration;
+      if ((modelChanged || accelerationChanged) && QFileInfo(model).isFile())
+        worker->reloadModel(model, !modelChanged && accelerationChanged);
+    });
     // The cloud key reaches the worker through an in-memory cache, read once for someone who opted in.
     if (pcm::app_settings::cloudConsentValid()) {
       auto *keys = new CloudKeyStore(this);
@@ -1480,10 +1499,10 @@ void Application::connectSignals() {
       reviewPage->focusPhrase(id);
     });
     auto postCallViews = std::make_shared<QHash<qint64, QPointer<QWidget>>>();
-    auto openMaterials = [this, notes, prompter, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting, wireCalendar, postCallViews](qint64 materialId, qint64 transcriptId, bool postCall = false) {
-      if (materialId > 0) {
+    auto openMaterials = [this, callsPage, notes, prompter, finals, panel, sidePanel, reviewPage, prompterPanel, selectedEvent, bindNotesEditor, meetingControllers, describeMeeting, wireCalendar, postCallViews](qint64 materialId, qint64 transcriptId, bool postCall = false) {
+      if (postCall && materialId > 0) {
         if (auto existing = postCallViews->value(materialId)) {
-          mMainWindow->openMeetingReview(existing);
+          callsPage->setPostCallReview(existing);
           return;
         }
       }
@@ -1552,7 +1571,7 @@ void Application::connectSignals() {
         layout->setContentsMargins(0, 0, 0, 0);
         layout->addWidget(page);
         if (materialId > 0) postCallViews->insert(materialId, host);
-        mMainWindow->openMeetingReview(host);
+        callsPage->setPostCallReview(host);
       } else {
         dialog->open();
       }
@@ -1561,9 +1580,9 @@ void Application::connectSignals() {
       // A cancelled device check or a failed join has nothing to review.
       if (!callsPage->lastCallConnected()) return;
       const auto materialId = notes->materialId();
-      if (materialId <= 0) return;
-      QTimer::singleShot(0, mMainWindow.get(), [this, materialId, openMaterials] {
-        if (mMainWindow->isVisible()) openMaterials(materialId, 0, true);
+      if (materialId <= 0) { callsPage->setPostCallReview(nullptr); return; }
+      QTimer::singleShot(0, mMainWindow.get(), [this, callsPage, materialId, openMaterials] {
+        if (mMainWindow->isVisible() && callsPage->isShowingPostCall()) openMaterials(materialId, 0, true);
       });
     });
     auto reviewNotesViews = std::make_shared<QHash<qint64, QPointer<QWidget>>>();

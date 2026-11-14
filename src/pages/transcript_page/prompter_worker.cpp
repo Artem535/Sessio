@@ -157,6 +157,7 @@ bool PrompterWorker::start(const QString &model) {
   if (!mStopped && !mCloudOnly) return true;
   if (mCloudOnly && !mExpected.isEmpty()) return true;  // a cloud request is running; load later
   mCloudOnly = false;
+  mPendingModel.clear();
   mModelPath = model;
   mStopped = false; mReady = false; mTimedOut = false; mPending = {}; mExpected = {}; mQueue.clear(); mReloadAfterCancel = false;
   const int generation = ++mGeneration;
@@ -180,6 +181,8 @@ bool PrompterWorker::start(const QString &model) {
       // Signal handlers may delete the worker synchronously on this GUI thread.
       QPointer<PrompterWorker> guard(&worker);
       emit worker.ready();
+      if (guard && generation == worker.mGeneration && !worker.mStopped)
+        worker.applyPendingModel();
       if (guard && generation == worker.mGeneration && !worker.mStopped && !worker.mPending.isEmpty()) {
         const auto request = worker.mPending;
         worker.mPending = {};
@@ -190,6 +193,30 @@ bool PrompterWorker::start(const QString &model) {
     });
   }, Qt::QueuedConnection);
   return true;
+}
+
+void PrompterWorker::reloadModel(const QString &model, bool force) {
+  if (model.isEmpty() || (!force && model == mModelPath)) {
+    mPendingModel.clear();
+    return;
+  }
+  if (mStopped || mCloudOnly) return;
+  mPendingModel = model;
+  if (mReady && mExpected.isEmpty()) applyPendingModel();
+}
+
+void PrompterWorker::applyPendingModel() {
+  if (mPendingModel.isEmpty() || mStopped || mCloudOnly || !mExpected.isEmpty()) return;
+  const auto model = std::exchange(mPendingModel, {});
+  auto queued = std::move(mQueue);
+  auto pending = std::move(mPending);
+  // Suppress stopped(): this is a transparent model switch, and the active
+  // controller must keep its session and queued requests.
+  mStopped = true;
+  stop();
+  if (!start(model)) return;
+  mPending = std::move(pending);
+  mQueue = std::move(queued);
 }
 
 bool PrompterWorker::startCloud() {
@@ -396,7 +423,10 @@ void PrompterWorker::finish(int generation, const QJsonObject &result) {
   }
   QPointer<PrompterWorker> guard(this);
   emit resultReady(reply);
-  if (guard && !mStopped && mExpected.isEmpty() && !mQueue.isEmpty()) send(mQueue.dequeue());
+  if (guard && !mStopped) {
+    applyPendingModel();
+    if (!mStopped && mExpected.isEmpty() && !mQueue.isEmpty()) send(mQueue.dequeue());
+  }
 }
 
 void PrompterWorker::cancelNotes(qint64 materialId, const QString &requestToken) {

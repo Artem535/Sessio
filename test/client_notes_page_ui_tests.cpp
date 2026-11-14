@@ -20,6 +20,18 @@
 #include <oclero/qlementine/style/QlementineStyle.hpp>
 
 namespace {
+TEST(ClientJournalTest, ExternalHeaderHostMayBeDestroyedBeforePage) {
+  auto *host = new QWidget;
+  auto *page = new ClientNotesPage(nullptr);
+  page->enableQuickWorkspace();
+  auto *header = page->headerControls();
+  ASSERT_NE(header, nullptr);
+  header->setParent(host);
+
+  delete host;
+  delete page;
+}
+
 TEST(ClientJournalTest, QuickWorkspaceLoadsAndSavesOnlyForSelectedParticipant) {
   QTemporaryDir temp;
   pcm::config::Config config{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(temp.path().toStdString())}};

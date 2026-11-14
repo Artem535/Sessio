@@ -2,6 +2,7 @@
 #include "token_backend_client.h"
 #include "fake_token_backend_server.h"
 #include "fake_video_provider.h"
+#include "app_settings.h"
 
 #include <QApplication>
 #include <QComboBox>
@@ -11,6 +12,7 @@
 #include <QJsonObject>
 #include <QPushButton>
 #include <QSignalSpy>
+#include <QScopeGuard>
 #include <QStackedWidget>
 #include <QTest>
 #include <QToolButton>
@@ -61,9 +63,54 @@ TEST(CallsPageTest, QuickMeetingCreatesRoomThenStartsHostJoinAndKeepsInvitation)
   button->click();
   ASSERT_TRUE(QTest::qWaitFor([&] { return provider != nullptr; }, 2000));
   EXPECT_EQ(server.requestPaths, (QStringList{"/v1/meetings", "/v1/meetings/quick-1/specialist-token"}));
-  auto *copy = page.findChild<QPushButton *>("copyQuickMeetingInvitation");
+  auto *copy = page.findChild<QToolButton *>("copyQuickMeetingInvitation");
   ASSERT_NE(copy, nullptr);
   EXPECT_FALSE(copy->isHidden());
+  EXPECT_FALSE(copy->icon().isNull());
+  EXPECT_FALSE(copy->accessibleName().isEmpty());
+}
+
+TEST(CallsPageTest, QuickJitsiMeetingRequestsJitsiTokensAndJoinsWebCallProvider) {
+  FakeTokenBackendServer server;
+  server.setResponseForPath("/v1/meetings", 200,
+      R"({"meetingRef":"quick-jitsi","invitationUrl":"https://example.test/invite","passcode":"123456"})");
+  server.setResponseForPath("/v1/meetings/quick-jitsi/specialist-token", 200,
+      R"({"endpointUrl":"https://meet.example.test/","roomName":"quick-room","token":"jitsi-jwt","expiresAt":123,"provider":"jitsi"})");
+  const auto previousProvider = pcm::app_settings::quickMeetingProvider();
+  pcm::app_settings::setQuickMeetingProvider(QStringLiteral("jitsi"));
+  const auto restoreProvider = qScopeGuard([previousProvider] {
+    pcm::app_settings::setQuickMeetingProvider(previousProvider);
+  });
+
+  pcm::video::DeviceManager devices;
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  CallsPage page(true, &devices, &client);
+  page.setBearerCredentialProvider([] { return QStringLiteral("test-credential"); });
+  FakeVideoProvider *provider = nullptr;
+  QString selectedProvider;
+  page.setVideoProviderFactoryForTesting([&](const QString &kind) {
+    selectedProvider = kind;
+    provider = new FakeVideoProvider();
+    // WebCallProvider exposes a call view and joins as soon as the token is
+    // ready; model that property so startJoin exercises its Jitsi path.
+    provider->mCallView = new QWidget();
+    return provider;
+  });
+
+  auto *button = page.headerControls()->findChild<QPushButton *>("quickMeetingButton");
+  ASSERT_NE(button, nullptr);
+  button->click();
+  ASSERT_TRUE(QTest::qWaitFor([&] { return provider && provider->mJoinCallCount == 1; }, 2000));
+
+  EXPECT_EQ(server.requestPaths,
+            (QStringList{QStringLiteral("/v1/meetings"),
+                         QStringLiteral("/v1/meetings/quick-jitsi/specialist-token")}));
+  EXPECT_EQ(QJsonDocument::fromJson(server.lastBody).object().value("displayName").toString(),
+            pcm::app_settings::callDisplayName());
+  EXPECT_EQ(server.lastAuthorizationHeader, QStringLiteral("Bearer test-credential"));
+  EXPECT_EQ(selectedProvider, QStringLiteral("jitsi"));
+  EXPECT_EQ(provider->mLastJoinUrl, QStringLiteral("https://meet.example.test/quick-room"));
+  EXPECT_EQ(provider->mLastJoinToken, QStringLiteral("jitsi-jwt"));
 }
 
 // CallsPage is exercised against a real TokenBackendClient talking to a fake
@@ -718,10 +765,43 @@ TEST(CallsPageTest, SpecialistKeepsCallMaterialsAfterEndingAndCanReturnToCalls) 
   call->onSessionStateChanged(pcm::video::VideoSessionState::Ended);
   EXPECT_EQ(topStack(page)->currentWidget(), call);
   EXPECT_TRUE(materials->isVisibleTo(&page));
+  auto *review = new QWidget;
+  review->setObjectName("embeddedPostCallReview");
+  page.setPostCallReview(review);
+  EXPECT_TRUE(call->isAncestorOf(review));
+  EXPECT_TRUE(review->isVisibleTo(&page));
+  EXPECT_FALSE(materials->isVisibleTo(&page));
   auto *back = call->findChild<QPushButton *>("endedBackToCalls");
   ASSERT_NE(back, nullptr);
   back->click();
   EXPECT_EQ(topStack(page)->currentWidget(), page.findChild<CallEntryWidget *>());
+}
+
+TEST(CallsPageTest, ConnectedCallShowsPreparationUntilReviewIsReady) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, kTokenResponse);
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  pcm::video::DeviceManager devices;
+  CallsPage page(true, &devices, &client);
+  FakeVideoProvider *provider = nullptr;
+  page.setVideoProviderFactoryForTesting([&](const QString &) -> pcm::video::VideoProvider * { return provider = new FakeVideoProvider; });
+  page.setSidePanelWidget(new QWidget);
+  submitJoinCode(page, "code", "123456");
+  ASSERT_TRUE(QTest::qWaitFor([&] { return provider != nullptr; }, 2000));
+  page.findChild<QPushButton *>("joinButton")->click();
+  ASSERT_TRUE(QTest::qWaitFor([&] { return provider->mJoinCallCount == 1; }, 2000));
+  provider->simulateJoined();
+  auto *call = page.findChild<CallPage *>();
+  call->onSessionStateChanged(pcm::video::VideoSessionState::Leaving);
+  auto *preparing = call->findChild<QWidget *>("postCallPreparing");
+  ASSERT_NE(preparing, nullptr);
+  EXPECT_TRUE(preparing->isVisibleTo(&page));
+  call->onSessionStateChanged(pcm::video::VideoSessionState::Ended);
+  EXPECT_TRUE(preparing->isVisibleTo(&page));
+  auto *review = new QWidget;
+  page.setPostCallReview(review);
+  EXPECT_FALSE(preparing->isVisibleTo(&page));
+  EXPECT_TRUE(review->isVisibleTo(&page));
 }
 
 TEST(CallsPageTest, CallSessionEndsExactlyOnceOnCancellationOrJoinFailure) {

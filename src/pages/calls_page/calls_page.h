@@ -44,6 +44,8 @@ public:
   void prefillJoinCode(const QString &code, const QString &passcode);
   void joinExternalJitsi(const QString &url, std::optional<int64_t> eventId = std::nullopt);
   void setSidePanelWidget(QWidget *panel);
+  void setPostCallReview(QWidget *review);
+  [[nodiscard]] bool isShowingPostCall() const;
   void setSidePanelExpandedByDefault(bool expanded);
   void setTranscribeButtonVisible(bool visible);
   void setTranscribeButtonState(bool active, const QString &tooltip);

@@ -251,9 +251,18 @@ Rectangle {
                                     }
 
                                     ToolButton {
+                                        id: renameButton
                                         objectName: "todoRename"
                                         visible: !todoRow.editing
                                         text: "✎"
+                                        background: Item {}
+                                        contentItem: Text {
+                                            text: renameButton.text
+                                            color: theme.text
+                                            font.pixelSize: 16
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
                                         implicitWidth: 28
                                         implicitHeight: 28
                                         Accessible.name: qsTr("Rename")

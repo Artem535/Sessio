@@ -18,9 +18,9 @@
 namespace pcm::prompter {
 namespace {
 using namespace notes;
-constexpr qsizetype kOverviewLength = 3000;
-constexpr qsizetype kGroupNoteLength = 300;
-constexpr qsizetype kLeafNoteLength = 400;
+constexpr qsizetype kOverviewLength = 6000;
+constexpr qsizetype kGroupNoteLength = 800;
+constexpr qsizetype kLeafNoteLength = 800;
 constexpr qsizetype kPointLength = 120;
 constexpr qsizetype kTaskLength = 160;
 constexpr qsizetype kQuestionLength = 160;
