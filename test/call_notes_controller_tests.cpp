@@ -280,6 +280,20 @@ TEST_F(CallNotesTest, RequestFinalSendsSummaryTaskWithAgreements) {
   EXPECT_EQ(request["agreements"].toArray(), (QJsonArray{"Meet Thursday"}));
   EXPECT_EQ(request["call_date"].toString(), QDate::currentDate().toString(Qt::ISODate));
 }
+TEST_F(CallNotesTest, FinalRequestIncludesEveryAvailablePhraseInOrder) {
+  phrase("раз два три");
+  phrase("завтра встреча в шестнадцать ноль ноль");
+  phrase("встреча переносится на семнадцать ноль ноль");
+  c->setGenerationEnabled(true); c->finishCall();
+  QSignalSpy requests(c.get(), &CallNotesController::requestReady);
+  c->requestFinal();
+  ASSERT_EQ(requests.count(), 1);
+  const auto utterances = requests[0][0].toJsonObject()["utterances"].toArray();
+  ASSERT_EQ(utterances.size(), 3);
+  EXPECT_EQ(utterances[0].toObject()["text"].toString(), QString::fromUtf8("раз два три"));
+  EXPECT_EQ(utterances[1].toObject()["text"].toString(), QString::fromUtf8("завтра встреча в шестнадцать ноль ноль"));
+  EXPECT_EQ(utterances[2].toObject()["text"].toString(), QString::fromUtf8("встреча переносится на семнадцать ноль ноль"));
+}
 TEST_F(CallNotesTest, SummaryRequestCarriesCallDateNotToday) {
   DuckEvent event; event.name = "Session";
   event.start_date = QDateTime(QDate(2026, 10, 1), QTime(10, 0)).toMSecsSinceEpoch();
@@ -423,6 +437,23 @@ TEST_F(CallNotesTest, FinalWaitsForTheMatchingTranscriptEvenWithoutAnotherCall) 
   finals.handleResult(reply(requests[0][0].toJsonObject(), p));
   CallNotesController reopened(db); reopened.openMaterial(c->materialId());
   EXPECT_EQ(reopened.finalStatus(), "ready");
+}
+TEST_F(CallNotesTest, FinalRequestedAfterCallWaitsForLateTranscriptPhrases) {
+  phrase("раз два три"); c->finishCall();
+  CallNotesFinalizer finals(db);
+  finals.transcriptStarted(transcript);
+  QObject::connect(&finals, &CallNotesFinalizer::generationRequested, &finals,
+                   [&] { finals.setGenerationEnabled(true); });
+  QSignalSpy requests(&finals, &CallNotesFinalizer::requestReady);
+  finals.enqueue(c->materialId()); QCoreApplication::processEvents();
+  EXPECT_TRUE(requests.isEmpty());
+  phrase("завтра встреча в шестнадцать ноль ноль");
+  phrase("встреча переносится на семнадцать ноль ноль");
+  finals.transcriptReady(transcript); QCoreApplication::processEvents();
+  ASSERT_EQ(requests.count(), 1);
+  const auto inputs = requests[0][0].toJsonObject()["utterances"].toArray();
+  ASSERT_EQ(inputs.size(), 3);
+  EXPECT_EQ(inputs[2].toObject()["text"].toString(), QString::fromUtf8("встреча переносится на семнадцать ноль ноль"));
 }
 TEST_F(CallNotesTest, InterruptedFinalIsRetriedAndRejectsItsOldResponse) {
   const auto p = phrase(); c->finishCall();

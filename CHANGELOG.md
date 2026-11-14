@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.44] - 2026-11-14
+
+- Meeting summaries wait for transcription to finish so late phrases are
+  included, and the post-call notes view is embedded in the call screen.
+- Improved the meeting summary prompts and increased context and output limits.
+- Model and acceleration changes take effect without restarting the app.
+- Added a default video provider for quick meetings, refreshed the invitation
+  copy and task rename controls, and fixed a crash when exiting the notes page.
+
 ## [0.2.43] - 2026-11-13
 
 - The call prompter runtime is built on LiteRT-LM v0.19.0, matching the GPU

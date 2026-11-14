@@ -178,7 +178,7 @@ int Application::run(int argc, char *argv[], const QString &launchUrl) {
   app.setOrganizationName("Sessio");
   app.setApplicationName("Sessio");
   app.setApplicationDisplayName("Sessio");
-  QCoreApplication::setApplicationVersion("0.2.43");
+  QCoreApplication::setApplicationVersion("0.2.44");
   // Before anything that can log: on Windows this file and the crash dump are
   // the only trace a hang or crash leaves.
   const QString logDir =
@@ -1394,6 +1394,10 @@ void Application::connectSignals() {
     hooks.eventMaterialised = [eventPage](int64_t) { eventPage->reloadSelectedDay(); };
     mCallTranscription = new pcm::transcriptionui::CallTranscriptionController(mDb, panel, sidePanel, std::move(hooks), this);
     auto *controller = mCallTranscription.data();
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptStarted,
+            finals, &CallNotesFinalizer::transcriptStarted);
+    connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptSettled,
+            finals, &CallNotesFinalizer::transcriptReady);
     auto manualPrompterRequested = std::make_shared<bool>(false);
     connect(controller, &pcm::transcriptionui::CallTranscriptionController::transcriptStarted, prompter,
             [prompter, worker, notes, startPrompter, manualPrompterRequested](qint64 id) {
