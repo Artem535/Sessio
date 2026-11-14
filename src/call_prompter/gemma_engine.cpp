@@ -21,7 +21,9 @@ public:
   QJsonValue generate(const QString &system, const QByteArray &payload, const QByteArray &schema) override {
     std::string reply;
     sessio::litert::GenerateOptions options;
-    options.reusePrefix = mReusePrefix;
+    // Qwen constrained decoding can fail after rewinding a prefix checkpoint
+    // in LiteRT-LM 0.19. Use a fresh session until that path is reliable.
+    options.reusePrefix = mReusePrefix && !(mQwen && !schema.isEmpty());
     options.jsonSchema = schema.toStdString();
     // A schema bounds the reply by its own lengths; the meeting summary's
     // overview needs more than the default 384 tokens. Pipelines budget their
