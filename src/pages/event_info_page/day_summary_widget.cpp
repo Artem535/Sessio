@@ -8,20 +8,16 @@
 
 DaySummaryWidget::DaySummaryWidget(QWidget *parent) : QWidget(parent) {
   setObjectName("daySummaryCard");
-  setStyleSheet(
-      "#daySummaryCard {"
-      " background: rgba(255, 255, 255, 0.05);"
-      " border: 1px solid rgba(255, 255, 255, 0.10);"
-      " border-radius: 14px;"
-      "}");
-
   auto *layout = new QVBoxLayout(this);
-  layout->setContentsMargins(14, 12, 14, 12);
-  layout->setSpacing(4);
+  layout->setContentsMargins(0, 0, 0, 0);
+  layout->setSpacing(6);
 
   mDateLabel = new QLabel(this);
+  mDateLabel->setObjectName("daySummaryDate");
+  mDateLabel->setWordWrap(true);
   QFont dateFont = mDateLabel->font();
   dateFont.setBold(true);
+  dateFont.setPointSize(18);
   mDateLabel->setFont(dateFont);
 
   mCountsLabel = new QLabel(this);
@@ -34,6 +30,7 @@ DaySummaryWidget::DaySummaryWidget(QWidget *parent) : QWidget(parent) {
   mFreeWindowLabel->setStyleSheet("color: rgba(255, 255, 255, 0.65);");
 
   layout->addWidget(mDateLabel);
+  layout->addSpacing(6);
   layout->addWidget(mCountsLabel);
   layout->addWidget(mBusyLabel);
   layout->addWidget(mNextSessionLabel);
@@ -56,7 +53,11 @@ void DaySummaryWidget::clearMiniList() {
 void DaySummaryWidget::setSummary(const pcm::recurrence::DaySummary &summary) {
   clearMiniList();
 
-  mDateLabel->setText(QLocale().toString(summary.date, QLocale::LongFormat));
+  auto heading = QLocale().toString(summary.date, QLocale::LongFormat);
+  if (!heading.isEmpty()) {
+    heading[0] = heading.at(0).toUpper(); // "пятница" -> "Пятница"
+  }
+  mDateLabel->setText(heading);
 
   if (!summary.hasSessions) {
     mCountsLabel->setText(tr("Free all day"));
@@ -79,7 +80,7 @@ void DaySummaryWidget::setSummary(const pcm::recurrence::DaySummary &summary) {
 
   if (summary.nextSession.has_value() && summary.nextSession->start_date.has_value()) {
     const auto nextAt = QDateTime::fromMSecsSinceEpoch(*summary.nextSession->start_date,
-                                                        QTimeZone::systemTimeZone());
+                                                        QTimeZone(QTimeZone::LocalTime));
     mNextSessionLabel->setText(tr("Next session: %1").arg(nextAt.toString("HH:mm")));
     mNextSessionLabel->setVisible(true);
   } else {
@@ -102,7 +103,7 @@ void DaySummaryWidget::setSummary(const pcm::recurrence::DaySummary &summary) {
       continue;
     }
     const auto startAt =
-        QDateTime::fromMSecsSinceEpoch(*event.start_date, QTimeZone::systemTimeZone());
+        QDateTime::fromMSecsSinceEpoch(*event.start_date, QTimeZone(QTimeZone::LocalTime));
     const auto clientName =
         QString::fromStdString(event.client_name.value_or(std::string{}));
     auto *row = new QPushButton(this);

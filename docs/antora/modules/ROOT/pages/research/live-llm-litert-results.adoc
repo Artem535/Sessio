@@ -1,0 +1,116 @@
+= Gemma 4 E2B: LiteRT-LM CPU spike, 2026-10-09
+
+== Scope and reproducibility
+
+Ryzen 7 7840HS, Fedora 44, 27 GiB RAM. CPU only, four threads, one
+request at a time, 4096-token context, up to 160 generated tokens. Six
+Russian synthetic call excerpts, four repeats (24 measured requests per
+configuration), one excluded warmup. Greedy generation, thinking
+disabled through the same rendered template, no schema grammar, no
+prompt cache. Fresh LiteRT session on each request. No ASR/video
+workload was running; this is not real-call acceptance.
+
+LiteRT-LM API/CLI 0.18.0, Python 3.12.9. Export:
+`litert-community/gemma-4-E2B-it-litert-lm`, revision
+`b3ca0d2f076785a8f4b2219ddbd2bdb99954eae1`, file
+`gemma-4-E2B-it.litertlm`, 2,588,147,712 bytes, verified SHA256
+`181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c`.
+Compiled XNNPACK weight caches allowed and warm before measurements.
+They occupy about 1.1 GiB on disk including encoder and draft caches.
+Startup times reported below are warm-cache engine construction, not
+first installation/compilation. Selected text/vision/audio backends are
+explicitly CPU; library startup logs also register GPU accelerator
+names, which does not mean GPU execution was selected. Processes ran
+sequentially under user cgroup MemoryMax=8G, MemorySwapMax=0.
+
+The llama.cpp baseline is the same CPU binary and GGUF Q4++_++0 as the
+earlier xref:research/live-llm-cpu-results.adoc[CPU report], repeated after both
+LiteRT configurations. llama uses HTTP/SSE, LiteRT its native Python/C
+API; transport differs.
+
+== Comparability limits
+
+This is a comparison of available deployment artifacts, *not a
+controlled test of runtime alone*. LiteRT's official mobile QAT uses
+mixed 2/4/8-bit weights; GGUF is Q4++_++0. The exact common upstream
+weight revision and equivalent per-tensor precision have not been
+established. See xref:research/live-llm-litert-sources.adoc[primary sources].
+Different output lengths also affect full-response latency.
+
+Raw prompt token IDs match after BOS normalization. LiteRT public
+`tokenize()` treats literal `++<++bos++>++` as text, whereas its session
+inserts BOS. Initial diagnostic runs caught this before measurement. The
+final runner omits literal BOS only for LiteRT and checks the remaining
+IDs against the ONNX tokenizer. Session prefill counts match the
+reference including BOS: 189, 176, 192, 176, 179, 169. All measured
+responses finish below the cap. MTP token accounting differs by one
+token on several cases although response text matches exactly.
+
+== LiteRT measured results
+
+[cols=",>,>,>,>,>",options="header",]
+|===
+|Configuration |n |First text median |Full response median |Empirical
+p95 |Peak RSS
+|llama.cpp Q4++_++0, fresh baseline |24 |1.199 s |3.309 s |5.223 s |3.87
+GiB sampled
+
+|LiteRT, MTP off |24 |0.452 s |2.155 s |2.769 s |1.75 GiB
+
+|LiteRT, MTP on |24 |0.487 s |1.515 s |1.938 s |1.82 GiB
+|===
+
+Peak RSS uses Linux process high-water mark (load/warmup included).
+Sampled peaks are 1793 and 1860 MiB; kernel high-water marks are 1835320
+and 1909548 KiB. Warm-cache engine construction: 0.231/0.245 s,
+excluding first prefill. Average active CPU cores: 3.74/3.66. MTP
+reduces full-response median by about 30% here; it does not improve
+first-text median. These small-sample p95 values describe this six-case
+workload, not production tails or representative Russian quality. The
+llama row uses sampled server RSS, not the Python client's high-water
+mark. LiteRT MTP's full-response median is about 2.18x faster than this
+GGUF baseline, with the quantization/output-length caveats above. On
+correction, LiteRT returns 68 tokens versus llama's 111 (including EOS);
+this materially affects latency.
+
+[cols=",>,>,>",options="header",]
+|===
+|Case |MTP off median |MTP on median |Output tokens off/on
+|agreement |2.752 s |1.923 s |75/75
+|proposal |1.107 s |0.862 s |22/21
+|correction |2.480 s |1.583 s |68/68
+|negation |2.269 s |1.636 s |61/60
+|task |2.082 s |1.453 s |56/55
+|silence |1.069 s |0.879 s |22/21
+|===
+
+== Semantic inspection
+
+Both LiteRT configurations emit the exact same response text, stable
+across all four repeats. Strict raw JSON: 0/24 each because of Markdown
+fences; after exact fence removal: 24/24 each. Syntax validity does not
+establish factual accuracy.
+
+[cols=",",options="header",]
+|===
+|Case |Observed LiteRT behavior
+|agreement |Correct Friday 18:00, evidence u1/u2
+|proposal |Empty agreements, correct under the strict reference
+|correction |Only Monday, evidence u2/u3; no obsolete deadline duplicate
+|negation |False agreement “пока просто обсудим варианты”, evidence u2
+|task |Correct task meaning, but empty evidence++_++ids
+|silence |Empty agreements; no weather fact misclassified
+|===
+
+This export is worth continuing as a local CPU candidate. Quality is
+insufficient for automatic agreement recording: false positives and
+missing evidence require an explicit acceptance gate and human review.
+`hint` is empty in every case; useful live suggestions have not been
+demonstrated by this extraction-only set. Next evaluation should include
+a broader labeled Russian set, longer rolling context, and simultaneous
+ASR/video. Matched checkpoint/precision is required before attributing
+improvements solely to the runtime.
+
+Local raw JSON, metadata and logs are in
+`spikes/live-llm-bench/results/` (gitignored); the runner and pinned
+dependencies are saved beside them.

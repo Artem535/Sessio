@@ -1,0 +1,33 @@
+Failed to open VDPAU backend libvdpau_nvidia.so: cannot open shared object file: No such file or directory
+tiles=2 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=1173x660
+tiles=2 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=160x90
+identity=remote-1 stage=1240x760 tile=33,11,1173,660 renderer=0,0,1173,660
+identity=local stage=1240x760 tile=1068,582,160,90 renderer=0,0,160,90
+tiles=3 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=579x326
+tiles=3 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=579x326
+tiles=3 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=579x326
+identity=remote-1 stage=1240x760 tile=36,11,579,326 renderer=0,0,579,326
+identity=remote-2 stage=1240x760 tile=623,11,579,326 renderer=0,0,579,326
+identity=local stage=1240x760 tile=329,345,579,326 renderer=0,0,579,326
+tiles=10 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=298x167
+tiles=10 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=298x167
+tiles=10 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=298x167
+tiles=10 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=298x167
+tiles=10 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=298x167
+tiles=10 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=298x167
+tiles=10 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=298x167
+tiles=10 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=298x167
+tiles=10 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=298x167
+tiles=10 hardware=AMD Radeon 780M Graphics (radeonsi, phoenix, ACO, DRM 3.64, 7.2.7-200.fc44.x86_64) framebuffer=298x167
+identity=remote-1 stage=1240x760 tile=11,83,298,167 renderer=0,0,298,167
+identity=remote-2 stage=1240x760 tile=317,83,298,167 renderer=0,0,298,167
+identity=local stage=1240x760 tile=623,433,298,167 renderer=0,0,298,167
+identity=remote-3 stage=1240x760 tile=623,83,298,167 renderer=0,0,298,167
+identity=remote-4 stage=1240x760 tile=929,83,298,167 renderer=0,0,298,167
+identity=remote-5 stage=1240x760 tile=11,258,298,167 renderer=0,0,298,167
+identity=remote-6 stage=1240x760 tile=317,258,298,167 renderer=0,0,298,167
+identity=remote-7 stage=1240x760 tile=623,258,298,167 renderer=0,0,298,167
+identity=remote-8 stage=1240x760 tile=929,258,298,167 renderer=0,0,298,167
+identity=remote-9 stage=1240x760 tile=317,433,298,167 renderer=0,0,298,167
+populated native 1:1, 1:2 and ten-tile hardware GL/geometry passed
+ARTIFACTS: widget/framebuffer reconstructions, not desktop compositor screenshots

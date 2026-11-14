@@ -30,7 +30,8 @@ public slots:
     [[nodiscard]] int64_t addEvent(const DuckEvent &event, bool allowOverlap = true) const;
     [[nodiscard]] int64_t addEventSeries(const DuckEvent &event, int64_t clientId,
                                          const QString &recurrenceRule,
-                                         std::optional<int64_t> recurrenceUntilMs) const;
+                                         std::optional<int64_t> recurrenceUntilMs,
+                                         const QString &publishTimezone = {}) const;
     [[nodiscard]] bool updateEventSeries(const DuckEvent &event, int64_t seriesId,
                                          int64_t clientId,
                                          const QString &recurrenceRule,

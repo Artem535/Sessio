@@ -1,0 +1,144 @@
+= Gemma 4 E4B CPU spike, 2026-10-09
+
+== Method
+
+Compare the next model-size tier on the same Ryzen 7 7840HS, Fedora 44,
+27 GiB RAM. LiteRT-LM API 0.18.0, CPU XNNPACK, four threads, MTP
+enabled, 4096 context, greedy generation, no prompt cache/fresh session
+on each request. All selected text/vision/audio backends are CPU. Runs
+sequentially, no ASR/video workload. MemoryMax=12G, MemorySwapMax=0 for
+each process; this is a process safety limit, not the amount of RAM
+required by the model.
+
+Export:
+https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm[litert-community/gemma-4-E4B-it-litert-lm],
+revision `2eee7ac325f20eb8c9ac1d0e972f7c84663062da`, file
+`gemma-4-E4B-it.litertlm`, 3,659,530,240 bytes, verified size and SHA256
+`0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0`.
+Official
+https://developers.google.com/edge/litert-lm/models/gemma-4[Gemma 4
+LiteRT guide] recommends MTP for E4B CPU. E4B model card does not
+provide an explicit complete per-tensor quantization inventory, so no
+claim of equal quantization with E2B is made. This tests the available
+model artifacts, not parameter count in isolation.
+
+Unmodified prompts from E2B experiments:
+
+* Six short extraction cases, four repeats each, max 160 output tokens.
+* Short control (271 tokens) and long history (2986 tokens), four
+repeats each, max 256 output tokens.
+* Seven rolling windows plus three explicit mutation windows, two
+replays, model-generated operations and application-maintained state,
+max 256 tokens.
+
+Input token IDs and actual prefill counts are checked against the same
+reference tokenizer, with the same LiteRT BOS normalization. Initial
+excluded short warmup and compiled-weight caching remain unchanged. Cold
+first compilation is not represented by the measured warm-request
+latencies. No prompt tuning on E4B.
+
+Quality references: Friday 18:00 meeting; notes sent Monday (not the
+obsolete tomorrow deadline); no diary agreement after explicit refusal;
+neutral windows preserve accepted facts. Mutation probe must move the
+meeting to Friday 20:00, cancel notes, and retain only the meeting
+through the final neutral window. Known/current evidence-ID validation
+checks syntax/provenance, not semantics.
+
+E2B baselines: xref:research/live-llm-litert-results.adoc[short],
+xref:research/live-llm-long-results.adoc[long],
+xref:research/live-llm-rolling-results.adoc[rolling operations]. Two/four repeated
+synthetic runs do not establish representative quality or
+production-tail latency. Identical repeated outputs are not independent
+examples.
+
+Reproduce with `bash spikes/live-llm-bench/run++_++e4b.sh` after
+downloading and verifying the model. Local raw outputs and metadata:
+results/e4b-++*++.json.
+
+== Short extraction results
+
+24 measured requests. Median first text 1.184 s; full response 2.592 s,
+versus 0.487/1.515 s for E2B {plus} MTP. E4B kernel peak RSS 3722696 KiB
+(3.55 GiB), including load/warmup. All six case outputs are stable
+across four repeats.
+
+[cols=",,",options="header",]
+|===
+|Case |E4B observation |Comparison to E2B
+|agreement |Friday 18:00 with evidence u1/u2 |Both correct
+
+|proposal |Empty agreements |Both correct
+
+|correction |Send notes Monday, evidence u2/u3 |Both correct
+
+|negation |Empty agreements |Removes E2B false agreement
+
+|task |Correct action, evidence u1 only |E2B had no evidence; acceptance
+u2 still absent
+
+|silence |Empty agreements |Both correct
+|===
+
+Hints are empty. Valid extraction here does not establish useful live
+coaching.
+
+== Long history results
+
+[cols=",>,>",options="header",]
+|===
+|Fixture |E2B first text/full response median |E4B first text/full
+response median
+|short control, 271 tokens |0.671 / 2.860 s |1.687 / 5.480 s
+
+|long history, 2986 tokens |5.515 / 7.507 s |13.315 / 17.900 s
+|===
+
+Unlike E2B's incomplete “В понедельник.” agreement, E4B returns both
+complete actions: Friday 18:00 meeting (a1/a2) and sending notes Monday
+(b2/b3). It does not resurrect tomorrow or accept the refused daily
+diary. This is a concrete quality improvement on this fixture. Its
+generic hints (“Понятно”/a confirmation summary) are not demonstrated
+useful coaching. Kernel peak RSS across these cases: 4061800 KiB, about
+3.87 GiB. Long-response output counts: E2B 110 versus E4B 133; output
+length is one additional latency confound.
+
+== Rolling operation results
+
+20 measured updates (two ten-window replays). The original seven-window
+portion has median first text/full update 3.156/3.424 s, versus E2B
+1.448/1.616 s. Mean sum of the original seven updates: 23.564 s per
+replay. Kernel peak RSS over the original and mutation windows: 3553740
+KiB, about 3.39 GiB.
+
+E4B emits empty operations on all original seven windows, missing both
+accepted facts. It then creates the explicitly rescheduled Friday 20:00
+meeting with evidence d1/d2. On cancellation of the Monday notes, it
+incorrectly emits `remove d1` with evidence e2, deleting the unrelated
+meeting. Final state is empty in both replays. No operation is rejected
+by provenance checks: all identifiers exist and evidence points to a
+current utterance, demonstrating that those checks do not validate
+semantic targeting. This is the same wrong-target failure found in E2B.
+Identical prompts did not become reliable simply by increasing model
+size.
+
+== Verification and verdict
+
+52 measured responses completed under output caps. All input-ID/prefill
+checks passed. Operation response text is identical across replays;
+short/long response text is stable per fixture. JSON is parseable after
+exact Markdown fence removal; semantic failures above remain regardless
+of syntax validity.
+
+E4B improves straightforward extraction and retention in the one-shot
+long history, at about 1.7x short-case and 2.4x long-case full-response
+latency versus E2B on these exports. It does *not* pass incremental
+operation safety and its ~3.4-second rolling updates exceed the earlier
+~2-second aspiration.
+
+Recommendation: retain E4B as a candidate for a less frequent full
+summary; do not enable automatic agreement mutation based on either
+current export. Next probe should isolate extraction from target
+selection/deletion, and compare another model family with reviewed
+evidence. Real-call ASR/video contention and KV-cache reuse remain
+untested. No broad quality score is inferred from this small, repeated
+synthetic set.

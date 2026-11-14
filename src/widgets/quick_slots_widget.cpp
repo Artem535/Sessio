@@ -75,7 +75,7 @@ void QuickSlotsWidget::refreshSlots() {
        slotTime.addSecs(durationMinutes * 60) <= workDayEnd;
        slotTime = slotTime.addSecs(durationMinutes * 60)) {
     const auto slotStart =
-        QDateTime(mSelectedDate, slotTime, QTimeZone::systemTimeZone());
+        QDateTime(mSelectedDate, slotTime, QTimeZone(QTimeZone::LocalTime));
     const auto slotEnd = slotStart.addSecs(durationMinutes * 60);
 
     if (hideOverlaps && slotOverlapsAnyEvent(slotStart, slotEnd)) {

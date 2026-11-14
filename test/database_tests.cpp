@@ -39,7 +39,7 @@ TEST(DatabaseTest, PersistsApplicationMetadataAcrossRestart) {
     first = db.get_application_metadata();
   }
 
-  ASSERT_EQ(first.schema_version, 1);
+  ASSERT_EQ(first.schema_version, 4);
   ASSERT_EQ(first.backup_format_version, 1);
   ASSERT_FALSE(first.workspace_uuid.empty());
   ASSERT_GT(first.created_at, 0);
@@ -253,6 +253,40 @@ TEST(DatabaseTest, UpdateEventLogsStatusChange) {
   EXPECT_EQ(*entries.front().new_event_stat_id, 2);
   EXPECT_FALSE(entries.front().old_payment_stat_id.has_value());
   EXPECT_FALSE(entries.front().old_start_date.has_value());
+
+  removeChangeLogTestDatabase(dirName);
+}
+
+TEST(DatabaseTest, UpdateEventSucceedsRepeatedlyOnceChangeLogRowsExist) {
+  const std::string dirName = "tmp_dir_changelog_repeated_update";
+  auto db = makeChangeLogTestDatabase(dirName);
+
+  const auto [clientId, eventId] = makeLinkedClientAndEvent(db, 1730000000000, 1730003600000);
+
+  DuckEvent updated;
+  updated.id = eventId;
+  updated.start_date = 1730000000000;
+  updated.end_date = 1730003600000;
+  updated.event_stat_id = 2;
+  updated.payment_stat_id = 1;
+
+  // 1st edit: status change.
+  ASSERT_TRUE(db.update_event(updated));
+  db.add_event_client(eventId, clientId);
+
+  // 2nd edit: payment change.
+  updated.payment_stat_id = 2;
+  ASSERT_TRUE(db.update_event(updated));
+  db.add_event_client(eventId, clientId);
+
+  // 3rd edit: reschedule.
+  updated.start_date = 1730010000000;
+  updated.end_date = 1730013600000;
+  ASSERT_TRUE(db.update_event(updated));
+  db.add_event_client(eventId, clientId);
+
+  const auto entries = db.get_event_change_log_for_client(clientId);
+  ASSERT_EQ(entries.size(), 3);
 
   removeChangeLogTestDatabase(dirName);
 }
@@ -883,6 +917,30 @@ TEST(DatabaseTest, PersistsProviderFieldsOnEvent) {
   ASSERT_NE(updated, nullptr);
   ASSERT_TRUE(updated->invitation_state.has_value());
   EXPECT_EQ(*updated->invitation_state, "pending");
+}
+
+TEST(DatabaseTest, ExternalJitsiRoundTripsWithoutBackendCredentials) {
+  TempDbFixture fixture("tmp_dir_external_jitsi_event");
+  int64_t id = 0;
+  {
+    pcm::database::Database db{fixture.conf};
+    DuckEvent event;
+    event.name = "External meeting";
+    event.start_date = 1730000000000;
+    event.end_date = 1730003600000;
+    event.is_online = true;
+    event.provider_kind = "ExternalJitsi";
+    event.meeting_url = "https://meet.example.invalid/prefix/room";
+    id = db.add_event(event);
+    ASSERT_GT(id, 0);
+  }
+  pcm::database::Database reopened{fixture.conf};
+  const auto event = reopened.get_event(id);
+  ASSERT_NE(event, nullptr);
+  EXPECT_EQ(event->provider_kind, std::optional<std::string>{"ExternalJitsi"});
+  EXPECT_EQ(event->meeting_url, "https://meet.example.invalid/prefix/room");
+  EXPECT_FALSE(event->meeting_ref);
+  EXPECT_FALSE(event->invitation_state);
 }
 
 TEST(DatabaseTest, PersistsProviderFieldsOnEventSeries) {

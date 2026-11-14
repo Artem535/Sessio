@@ -6,6 +6,7 @@
 #include <QMenu>
 #include <QPainterPath>
 #include <QRegion>
+#include <QScrollBar>
 #include <QSet>
 #include <QTimer>
 
@@ -16,6 +17,8 @@ Q_LOGGING_CATEGORY(logEventView, "pcm.EventView")
 
 namespace {
 constexpr int kHighlightDurationMs = 2500;
+constexpr int kNowLineRefreshMs = 30'000;
+const QColor kNowLineColor(0xE5, 0x48, 0x4D);
 } // namespace
 
 QEventView::QEventView(QWidget *parent)
@@ -47,6 +50,41 @@ QEventView::QEventView(QWidget *parent)
           .arg(borderCss, backgroundCss));
 
   updateSceneSize();
+
+  // Keeps the current-time line moving while the timeline is open.
+  auto *nowTimer = new QTimer(this);
+  nowTimer->setInterval(kNowLineRefreshMs);
+  connect(nowTimer, &QTimer::timeout, this, [this] {
+    if (isVisible()) viewport()->update();
+  });
+  nowTimer->start();
+}
+
+std::optional<qreal> QEventView::currentTimeLineY(const QDateTime &now) const {
+  if (!mModel || mModel->currentDate() != now.date()) {
+    return std::nullopt;
+  }
+  const auto time = now.time();
+  const qreal minutes = time.hour() * 60 + time.minute() + time.second() / 60.0;
+  return minutes * mPixelPerMin;
+}
+
+void QEventView::drawForeground(QPainter *painter, const QRectF &rect) {
+  QGraphicsView::drawForeground(painter, rect);
+  const auto y = currentTimeLineY(QDateTime::currentDateTime());
+  if (!y) {
+    return;
+  }
+  constexpr qreal x = pcm::widgets::constants::kWidthLabel;
+  constexpr qreal kDotRadius = 4.0;
+  painter->save();
+  painter->setRenderHint(QPainter::Antialiasing);
+  painter->setPen(QPen(kNowLineColor, 2.0));
+  painter->drawLine(QLineF(x, *y, rect.right(), *y));
+  painter->setPen(Qt::NoPen);
+  painter->setBrush(kNowLineColor);
+  painter->drawEllipse(QPointF(x, *y), kDotRadius, kDotRadius);
+  painter->restore();
 }
 
 void QEventView::setModel(QTimelineModel *model) {
@@ -63,6 +101,48 @@ void QEventView::setModel(QTimelineModel *model) {
   connect(mModel, &QTimelineModel::dataChanged, this,
           &QEventView::onDataChanged);
   connect(mModel, &QTimelineModel::modelReset, this, &QEventView::onModelReset);
+  connect(mModel, &QTimelineModel::eventsLoaded, this, [this] {
+    // Only a new displayed date scrolls; reloads of the same day after a save,
+    // edit or delete keep the user's scroll position.
+    if (mLastScrolledDate.isValid() && mLastScrolledDate == mModel->currentDate()) {
+      return;
+    }
+    mLastScrolledDate = mModel->currentDate();
+    mAutoScrollPending = true;
+    QTimer::singleShot(0, this, &QEventView::scrollToDayStart);
+  });
+}
+
+void QEventView::scrollToDayStart() {
+  if (!isVisible() || viewport()->height() <= 0) {
+    return; // applied from showEvent/resizeEvent once the view has a size
+  }
+  mAutoScrollPending = false;
+  int firstMinute = 8 * 60;
+  bool any = false;
+  for (auto it = mSceneItems.cbegin(); it != mSceneItems.cend(); ++it) {
+    const auto time = it.value()->getStartTime().time();
+    const int minute = time.hour() * 60 + time.minute();
+    if (!any || minute < firstMinute) {
+      firstMinute = minute;
+    }
+    any = true;
+  }
+  auto *bar = verticalScrollBar();
+  const int target = static_cast<int>(firstMinute * mPixelPerMin);
+  const int viewTop = bar->value();
+  const int margin = static_cast<int>(30 * mPixelPerMin);
+  if (target >= viewTop && target + margin <= viewTop + viewport()->height()) {
+    return; // already visible
+  }
+  bar->setValue(std::max(0, target - margin));
+}
+
+void QEventView::showEvent(QShowEvent *event) {
+  QGraphicsView::showEvent(event);
+  if (mAutoScrollPending) {
+    QTimer::singleShot(0, this, &QEventView::scrollToDayStart);
+  }
 }
 
 void QEventView::onRowsInserted(const QModelIndex &parent, int first,
@@ -392,6 +472,9 @@ void QEventView::resizeEvent(QResizeEvent *event) {
   clipPath.addRoundedRect(rect(), kCornerRadius, kCornerRadius);
   setMask(QRegion(clipPath.toFillPolygon().toPolygon()));
   updateScene();
+  if (mAutoScrollPending) {
+    scrollToDayStart();
+  }
 }
 
 void QEventView::updateScene() {

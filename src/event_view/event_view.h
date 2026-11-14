@@ -4,6 +4,7 @@
 #include <QGraphicsView>
 #include <QLoggingCategory>
 #include <QPainter>
+#include <QDateTime>
 #include <QTime>
 #include <QVector>
 #include <QWidget>
@@ -36,10 +37,19 @@ public slots:
                      const QList<int> &roles);
   void onModelReset();
   void highlightEvent(int64_t eventId);
+  // Scroll so the first meeting of the loaded day (or 08:00 when there is none)
+  // is visible; a no-op when it already is.
+  void scrollToDayStart();
+
+public:
+  // Scene y of the current-time line, or nothing when the displayed day is
+  // not the day of `now`.
+  [[nodiscard]] std::optional<qreal> currentTimeLineY(const QDateTime &now) const;
 
 protected:
   void contextMenuEvent(QContextMenuEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
+  void showEvent(QShowEvent *event) override;
 
 private slots:
   void onEventSelected();
@@ -53,8 +63,11 @@ private:
   std::optional<int64_t> mHighlightedEventId;
   qreal mPixelPerMin = pcm::widgets::constants::kPixelPerMin;
   QMap<int64_t, QEventItem *> mSceneItems;
+  bool mAutoScrollPending = false;
+  QDate mLastScrolledDate;
 
   void drawBackground(QPainter *painter, const QRectF &rect) override;
+  void drawForeground(QPainter *painter, const QRectF &rect) override;
   void showCreateEventMenu(const QPoint &viewportPos, const QPoint &globalPos);
   void updateSceneSize();
   void updateItemsSize() const;

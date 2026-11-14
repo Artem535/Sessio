@@ -192,7 +192,8 @@ void ClientInfo::connectSignals(const QClientDelegate *delegate) {
 
         const auto reply = QMessageBox::question(
             this, tr("Delete client"),
-            tr("Delete %1? This action cannot be undone.").arg(promptName),
+            tr("Delete %1? This action cannot be undone.").arg(promptName) + "\n" +
+                tr("The transcript will be kept."),
             QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (reply != QMessageBox::Yes) {
           return;
