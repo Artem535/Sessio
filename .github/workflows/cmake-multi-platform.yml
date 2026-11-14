@@ -41,7 +41,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/sessio-litert
-          key: litert-lm-v0.19.0-${{ runner.os }}-${{ hashFiles('scripts/build-litert-lm.sh', 'scripts/build-litert-lm-gpu.sh', 'src/call_prompter/litert/**', 'test/litert_gpu_runtime_smoke.cpp') }}
+          key: litert-lm-v0.19.0-${{ runner.os }}-${{ hashFiles('scripts/build-litert-lm.sh', 'scripts/build-litert-lm-gpu.sh', 'scripts/patch-litert-lm-gpu-mask.py', 'src/call_prompter/litert/**', 'test/litert_gpu_runtime_smoke.cpp') }}
 
       - name: Free disk space
         if: steps.cache-litert.outputs.cache-hit != 'true'

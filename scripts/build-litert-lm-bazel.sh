@@ -54,6 +54,12 @@ if [[ "$(git -C "$prefix/src" describe --tags --exact-match 2>/dev/null)" != "$v
   echo "$prefix/src is not LiteRT-LM $version" >&2
   exit 1
 fi
+py="$(command -v python3 || command -v python)"
+if [[ "$platform" == windows ]]; then
+  "$py" "$(cygpath -w "$(dirname "$0")/patch-litert-lm-gpu-mask.py")" "$(cygpath -w "$prefix/src")"
+else
+  "$py" "$(dirname "$0")/patch-litert-lm-gpu-mask.py" "$prefix/src"
+fi
 
 # Our library is a package inside the LiteRT-LM workspace, linked against the
 # same targets as upstream's litert_lm_main.
