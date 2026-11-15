@@ -18,6 +18,14 @@ env:
   VCPKG_COMMIT: 62159a45e18f3a9ac0548628dcaf74fcb60c6ff9
 
 jobs:
+  prompt-contract:
+    name: Call prompter contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check_prompt_contract.py
+      - run: python3 -m unittest test/test_prompt_contract.py test/test_prompter_eval_fixture.py
+
   # The call prompter runtime (libsessio_litert on LiteRT-LM v0.19.0, Vulkan
   # with CPU fallback). The upstream super-build takes hours, so install/ is
   # cached and rebuilt only when the build scripts or the shim change: the shim

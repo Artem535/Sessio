@@ -20,7 +20,38 @@ bool timestamp(const QJsonValue &value) {
 } // namespace
 
 QByteArray serialize(const QJsonObject &object) {
-  return QJsonDocument(object).toJson(QJsonDocument::Compact);
+  return dumpJson(object);
+}
+
+QByteArray requireNonemptyItems(QByteArray schema, const QString &emptyNoteDefinition) {
+  const auto definitions = QJsonDocument::fromJson(schema).object()["$defs"].toObject();
+  for (auto it = definitions.begin(); it != definitions.end(); ++it) {
+    const auto properties = it.value().toObject()["properties"].toObject();
+    if (it.key() == emptyNoteDefinition || !properties.contains("text") || !properties.contains("evidence_ids")) continue;
+    const auto encoded = QJsonDocument(QJsonArray{it.key()}).toJson(QJsonDocument::Compact);
+    const auto marker = encoded.mid(1, encoded.size() - 2) + ":{";
+    const auto start = schema.indexOf(marker);
+    if (start < 0) continue;
+    auto end = start + marker.size();
+    int depth = 1;
+    bool quoted = false, escaped = false;
+    for (; end < schema.size() && depth; ++end) {
+      const char c = schema[end];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (c == '\\') escaped = true;
+        else if (c == '"') quoted = false;
+      } else if (c == '"') quoted = true;
+      else if (c == '{') ++depth;
+      else if (c == '}') --depth;
+    }
+    if (depth) continue;
+    auto definition = schema.mid(start, end - start);
+    definition.replace(R"("text":{"type":"string",)", R"("text":{"type":"string","minLength":1,)");
+    definition.replace(R"("evidence_ids":{"type":"array",)", R"("evidence_ids":{"type":"array","minItems":1,)");
+    schema.replace(start, end - start, definition);
+  }
+  return schema;
 }
 
 QString pointKey(const QString &text) {

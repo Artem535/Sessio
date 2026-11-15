@@ -67,6 +67,8 @@ QByteArray dumpPayload(const Payload &payload);
 // Parses a raw model reply, tolerating surrounding whitespace and a Markdown
 // code fence. Throws PipelineError when the reply is not JSON.
 QJsonValue parseModelReply(const QString &raw);
+// Raw model replies are sensitive; debug logging is disabled by default.
+void logModelReply(const char *engine, const QString &reply);
 
 // Gemma 4 chat format for one system and one user turn, thinking disabled,
 // without the leading <bos> (the engine adds it).

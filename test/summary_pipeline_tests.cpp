@@ -11,6 +11,10 @@
 using namespace pcm::prompter;
 
 namespace {
+QStringList diagnostics;
+void captureDiagnostics(QtMsgType type, const QMessageLogContext &context, const QString &message) {
+  if (type == QtWarningMsg && QByteArray(context.category) == "pcm.prompter.diagnostics") diagnostics.append(message);
+}
 QJsonObject source(const QString &id, const QString &text = QStringLiteral("Обсудили проект.")) {
   return {{"id", id}, {"speaker", "A"}, {"text", text}, {"start_ms", 0}, {"end_ms", 1000}};
 }
@@ -83,6 +87,32 @@ TEST(SummaryPipeline, EmptyTranscriptReturnsEmptyFormat2WithoutModel) {
 TEST(SummaryPipeline, ShortCallGivesOneLeafAndAnOverview) {
   Model model;
   const auto out = processSummary({source("u1")}, ctx(), model.generate());
+  for (const auto &bytes : model.schemas) {
+    const auto schema = parsed(bytes);
+    const auto name = schema["$ref"].toString().section('/', -1);
+    const auto definitions = schema["$defs"].toObject();
+    const auto root = definitions[name].toObject();
+    EXPECT_TRUE(root["required"].toArray().contains("reasoning"));
+    EXPECT_TRUE(root["properties"].toObject().contains("reasoning"));
+    const auto rootStart = bytes.indexOf(('\"' + name.toUtf8() + "\":{"));
+    ASSERT_GE(rootStart, 0);
+    const auto propsStart = bytes.indexOf("\"properties\":{", rootStart);
+    ASSERT_GE(propsStart, 0);
+    EXPECT_TRUE(bytes.mid(propsStart).startsWith("\"properties\":{\"reasoning\":"));
+    for (auto it = definitions.begin(); it != definitions.end(); ++it)
+      if (it.key() != name) EXPECT_FALSE(it.value().toObject()["required"].toArray().contains("reasoning"));
+  }
+  const auto leafSchema = parsed(model.schemas.front());
+  const auto defs = leafSchema["$defs"].toObject();
+  const auto resolve = [&defs](const QJsonObject &node) {
+    return defs[node["$ref"].toString().section('/', -1)].toObject();
+  };
+  const auto props = resolve(leafSchema)["properties"].toObject();
+  const auto note = resolve(props["note"].toObject())["properties"].toObject();
+  EXPECT_EQ(note["text"].toObject()["minLength"].toInt(), 0);
+  const auto point = resolve(props["key_points"].toObject()["items"].toObject())["properties"].toObject();
+  EXPECT_EQ(point["text"].toObject()["minLength"].toInt(), 1);
+  EXPECT_EQ(point["evidence_ids"].toObject()["minItems"].toInt(), 1);
   EXPECT_EQ(model.payloads.size(), 2u);
   EXPECT_EQ(out["overview"].toObject(), item("Обзор: Часть u1", {"u1"}));
   EXPECT_EQ(texts(out["key_points"].toArray()), QStringList{"Пункт u1"});
@@ -110,6 +140,9 @@ TEST(SummaryPipeline, LeafPayloadCarriesCalendarAndAgreements) {
   Model model;
   processSummary({source("u1")}, ctx({QStringLiteral("Встреча в четверг")}), model.generate());
   const auto leaf = parsed(model.payloads.front());
+  EXPECT_TRUE(model.payloads.front().startsWith("{\"call_date\": "));
+  EXPECT_LT(model.payloads.front().indexOf("\"calendar\""), model.payloads.front().indexOf("\"agreements\""));
+  EXPECT_LT(model.payloads.front().indexOf("\"agreements\""), model.payloads.front().indexOf("\"utterances\""));
   EXPECT_EQ(leaf["call_date"].toString(), "2026-10-29 четверг");
   EXPECT_EQ(leaf["calendar"].toArray().first().toString(), "2026-10-29 четверг");
   EXPECT_EQ(leaf["agreements"].toArray(), (QJsonArray{"Встреча в четверг"}));
@@ -274,6 +307,27 @@ TEST(SummaryPipeline, AllLeavesFailingThrows) {
   Model model;
   model.leaf = [](const QJsonObject &) { return QJsonValue(QStringLiteral("not json")); };
   EXPECT_THROW(processSummary(longCall(2), ctx(), model.generate()), PipelineError);
+}
+
+TEST(SummaryPipeline, InvalidLeafAndOverviewReportFallbackReason) {
+  Model leafModel;
+  leafModel.leaf = [](const QJsonObject &) { return QJsonValue(QStringLiteral("not json")); };
+  diagnostics.clear();
+  auto previous = qInstallMessageHandler(captureDiagnostics);
+  EXPECT_THROW(processSummary({source("u1")}, ctx(), leafModel.generate()), PipelineError);
+  qInstallMessageHandler(previous);
+  ASSERT_FALSE(diagnostics.isEmpty());
+  EXPECT_TRUE(diagnostics.join(" ").contains("Leaf validation failed:"));
+
+  Model overviewModel;
+  overviewModel.overview = [](const QJsonObject &) { return QJsonValue(QStringLiteral("not json")); };
+  diagnostics.clear();
+  previous = qInstallMessageHandler(captureDiagnostics);
+  const auto result = processSummary({source("u1")}, ctx(), overviewModel.generate());
+  qInstallMessageHandler(previous);
+  EXPECT_FALSE(result["overview"]["text"].toString().isEmpty());
+  ASSERT_FALSE(diagnostics.isEmpty());
+  EXPECT_TRUE(diagnostics.join(" ").contains("Overview validation failed:"));
 }
 
 TEST(SummaryPipeline, TranscriptInstructionsStayInStructuredSourceData) {

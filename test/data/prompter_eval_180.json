@@ -1,0 +1,1941 @@
+{
+  "version": "issue-180-new-synthetic-v1",
+  "seed": null,
+  "description": "New synthetic cases; not the historical frozen evaluation.",
+  "key_points": [
+    {
+      "id": "kp-01",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Команда перенесла запуск сайта на понедельник.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "запуск",
+          "понедельник"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-02",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Склад закроют на ремонт в августе.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "склад",
+          "август"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-03",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Для фестиваля выбрали открытую площадку.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "фестивал",
+          "площадк"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-04",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Прототип требует более крупного шрифта.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "прототип",
+          "шрифт"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-05",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Бюджет выставки ограничен сорока тысячами рублей.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "бюджет",
+          "сорок"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-06",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Редактор попросил сократить вступление статьи.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "сократ",
+          "вступлен"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-07",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "В библиотеку закупят новые словари.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "библиотек",
+          "словар"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-08",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Тренировку группы перенесли в спортивный зал.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "трениров",
+          "зал"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-09",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Отчёт будут публиковать раз в квартал.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "отчёт",
+          "квартал"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-10",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Новую остановку откроют около школы.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "остановк",
+          "школ"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-11",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Для макета выбрали синий фон.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "макет",
+          "син"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-12",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Музей добавит аудиогид на двух языках.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "аудиогид",
+          "язык"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-13",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Участники решили начать встречу на полчаса раньше.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "встреч",
+          "раньше"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-14",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "В рецепте заменили сливки овсяным молоком.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "сливк",
+          "овсян"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-15",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "На конференции предусмотрели перевод жестового языка.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "конференц",
+          "жестов"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-16",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Команда исключила платную регистрацию из первого этапа.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "регистрац",
+          "платн"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-17",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Утверждена поставка тридцати стульев в актовый зал.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "стуль",
+          "зал"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-18",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "В саду планируют посадить яблони вдоль забора.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "яблон",
+          "забор"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-19",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Переезд офиса отложили до завершения ремонта.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "переезд",
+          "ремонт"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-20",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Курс разделили на четыре коротких занятия.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "курс",
+          "четыр"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-21",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Срок приёма заявок продлили до пятницы.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "заяв",
+          "пятниц"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-22",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Исследование проведут без записи голосов.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "исследован",
+          "запис"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-23",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Вход на лекцию сделают бесплатным.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "лекц",
+          "бесплат"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-24",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Первый выпуск журнала посвятят городской среде.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "журнал",
+          "город"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-25",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Для доставки выбрали железную дорогу.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "достав",
+          "железн"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-26",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "У приложения будет тёмная тема.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "приложен",
+          "тёмн"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-27",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Экскурсия начнётся у северного входа.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "экскурс",
+          "северн"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-28",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Обеденный перерыв сократят до сорока минут.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "перерыв",
+          "сорок"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-29",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Мастерская закупит защитные очки для всех участников.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "очк",
+          "участник"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-30",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "В расчётах использовали курс девяносто рублей за доллар.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "курс",
+          "доллар"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-31",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Комиссия отклонила предложение закрыть парк.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "отклони",
+          "парк"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-32",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Пилотный проект запустят только в одном районе.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": false,
+        "terms": [
+          "пилот",
+          "район"
+        ],
+        "evidence_ids": [
+          "u1"
+        ]
+      }
+    },
+    {
+      "id": "kp-33",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Здравствуйте, всем меня слышно?",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": true,
+        "terms": [],
+        "evidence_ids": []
+      }
+    },
+    {
+      "id": "kp-34",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Раз, два, проверка микрофона.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": true,
+        "terms": [],
+        "evidence_ids": []
+      }
+    },
+    {
+      "id": "kp-35",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Сейчас, одну секунду, я подключаюсь.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": true,
+        "terms": [],
+        "evidence_ids": []
+      }
+    },
+    {
+      "id": "kp-36",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Добрый день! Спасибо, что пришли.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": true,
+        "terms": [],
+        "evidence_ids": []
+      }
+    },
+    {
+      "id": "kp-37",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Угу. Да. Хорошо.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": true,
+        "terms": [],
+        "evidence_ids": []
+      }
+    },
+    {
+      "id": "kp-38",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Извините, звук немного пропал.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": true,
+        "terms": [],
+        "evidence_ids": []
+      }
+    },
+    {
+      "id": "kp-39",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Всем пока, до свидания.",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": true,
+        "terms": [],
+        "evidence_ids": []
+      }
+    },
+    {
+      "id": "kp-40",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Так, где же кнопка включения камеры?",
+          "start_ms": 0,
+          "end_ms": 1000
+        }
+      ],
+      "gold": {
+        "abstain": true,
+        "terms": [],
+        "evidence_ids": []
+      }
+    }
+  ],
+  "dialogues": [
+    {
+      "id": "dialogue-01",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Предлагаю срок отправки отчёта: вторник.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Поправка: срок отправки отчёта — четверг.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Согласовано, срок — четверг.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "отправки отчёта",
+        "final_value": "четверг",
+        "superseded_value": "вторник",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-02",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "По поводу начала выставки: первоначально называли март.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Это устарело, теперь договорились на апрель.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Да, подтверждаю изменение.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "начала выставки",
+        "final_value": "апрель",
+        "superseded_value": "март",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-03",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "Б",
+          "text": "Ставим встречи команды на 10:00?",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "А",
+          "text": "Нет, лучше 11:00; первый вариант отменяем.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "Б",
+          "text": "Хорошо, записываем 11:00.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "встречи команды",
+        "final_value": "11:00",
+        "superseded_value": "10:00",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-04",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Перейдём к следующему пункту.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "По сроку поставки стульев раньше было понедельник.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Уточняю: не понедельник, а среда.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        },
+        {
+          "id": "u4",
+          "speaker": "Б",
+          "text": "Согласен с уточнением.",
+          "start_ms": 3000,
+          "end_ms": 4000
+        }
+      ],
+      "gold": {
+        "topic": "поставки стульев",
+        "final_value": "среда",
+        "superseded_value": "понедельник",
+        "evidence_ids": [
+          "u3",
+          "u4"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-05",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Я ошибочно сообщил пятницу для проверки макета.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Верное значение — субботу?",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Да, субботу; предыдущее значение отменено.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "проверки макета",
+        "final_value": "субботу",
+        "superseded_value": "пятницу",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-06",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Предлагаю срок открытия библиотеки: июнь.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Поправка: срок открытия библиотеки — июль.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Согласовано, срок — июль.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "открытия библиотеки",
+        "final_value": "июль",
+        "superseded_value": "июнь",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-07",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "По поводу репетиции хора: первоначально называли 15:00.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Это устарело, теперь договорились на 16:00.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Да, подтверждаю изменение.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "репетиции хора",
+        "final_value": "16:00",
+        "superseded_value": "15:00",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-08",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "Б",
+          "text": "Ставим публикации статьи на август?",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "А",
+          "text": "Нет, лучше сентябрь; первый вариант отменяем.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "Б",
+          "text": "Хорошо, записываем сентябрь.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "публикации статьи",
+        "final_value": "сентябрь",
+        "superseded_value": "август",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-09",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Перейдём к следующему пункту.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "По сроку переезда офиса раньше было январь.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Уточняю: не январь, а февраль.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        },
+        {
+          "id": "u4",
+          "speaker": "Б",
+          "text": "Согласен с уточнением.",
+          "start_ms": 3000,
+          "end_ms": 4000
+        }
+      ],
+      "gold": {
+        "topic": "переезда офиса",
+        "final_value": "февраль",
+        "superseded_value": "январь",
+        "evidence_ids": [
+          "u3",
+          "u4"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-10",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Я ошибочно сообщил среду для закупки словарей.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Верное значение — пятницу?",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Да, пятницу; предыдущее значение отменено.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "закупки словарей",
+        "final_value": "пятницу",
+        "superseded_value": "среду",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-11",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Предлагаю срок заседания совета: 12:00.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Поправка: срок заседания совета — 14:00.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Согласовано, срок — 14:00.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "заседания совета",
+        "final_value": "14:00",
+        "superseded_value": "12:00",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-12",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "По поводу подачи заявки: первоначально называли декабрь.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Это устарело, теперь договорились на ноябрь.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Да, подтверждаю изменение.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "подачи заявки",
+        "final_value": "ноябрь",
+        "superseded_value": "декабрь",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-13",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "Б",
+          "text": "Ставим поездки группы на субботу?",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "А",
+          "text": "Нет, лучше воскресенье; первый вариант отменяем.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "Б",
+          "text": "Хорошо, записываем воскресенье.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "поездки группы",
+        "final_value": "воскресенье",
+        "superseded_value": "субботу",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-14",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Перейдём к следующему пункту.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "По сроку начала курса раньше было май.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Уточняю: не май, а июнь.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        },
+        {
+          "id": "u4",
+          "speaker": "Б",
+          "text": "Согласен с уточнением.",
+          "start_ms": 3000,
+          "end_ms": 4000
+        }
+      ],
+      "gold": {
+        "topic": "начала курса",
+        "final_value": "июнь",
+        "superseded_value": "май",
+        "evidence_ids": [
+          "u3",
+          "u4"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-15",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Я ошибочно сообщил четверг для доставки оборудования.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Верное значение — понедельник?",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Да, понедельник; предыдущее значение отменено.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "доставки оборудования",
+        "final_value": "понедельник",
+        "superseded_value": "четверг",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-16",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Предлагаю срок запуска сайта: 09:00.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Поправка: срок запуска сайта — 10:00.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Согласовано, срок — 10:00.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "запуска сайта",
+        "final_value": "10:00",
+        "superseded_value": "09:00",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-17",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "По поводу монтажа выставки: первоначально называли февраль.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Это устарело, теперь договорились на март.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Да, подтверждаю изменение.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "монтажа выставки",
+        "final_value": "март",
+        "superseded_value": "февраль",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-18",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "Б",
+          "text": "Ставим сдачи перевода на вторник?",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "А",
+          "text": "Нет, лучше пятницу; первый вариант отменяем.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "Б",
+          "text": "Хорошо, записываем пятницу.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "сдачи перевода",
+        "final_value": "пятницу",
+        "superseded_value": "вторник",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-19",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Перейдём к следующему пункту.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "По сроку встречи с издателем раньше было 16:00.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Уточняю: не 16:00, а 17:00.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        },
+        {
+          "id": "u4",
+          "speaker": "Б",
+          "text": "Согласен с уточнением.",
+          "start_ms": 3000,
+          "end_ms": 4000
+        }
+      ],
+      "gold": {
+        "topic": "встречи с издателем",
+        "final_value": "17:00",
+        "superseded_value": "16:00",
+        "evidence_ids": [
+          "u3",
+          "u4"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-20",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Я ошибочно сообщил апрель для проведения экскурсии.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Верное значение — май?",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Да, май; предыдущее значение отменено.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "проведения экскурсии",
+        "final_value": "май",
+        "superseded_value": "апрель",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-21",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Предлагаю срок проверки проекта: понедельник.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Поправка: срок проверки проекта — четверг.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Согласовано, срок — четверг.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "проверки проекта",
+        "final_value": "четверг",
+        "superseded_value": "понедельник",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-22",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "По поводу открытия фестиваля: первоначально называли июль.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Это устарело, теперь договорились на август.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Да, подтверждаю изменение.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "открытия фестиваля",
+        "final_value": "август",
+        "superseded_value": "июль",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-23",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "Б",
+          "text": "Ставим начала тренировки на 18:00?",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "А",
+          "text": "Нет, лучше 19:00; первый вариант отменяем.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "Б",
+          "text": "Хорошо, записываем 19:00.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "начала тренировки",
+        "final_value": "19:00",
+        "superseded_value": "18:00",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-24",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Перейдём к следующему пункту.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "По сроку печати журнала раньше было сентябрь.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Уточняю: не сентябрь, а октябрь.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        },
+        {
+          "id": "u4",
+          "speaker": "Б",
+          "text": "Согласен с уточнением.",
+          "start_ms": 3000,
+          "end_ms": 4000
+        }
+      ],
+      "gold": {
+        "topic": "печати журнала",
+        "final_value": "октябрь",
+        "superseded_value": "сентябрь",
+        "evidence_ids": [
+          "u3",
+          "u4"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-25",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Я ошибочно сообщил среду для доставки книг.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Верное значение — субботу?",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Да, субботу; предыдущее значение отменено.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "доставки книг",
+        "final_value": "субботу",
+        "superseded_value": "среду",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-26",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Предлагаю срок вебинара для участников: 13:00.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Поправка: срок вебинара для участников — 15:00.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Согласовано, срок — 15:00.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "вебинара для участников",
+        "final_value": "15:00",
+        "superseded_value": "13:00",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-27",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "По поводу ремонта мастерской: первоначально называли октябрь.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Это устарело, теперь договорились на ноябрь.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Да, подтверждаю изменение.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "ремонта мастерской",
+        "final_value": "ноябрь",
+        "superseded_value": "октябрь",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-28",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "Б",
+          "text": "Ставим сбора документов на пятницу?",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "А",
+          "text": "Нет, лучше понедельник; первый вариант отменяем.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "Б",
+          "text": "Хорошо, записываем понедельник.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "сбора документов",
+        "final_value": "понедельник",
+        "superseded_value": "пятницу",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-29",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Перейдём к следующему пункту.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "По сроку выпуска аудиогида раньше было март.",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Уточняю: не март, а май.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        },
+        {
+          "id": "u4",
+          "speaker": "Б",
+          "text": "Согласен с уточнением.",
+          "start_ms": 3000,
+          "end_ms": 4000
+        }
+      ],
+      "gold": {
+        "topic": "выпуска аудиогида",
+        "final_value": "май",
+        "superseded_value": "март",
+        "evidence_ids": [
+          "u3",
+          "u4"
+        ]
+      }
+    },
+    {
+      "id": "dialogue-30",
+      "utterances": [
+        {
+          "id": "u1",
+          "speaker": "А",
+          "text": "Я ошибочно сообщил 11:00 для начала выступления.",
+          "start_ms": 0,
+          "end_ms": 1000
+        },
+        {
+          "id": "u2",
+          "speaker": "Б",
+          "text": "Верное значение — 12:00?",
+          "start_ms": 1000,
+          "end_ms": 2000
+        },
+        {
+          "id": "u3",
+          "speaker": "А",
+          "text": "Да, 12:00; предыдущее значение отменено.",
+          "start_ms": 2000,
+          "end_ms": 3000
+        }
+      ],
+      "gold": {
+        "topic": "начала выступления",
+        "final_value": "12:00",
+        "superseded_value": "11:00",
+        "evidence_ids": [
+          "u2",
+          "u3"
+        ]
+      }
+    }
+  ]
+}
