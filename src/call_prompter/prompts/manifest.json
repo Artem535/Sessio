@@ -1,0 +1,12 @@
+{
+  "kind": "runtime-prompt-contract",
+  "tasks": ["deadline", "extract", "live_points", "match", "summary_leaf", "summary_overview"],
+  "prompts": {
+    "deadline.txt": "17155fd96e200330",
+    "extract.txt": "c34c4cc18d4f6386",
+    "live_points.txt": "3e5753abd2b6d212",
+    "match.txt": "467cc4c8a447d6d5",
+    "summary_leaf.txt": "c80bc37debb42cc0",
+    "summary_overview.txt": "f7c98358d557663b"
+  }
+}

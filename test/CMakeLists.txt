@@ -517,6 +517,8 @@ gtest_discover_tests(Sessio_qlementine_combo_filter_tests)
 target_link_libraries(Sessio_call_prompter_pipeline_tests PRIVATE GTest::gtest_main Sessio_call_prompter)
 gtest_discover_tests(Sessio_call_prompter_pipeline_tests)
 if(SESSIO_LITERTLM_FOUND)
+  add_executable(Sessio_prompter_eval_runner prompter_eval_runner.cpp)
+  target_link_libraries(Sessio_prompter_eval_runner PRIVATE Sessio_call_prompter_engine)
   # Real Gemma smoke; skips itself unless SESSIO_PROMPTER_MODEL is set.
   add_executable(Sessio_call_prompter_model_smoke_tests call_prompter_model_smoke_tests.cpp)
   target_link_libraries(Sessio_call_prompter_model_smoke_tests PRIVATE GTest::gtest Sessio_call_prompter_engine)

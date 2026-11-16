@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.45] - 2026-11-15
+
+- Updated call assistant response constraints and diagnostics for rejected
+  meeting notes and agreements, and localized the deadline question.
+
 ## [0.2.44] - 2026-11-14
 
 - Meeting summaries wait for transcription to finish so late phrases are

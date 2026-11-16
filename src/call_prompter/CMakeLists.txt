@@ -26,7 +26,7 @@ qt_add_resources(${TARGET_NAME} call_prompter_prompts
   PREFIX /call-prompter
   BASE prompts
   FILES prompts/extract.txt prompts/match.txt prompts/live_points.txt
-        prompts/summary_leaf.txt prompts/summary_overview.txt)
+        prompts/summary_leaf.txt prompts/summary_overview.txt prompts/deadline.txt)
 target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 find_package(reflectcpp CONFIG REQUIRED)
 target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Core Qt6::Network PRIVATE reflectcpp::reflectcpp)

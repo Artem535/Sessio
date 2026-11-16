@@ -544,6 +544,13 @@
     </message>
 </context>
 <context>
+    <name>CallPrompter</name>
+    <message>
+        <source>К какому сроку вы договорились это выполнить?</source>
+        <translation>By when did you agree to complete this?</translation>
+    </message>
+</context>
+<context>
     <name>CallPrompterController</name>
     <message>
         <source>Prompter is off</source>

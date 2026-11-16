@@ -100,6 +100,25 @@ TEST_F(ModelSmokeTest, AgreementWithoutDeadlineAsksForIt) {
   EXPECT_EQ(out["suggestions"].toArray().size(), 1);
 }
 
+// Script extraction so this exercises match even if the model abstains during
+// extract. This is a schema smoke check, not an end-to-end accuracy test.
+TEST_F(ModelSmokeTest, MatchSchemaWithSyntheticExtractedEvent) {
+  const QJsonObject request{{"protocol_version", 1}, {"request_id", 1}, {"session_generation", 1},
+                            {"ledger_revision", 0},
+                            {"utterances", parse(R"([{"id":"1","speaker":"Анна","text":"Отменяем отправку документа."}])")},
+                            {"candidates", parse(R"([{"id":"a","text":"Анна отправит документ","participants":["Анна"]}])")}};
+  int calls = 0;
+  const auto out = processRequest(request, [&](const QString &system, const QByteArray &payload, const QByteArray &schema) {
+    if (++calls == 1)
+      return QJsonValue(QJsonObject{{"events", QJsonArray{QJsonObject{
+          {"kind", "cancel"}, {"participants", QJsonArray{"Анна"}}, {"action", "Отменить отправку документа"},
+          {"evidence_ids", QJsonArray{"1"}}, {"meeting", false}, {"date", ""}, {"time", ""}}}}});
+    return engine()->generate(system, payload, schema);
+  });
+  EXPECT_EQ(calls, 2);
+  EXPECT_EQ(out["events"].toArray().size(), 1);
+}
+
 TEST_F(ModelSmokeTest, AdditionalAnnouncedMeetingIsSeparateFromTheFirst) {
   const auto out = run(R"([{"id":"1","speaker":"Артем","text":"Давай поговорим о следующем: завтра будет встреча в семнадцать ноль ноль."},
                            {"id":"2","speaker":"Артем","text":"Потом будет важная встреча в двенадцать ноль ноль тоже завтра."}])");

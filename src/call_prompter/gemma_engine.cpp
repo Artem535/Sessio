@@ -50,6 +50,7 @@ public:
     }
     const auto text = QString::fromStdString(reply);
     if (text.size() > kMaxReplyChars) throw PipelineError("output budget exceeded");
+    logModelReply("litert", text);
     return parseModelReply(text);
   }
 
