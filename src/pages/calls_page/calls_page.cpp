@@ -3,6 +3,7 @@
 #include "series_join_target.h"
 #include "web_call_provider.h"
 #include "jitsi_url.h"
+#include "app_settings.h"
 
 #include <QStackedWidget>
 #include <QDateTime>
@@ -100,7 +101,8 @@ CallsPage::CallsPage(const bool specialistMode, pcm::video::DeviceManager *devic
     // Account for that grace period so the invitation lasts 24 hours total.
     constexpr int kBackendGraceSeconds = 15 * 60;
     mQuickMeetingClient->requestCreateMeeting(credential, start.toString(Qt::ISODate),
-        start.addSecs(24 * 60 * 60 - kBackendGraceSeconds).toString(Qt::ISODate));
+        start.addSecs(24 * 60 * 60 - kBackendGraceSeconds).toString(Qt::ISODate),
+        pcm::app_settings::quickMeetingProvider());
   });
   connect(mQuickMeetingClient, &pcm::tokenclient::TokenBackendClient::meetingCreateFailed,
           this, [this](const QString &reason) {
@@ -275,6 +277,10 @@ void CallsPage::prefillJoinCode(const QString &code, const QString &passcode) {
 }
 
 void CallsPage::setSidePanelWidget(QWidget *panel) { mCallPage->setSidePanelWidget(panel); }
+void CallsPage::setPostCallReview(QWidget *review) { mCallPage->setPostCallReview(review); }
+bool CallsPage::isShowingPostCall() const {
+  return mStack->currentWidget() == mCallPage && mCallPage->isCallEnded();
+}
 
 void CallsPage::setSidePanelExpandedByDefault(bool expanded) { mCallPage->setSidePanelExpandedByDefault(expanded); }
 

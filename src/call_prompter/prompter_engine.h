@@ -31,7 +31,7 @@ struct GemmaOptions {
 };
 
 // Gemma 4 E4B through LiteRT-LM on CPU with the settings validated in spike
-// #146: 4 threads, 8192-token context, greedy decoding, speculative decoding,
+// #146: 4 threads, 32768-token context, greedy decoding, speculative decoding,
 // at most 384 output tokens. `cacheDir` keeps the compiled XNNPACK cache.
 // Null when Sessio was built without LiteRT-LM or the model cannot be loaded.
 std::unique_ptr<PrompterEngine> createGemmaEngine(const QString &modelPath, const QString &cacheDir,

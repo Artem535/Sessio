@@ -11,7 +11,7 @@ namespace pcm::prompter {
 namespace {
 
 constexpr qsizetype kMaxReplyChars = 48000;
-constexpr int kSchemaOutputTokens = 2048;
+constexpr int kSchemaOutputTokens = 4096;
 
 class GemmaEngine final : public PrompterEngine {
 public:
@@ -52,6 +52,7 @@ public:
     }
     const auto text = QString::fromStdString(reply);
     if (text.size() > kMaxReplyChars) throw PipelineError("output budget exceeded");
+    logModelReply("litert", text);
     return parseModelReply(text);
   }
 

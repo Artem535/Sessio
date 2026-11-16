@@ -196,6 +196,16 @@ TEST(AppSettingsTest, TranscriptionDefaultsEnabledAndPersistsRoundTrip) {
   EXPECT_TRUE(pcm::app_settings::transcriptionEnabled());
 }
 
+TEST(AppSettingsTest, QuickMeetingProviderDefaultsToLiveKitAndPersistsValidChoice) {
+  QSettings().remove("calls/quickMeetingProvider");
+  EXPECT_EQ(pcm::app_settings::quickMeetingProvider(), QStringLiteral("livekit"));
+  pcm::app_settings::setQuickMeetingProvider(QStringLiteral("jitsi"));
+  EXPECT_EQ(pcm::app_settings::quickMeetingProvider(), QStringLiteral("jitsi"));
+  pcm::app_settings::setQuickMeetingProvider(QStringLiteral("unsupported"));
+  EXPECT_EQ(pcm::app_settings::quickMeetingProvider(), QStringLiteral("livekit"));
+  QSettings().remove("calls/quickMeetingProvider");
+}
+
 TEST(AppSettingsTest, TranscriptionTuningDefaultsPersistAndAreClamped) {
   using pcm::transcription::TranscriptionTuning;
   for (const char *key : {"vadThreshold", "vadMinSilence", "vadMinSpeech", "vadMaxPhrase", "threads"})

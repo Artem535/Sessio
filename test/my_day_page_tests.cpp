@@ -145,6 +145,11 @@ TEST_F(MyDayPageTest, TodoCanBeRenamedWithAnExplicitActionAndFocusLoss) {
   };
   auto *action = findVisual(findVisual, quick->rootObject(), "todoRename");
   ASSERT_NE(action, nullptr);
+  auto *title = findVisual(findVisual, quick->rootObject(), "todoTitle");
+  auto *icon = qvariant_cast<QObject *>(action->property("contentItem"));
+  ASSERT_NE(title, nullptr);
+  ASSERT_NE(icon, nullptr);
+  EXPECT_EQ(icon->property("color").value<QColor>(), title->property("color").value<QColor>());
   ASSERT_TRUE(QMetaObject::invokeMethod(action, "clicked"));
   QTest::qWait(20);
   auto *editor = findVisual(findVisual, quick->rootObject(), "todoTitleEditor");

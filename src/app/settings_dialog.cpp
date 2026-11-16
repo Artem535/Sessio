@@ -701,6 +701,20 @@ void SettingsDialog::setupLiveKitSection() {
   });
   liveKitPageLayout->addWidget(jitsiBox);
 
+  auto *quickProviderBox = new QGroupBox(tr("Quick meeting server"), liveKitPage);
+  auto *quickProviderLayout = new QVBoxLayout(quickProviderBox);
+  auto *quickProvider = new QComboBox(quickProviderBox);
+  quickProvider->setObjectName("quickMeetingProviderCombo");
+  quickProvider->addItem(tr("LiveKit"), QStringLiteral("livekit"));
+  quickProvider->addItem(tr("External Jitsi"), QStringLiteral("jitsi"));
+  quickProvider->setCurrentIndex(quickProvider->findData(pcm::app_settings::quickMeetingProvider()));
+  quickProviderLayout->addWidget(new QLabel(tr("Server used for meetings started with Start a meeting."), quickProviderBox));
+  quickProviderLayout->addWidget(quickProvider);
+  connect(quickProvider, &QComboBox::currentIndexChanged, this, [quickProvider](int index) {
+    pcm::app_settings::setQuickMeetingProvider(quickProvider->itemData(index).toString());
+  });
+  liveKitPageLayout->addWidget(quickProviderBox);
+
   auto *liveKitBox = new QGroupBox(tr("Token backend"), liveKitPage);
   auto *liveKitLayout = new QVBoxLayout(liveKitBox);
   liveKitLayout->setContentsMargins(16, 16, 16, 16);

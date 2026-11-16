@@ -118,6 +118,16 @@ QIcon transcriptIcon(bool active) {
   });
 }
 
+QIcon copyIcon() {
+  return renderIcon(false, [](QPainter &painter, const QColor &color) {
+    painter.setPen(QPen(color, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRoundedRect(QRectF(8, 7, 12, 14), 1.5, 1.5);
+    painter.drawLine(QPointF(5, 17), QPointF(5, 4));
+    painter.drawLine(QPointF(5, 4), QPointF(16, 4));
+  });
+}
+
 QIcon notesIcon() {
   return renderIcon(false, [](QPainter &painter, const QColor &color) {
     painter.setPen(QPen(color, 1.5));

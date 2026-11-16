@@ -347,6 +347,9 @@ target_link_libraries(Sessio_frame_convert_tests PRIVATE
     Qt6::Gui
     LiveKit::livekit
 )
+if(UNIX AND NOT APPLE)
+  target_link_libraries(Sessio_frame_convert_tests PRIVATE "${LIVEKIT_CURL_LIBRARY}")
+endif()
 gtest_discover_tests(Sessio_frame_convert_tests)
 
 # Device manager tests
@@ -386,6 +389,9 @@ target_link_libraries(Sessio_video_capture_adapter_smoke_test PRIVATE
     Qt6::Multimedia
     LiveKit::livekit
 )
+if(UNIX AND NOT APPLE)
+  target_link_libraries(Sessio_video_capture_adapter_smoke_test PRIVATE "${LIVEKIT_CURL_LIBRARY}")
+endif()
 add_test(NAME VideoCaptureAdapterSmokeTest COMMAND Sessio_video_capture_adapter_smoke_test)
 set_tests_properties(VideoCaptureAdapterSmokeTest PROPERTIES TIMEOUT 30)
 
@@ -401,6 +407,9 @@ add_executable(Sessio_screen_capture_adapter_tests
 target_include_directories(Sessio_screen_capture_adapter_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
 target_link_libraries(Sessio_screen_capture_adapter_tests PRIVATE
     Qt6::Gui Qt6::Multimedia Qt6::Test GTest::gtest LiveKit::livekit)
+if(UNIX AND NOT APPLE)
+  target_link_libraries(Sessio_screen_capture_adapter_tests PRIVATE "${LIVEKIT_CURL_LIBRARY}")
+endif()
 set_target_properties(Sessio_screen_capture_adapter_tests PROPERTIES AUTOMOC ON)
 gtest_discover_tests(Sessio_screen_capture_adapter_tests)
 
@@ -508,6 +517,8 @@ gtest_discover_tests(Sessio_qlementine_combo_filter_tests)
 target_link_libraries(Sessio_call_prompter_pipeline_tests PRIVATE GTest::gtest_main Sessio_call_prompter)
 gtest_discover_tests(Sessio_call_prompter_pipeline_tests)
 if(SESSIO_LITERTLM_FOUND)
+  add_executable(Sessio_prompter_eval_runner prompter_eval_runner.cpp)
+  target_link_libraries(Sessio_prompter_eval_runner PRIVATE Sessio_call_prompter_engine)
   # Real Gemma smoke; skips itself unless SESSIO_PROMPTER_MODEL is set.
   add_executable(Sessio_call_prompter_model_smoke_tests call_prompter_model_smoke_tests.cpp)
   target_link_libraries(Sessio_call_prompter_model_smoke_tests PRIVATE GTest::gtest Sessio_call_prompter_engine)
@@ -625,6 +636,9 @@ add_executable(Sessio_remote_audio_player_lifecycle_test
 )
 target_include_directories(Sessio_remote_audio_player_lifecycle_test PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
 target_link_libraries(Sessio_remote_audio_player_lifecycle_test PRIVATE Qt6::Core Qt6::Multimedia LiveKit::livekit)
+if(UNIX AND NOT APPLE)
+  target_link_libraries(Sessio_remote_audio_player_lifecycle_test PRIVATE "${LIVEKIT_CURL_LIBRARY}")
+endif()
 add_test(NAME RemoteAudioPlayerLifecycleTest COMMAND Sessio_remote_audio_player_lifecycle_test)
 
 add_executable(Sessio_livekit_video_frame_source_smoke_test
@@ -634,6 +648,9 @@ add_executable(Sessio_livekit_video_frame_source_smoke_test
 )
 target_include_directories(Sessio_livekit_video_frame_source_smoke_test PRIVATE ${CMAKE_SOURCE_DIR}/src/video)
 target_link_libraries(Sessio_livekit_video_frame_source_smoke_test PRIVATE Qt6::Core Qt6::Gui LiveKit::livekit)
+if(UNIX AND NOT APPLE)
+  target_link_libraries(Sessio_livekit_video_frame_source_smoke_test PRIVATE "${LIVEKIT_CURL_LIBRARY}")
+endif()
 add_test(NAME LiveKitVideoFrameSourceSmokeTest COMMAND Sessio_livekit_video_frame_source_smoke_test)
 set_tests_properties(LiveKitVideoFrameSourceSmokeTest PROPERTIES TIMEOUT 15)
 

@@ -296,6 +296,95 @@ TEST_F(PrompterWorkerTest, StopAndImmediateRestartLoadsAFreshModel) {
   EXPECT_EQ(probe->alive, 1);
 }
 
+TEST_F(PrompterWorkerTest, ReloadingModelFinishesActiveWorkAndKeepsQueuedRequests) {
+  const auto secondModel = dir.filePath("model-next.litertlm");
+  QFile nextFile(secondModel);
+  ASSERT_TRUE(nextFile.open(QIODevice::WriteOnly));
+  nextFile.write("x");
+  auto loadedModels = std::make_shared<QStringList>();
+  auto modelsMutex = std::make_shared<std::mutex>();
+  PrompterWorker worker([probe = probe, loadedModels, modelsMutex](const QString &path) {
+    { std::lock_guard lock(*modelsMutex); loadedModels->append(path); }
+    ++probe->loads;
+    return std::make_unique<FakeEngine>(probe);
+  });
+  QSignalSpy ready(&worker, &PrompterWorker::ready);
+  QSignalSpy replies(&worker, &PrompterWorker::resultReady);
+  ASSERT_TRUE(worker.start(model));
+  ASSERT_TRUE(ready.wait(5000));
+
+  probe->block = true;
+  worker.send(request(1));
+  QTRY_VERIFY_WITH_TIMEOUT(probe->alive > 0, 5000);
+  worker.reloadModel(secondModel);
+  worker.send(request(2));
+  probe->block = false;
+
+  ASSERT_TRUE(replies.wait(5000));
+  ASSERT_TRUE(replies.wait(5000));
+  ASSERT_EQ(replies.count(), 2);
+  EXPECT_EQ(replies[0][0].toJsonObject()["request_id"].toInt(), 1);
+  EXPECT_EQ(replies[1][0].toJsonObject()["request_id"].toInt(), 2);
+  QTRY_COMPARE_WITH_TIMEOUT(probe->loads.load(), 2, 5000);
+  std::lock_guard lock(*modelsMutex);
+  ASSERT_EQ(loadedModels->size(), 2);
+  EXPECT_EQ(loadedModels->at(0), model);
+  EXPECT_EQ(loadedModels->at(1), secondModel);
+}
+
+TEST_F(PrompterWorkerTest, ForcedReloadReappliesOptionsForTheSameModelPath) {
+  PrompterWorker worker(factory(probe));
+  QSignalSpy ready(&worker, &PrompterWorker::ready);
+  ASSERT_TRUE(worker.start(model));
+  ASSERT_TRUE(ready.wait(5000));
+
+  worker.reloadModel(model, true);
+  QTRY_COMPARE_WITH_TIMEOUT(ready.count(), 2, 5000);
+  QTRY_COMPARE_WITH_TIMEOUT(probe->loads.load(), 2, 5000);
+  EXPECT_EQ(probe->loads, 2);
+  EXPECT_EQ(probe->alive, 1);
+}
+
+TEST_F(PrompterWorkerTest, RevertingModelWhileInitialLoadIsPendingCancelsTheSwitch) {
+  auto entered = std::make_shared<QSemaphore>();
+  auto release = std::make_shared<QSemaphore>();
+  PrompterWorker worker([probe = probe, entered, release](const QString &) {
+    entered->release();
+    release->acquire();
+    ++probe->loads;
+    return std::make_unique<FakeEngine>(probe);
+  });
+  QSignalSpy ready(&worker, &PrompterWorker::ready);
+  ASSERT_TRUE(worker.start(model));
+  ASSERT_TRUE(entered->tryAcquire(1, 5000));
+
+  worker.reloadModel(dir.filePath("next-model.litertlm"));
+  worker.reloadModel(model);
+  release->release();
+
+  ASSERT_TRUE(ready.wait(5000));
+  EXPECT_EQ(probe->loads, 1);
+}
+
+TEST_F(PrompterWorkerTest, FailedModelReloadReportsFailure) {
+  const auto brokenModel = dir.filePath("broken-model.litertlm");
+  QFile file(brokenModel);
+  ASSERT_TRUE(file.open(QIODevice::WriteOnly));
+  file.write("x");
+  PrompterWorker worker([probe = probe, brokenModel](const QString &path) {
+    if (path == brokenModel) return std::unique_ptr<pcm::prompter::PrompterEngine>{};
+    return std::unique_ptr<pcm::prompter::PrompterEngine>(std::make_unique<FakeEngine>(probe));
+  });
+  QSignalSpy ready(&worker, &PrompterWorker::ready);
+  QSignalSpy failed(&worker, &PrompterWorker::failed);
+  ASSERT_TRUE(worker.start(model));
+  ASSERT_TRUE(ready.wait(5000));
+
+  worker.reloadModel(brokenModel);
+  ASSERT_TRUE(failed.wait(5000));
+  EXPECT_EQ(probe->loads, 0);
+}
+
 TEST_F(PrompterWorkerTest, DestructionReturnsWhileFactoryIsBlockedAndLaterCleansUpOnModelThread) {
   struct Gate {
     QSemaphore entered, release, destructorReturned;

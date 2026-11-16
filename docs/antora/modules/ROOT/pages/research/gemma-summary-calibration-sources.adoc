@@ -1,0 +1,25 @@
+= Gemma 4 E4B: источники для калибровки саммари
+
+Проверено: 2026-11-11. Этот файл фиксирует рекомендации производителей, а не результат эксперимента или доказанную оптимальность параметров для суммаризации встреч Sessio.
+
+== Формат диалога и thinking
+
+Gemma 4 поддерживает отдельные роли `system`, `user` и `model` и управляющие токены `<|turn>` и `<turn|>`. Для разных поколений Gemma формат различается; при Gemma 4 следует использовать именно документацию Gemma 4, а не правило старого руководства о том, что отдельной роли system нет. Источник: https://ai.google.dev/gemma/docs/core/prompt-formatting-gemma4[Google: Gemma 4 Prompt Formatting].
+
+Thinking включается токеном `<|think|>` в системной инструкции; без него режим выключен. Карточка модели отдельно оговаривает поведение E2B/E4B при выключенном thinking. При проверке следует сохранять одинаковый формат ролей и режим thinking, иначе сравнение sampling-параметров смешает несколько факторов. Источники: https://ai.google.dev/gemma/docs/core/model_card_4[Google: Gemma 4 model card], https://ai.google.dev/gemma/docs/core/prompt-formatting-gemma4[Google: Gemma 4 Prompt Formatting].
+
+Для промпта полезно явно описывать задачу, нужные детали и формат ответа. Это инженерное применение официального материала, а не опубликованный Google оптимальный промпт для русскоязычных протоколов встреч. Google отдельно показывает инструкции для извлечения данных в JSON и оговаривает ограничения инструкций и размера входа: https://ai.google.dev/gemma/docs/business-email-assistant[Google: Build a business email AI assistant with Gemma].
+
+== Sampling
+
+Карточка Gemma 4 рекомендует стандартную стартовую конфигурацию для всех сценариев: `temperature=1.0`, `top_p=0.95`, `top_k=64`. Это начальная точка калибровки, а не подтверждение лучшего качества для данного пайплайна, русского текста, квантованной модели и ограниченного JSON Schema. Источник: https://ai.google.dev/gemma/docs/core/model_card_4[Google: Gemma 4 model card, Best Practices].
+
+В текущем Sessio `src/call_prompter/litert/sessio_litert.cpp` задаёт тип `TOP_P`, `k=1`, `p=0.95`, `temperature=0` и seed из опций: это greedy baseline, поэтому сравнение только значения `p` без изменения `k` не является полноценным сравнением nucleus sampling. Облачный движок имеет отдельное значение temperature; требование пользователя относит эту калибровку только к локальной модели.
+
+Текущий исходный код upstream LiteRT-LM имеет отдельные поля top-k, top-p, temperature и seed и выставляет тип `TOP_P` в Python-конвертере. В upstream-примере Kotlin показан `SamplerConfig(topK=10, topP=0.95, temperature=0.8)`; это пример API, а не рекомендация модели Gemma 4 вместо model card. Версия upstream и установленный в Sessio LiteRT-LM могут различаться, поэтому поведение конкретного runtime и ограниченного декодирования надо проверить экспериментально. Источники: https://github.com/google-ai-edge/LiteRT-LM/blob/main/python/litert_lm/utils.py[Google: LiteRT-LM sampler conversion], https://github.com/google-ai-edge/litert-samples/blob/main/skills/litert-lm/SKILL.md[Google: LiteRT-LM Kotlin sample].
+
+== Контекст и ресурсы
+
+Архитектурная карточка указывает для E4B контекст до 128K токенов. Этот предел не означает, что конкретный LiteRT-файл и приложение Sessio фактически выделяют такой контекст: размеры конфигурации, кэш и доступная память определяют реальный предел. Больший контекст увеличивает потребление памяти. Источники: https://ai.google.dev/gemma/docs/core/model_card_4[Gemma 4 model card], https://ai.google.dev/gemma/docs/core[Gemma 4 model overview].
+
+Для измерений фиксировать точную версию модели и runtime, устройство и backend, размер контекста, seed, prompt, schema, output budget и дату. Сравнивать качество, сохранение фактов и источников, корректность JSON, задержку и воспроизводимость на одном наборе входов, включая отрицания, исправления, неоднозначные обязательства и факты из конца встречи. Проводить несколько запусков для стохастических настроек; не публиковать содержимое реальных приватных встреч.

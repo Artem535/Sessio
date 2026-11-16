@@ -21,6 +21,9 @@ public:
   explicit PrompterWorker(pcm::prompter::PrompterEngineFactory factory, QObject *parent = nullptr);
   ~PrompterWorker() override;
   bool start(const QString &model);
+  // Switches a loaded local model after the current request finishes, keeping
+  // queued work. Cloud-only operation needs no model reload.
+  void reloadModel(const QString &model, bool force = false);
   // Cloud-routed requests only: no local model is loaded, a request routed to
   // the local engine fails with reason "runtime". A later start() loads one.
   bool startCloud();
@@ -53,6 +56,7 @@ private:
   void timedOut();
   void progress(int generation, int serial);
   void finish(int generation, const QJsonObject &result);
+  void applyPendingModel();
   pcm::prompter::PrompterEngineFactory mFactory;
   std::shared_ptr<Shared> mShared;
   QThread *mThread = nullptr;
@@ -62,6 +66,7 @@ private:
   QJsonObject mExpected;
   QQueue<QJsonObject> mQueue;
   QString mModelPath;
+  QString mPendingModel;
   CloudRouting mCloud;
   bool mCloudOnly = false, mExpectedCloud = false;
   int mGeneration = 0, mSerial = 0, mCallTimeoutMs = 0;

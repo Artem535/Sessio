@@ -123,11 +123,13 @@ void CallTranscriptionController::releaseSession(
   if (session != mSession)
     return;
   disconnect(session, nullptr, this, nullptr);
-  connect(session, &QObject::destroyed, this, [this, session] {
+  const auto transcriptId = session->transcriptId();
+  connect(session, &QObject::destroyed, this, [this, session, transcriptId] {
     if (mSession != session)
       return;
     mSession = nullptr;
     refreshAvailability();
+    if (transcriptId > 0) emit transcriptSettled(transcriptId);
   });
   // A terminal signal is emitted inside the session's own call stack.
   session->deleteLater();

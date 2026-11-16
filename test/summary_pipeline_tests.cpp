@@ -11,6 +11,10 @@
 using namespace pcm::prompter;
 
 namespace {
+QStringList diagnostics;
+void captureDiagnostics(QtMsgType type, const QMessageLogContext &context, const QString &message) {
+  if (type == QtWarningMsg && QByteArray(context.category) == "pcm.prompter.diagnostics") diagnostics.append(message);
+}
 QJsonObject source(const QString &id, const QString &text = QStringLiteral("Обсудили проект.")) {
   return {{"id", id}, {"speaker", "A"}, {"text", text}, {"start_ms", 0}, {"end_ms", 1000}};
 }
@@ -22,8 +26,9 @@ QJsonObject task(const QString &text, const QJsonArray &ids, bool meeting = fals
 QJsonObject parsed(const QByteArray &bytes) { return QJsonDocument::fromJson(bytes).object(); }
 QJsonArray longCall(int count) {
   QJsonArray out;
-  // 600 Cyrillic characters: one source per leaf chunk, two never fit together.
-  for (int i = 0; i < count; ++i) out.append(source("u" + QString::number(i), QString(600, QChar(u'ж'))));
+  // 6000 Cyrillic characters: each source fits, while a pair exceeds the
+  // 24000-byte payload fallback even with the larger model context.
+  for (int i = 0; i < count; ++i) out.append(source("u" + QString::number(i), QString(6000, QChar(u'ж'))));
   return out;
 }
 QString firstId(const QJsonObject &input) { return input["utterances"][0].toObject()["id"].toString(); }
@@ -82,6 +87,32 @@ TEST(SummaryPipeline, EmptyTranscriptReturnsEmptyFormat2WithoutModel) {
 TEST(SummaryPipeline, ShortCallGivesOneLeafAndAnOverview) {
   Model model;
   const auto out = processSummary({source("u1")}, ctx(), model.generate());
+  for (const auto &bytes : model.schemas) {
+    const auto schema = parsed(bytes);
+    const auto name = schema["$ref"].toString().section('/', -1);
+    const auto definitions = schema["$defs"].toObject();
+    const auto root = definitions[name].toObject();
+    EXPECT_TRUE(root["required"].toArray().contains("reasoning"));
+    EXPECT_TRUE(root["properties"].toObject().contains("reasoning"));
+    const auto rootStart = bytes.indexOf(('\"' + name.toUtf8() + "\":{"));
+    ASSERT_GE(rootStart, 0);
+    const auto propsStart = bytes.indexOf("\"properties\":{", rootStart);
+    ASSERT_GE(propsStart, 0);
+    EXPECT_TRUE(bytes.mid(propsStart).startsWith("\"properties\":{\"reasoning\":"));
+    for (auto it = definitions.begin(); it != definitions.end(); ++it)
+      if (it.key() != name) EXPECT_FALSE(it.value().toObject()["required"].toArray().contains("reasoning"));
+  }
+  const auto leafSchema = parsed(model.schemas.front());
+  const auto defs = leafSchema["$defs"].toObject();
+  const auto resolve = [&defs](const QJsonObject &node) {
+    return defs[node["$ref"].toString().section('/', -1)].toObject();
+  };
+  const auto props = resolve(leafSchema)["properties"].toObject();
+  const auto note = resolve(props["note"].toObject())["properties"].toObject();
+  EXPECT_EQ(note["text"].toObject()["minLength"].toInt(), 0);
+  const auto point = resolve(props["key_points"].toObject()["items"].toObject())["properties"].toObject();
+  EXPECT_EQ(point["text"].toObject()["minLength"].toInt(), 1);
+  EXPECT_EQ(point["evidence_ids"].toObject()["minItems"].toInt(), 1);
   EXPECT_EQ(model.payloads.size(), 2u);
   EXPECT_EQ(out["overview"].toObject(), item("Обзор: Часть u1", {"u1"}));
   EXPECT_EQ(texts(out["key_points"].toArray()), QStringList{"Пункт u1"});
@@ -109,6 +140,9 @@ TEST(SummaryPipeline, LeafPayloadCarriesCalendarAndAgreements) {
   Model model;
   processSummary({source("u1")}, ctx({QStringLiteral("Встреча в четверг")}), model.generate());
   const auto leaf = parsed(model.payloads.front());
+  EXPECT_TRUE(model.payloads.front().startsWith("{\"call_date\": "));
+  EXPECT_LT(model.payloads.front().indexOf("\"calendar\""), model.payloads.front().indexOf("\"agreements\""));
+  EXPECT_LT(model.payloads.front().indexOf("\"agreements\""), model.payloads.front().indexOf("\"utterances\""));
   EXPECT_EQ(leaf["call_date"].toString(), "2026-10-29 четверг");
   EXPECT_EQ(leaf["calendar"].toArray().first().toString(), "2026-10-29 четверг");
   EXPECT_EQ(leaf["agreements"].toArray(), (QJsonArray{"Встреча в четверг"}));
@@ -179,13 +213,16 @@ TEST(SummaryPipeline, ManyNotesAreReducedBeforeTheFinalOverview) {
   model.leaf = [](const QJsonObject &input) {
     auto reply = leafReply(input);
     const auto id = firstId(input);
-    reply["note"] = item(id + " " + QString(230, QChar(u'н')), {id});
+    reply["note"] = item(id + " " + QString(700, QChar(u'н')), {id});
     return reply;
   };
-  const auto out = processSummary(longCall(30), ctx(), model.generate());
+  const auto out = processSummary(longCall(40), ctx(), model.generate());
   EXPECT_GT(overviewCalls, 1);
   EXPECT_FALSE(out["overview"].toObject()["text"].toString().isEmpty());
-  for (const auto &payload : model.payloads) EXPECT_LE(payload.size(), 8192 - 2048 - 128);
+  for (const auto &payload : model.payloads) {
+    const auto input = parsed(payload);
+    if (input.contains("utterances")) EXPECT_LE(payload.size(), 24000);
+  }
 }
 
 TEST(SummaryPipeline, OverviewFallbackJoinsNotes) {
@@ -239,7 +276,7 @@ TEST(SummaryPipeline, LeafRepliesOverLimitsAreRejected) {
     }
     return false;
   };
-  EXPECT_TRUE(rejects([](QJsonObject &r) { r["note"] = item(QString(401, QChar(u'я')), {"u1"}); }));
+  EXPECT_TRUE(rejects([](QJsonObject &r) { r["note"] = item(QString(801, QChar(u'я')), {"u1"}); }));
   EXPECT_TRUE(rejects([](QJsonObject &r) {
     QJsonArray many;
     for (int i = 0; i < 4; ++i) many.append(item(QStringLiteral("П%1").arg(i), {"u1"}));
@@ -259,8 +296,8 @@ TEST(SummaryPipeline, FailedLeafIsRetriedAsHalvesThenSkipped) {
     if (allIds(input).contains("u0")) return QStringLiteral("not json");
     return leafReply(input);
   };
-  QJsonArray call{source("u0", QString(200, QChar(u'ж'))), source("u1", QString(200, QChar(u'ж'))),
-                  source("u2", QString(600, QChar(u'ж')))};
+  QJsonArray call{source("u0", QString(5500, QChar(u'ж'))), source("u1", QString(5500, QChar(u'ж'))),
+                  source("u2", QString(2000, QChar(u'ж')))};
   const auto out = processSummary(call, ctx(), model.generate());
   EXPECT_EQ(leafCalls, 4); // chunk 1, its two halves, chunk 2
   EXPECT_EQ(texts(out["key_points"].toArray()), (QStringList{"Пункт u1", "Пункт u2"}));
@@ -270,6 +307,27 @@ TEST(SummaryPipeline, AllLeavesFailingThrows) {
   Model model;
   model.leaf = [](const QJsonObject &) { return QJsonValue(QStringLiteral("not json")); };
   EXPECT_THROW(processSummary(longCall(2), ctx(), model.generate()), PipelineError);
+}
+
+TEST(SummaryPipeline, InvalidLeafAndOverviewReportFallbackReason) {
+  Model leafModel;
+  leafModel.leaf = [](const QJsonObject &) { return QJsonValue(QStringLiteral("not json")); };
+  diagnostics.clear();
+  auto previous = qInstallMessageHandler(captureDiagnostics);
+  EXPECT_THROW(processSummary({source("u1")}, ctx(), leafModel.generate()), PipelineError);
+  qInstallMessageHandler(previous);
+  ASSERT_FALSE(diagnostics.isEmpty());
+  EXPECT_TRUE(diagnostics.join(" ").contains("Leaf validation failed:"));
+
+  Model overviewModel;
+  overviewModel.overview = [](const QJsonObject &) { return QJsonValue(QStringLiteral("not json")); };
+  diagnostics.clear();
+  previous = qInstallMessageHandler(captureDiagnostics);
+  const auto result = processSummary({source("u1")}, ctx(), overviewModel.generate());
+  qInstallMessageHandler(previous);
+  EXPECT_FALSE(result["overview"]["text"].toString().isEmpty());
+  ASSERT_FALSE(diagnostics.isEmpty());
+  EXPECT_TRUE(diagnostics.join(" ").contains("Overview validation failed:"));
 }
 
 TEST(SummaryPipeline, TranscriptInstructionsStayInStructuredSourceData) {
@@ -315,23 +373,24 @@ TEST(SummaryPipeline, SplittingPreservesSupplementaryUnicodeWithoutReplacementCh
     return leafReply(input);
   };
   processSummary({source("u1", text)}, ctx(), [&](const QString &system, const QByteArray &payload, const QByteArray &schema) {
-    EXPECT_LE(system.toUtf8().size() + payload.size() + 2048 + 128, 8192);
+    EXPECT_LE(system.toUtf8().size() + payload.size() + 4096 + 128, 32768);
     return model.generate()(system, payload, schema);
   });
   EXPECT_EQ(delivered, text);
 }
 
-TEST(SummaryPipeline, ExcessSourceAndChunkBudgetsFailBeforeModelCalls) {
+TEST(SummaryPipeline, ExcessSourceFailsAndLargeEscapedInputChunksSafely) {
   Model model;
   QJsonArray sources;
   for (int i = 0; i < 1025; ++i) sources.append(source(QString::number(i)));
   EXPECT_THROW(processSummary(sources, ctx(), model.generate()), PipelineError);
   sources = {};
-  // Escaping expands every character to six bytes, forcing >512 chunks
-  // without exceeding the total raw text budget.
+  // Escaping expands each control character to six bytes. The larger payload
+  // budget allows these valid sources to be split into fewer than 512 chunks.
   for (int i = 0; i < 40; ++i) sources.append(source(QString::number(i), QString(6000, QChar(1))));
-  EXPECT_THROW(processSummary(sources, ctx(), model.generate()), PipelineError);
-  EXPECT_TRUE(model.payloads.empty());
+  EXPECT_NO_THROW(processSummary(sources, ctx(), model.generate()));
+  EXPECT_FALSE(model.payloads.empty());
+  EXPECT_LT(model.payloads.size(), 512u);
 }
 
 namespace {

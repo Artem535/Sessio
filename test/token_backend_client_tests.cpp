@@ -117,6 +117,17 @@ TEST(TokenBackendClientTest, CreateMeetingSendsScheduleAndBearerHeader) {
   EXPECT_EQ(result.passcode, QStringLiteral("111111"));
 }
 
+TEST(TokenBackendClientTest, CreateMeetingSendsSelectedJitsiProvider) {
+  FakeTokenBackendServer server;
+  server.setNextResponse(200, R"({"meetingRef":"ref-1","invitationUrl":"https://x/code-1","passcode":"111111"})");
+  pcm::tokenclient::TokenBackendClient client(server.baseUrl().toString());
+  QSignalSpy createdSpy(&client, &pcm::tokenclient::TokenBackendClient::meetingCreated);
+  client.requestCreateMeeting("secret", "2026-10-01T10:00:00Z", "2026-10-01T10:50:00Z", "jitsi");
+  ASSERT_TRUE(createdSpy.wait(2000));
+  EXPECT_EQ(QJsonDocument::fromJson(server.lastBody).object().value("provider").toString(),
+            QStringLiteral("jitsi"));
+}
+
 TEST(TokenBackendClientTest, CreateMeetingErrorStatusEmitsMeetingCreateFailed) {
   FakeTokenBackendServer server;
   server.setNextResponse(401, R"({"error": "unauthorized"})");

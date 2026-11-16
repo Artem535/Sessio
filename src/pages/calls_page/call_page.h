@@ -93,6 +93,8 @@ public:
   void setTranscribeButtonVisible(bool visible);
   void setTranscribeButtonState(bool active, const QString &tooltip);
   void setInvitationUrl(const QString &url);
+  void setPostCallReview(QWidget *review);
+  [[nodiscard]] bool isCallEnded() const { return mCallEnded; }
   void openSidePanel();
   void setNotesFocused(bool focused);
   bool hasSidePanelWidget() const { return mSidePanel != nullptr; }
@@ -181,6 +183,9 @@ private:
   // by onMediaError() and auto-hidden a few seconds later by a QTimer.
   QLabel *mMediaErrorBanner{nullptr};
   QWidget *mEndedScreen{nullptr};
+  QWidget *mEndedDefaultContent{nullptr};
+  QWidget *mEndedReviewHost{nullptr};
+  QLabel *mPostCallPreparing{nullptr};
   QWidget *mEndedSidePanelHost{nullptr};
   QLabel *mEndedReasonLabel{nullptr};
   QWidget *mSidePanelHost{nullptr};
@@ -188,13 +193,14 @@ private:
   QToolButton *mNotesFocusButton{nullptr};
   bool mNotesFocused{false};
   bool mCallEnded{false};
+  bool mCallWasConnected{false};
   QToolButton *mNotesToggleButton{nullptr};
   QToolButton *mMicrophoneToggleButton{nullptr};
   QToolButton *mCameraToggleButton{nullptr};
   QToolButton *mFullscreenToggleButton{nullptr};
   QToolButton *mDevicesButton{nullptr};
   QToolButton *mScreenShareButton{nullptr};
-  QPushButton *mCopyInvitationButton{nullptr};
+  QToolButton *mCopyInvitationButton{nullptr};
   QString mInvitationUrl;
   QWidget *mSharingBanner{nullptr};
   QString mFeaturedScreenKey;

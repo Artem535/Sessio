@@ -6,8 +6,8 @@
 
 namespace pcm::prompter {
 struct SummaryLimits {
-  int overview = 3000;
-  int leaf = 400;
+  int overview = 6000;
+  int leaf = 800;
   int points = 20;
   int tasks = 12;
   int questions = 10;

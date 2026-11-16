@@ -18,11 +18,14 @@
 #include <QSplitter>
 
 ClientNotesPage::~ClientNotesPage() {
+  // The header is reparented into MainWindow's chrome and may already have
+  // been destroyed with that host. QPointer makes that lifetime explicit.
   if (mExternalHeader) {
     for (auto *menu : mExternalHeader->findChildren<QMenu *>()) delete menu;
-    delete mExternalHeader;
+    delete mExternalHeader.data();
     mExternalHeader = nullptr;
   }
+  // Tear down QML while ClientNotesPage's members and bridge are still alive.
   delete mQuickWorkspace;
   mQuickWorkspace = nullptr;
 }

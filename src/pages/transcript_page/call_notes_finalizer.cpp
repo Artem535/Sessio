@@ -46,8 +46,14 @@ bool CallNotesFinalizer::contains(qint64 id) const {
   return false;
 }
 void CallNotesFinalizer::transcriptReady(qint64 id) {
+  mWriting.remove(id);
   mReady.insert(id);
   QTimer::singleShot(0, this, &CallNotesFinalizer::pump);
+}
+void CallNotesFinalizer::transcriptStarted(qint64 id) {
+  if (id <= 0) return;
+  mReady.remove(id);
+  mWriting.insert(id);
 }
 void CallNotesFinalizer::cancel(qint64 id) {
   bool found = false;
@@ -69,6 +75,12 @@ void CallNotesFinalizer::pump() {
   if (mCallActive || mCurrent) return;
   for (const auto &job : mJobs) {
     if (job.pendingTranscript > 0 && !mReady.contains(job.pendingTranscript)) continue;
+    bool writing = false;
+    try {
+      for (const auto id : mDb->get_call_material_transcript_ids(job.materialId))
+        if (mWriting.contains(id)) { writing = true; break; }
+    } catch (...) { continue; }
+    if (writing) continue;
     const auto id = job.materialId;
     mNotes.openMaterial(id);
     if (mNotes.materialId() != id) {

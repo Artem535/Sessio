@@ -1,6 +1,7 @@
 #include "prompter_pipeline.h"
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QLoggingCategory>
 #include <QTemporaryFile>
 #include <deque>
 #include <array>
@@ -9,6 +10,15 @@
 using namespace pcm::prompter;
 
 namespace {
+
+QStringList capturedWarnings;
+QStringList capturedResponses;
+void captureWarning(QtMsgType type, const QMessageLogContext &context, const QString &message) {
+  if (type == QtWarningMsg && QByteArray(context.category) == "pcm.prompter.diagnostics")
+    capturedWarnings.append(message);
+  if (type == QtDebugMsg && QByteArray(context.category) == "pcm.prompter.responses")
+    capturedResponses.append(message);
+}
 
 QJsonValue json(const char *text) {
   return QJsonDocument::fromJson(QByteArray("[") + text + "]").array().first();
@@ -44,6 +54,49 @@ protected:
 
 } // namespace
 
+TEST(PrompterSchemaTest, ReasoningIsFirstAndRequiredOnlyAtTopLevel) {
+  const QByteArray input = R"({"type":"object","properties":{"nested":{"type":"object","properties":{"x":{"type":"string"}},"required":["x"]}},"required":["nested"]})";
+  const auto result = withReasoning(input);
+  EXPECT_TRUE(result.contains(R"("properties":{"reasoning":{"type":"string"},)"));
+  const auto schema = QJsonDocument::fromJson(result).object();
+  EXPECT_EQ(schema["required"].toArray(), (QJsonArray{"reasoning", "nested"}));
+  EXPECT_EQ(schema["properties"]["nested"]["required"].toArray(), (QJsonArray{"x"}));
+}
+
+TEST(PrompterSchemaTest, EmptyRestrictionLeavesSchemaUnchanged) {
+  const QByteArray input = R"({"properties":{"kind":{"type":"string"}}})";
+  capturedWarnings.clear();
+  const auto previous = qInstallMessageHandler(captureWarning);
+  EXPECT_EQ(restrictStrings(input, "kind", {}), input);
+  qInstallMessageHandler(previous);
+  ASSERT_EQ(capturedWarnings.size(), 1);
+  EXPECT_TRUE(capturedWarnings.first().contains("kind"));
+}
+
+TEST(PrompterSchemaTest, AddsRequiredWhenRootHasNone) {
+  const auto result = QJsonDocument::fromJson(withReasoning(R"({"type":"object","properties":{"x":{"type":"string"}}})")).object();
+  EXPECT_EQ(result["required"].toArray(), (QJsonArray{"reasoning"}));
+}
+
+TEST(PrompterSchemaTest, ReasoningCanBeAddedToEmptyProperties) {
+  const auto result = QJsonDocument::fromJson(withReasoning(R"({"type":"object","properties":{},"required":[]})")).object();
+  EXPECT_TRUE(result["properties"].toObject().contains("reasoning"));
+  EXPECT_EQ(result["required"].toArray(), (QJsonArray{"reasoning"}));
+}
+
+TEST(PrompterSchemaTest, RawRepliesRequireDebugLoggingToBeEnabled) {
+  capturedResponses.clear();
+  const auto previous = qInstallMessageHandler(captureWarning);
+  logModelReply("litert", QStringLiteral("synthetic reply"));
+  qInstallMessageHandler(previous);
+  if (qEnvironmentVariableIntValue("SESSIO_TEST_RESPONSE_LOGGING") == 1) {
+    ASSERT_EQ(capturedResponses.size(), 1);
+    EXPECT_TRUE(capturedResponses.front().contains("synthetic reply"));
+  } else {
+    EXPECT_TRUE(capturedResponses.isEmpty());
+  }
+}
+
 TEST_F(PipelineTest, EventsRemainProposalsAndReplyEchoesRevision) {
   const auto out = run({events(event()), QJsonObject{{"suggestions", QJsonArray{}}}});
   EXPECT_EQ(out["request_id"].toInt(), 7);
@@ -57,6 +110,25 @@ TEST_F(PipelineTest, ForeignEvidenceAndSpeakerAreRejected) {
     const auto out = run({events(bad), QJsonObject{}});
     EXPECT_TRUE(out["events"].toArray().isEmpty());
     EXPECT_FALSE(out["rejected"].toArray().isEmpty());
+  }
+}
+
+TEST_F(PipelineTest, RejectedEventsLogFieldWithoutChangingProtocol) {
+  const QList<std::pair<QJsonObject, QString>> cases{
+      {event({{"kind", "other"}}), "kind"},
+      {event({{"action", ""}}), "action length"},
+      {event({{"evidence_ids", QJsonArray{"foreign"}}}), "evidence_ids"},
+      {event({{"participants", QJsonArray{"foreign"}}}), "participants"}};
+  for (const auto &[bad, field] : cases) {
+    capturedWarnings.clear();
+    const auto previous = qInstallMessageHandler(captureWarning);
+    const auto out = run({events(bad)});
+    qInstallMessageHandler(previous);
+    ASSERT_EQ(out["rejected"].toArray().size(), 1);
+    EXPECT_EQ(out["rejected"][0].toString(), "invalid event source/schema");
+    ASSERT_EQ(capturedWarnings.size(), 1);
+    EXPECT_TRUE(capturedWarnings.first().contains(field));
+    EXPECT_FALSE(capturedWarnings.first().contains("foreign"));
   }
 }
 
@@ -319,6 +391,10 @@ TEST_F(PipelineTest, ExtractCallPassesSchemaWithDateEnumFromCallDate) {
   EXPECT_TRUE(dates.contains(""));
   EXPECT_FALSE(dates.contains("2026-12-31"));
   const auto ids = schemaAt(parsed(extract.schema), {"events", "evidence_ids"})["items"].toObject()["enum"].toArray();
+  EXPECT_EQ(schemaAt(parsed(extract.schema), {"events", "evidence_ids"})["minItems"].toInt(), 1);
+  EXPECT_EQ(schemaAt(parsed(extract.schema), {"events", "evidence_ids"})["maxItems"].toInt(), 24);
+  EXPECT_EQ(schemaAt(parsed(extract.schema), {"events", "participants"})["minItems"].toInt(), 1);
+  EXPECT_EQ(schemaAt(parsed(extract.schema), {"events", "participants"})["maxItems"].toInt(), 24);
   EXPECT_EQ(ids, (QJsonArray{"1", "2"}));
 }
 
@@ -350,9 +426,25 @@ TEST_F(PipelineTest, MatchAndDeadlineCallsAreSchemaConstrained) {
     return json(R"({"missing_deadline":false,"evidence_ids":[]})");
   });
   ASSERT_EQ(calls.size(), 3u);
+  for (const auto &call : calls) {
+    const auto document = parsed(call.schema);
+    const auto root = schemaAt(document, {});
+    EXPECT_TRUE(root["required"].toArray().contains("reasoning"));
+    EXPECT_TRUE(root["properties"].toObject().contains("reasoning"));
+    const auto rootName = document["$ref"].toString().section('/', -1);
+    const auto rootStart = call.schema.indexOf(('\"' + rootName.toUtf8() + "\":{"));
+    ASSERT_GE(rootStart, 0);
+    const auto propsStart = call.schema.indexOf("\"properties\":{", rootStart);
+    ASSERT_GE(propsStart, 0);
+    EXPECT_TRUE(call.schema.mid(propsStart).startsWith("\"properties\":{\"reasoning\":"));
+    const auto definitions = document["$defs"].toObject();
+    for (auto it = definitions.begin(); it != definitions.end(); ++it)
+      if (it.key() != rootName) EXPECT_FALSE(it.value().toObject()["required"].toArray().contains("reasoning"));
+  }
   for (const auto &call : calls) EXPECT_FALSE(call.schema.isEmpty());
   EXPECT_EQ(schemaAt(parsed(calls[1].schema), {"matches"})["items"].toObject()["enum"].toArray(), (QJsonArray{"a", "b"}));
   EXPECT_EQ(schemaAt(parsed(calls[2].schema), {"evidence_ids"})["items"].toObject()["enum"].toArray(), (QJsonArray{"1", "2"}));
+  EXPECT_EQ(schemaAt(parsed(calls[2].schema), {"evidence_ids"})["maxItems"].toInt(), 24);
 }
 
 TEST_F(PipelineTest, MeetingFieldsSurviveIntoEvents) {

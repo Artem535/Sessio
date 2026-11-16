@@ -419,6 +419,10 @@
         <translation>Reconnecting...</translation>
     </message>
     <message>
+        <source>Preparing meeting notes…</source>
+        <translation>Preparing meeting notes…</translation>
+    </message>
+    <message>
         <source>Call ended.</source>
         <translation>Call ended.</translation>
     </message>
@@ -537,6 +541,13 @@
     <message>
         <source>Transcribe</source>
         <translation>Transcribe</translation>
+    </message>
+</context>
+<context>
+    <name>CallPrompter</name>
+    <message>
+        <source>К какому сроку вы договорились это выполнить?</source>
+        <translation>By when did you agree to complete this?</translation>
     </message>
 </context>
 <context>
@@ -4049,6 +4060,22 @@ See you!</translation>
     <message>
         <source>Saved</source>
         <translation>Saved</translation>
+    </message>
+    <message>
+        <source>Quick meeting server</source>
+        <translation>Quick meeting server</translation>
+    </message>
+    <message>
+        <source>LiveKit</source>
+        <translation>LiveKit</translation>
+    </message>
+    <message>
+        <source>External Jitsi</source>
+        <translation>External Jitsi</translation>
+    </message>
+    <message>
+        <source>Server used for meetings started with Start a meeting.</source>
+        <translation>Server used for meetings started with Start a meeting.</translation>
     </message>
     <message>
         <source>Stop transcription before deleting its data.</source>

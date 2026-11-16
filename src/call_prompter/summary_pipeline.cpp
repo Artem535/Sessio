@@ -2,6 +2,7 @@
 #include "notes_common.h"
 
 #include <QJsonDocument>
+#include <QLoggingCategory>
 #include <QRegularExpression>
 #include <algorithm>
 #include <atomic>
@@ -16,11 +17,12 @@
 #include <vector>
 
 namespace pcm::prompter {
+Q_DECLARE_LOGGING_CATEGORY(prompterDiagnostics)
 namespace {
 using namespace notes;
-constexpr qsizetype kOverviewLength = 3000;
-constexpr qsizetype kGroupNoteLength = 300;
-constexpr qsizetype kLeafNoteLength = 400;
+constexpr qsizetype kOverviewLength = 6000;
+constexpr qsizetype kGroupNoteLength = 800;
+constexpr qsizetype kLeafNoteLength = 800;
 constexpr qsizetype kPointLength = 120;
 constexpr qsizetype kTaskLength = 160;
 constexpr qsizetype kQuestionLength = 160;
@@ -38,6 +40,10 @@ template <qsizetype N> struct Item {
   rfl::Validator<std::string, rfl::Size<rfl::Maximum<N>>> text;
   EvidenceIds evidence_ids;
 };
+struct EmptyNote {
+  rfl::Validator<std::string, rfl::Size<rfl::Maximum<kLeafNoteLength>>> text;
+  EvidenceIds evidence_ids;
+};
 struct TaskItem {
   rfl::Validator<std::string, rfl::Size<rfl::Maximum<kTaskLength>>> text;
   EvidenceIds evidence_ids;
@@ -46,7 +52,7 @@ struct TaskItem {
   std::string time;
 };
 struct LeafSchema {
-  Item<kLeafNoteLength> note;
+  EmptyNote note;
   rfl::Validator<std::vector<Item<kPointLength>>, rfl::Size<rfl::Maximum<kLeafPoints>>> key_points;
   rfl::Validator<std::vector<TaskItem>, rfl::Size<rfl::Maximum<kLeafTasks>>> tasks;
   rfl::Validator<std::vector<Item<kQuestionLength>>, rfl::Size<rfl::Maximum<kLeafQuestions>>> open_questions;
@@ -335,14 +341,22 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
       if (leafPrompt.toUtf8().size() + serialize(trial).size() <= kContextInputBytes) hints = candidate;
     }
     if (!hints.isEmpty()) withHints["live_points"] = hints;
-    auto payload = serialize(withHints);
-    payload.chop(1);
-    payload += ",\"utterances\":" + QJsonDocument(input).toJson(QJsonDocument::Compact) + '}';
+    Payload fields{{"call_date", withHints["call_date"]}, {"calendar", withHints["calendar"]},
+                   {"agreements", withHints["agreements"]}};
+    fields.emplace_back("utterances", input);
+    if (withHints.contains("live_points")) fields.emplace_back("live_points", withHints["live_points"]);
+    const auto payload = dumpPayload(fields);
     try {
-      return checkedLeaf(call(leafPrompt, payload, restrictStrings(leafDates, "evidence_ids", sorted(allowed))), allowed,
+      auto schema = restrictStrings(leafDates, "evidence_ids", sorted(allowed));
+      const auto root = QJsonDocument::fromJson(schema).object();
+      const auto defs = root["$defs"].toObject();
+      const auto leafDef = defs[root["$ref"].toString().section('/', -1)].toObject();
+      const auto noteDef = leafDef["properties"]["note"]["$ref"].toString().section('/', -1);
+      return checkedLeaf(call(leafPrompt, payload, requireNonemptyItems(schema, noteDef)), allowed,
                          dateSet, sourceNumbers);
     } catch (const PipelineError &error) {
       if (!usable(error)) throw;
+      qCWarning(prompterDiagnostics) << "Leaf validation failed:" << error.what();
       return std::nullopt;
     }
   };
@@ -412,13 +426,14 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
                                                                         : rfl::json::to_schema<OverviewSchema<kGroupNoteLength>>())),
         "evidence_ids", sorted(allowed));
     try {
-      const auto reply = call(overviewPrompt, serialize({{"notes", group}}), schema).toObject();
+      const auto reply = call(overviewPrompt, serialize({{"notes", group}}), requireNonemptyItems(schema)).toObject();
       if (reply.size() != 1) throw PipelineError("invalid notes output schema/budget");
       const auto overview = checkedItem(reply["overview"], limit, false, allowed);
       if (const auto cleaned = cleanedItem(overview, ids(utterances), sourceNumbers)) return *cleaned;
       return joinedNotes(group, limit);
     } catch (const PipelineError &error) {
       if (!usable(error)) throw;
+      qCWarning(prompterDiagnostics) << "Overview validation failed:" << error.what();
       return joinedNotes(group, limit);
     }
   };

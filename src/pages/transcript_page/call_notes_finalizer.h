@@ -13,6 +13,7 @@ public:
   void setCallActive(bool active);
   void enqueue(qint64 materialId, qint64 pendingTranscript = 0);
   void transcriptReady(qint64 transcriptId);
+  void transcriptStarted(qint64 transcriptId);
   void cancel(qint64 materialId);
   bool contains(qint64 materialId) const;
   void handleResult(const QJsonObject &result);
@@ -30,6 +31,7 @@ private:
   std::shared_ptr<pcm::database::Database> mDb;
   QList<Job> mJobs;
   QSet<qint64> mReady;
+  QSet<qint64> mWriting;
   bool mCallActive = false;
   qint64 mCurrent = 0;
 };

@@ -25,7 +25,7 @@ QByteArray schemaFor(const QSet<QString> &allowed) {
   static const auto base = closeObjects(QByteArray::fromStdString(rfl::json::to_schema<LivePointsSchema>()));
   auto sorted = QStringList(allowed.begin(), allowed.end());
   sorted.sort();
-  return restrictStrings(base, "evidence_ids", sorted);
+  return requireNonemptyItems(restrictStrings(base, "evidence_ids", sorted));
 }
 
 QJsonArray checkedPoints(const QJsonValue &value, const QSet<QString> &allowed) {
@@ -58,8 +58,7 @@ QJsonObject processLivePoints(const QJsonArray &newUtterances, const QStringList
     // known_points first, as the prompt describes the payload.
     auto reference = known;
     const auto pack = [&] {
-      return "{\"known_points\":" + QJsonDocument(reference).toJson(QJsonDocument::Compact) +
-             ",\"utterances\":" + QJsonDocument(input).toJson(QJsonDocument::Compact) + "}";
+      return dumpPayload({{"known_points", reference}, {"utterances", input}});
     };
     while (!reference.isEmpty() && pack().size() > limit) reference.removeAt(0);
     const QByteArray payload = pack();

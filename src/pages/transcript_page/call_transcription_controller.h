@@ -37,6 +37,8 @@ signals:
   void transcribeButtonState(bool active, QString tooltip);
   void requestOpenTranscriptTab();
   void transcriptReady(qint64 transcriptId);
+  // Emitted for every terminal session, including failure and revocation.
+  void transcriptSettled(qint64 transcriptId);
   void transcriptStarted(qint64 transcriptId);
   void phraseAdded(DuckTranscriptPhrase phrase);
   void transcriptionStopped();

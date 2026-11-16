@@ -16,7 +16,9 @@ QJsonObject parsed(const QByteArray &bytes) { return QJsonDocument::fromJson(byt
 // Utterances whose serialized size forces one chunk each.
 QJsonArray longWindow(int count) {
   QJsonArray out;
-  for (int i = 0; i < count; ++i) out.append(source("u" + QString::number(i), QString(700, QChar(u'ж'))));
+  // Keep each utterance below the source limit but large enough that two
+  // cannot share the 24000-byte payload budget.
+  for (int i = 0; i < count; ++i) out.append(source("u" + QString::number(i), QString(6000, QChar(u'ж'))));
   return out;
 }
 QJsonArray evidenceEnum(const QByteArray &schema) {
