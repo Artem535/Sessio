@@ -82,6 +82,29 @@ TEST_F(MyDayPageTest, QmlLoadsAndFindsRoot) {
   EXPECT_TRUE(gWarnings.isEmpty()) << gWarnings.join("\n").toStdString();
 }
 
+TEST_F(MyDayPageTest, QmlViewIsDestroyedBeforeTheBridgeContextProperty) {
+  // The bridge is the scene's context property. If base-class child cleanup
+  // deletes it first (children go in creation order), live QML bindings
+  // re-evaluate against a dying object and abort the app on exit once
+  // ~QApplication has cleared the global instance.
+  int order = 0;
+  int quickOrder = -1;
+  int bridgeOrder = -1;
+  {
+    pcm::my_day::MyDayPage page(db, model.get(), nullptr);
+    page.resize(1100, 700);
+    page.show();
+    auto *quick = quickOf(page);
+    ASSERT_NE(quick, nullptr);
+    QObject::connect(quick, &QObject::destroyed, [&] { quickOrder = order++; });
+    QObject::connect(page.bridge(), &QObject::destroyed, [&] { bridgeOrder = order++; });
+    QTest::qWait(20);
+  }
+  EXPECT_GE(quickOrder, 0);
+  EXPECT_GE(bridgeOrder, 0);
+  EXPECT_LT(quickOrder, bridgeOrder);
+}
+
 TEST_F(MyDayPageTest, HeaderShowsBridgeDateTitle) {
   pcm::my_day::MyDayPage page(db, model.get(), nullptr);
   page.resize(1100, 700);

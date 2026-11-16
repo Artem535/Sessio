@@ -34,6 +34,15 @@ MyDayPage::MyDayPage(std::shared_ptr<pcm::database::Database> db, QTimelineModel
   mQuick->setSource(QUrl("qrc:/sessio/myday/MyDay.qml"));
 }
 
+MyDayPage::~MyDayPage() {
+  // The bridge is the QML scene's context property and must outlive the view:
+  // base-class child cleanup deletes children in creation order (bridge first),
+  // and re-evaluated bindings in the still-live scene would create a font
+  // engine after ~QApplication has cleared the global instance (qFatal).
+  delete mQuick;
+  mQuick = nullptr;
+}
+
 void MyDayPage::showEvent(QShowEvent *event) {
   QWidget::showEvent(event);
   // setActive(true) reloads by itself when data changed while hidden; reload here only otherwise.
