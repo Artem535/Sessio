@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.47] - 2026-11-16
+
+- Fixed an abort on application exit caused by QML bindings of the My Day
+  page re-evaluating while the app was shutting down.
+
 ## [0.2.46] - 2026-11-16
 
 - Fix constrained local-model generation on WebGPU devices that reject the

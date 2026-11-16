@@ -23,6 +23,7 @@ class MyDayPage final : public QWidget {
 public:
   MyDayPage(std::shared_ptr<pcm::database::Database> db, QTimelineModel *model,
             pcm::meeting::SeriesCallService *seriesCalls, QWidget *parent = nullptr);
+  ~MyDayPage() override;
 
   MyDayBridge *bridge() const { return mBridge; }
 
