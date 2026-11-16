@@ -34,6 +34,7 @@ if [[ "$(git -C "$prefix/src" describe --tags --exact-match 2>/dev/null)" != "$v
   echo "$prefix/src is not LiteRT-LM $version" >&2
   exit 1
 fi
+python3 "$(dirname "$0")/patch-litert-lm-gpu-mask.py" "$prefix/src"
 
 # The orchestrator project has no languages, so compilers must be passed to
 # both phases explicitly.

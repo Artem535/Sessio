@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.46] - 2026-11-16
+
+- Fix constrained local-model generation on WebGPU devices that reject the
+  GPU logit-mask buffer, while keeping model inference on the GPU.
+
 ## [0.2.45] - 2026-11-15
 
 - Updated call assistant response constraints and diagnostics for rejected

@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 scripts/check_prompt_contract.py
-      - run: python3 -m unittest test/test_prompt_contract.py test/test_prompter_eval_fixture.py
+      - run: python3 -m unittest discover -s test -p 'test_prompt*.py'
 
   # The call prompter runtime (libsessio_litert on LiteRT-LM v0.19.0, Vulkan
   # with CPU fallback). The upstream super-build takes hours, so install/ is
@@ -49,7 +49,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/sessio-litert
-          key: litert-lm-v0.19.0-${{ runner.os }}-${{ hashFiles('scripts/build-litert-lm.sh', 'scripts/build-litert-lm-gpu.sh', 'src/call_prompter/litert/**', 'test/litert_gpu_runtime_smoke.cpp') }}
+          key: litert-lm-v0.19.0-${{ runner.os }}-${{ hashFiles('scripts/build-litert-lm.sh', 'scripts/build-litert-lm-gpu.sh', 'scripts/patch-litert-lm-gpu-mask.py', 'src/call_prompter/litert/**', 'test/litert_gpu_runtime_smoke.cpp') }}
 
       - name: Free disk space
         if: steps.cache-litert.outputs.cache-hit != 'true'

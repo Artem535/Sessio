@@ -51,14 +51,14 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.LITERT_PREFIX }}/install
-          key: litert-runtime-${{ runner.os }}-v0.19.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}
+          key: litert-runtime-${{ runner.os }}-v0.19.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'scripts/patch-litert-lm-gpu-mask.py', 'src/call_prompter/litert/**') }}
 
       - name: Restore Bazel cache
         if: steps.cache-runtime.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.BAZEL_DISK_CACHE }}
-          key: litert-bazel-${{ runner.os }}-v0.19.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}
+          key: litert-bazel-${{ runner.os }}-v0.19.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'scripts/patch-litert-lm-gpu-mask.py', 'src/call_prompter/litert/**') }}
           restore-keys: litert-bazel-${{ runner.os }}-v0.19.0-
 
       - name: Set up Java 17
@@ -111,7 +111,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ env.BAZEL_DISK_CACHE }}
-          key: litert-bazel-${{ runner.os }}-v0.19.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'src/call_prompter/litert/**') }}-${{ github.run_id }}
+          key: litert-bazel-${{ runner.os }}-v0.19.0-${{ hashFiles('scripts/build-litert-lm-bazel.sh', 'scripts/patch-litert-lm-gpu-mask.py', 'src/call_prompter/litert/**') }}-${{ github.run_id }}
 
       - name: Verify runtime
         run: |

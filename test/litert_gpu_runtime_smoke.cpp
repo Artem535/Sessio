@@ -34,22 +34,30 @@ int main(int argc, char **argv) try {
   std::cout << "RUNTIME " << (gpu ? "Vulkan" : "CPU") << " device=" << info.device
             << " fallback=" << info.cpuFallback << " reason=" << info.fallbackReason << std::endl;
 
-  const std::string prefix = "<|turn>system\nReturn only a JSON object with one field action. No markdown.\n<turn|>\n";
-  const std::string suffix = "<|turn>user\nAgreement: Boris will send the estimate on Friday. Extract the action.\n<turn|>\n<|turn>model\n";
+  const bool qwen = std::string(argv[1]).find("qwen") != std::string::npos;
+  const std::string prefix = qwen
+      ? "<|im_start|>system\nReturn only a JSON object with one field action. No markdown.\n<|im_end|>\n"
+      : "<|turn>system\nReturn only a JSON object with one field action. No markdown.\n<turn|>\n";
+  const std::string suffix = qwen
+      ? "<|im_start|>user\nAgreement: Boris will send the estimate on Friday. Extract the action.\n<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+      : "<|turn>user\nAgreement: Boris will send the estimate on Friday. Extract the action.\n<turn|>\n<|turn>model\n";
   GenerateOptions generate;
   generate.maxOutputTokens = 128;
+  generate.reusePrefix = !qwen;
+  generate.jsonSchema = R"({"type":"object","properties":{"action":{"type":"string"}},"required":["action"],"additionalProperties":false})";
   std::string reply;
   GenerateStats stats;
   require(model->generate(prefix, suffix, generate, &reply, &stats) == Status::Ok, "JSON generation failed");
+  require(stats.constrained, "JSON schema was not applied");
   const auto json = nlohmann::json::parse(reply);
   require(json.is_object() && json.contains("action") && json["action"].is_string(), "invalid action JSON");
   require(stats.decodeTokens > 2, "not a meaningful JSON response");
   std::cout << "JSON_OK tokens=" << stats.decodeTokens << " prefix_reused=" << stats.prefixReused << std::endl;
   reply.clear();
   require(model->generate(prefix, suffix, generate, &reply, &stats) == Status::Ok, "repeat generation failed");
-  require(stats.prefixReused, "prefix checkpoint was not reused");
+  require(qwen || stats.prefixReused, "prefix checkpoint was not reused");
   require(nlohmann::json::parse(reply).is_object(), "repeat JSON invalid");
-  std::cout << "PREFIX_REPEAT_OK" << std::endl;
+  std::cout << (qwen ? "FRESH_SESSION_REPEAT_OK" : "PREFIX_REPEAT_OK") << std::endl;
 
   std::packaged_task<Status()> cancelledTask([&] {
     GenerateOptions longOutput;
