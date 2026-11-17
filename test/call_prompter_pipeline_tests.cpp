@@ -282,6 +282,28 @@ TEST(PipelineFormatTest, DiscardsTopLevelReasoningBeforeValidatingModelReply) {
   EXPECT_TRUE(reply.value("key_points").isArray());
 }
 
+TEST(PipelineFormatTest, StripsLeadingColonArtifactFromEveryStringValue) {
+  const auto reply = parseModelReply(R"({"reasoning":":думал","note":{"text":": Текст заметки","evidence_ids":["1"]},)"
+                                     R"("key_points":[{"text":":Пункт","evidence_ids":["1"]}],)"
+                                     R"("tasks":[{"text":"Встреча в 17:15","evidence_ids":["1"]}]})")
+                           .toObject();
+  EXPECT_EQ(reply["note"].toObject()["text"].toString(), QStringLiteral("Текст заметки"));
+  EXPECT_EQ(reply["key_points"].toArray().first().toObject()["text"].toString(), QStringLiteral("Пункт"));
+  EXPECT_EQ(reply["tasks"].toArray().first().toObject()["text"].toString(), QStringLiteral("Встреча в 17:15"));
+  EXPECT_EQ(reply["note"].toObject()["evidence_ids"].toArray().first().toString(), QStringLiteral("1"));
+}
+
+TEST(PrompterSchemaTest, MaxLengthTripledForByteCountingConstraintEngine) {
+  const QByteArray input =
+      R"({"type":"object","properties":{"text":{"type":"string","maxLength":120,"minLength":1},)"
+      R"("arr":{"type":"array","items":{"type":"string","maxLength":160}}}})";
+  const auto out = QJsonDocument::fromJson(scaleSchemaByteLimits(input)).object();
+  const auto text = out["properties"].toObject()["text"].toObject();
+  EXPECT_EQ(text["maxLength"].toInt(), 360);
+  EXPECT_EQ(text["minLength"].toInt(), 1);
+  EXPECT_EQ(out["properties"].toObject()["arr"].toObject()["items"].toObject()["maxLength"].toInt(), 480);
+}
+
 TEST(PipelineFormatTest, RecognizesQwenChatTemplateInLitertMetadata) {
   QTemporaryFile file;
   ASSERT_TRUE(file.open());

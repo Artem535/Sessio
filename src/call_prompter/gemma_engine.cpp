@@ -24,7 +24,7 @@ public:
     // Native templates render the complete system/user request in a fresh
     // session; do not checkpoint a manually formatted system prefix.
     options.reusePrefix = false;
-    options.jsonSchema = schema.toStdString();
+    options.jsonSchema = scaleSchemaByteLimits(schema).toStdString();
     options.applyPromptTemplate = true;
     // A schema bounds the reply by its own lengths; the meeting summary's
     // overview needs more than the default 384 tokens. Pipelines budget their

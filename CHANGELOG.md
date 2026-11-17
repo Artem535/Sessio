@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.48] - 2026-11-17
+
+- Fixed local-model meeting notes being cut mid-word: the constrained-decoding
+  engine counts string limits in UTF-8 bytes, so Cyrillic texts now get a full
+  character budget in the generated schema.
+- Removed the stray leading colon the local model prepended to every note,
+  key point, task and overview text under constrained decoding.
+
 ## [0.2.47] - 2026-11-16
 
 - Fixed an abort on application exit caused by QML bindings of the My Day

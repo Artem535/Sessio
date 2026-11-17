@@ -336,12 +336,67 @@ QByteArray withReasoning(QByteArray schema) {
   return schema;
 }
 
+namespace {
+void scaleByteLimits(QJsonObject &object) {
+  for (auto it = object.begin(); it != object.end(); ++it) {
+    if (it.key() == QLatin1String("maxLength") && it.value().isDouble()) {
+      it.value() = it.value().toInt() * 3;
+    } else if (it.value().isObject()) {
+      auto child = it.value().toObject();
+      scaleByteLimits(child);
+      it.value() = child;
+    } else if (it.value().isArray()) {
+      auto array = it.value().toArray();
+      for (qsizetype i = 0; i < array.size(); ++i) {
+        if (array[i].isObject()) {
+          auto child = array[i].toObject();
+          scaleByteLimits(child);
+          array[i] = child;
+        }
+      }
+      it.value() = array;
+    }
+  }
+}
+
+// Under constrained decoding the model prefixes every string value with ':'
+// (a forced-tokenization artifact); strip it so replies stay usable.
+QJsonValue stripLeadingColons(const QJsonValue &value) {
+  if (value.isString()) {
+    const auto text = value.toString();
+    static const QRegularExpression artifact(QStringLiteral(R"(^\s*:+\s*)"));
+    const auto match = artifact.match(text);
+    return match.hasMatch() ? QJsonValue(text.mid(match.capturedLength())) : value;
+  }
+  if (value.isArray()) {
+    QJsonArray array;
+    for (const auto &item : value.toArray()) array.append(stripLeadingColons(item));
+    return array;
+  }
+  if (value.isObject()) {
+    QJsonObject object;
+    const auto source = value.toObject();
+    for (auto it = source.begin(); it != source.end(); ++it) object.insert(it.key(), stripLeadingColons(it.value()));
+    return object;
+  }
+  return value;
+}
+} // namespace
+
+QByteArray scaleSchemaByteLimits(const QByteArray &schema) {
+  const auto doc = QJsonDocument::fromJson(schema);
+  if (!doc.isObject()) return schema;
+  auto object = doc.object();
+  scaleByteLimits(object);
+  return QJsonDocument(object).toJson(QJsonDocument::Compact);
+}
+
 QJsonValue parseModelReply(const QString &raw) {
   const auto stripReasoning = [](QJsonValue reply) -> QJsonValue {
     if (!reply.isObject()) return reply;
     auto object = reply.toObject();
     if (object.value("reasoning").isString()) object.remove("reasoning");
-    return object;
+    return stripLeadingColons(object);
   };
   auto value = raw.trimmed();
   if (value.startsWith("```")) {

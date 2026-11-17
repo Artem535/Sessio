@@ -62,6 +62,10 @@ QByteArray closeObjects(QByteArray schema);
 // Adds a leading "reasoning" string property so constrained decoding lets the
 // model think before the answer fields; parsers ignore the extra field.
 QByteArray withReasoning(QByteArray schema);
+// llguidance enforces maxLength as a UTF-8 byte count, cutting Cyrillic text
+// mid-word at half the character budget. Give the schema a 3x byte budget;
+// character limits are still validated after parsing. LiteRT path only.
+QByteArray scaleSchemaByteLimits(const QByteArray &schema);
 QByteArray dumpPayload(const Payload &payload);
 
 // Parses a raw model reply, tolerating surrounding whitespace and a Markdown
