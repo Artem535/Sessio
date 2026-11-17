@@ -1,6 +1,7 @@
 #include "summary_pipeline.h"
 
 #include <QJsonDocument>
+#include <QLoggingCategory>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -9,9 +10,35 @@
 #include <gtest/gtest.h>
 
 using namespace pcm::prompter;
+namespace pcm::prompter {
+Q_DECLARE_LOGGING_CATEGORY(prompterDiagnostics)
+Q_DECLARE_LOGGING_CATEGORY(prompterResponses)
+}
 
 namespace {
 QStringList diagnostics;
+void captureSummaryLogs(QtMsgType, const QMessageLogContext &context, const QString &message) {
+  if (QByteArray(context.category).startsWith("pcm.prompter.")) diagnostics.append(message);
+}
+struct SummaryLogCapture {
+  QtMessageHandler previous;
+  bool previousDebug, previousInfo;
+  explicit SummaryLogCapture(bool sensitive) {
+    auto &responses = const_cast<QLoggingCategory &>(prompterResponses());
+    auto &info = const_cast<QLoggingCategory &>(prompterDiagnostics());
+    previousDebug = responses.isDebugEnabled();
+    previousInfo = info.isInfoEnabled();
+    responses.setEnabled(QtDebugMsg, sensitive);
+    info.setEnabled(QtInfoMsg, true);
+    diagnostics.clear();
+    previous = qInstallMessageHandler(captureSummaryLogs);
+  }
+  ~SummaryLogCapture() {
+    qInstallMessageHandler(previous);
+    const_cast<QLoggingCategory &>(prompterResponses()).setEnabled(QtDebugMsg, previousDebug);
+    const_cast<QLoggingCategory &>(prompterDiagnostics()).setEnabled(QtInfoMsg, previousInfo);
+  }
+};
 void captureDiagnostics(QtMsgType type, const QMessageLogContext &context, const QString &message) {
   if (type == QtWarningMsg && QByteArray(context.category) == "pcm.prompter.diagnostics") diagnostics.append(message);
 }
@@ -82,6 +109,48 @@ TEST(SummaryPipeline, EmptyTranscriptReturnsEmptyFormat2WithoutModel) {
   EXPECT_EQ(out["format"].toInt(), 2);
   EXPECT_EQ(out["overview"].toObject(), item("", {}));
   for (const auto *key : {"key_points", "tasks", "open_questions"}) EXPECT_TRUE(out[key].toArray().isEmpty()) << key;
+}
+
+TEST(SummaryPipeline, DefaultDiagnosticsReportAllNotesWithoutMeetingText) {
+  SummaryLogCapture capture(false);
+  Model model;
+  model.leaf = [](const QJsonObject &input) {
+    auto reply = leafReply(input);
+    reply["note"] = item("PRIVATE_NOTE_SENTINEL", {firstId(input)});
+    return reply;
+  };
+  processSummary({source("PRIVATE_SOURCE_SENTINEL", "PRIVATE_TRANSCRIPT_SENTINEL")}, ctx(), model.generate());
+  const auto log = diagnostics.join('\n');
+  EXPECT_TRUE(log.contains("Summary overview input"));
+  EXPECT_TRUE(log.contains("accepted_leaves= 1 notes= 1"));
+  EXPECT_TRUE(log.contains("Summary complete"));
+  EXPECT_FALSE(log.contains("PRIVATE_"));
+  EXPECT_FALSE(log.contains("Summary parsed reply"));
+}
+
+TEST(SummaryPipeline, OptInRequestLogContainsAllThreeOverviewNotesAndCorrelation) {
+  SummaryLogCapture capture(true);
+  Model model;
+  processSummary(longCall(3), ctx(), model.generate());
+  int leafRequests = 0, overviewRequests = 0;
+  for (const auto &line : diagnostics) {
+    if (!line.startsWith("Summary request {")) continue;
+    const auto record = parsed(line.mid(line.indexOf('{')).toUtf8());
+    EXPECT_GT(record["run"].toInt(), 0);
+    EXPECT_GT(record["call"].toInt(), 0);
+    EXPECT_FALSE(record["system"].toString().isEmpty());
+    EXPECT_FALSE(record["schema"].toObject().isEmpty());
+    if (record["stage"] == "leaf") { ++leafRequests; continue; }
+    ++overviewRequests;
+    const auto notes = record["input"].toObject()["notes"].toArray();
+    ASSERT_EQ(notes.size(), 3);
+    EXPECT_EQ(notes[0].toObject()["text"].toString(), "Часть u0");
+    EXPECT_EQ(notes[1].toObject()["text"].toString(), "Часть u1");
+    EXPECT_EQ(notes[2].toObject()["text"].toString(), "Часть u2");
+    EXPECT_EQ(record["call"].toInt(), 4);
+  }
+  EXPECT_EQ(leafRequests, 3) << diagnostics.join('\n').toStdString();
+  EXPECT_EQ(overviewRequests, 1);
 }
 
 TEST(SummaryPipeline, ShortCallGivesOneLeafAndAnOverview) {

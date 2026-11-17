@@ -2,6 +2,7 @@
 #include "notes_common.h"
 
 #include <QJsonDocument>
+#include <QElapsedTimer>
 #include <QLoggingCategory>
 #include <QRegularExpression>
 #include <algorithm>
@@ -18,6 +19,7 @@
 
 namespace pcm::prompter {
 Q_DECLARE_LOGGING_CATEGORY(prompterDiagnostics)
+Q_DECLARE_LOGGING_CATEGORY(prompterResponses)
 namespace {
 using namespace notes;
 constexpr qsizetype kOverviewLength = 6000;
@@ -269,6 +271,8 @@ QJsonObject joinedNotes(const QJsonArray &notes, qsizetype limit) {
 
 QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &ctx, const Generate &generate) {
   if (utterances.isEmpty()) return emptySummary();
+  static std::atomic_int nextRun = 0;
+  const int run = ++nextRun;
   // A number spoken in the call may happen to equal a database source id.
   QSet<QString> sourceNumbers;
   static const QRegularExpression number(QStringLiteral(R"(\b[0-9]+\b)"));
@@ -308,6 +312,9 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
   if (leafBudget <= 0) throw PipelineError("notes generation budget exceeded");
   const auto inputs = chunks(utterances, leafBudget);
   if (!generate) throw PipelineError("notes generator missing");
+  qCInfo(prompterDiagnostics) << "Summary start run=" << run << "sources=" << utterances.size()
+                             << "chunks=" << inputs.size() << "leaf_limit=" << leafLimit
+                             << "overview_limit=" << overviewLimit;
 
   static const auto leafBase = [] {
     auto schema = closeObjects(QByteArray::fromStdString(rfl::json::to_schema<LeafSchema>()));
@@ -317,10 +324,39 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
   const auto leafDates = restrictStrings(leafBase, "date", schemaDays);
 
   std::atomic_int calls = 0;
-  const auto call = [&](const QString &system, const QByteArray &payload, const QByteArray &schema) {
-    if (system.toUtf8().size() + payload.size() > kContextInputBytes || ++calls > kMaxCalls)
+  const auto call = [&](const char *stage, const QString &system, const QByteArray &payload, const QByteArray &schema,
+                        int *callId = nullptr) {
+    const int index = ++calls;
+    if (callId) *callId = index;
+    if (system.toUtf8().size() + payload.size() > kContextInputBytes || index > kMaxCalls)
       throw PipelineError("notes generation budget exceeded");
-    return generate(system, payload, withReasoning(schema));
+    const auto input = QJsonDocument::fromJson(payload).object();
+    const auto fullSchema = withReasoning(schema);
+    qCInfo(prompterDiagnostics) << "Summary request run=" << run << "call=" << index << "stage=" << stage
+                               << "sources=" << input["utterances"].toArray().size()
+                               << "notes=" << input["notes"].toArray().size()
+                               << "payload_bytes=" << payload.size() << "schema_bytes=" << fullSchema.size();
+    // Opt-in only: these records contain meeting text, just like model replies.
+    qCDebug(prompterResponses).noquote() << "Summary request"
+        << QJsonDocument(QJsonObject{{"run", run}, {"call", index}, {"stage", QString::fromLatin1(stage)},
+                                    {"system", system}, {"input", input},
+                                    {"schema", QJsonDocument::fromJson(fullSchema).object()}}).toJson(QJsonDocument::Compact);
+    QElapsedTimer timer;
+    timer.start();
+    try {
+      const auto reply = generate(system, payload, fullSchema);
+      qCInfo(prompterDiagnostics) << "Summary reply run=" << run << "call=" << index << "stage=" << stage
+                                 << "elapsed_ms=" << timer.elapsed() << "object=" << reply.isObject();
+      qCDebug(prompterResponses).noquote() << "Summary parsed reply"
+          << QJsonDocument(QJsonObject{{"run", run}, {"call", index}, {"stage", QString::fromLatin1(stage)},
+                                      {"reply", reply}}).toJson(QJsonDocument::Compact);
+      return reply;
+    } catch (const PipelineError &error) {
+      qCWarning(prompterDiagnostics) << "Summary generation failed run=" << run << "call=" << index
+                                    << "stage=" << stage << "elapsed_ms=" << timer.elapsed()
+                                    << "reason=" << failureReason(QString::fromLatin1(error.what()));
+      throw;
+    }
   };
   const auto usable = [](const PipelineError &error) {
     return failureReason(QString::fromLatin1(error.what())) == QLatin1String("invalid_output");
@@ -351,17 +387,24 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
     fields.emplace_back("utterances", input);
     if (withHints.contains("live_points")) fields.emplace_back("live_points", withHints["live_points"]);
     const auto payload = dumpPayload(fields);
+    int attempt = 0;
     try {
       auto schema = restrictStrings(leafDates, "evidence_ids", sorted(allowed));
       const auto root = QJsonDocument::fromJson(schema).object();
       const auto defs = root["$defs"].toObject();
       const auto leafDef = defs[root["$ref"].toString().section('/', -1)].toObject();
       const auto noteDef = leafDef["properties"]["note"]["$ref"].toString().section('/', -1);
-      return checkedLeaf(call(leafPrompt, payload, requireNonemptyItems(schema, noteDef)), leafLimit,
-                         allowed, dateSet, sourceNumbers);
+      auto result = checkedLeaf(call("leaf", leafPrompt, payload, requireNonemptyItems(schema, noteDef), &attempt), leafLimit,
+                                allowed, dateSet, sourceNumbers);
+      qCInfo(prompterDiagnostics) << "Summary leaf accepted run=" << run << "call=" << attempt << "sources=" << input.size()
+                                 << "note_chars=" << result.note["text"].toString().size()
+                                 << "points=" << result.points.size() << "tasks=" << result.tasks.size()
+                                 << "questions=" << result.questions.size();
+      return result;
     } catch (const PipelineError &error) {
       if (!usable(error)) throw;
-      qCWarning(prompterDiagnostics) << "Leaf validation failed:" << error.what();
+      qCWarning(prompterDiagnostics) << "Leaf validation failed:" << error.what() << "run=" << run << "call=" << attempt
+                                    << "sources=" << input.size();
       return std::nullopt;
     }
   };
@@ -371,12 +414,19 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
   const auto leavesOf = [&](const QJsonArray &input) {
     QList<Leaf> out;
     if (auto result = leaf(input)) { out.append(*result); return out; }
+    qCInfo(prompterDiagnostics) << "Summary leaf retry run=" << run << "sources=" << input.size()
+                               << "halves=" << (input.size() >= 2);
     if (input.size() < 2) return out;
     const auto half = input.size() / 2;
     QJsonArray first, second;
     for (qsizetype i = 0; i < input.size(); ++i) (i < half ? first : second).append(input[i]);
-    for (const auto &part : {first, second})
-      if (auto result = leaf(part)) out.append(*result);
+    int partIndex = 0;
+    for (const auto &part : {first, second}) {
+      auto result = leaf(part);
+      qCInfo(prompterDiagnostics) << "Summary retry half result run=" << run << "half=" << ++partIndex
+                                 << "sources=" << part.size() << "accepted=" << result.has_value();
+      if (result) out.append(*result);
+    }
     return out;
   };
   // Chunks are independent; with parallelism above 1 they run on a few threads
@@ -409,7 +459,12 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
     if (failure) std::rethrow_exception(failure);
   }
   QList<Leaf> leaves;
-  for (const auto &part : perInput) leaves.append(part);
+  for (qsizetype i = 0; i < perInput.size(); ++i) {
+    qCInfo(prompterDiagnostics) << "Summary chunk result run=" << run << "chunk=" << i + 1
+                               << "sources=" << inputs[i].size() << "accepted_leaves=" << perInput[i].size()
+                               << "skipped=" << perInput[i].isEmpty();
+    leaves.append(perInput[i]);
+  }
   if (leaves.isEmpty()) throw PipelineError("invalid notes output");
 
   QList<QJsonArray> points, tasks, questions;
@@ -418,6 +473,12 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
     points << l.points; tasks << l.tasks; questions << l.questions;
     if (!l.note["text"].toString().isEmpty()) notes.append(l.note);
   }
+  qCInfo(prompterDiagnostics) << "Summary overview input run=" << run << "accepted_leaves=" << leaves.size()
+                             << "notes=" << notes.size();
+  for (qsizetype i = 0; i < notes.size(); ++i)
+    qCInfo(prompterDiagnostics) << "Summary note run=" << run << "note=" << i + 1
+                               << "chars=" << notes[i].toObject()["text"].toString().size()
+                               << "evidence_count=" << notes[i].toObject()["evidence_ids"].toArray().size();
 
   // Overview: reduce the chunk notes in groups that fit one call until a
   // single group is left, then write the final overview from it.
@@ -430,15 +491,23 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
         closeObjects(QByteArray::fromStdString(schemaLimit == kOverviewLength ? rfl::json::to_schema<OverviewSchema<kOverviewLength>>()
                                                                               : rfl::json::to_schema<OverviewSchema<kGroupNoteLength>>())),
         "evidence_ids", sorted(allowed));
+    int attempt = 0;
     try {
-      const auto reply = call(overviewPrompt, serialize({{"notes", group}}), requireNonemptyItems(schema)).toObject();
+      const auto reply = call("overview", overviewPrompt, serialize({{"notes", group}}), requireNonemptyItems(schema), &attempt).toObject();
       if (reply.size() != 1) throw PipelineError("invalid notes output schema/budget");
       const auto overview = checkedItem(reply["overview"], limit, false, allowed);
-      if (const auto cleaned = cleanedItem(overview, ids(utterances), sourceNumbers)) return *cleaned;
+      if (const auto cleaned = cleanedItem(overview, ids(utterances), sourceNumbers)) {
+        qCInfo(prompterDiagnostics) << "Summary overview accepted run=" << run << "call=" << attempt << "input_notes=" << group.size()
+                                   << "chars=" << (*cleaned)["text"].toString().size();
+        return *cleaned;
+      }
+      qCWarning(prompterDiagnostics) << "Summary overview empty after cleaning run=" << run << "call=" << attempt
+                                    << "input_notes=" << group.size() << "fallback=joined_notes";
       return joinedNotes(group, limit);
     } catch (const PipelineError &error) {
       if (!usable(error)) throw;
-      qCWarning(prompterDiagnostics) << "Overview validation failed:" << error.what();
+      qCWarning(prompterDiagnostics) << "Overview validation failed:" << error.what() << "run=" << run << "call=" << attempt
+                                    << "input_notes=" << group.size() << "fallback=joined_notes";
       return joinedNotes(group, limit);
     }
   };
@@ -468,6 +537,11 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
   out["key_points"] = mergedList(points, qBound(qsizetype(2), qsizetype(ctx.limits.points), kMaxPoints));
   out["tasks"] = mergedList(tasks, qBound(qsizetype(2), qsizetype(ctx.limits.tasks), kMaxTasks), ctx.agreements);
   out["open_questions"] = mergedList(questions, qBound(qsizetype(2), qsizetype(ctx.limits.questions), kMaxQuestions));
+  qCInfo(prompterDiagnostics) << "Summary complete run=" << run << "calls=" << calls.load()
+                             << "overview_chars=" << overview["text"].toString().size()
+                             << "points=" << out["key_points"].toArray().size()
+                             << "tasks=" << out["tasks"].toArray().size()
+                             << "questions=" << out["open_questions"].toArray().size();
   return out;
 }
 
