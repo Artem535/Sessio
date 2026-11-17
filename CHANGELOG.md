@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
   character budget in the generated schema.
 - Removed the stray leading colon the local model prepended to every note,
   key point, task and overview text under constrained decoding.
+- Opt-in prompter request logs no longer embed the JSON schema, keeping the
+  meeting input readable.
 
 ## [0.2.47] - 2026-11-16
 

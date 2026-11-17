@@ -337,10 +337,10 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
                                << "notes=" << input["notes"].toArray().size()
                                << "payload_bytes=" << payload.size() << "schema_bytes=" << fullSchema.size();
     // Opt-in only: these records contain meeting text, just like model replies.
+    // The schema is omitted: it repeats per call and dwarfs the useful input.
     qCDebug(prompterResponses).noquote() << "Summary request"
         << QJsonDocument(QJsonObject{{"run", run}, {"call", index}, {"stage", QString::fromLatin1(stage)},
-                                    {"system", system}, {"input", input},
-                                    {"schema", QJsonDocument::fromJson(fullSchema).object()}}).toJson(QJsonDocument::Compact);
+                                    {"system", system}, {"input", input}}).toJson(QJsonDocument::Compact);
     QElapsedTimer timer;
     timer.start();
     try {

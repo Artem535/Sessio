@@ -139,7 +139,7 @@ TEST(SummaryPipeline, OptInRequestLogContainsAllThreeOverviewNotesAndCorrelation
     EXPECT_GT(record["run"].toInt(), 0);
     EXPECT_GT(record["call"].toInt(), 0);
     EXPECT_FALSE(record["system"].toString().isEmpty());
-    EXPECT_FALSE(record["schema"].toObject().isEmpty());
+    EXPECT_FALSE(record.contains("schema"));
     if (record["stage"] == "leaf") { ++leafRequests; continue; }
     ++overviewRequests;
     const auto notes = record["input"].toObject()["notes"].toArray();
