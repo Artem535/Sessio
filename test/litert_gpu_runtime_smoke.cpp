@@ -15,7 +15,7 @@ void require(bool ok, const char *message) {
 }
 
 int main(int argc, char **argv) try {
-  require(argc >= 2, "usage: smoke model [cpu|fallback]");
+  require(argc >= 2, "usage: smoke model [cpu|fallback] [cache] [template]");
   const std::string mode = argc > 2 ? argv[2] : "gpu";
   ModelOptions options;
   options.backend = mode == "cpu" ? Backend::CPU : Backend::GPU;
@@ -35,15 +35,21 @@ int main(int argc, char **argv) try {
             << " fallback=" << info.cpuFallback << " reason=" << info.fallbackReason << std::endl;
 
   const bool qwen = std::string(argv[1]).find("qwen") != std::string::npos;
-  const std::string prefix = qwen
+  const bool nativeTemplate = argc > 4 && std::string(argv[4]) == "template";
+  const std::string prefix = nativeTemplate
+      ? "Return only a JSON object with one field action. No markdown."
+      : qwen
       ? "<|im_start|>system\nReturn only a JSON object with one field action. No markdown.\n<|im_end|>\n"
       : "<|turn>system\nReturn only a JSON object with one field action. No markdown.\n<turn|>\n";
-  const std::string suffix = qwen
+  const std::string suffix = nativeTemplate
+      ? "Agreement: Boris will send the estimate on Friday. Extract the action."
+      : qwen
       ? "<|im_start|>user\nAgreement: Boris will send the estimate on Friday. Extract the action.\n<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
       : "<|turn>user\nAgreement: Boris will send the estimate on Friday. Extract the action.\n<turn|>\n<|turn>model\n";
   GenerateOptions generate;
   generate.maxOutputTokens = 128;
   generate.reusePrefix = !qwen;
+  generate.applyPromptTemplate = nativeTemplate;
   generate.jsonSchema = R"({"type":"object","properties":{"action":{"type":"string"}},"required":["action"],"additionalProperties":false})";
   std::string reply;
   GenerateStats stats;
@@ -55,16 +61,18 @@ int main(int argc, char **argv) try {
   std::cout << "JSON_OK tokens=" << stats.decodeTokens << " prefix_reused=" << stats.prefixReused << std::endl;
   reply.clear();
   require(model->generate(prefix, suffix, generate, &reply, &stats) == Status::Ok, "repeat generation failed");
-  require(qwen || stats.prefixReused, "prefix checkpoint was not reused");
+  require(nativeTemplate ? !stats.prefixReused : qwen || stats.prefixReused, "unexpected prefix reuse");
   require(nlohmann::json::parse(reply).is_object(), "repeat JSON invalid");
-  std::cout << (qwen ? "FRESH_SESSION_REPEAT_OK" : "PREFIX_REPEAT_OK") << std::endl;
+  std::cout << (nativeTemplate || qwen ? "FRESH_SESSION_REPEAT_OK" : "PREFIX_REPEAT_OK") << std::endl;
 
   std::packaged_task<Status()> cancelledTask([&] {
     GenerateOptions longOutput;
     longOutput.maxOutputTokens = 384;
     longOutput.reusePrefix = false;
+    longOutput.applyPromptTemplate = nativeTemplate;
     std::string text;
-    return model->generate("", "<|turn>user\nWrite a very long story about a ship, at least 2000 words.\n<turn|>\n<|turn>model\n", longOutput, &text);
+    return model->generate("", nativeTemplate ? "Write a very long story about a ship, at least 2000 words."
+                                             : "<|turn>user\nWrite a very long story about a ship, at least 2000 words.\n<turn|>\n<|turn>model\n", longOutput, &text);
   });
   auto cancelled = cancelledTask.get_future();
   std::jthread generation(std::move(cancelledTask));

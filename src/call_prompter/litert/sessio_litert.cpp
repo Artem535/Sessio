@@ -24,6 +24,7 @@
 #include "runtime/components/constrained_decoding/constraint_provider.h"
 #include "runtime/components/constrained_decoding/constraint_provider_factory.h"
 #include "runtime/components/constrained_decoding/llg_constraint_config.h"
+#include "runtime/components/prompt_template.h"
 #include "runtime/engine/engine.h"
 #include "runtime/engine/engine_factory.h"
 #include "runtime/engine/engine_settings.h"
@@ -32,6 +33,7 @@
 #include "runtime/executor/llm_executor_settings.h"
 #include "runtime/proto/sampler_params.pb.h"
 #include "runtime/util/logging.h"
+#include "runtime/util/model_type_utils.h"
 
 namespace sessio::litert {
 namespace {
@@ -39,6 +41,18 @@ namespace {
 using ::litert::lm::Engine;
 using ::litert::lm::EngineSettings;
 using detail::TaskGate;
+
+// LiteRT-LM 0.19 replaced the session's boolean MTP setting with a config.
+template <typename Config> void setSpeculativeDecoding(Config &config, bool enabled) {
+  if constexpr (requires { config.SetEnableSpeculativeDecoding(enabled); }) {
+    config.SetEnableSpeculativeDecoding(enabled);
+  } else {
+    auto speculative = config.GetSpeculativeDecodingConfig();
+    using Mode = typename decltype(speculative.mode)::value_type;
+    speculative.mode = enabled ? Mode::kOn : Mode::kOff;
+    config.SetSpeculativeDecodingConfig(speculative);
+  }
+}
 
 // Pin WebGPU to an enumerated hardware adapter. In particular, a machine
 // exposing only a software adapter (llvmpipe, Microsoft Basic Render Driver)
@@ -144,16 +158,38 @@ public:
     GenerateStats local;
     if (!stats) stats = &local;
     *stats = {};
+    std::string rendered;
+    if (options.applyPromptTemplate) {
+      const auto &metadata = mEngine->GetEngineSettings().GetLlmMetadata();
+      if (!metadata) return Status::Failed;
+      std::string source;
+      if (metadata->has_jinja_prompt_template()) source = metadata->jinja_prompt_template();
+      else {
+        const auto fallback = ::litert::lm::GetDefaultJinjaPromptTemplate(
+            metadata->prompt_templates(), metadata->llm_model_type());
+        if (!fallback.ok()) return Status::Failed;
+        source = *fallback;
+      }
+      ::litert::lm::PromptTemplate promptTemplate(source);
+      ::litert::lm::PromptTemplateInput input;
+      input.messages = nlohmann::ordered_json::array();
+      if (!prefix.empty()) input.messages.push_back({{"role", "system"}, {"content", prefix}});
+      input.messages.push_back({{"role", "user"}, {"content", suffix}});
+      input.extra_context = {{"enable_thinking", false}};
+      const auto prompt = promptTemplate.Apply(input);
+      if (!prompt.ok()) return Status::Failed;
+      rendered = *prompt;
+    }
     // Encoding does not mutate the tokenizer; the API only lacks const.
     auto &tokenizer = const_cast<::litert::support::Tokenizer &>(mEngine->GetTokenizer());
-    const auto tokens = tokenizer.TextToTokenIds(prefix + suffix);
+    const auto tokens = tokenizer.TextToTokenIds(options.applyPromptTemplate ? rendered : prefix + suffix);
     if (!tokens.ok()) return Status::Failed;
     if (static_cast<int>(tokens->size()) + options.maxOutputTokens > mContextTokens) return Status::ContextExceeded;
 
-    if (!options.reusePrefix) {
+    if (options.applyPromptTemplate || !options.reusePrefix) {
       auto session = createSession(options);
       if (!session) return Status::Failed;
-      return complete(*session, prefix + suffix, options, reply, stats);
+      return complete(*session, options.applyPromptTemplate ? rendered : prefix + suffix, options, reply, stats);
     }
     Status failure = Status::Failed;
     auto *cached = prefixSession(prefix, options, stats, &failure);
@@ -184,10 +220,7 @@ private:
     // ("Cannot auto-resize tensor kv_cache_v_N"), so prefix reuse still decodes
     // without it. Greedy outputs were identical either way on the smoke
     // scenarios; Session::Clone() was not, so it is not used.
-    ::litert::lm::SpeculativeDecodingConfig speculative;
-    speculative.mode = mSpeculative && !options.reusePrefix ? ::litert::lm::SpeculativeDecodingMode::kOn
-                                                            : ::litert::lm::SpeculativeDecodingMode::kOff;
-    config.SetSpeculativeDecodingConfig(speculative);
+    setSpeculativeDecoding(config, mSpeculative && !options.reusePrefix);
     // Same sampler as the validated Python runtime: top-p type with k=1 and
     // temperature 0, which is greedy.
     auto &sampler = config.GetMutableSamplerParams();

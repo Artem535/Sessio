@@ -15,16 +15,17 @@ constexpr int kSchemaOutputTokens = 4096;
 
 class GemmaEngine final : public PrompterEngine {
 public:
-  GemmaEngine(std::unique_ptr<sessio::litert::Model> model, bool reusePrefix, bool qwen)
-      : mModel(std::move(model)), mReusePrefix(reusePrefix), mQwen(qwen) {}
+  explicit GemmaEngine(std::unique_ptr<sessio::litert::Model> model)
+      : mModel(std::move(model)) {}
 
   QJsonValue generate(const QString &system, const QByteArray &payload, const QByteArray &schema) override {
     std::string reply;
     sessio::litert::GenerateOptions options;
-    // Qwen constrained decoding can fail after rewinding a prefix checkpoint
-    // in LiteRT-LM 0.19. Use a fresh session until that path is reliable.
-    options.reusePrefix = mReusePrefix && !(mQwen && !schema.isEmpty());
+    // Native templates render the complete system/user request in a fresh
+    // session; do not checkpoint a manually formatted system prefix.
+    options.reusePrefix = false;
     options.jsonSchema = schema.toStdString();
+    options.applyPromptTemplate = true;
     // A schema bounds the reply by its own lengths; the meeting summary's
     // overview needs more than the default 384 tokens. Pipelines budget their
     // input for this reserve (notes::kContextInputBytes).
@@ -32,16 +33,14 @@ public:
     sessio::litert::GenerateStats stats;
     QElapsedTimer timer;
     timer.start();
-    const auto systemTurn = mQwen ? qwenSystemTurn(system) : gemmaSystemTurn(system);
-    const auto userTurn = mQwen ? qwenUserTurn(QString::fromUtf8(payload)) : gemmaUserTurn(QString::fromUtf8(payload));
-    const auto status = mModel->generate(systemTurn.toStdString(),
-                                         userTurn.toStdString(), options, &reply,
+    const auto status = mModel->generate(system.toStdString(),
+                                         payload.toStdString(), options, &reply,
                                          &stats);
     // Counts and timings only: never prompt or reply text.
     qCInfo(logPrompterModel).nospace()
         << "generate " << timer.elapsed() << " ms: prefill " << stats.prefillTokens << " tokens "
         << qRound(stats.prefillSeconds * 1000) << " ms" << (stats.prefixReused ? " (prefix reused)" : "")
-        << (schema.isEmpty() ? "" : stats.constrained ? " (schema)" : " (schema unavailable)")
+        << " (model template)" << (schema.isEmpty() ? "" : stats.constrained ? " (schema)" : " (schema unavailable)")
         << ", decode " << stats.decodeTokens << " tokens " << qRound(stats.decodeSeconds * 1000) << " ms";
     switch (status) {
     case sessio::litert::Status::Ok: break;
@@ -60,8 +59,6 @@ public:
 
 private:
   std::unique_ptr<sessio::litert::Model> mModel;
-  const bool mReusePrefix;
-  const bool mQwen;
 };
 
 } // namespace
@@ -84,7 +81,7 @@ std::unique_ptr<PrompterEngine> createGemmaEngine(const QString &modelPath, cons
   options.allowCpuFallback = gemma.acceleration == GemmaOptions::Acceleration::Auto;
   auto model = sessio::litert::loadModel(modelPath.toStdString(), options, nullptr);
   if (!model) return nullptr;
-  return std::make_unique<GemmaEngine>(std::move(model), gemma.reusePrefix, qwen);
+  return std::make_unique<GemmaEngine>(std::move(model));
 }
 
 } // namespace pcm::prompter

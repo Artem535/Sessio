@@ -50,6 +50,9 @@ struct GenerateOptions {
   // JSON schema the reply must follow, enforced while decoding (llguidance).
   // Empty decodes free text.
   std::string jsonSchema;
+  // Interpret generate() arguments as plain system/user messages and render
+  // the model's embedded Jinja template using LiteRT-LM. Uses a fresh session.
+  bool applyPromptTemplate = false;
 };
 
 // Work done by one generate() call, for timing diagnostics.
@@ -72,6 +75,8 @@ public:
   // Runs one already formatted prompt, prefix + suffix (without <bos>), with
   // greedy decoding. The prefix should end at a special-token boundary, e.g.
   // right before the user turn, so splitting does not change tokenisation.
+  // With applyPromptTemplate, prefix and suffix instead hold plain system and
+  // user messages; LiteRT-LM renders the model template before token budgeting.
   virtual Status generate(const std::string &prefix, const std::string &suffix, const GenerateOptions &options,
                           std::string *reply, GenerateStats *stats = nullptr) = 0;
   virtual void cancel() = 0;
