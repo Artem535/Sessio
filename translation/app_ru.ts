@@ -4916,6 +4916,22 @@ They appear here after a call with transcription turned on.</source>
         <translation>Длина саммари, символов</translation>
     </message>
     <message>
+        <source>Model overview</source>
+        <translation>Обзор моделью</translation>
+    </message>
+    <message>
+        <source>Join part notes (fast)</source>
+        <translation>Склейка заметок частей (быстро)</translation>
+    </message>
+    <message>
+        <source>Joining skips the final model call: faster and never loses parts, but reads as sequential notes instead of one coherent story.</source>
+        <translation>Склейка пропускает финальный вызов модели: быстрее и не теряет части, но читается как последовательные заметки, а не связный рассказ.</translation>
+    </message>
+    <message>
+        <source>Final overview</source>
+        <translation>Финальный обзор</translation>
+    </message>
+    <message>
         <source>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</source>
         <translation>Выберите скачанную модель Gemma. Модель работает на этом компьютере, ничего не скачивается автоматически. Подсказки суфлёра требуют вашей проверки.</translation>
     </message>

@@ -18,6 +18,7 @@ public:
   void setPrompterModel(const QString &model);
   void setPrompterAcceleration(const QString &mode);
   void setSummaryLimits(int leaf, int overview);
+  void setSummaryMode(bool partsOnly);
   void setModelInfo(const QString &modelId, bool installed);
   void setTranscriptCount(int count);
   void setDeleteAllAllowed(bool allowed, const QString &reason);
@@ -30,6 +31,7 @@ signals:
   void prompterModelChanged(QString model);
   void prompterAccelerationChanged(QString mode);
   void summaryLimitsChanged(int leaf, int overview);
+  void summaryModeChanged(bool partsOnly);
   void deleteAllRequested();
   // Emitted when the user edits a speech parameter or resets them to the defaults.
   void tuningChanged(const pcm::transcription::TranscriptionTuning &tuning);
@@ -41,6 +43,7 @@ private:
   QComboBox *mPrompterAcceleration;
   QSpinBox *mSummaryLeaf;
   QSpinBox *mSummaryOverview;
+  QComboBox *mSummaryMode;
   QLabel *mModel;
   QLabel *mCount;
   QPushButton *mDelete;

@@ -4901,6 +4901,22 @@ They appear here after a call with transcription turned on.</translation>
         <translation>Summary length, characters</translation>
     </message>
     <message>
+        <source>Model overview</source>
+        <translation>Model overview</translation>
+    </message>
+    <message>
+        <source>Join part notes (fast)</source>
+        <translation>Join part notes (fast)</translation>
+    </message>
+    <message>
+        <source>Joining skips the final model call: faster and never loses parts, but reads as sequential notes instead of one coherent story.</source>
+        <translation>Joining skips the final model call: faster and never loses parts, but reads as sequential notes instead of one coherent story.</translation>
+    </message>
+    <message>
+        <source>Final overview</source>
+        <translation>Final overview</translation>
+    </message>
+    <message>
         <source>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</source>
         <translation>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</translation>
     </message>

@@ -791,6 +791,7 @@ void SettingsDialog::setupTranscriptionSection() {
   panel->setPrompterModel(pcm::app_settings::prompterModel());
   panel->setPrompterAcceleration(pcm::app_settings::prompterAcceleration());
   panel->setSummaryLimits(pcm::app_settings::summaryLeafLimit(), pcm::app_settings::summaryOverviewLimit());
+  panel->setSummaryMode(pcm::app_settings::summaryPartsOnly());
   panel->setTuning(pcm::app_settings::transcriptionTuning());
   panel->setModelInfo(QStringLiteral("gigaam-v3-rnnt"),
       pcm::calltranscription::transcriptionModelsAvailable(
@@ -809,6 +810,7 @@ void SettingsDialog::setupTranscriptionSection() {
     pcm::app_settings::setSummaryLeafLimit(leaf);
     pcm::app_settings::setSummaryOverviewLimit(overview);
   });
+  connect(panel, &TranscriptionSettingsPanel::summaryModeChanged, this, &pcm::app_settings::setSummaryPartsOnly);
   connect(panel, &TranscriptionSettingsPanel::tuningChanged, this,
           &pcm::app_settings::setTranscriptionTuning);
   setupCloudSection();

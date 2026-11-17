@@ -17,6 +17,9 @@ All notable changes to this project will be documented in this file.
 - Meeting summaries split the transcript into smaller chunks close to the
   local model's training size, so long calls keep their later parts instead
   of dropping them when a big chunk fails.
+- New setting "Final overview": besides the model-written overview, the
+  summary can join the part notes directly — faster and never loses parts,
+  at the cost of a less coherent final story.
 
 ## [0.2.47] - 2026-11-16
 

@@ -69,6 +69,14 @@ TranscriptionSettingsPanel::TranscriptionSettingsPanel(QWidget *parent) : QWidge
   mSummaryOverview->setSingleStep(100);
   mSummaryOverview->setToolTip(tr("Maximum length of the overall call summary."));
   runtimeForm->addRow(tr("Summary length, characters"), mSummaryOverview);
+  mSummaryMode = new QComboBox(runtime); mSummaryMode->setObjectName("summaryMode");
+  mSummaryMode->addItem(tr("Model overview"), QStringLiteral("model"));
+  mSummaryMode->addItem(tr("Join part notes (fast)"), QStringLiteral("parts"));
+  mSummaryMode->setToolTip(tr("Joining skips the final model call: faster and never loses parts, but reads as sequential notes instead of one coherent story."));
+  runtimeForm->addRow(tr("Final overview"), mSummaryMode);
+  connect(mSummaryMode, &QComboBox::currentIndexChanged, this, [this] {
+    emit summaryModeChanged(mSummaryMode->currentData().toString() == QLatin1String("parts"));
+  });
   const auto emitSummaryLimits = [this] { emit summaryLimitsChanged(mSummaryLeaf->value(), mSummaryOverview->value()); };
   connect(mSummaryLeaf, &QSpinBox::valueChanged, this, emitSummaryLimits);
   connect(mSummaryOverview, &QSpinBox::valueChanged, this, emitSummaryLimits);
@@ -179,6 +187,10 @@ void TranscriptionSettingsPanel::setSummaryLimits(int leaf, int overview) {
   const QSignalBlocker a(mSummaryLeaf), b(mSummaryOverview);
   mSummaryLeaf->setValue(qBound(100, leaf, pcm::prompter::SummaryLimits::kLeafMax));
   mSummaryOverview->setValue(qBound(500, overview, pcm::prompter::SummaryLimits::kOverviewMax));
+}
+void TranscriptionSettingsPanel::setSummaryMode(bool partsOnly) {
+  const QSignalBlocker blocker(mSummaryMode);
+  mSummaryMode->setCurrentIndex(partsOnly ? 1 : 0);
 }
 void TranscriptionSettingsPanel::setPrompterAcceleration(const QString &mode) {
   const QSignalBlocker blocker(mPrompterAcceleration);

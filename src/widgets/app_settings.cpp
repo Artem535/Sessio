@@ -158,6 +158,12 @@ int summaryOverviewLimit() {
 }
 void setSummaryOverviewLimit(const int limit) { QSettings().setValue("summary/overview", limit); }
 
+bool summaryPartsOnly() { return QSettings().value("summary/mode").toString() == QLatin1String("parts"); }
+
+void setSummaryPartsOnly(const bool partsOnly) {
+  QSettings().setValue("summary/mode", partsOnly ? QStringLiteral("parts") : QStringLiteral("model"));
+}
+
 namespace {
 QString normalisedUrl(const QString &url) {
   const auto trimmed = url.trimmed();

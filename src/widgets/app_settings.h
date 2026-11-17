@@ -22,6 +22,9 @@ int summaryLeafLimit();
 void setSummaryLeafLimit(int limit);
 int summaryOverviewLimit();
 void setSummaryOverviewLimit(int limit);
+// false: the model writes the final overview; true: join the chunk notes (fast).
+bool summaryPartsOnly();
+void setSummaryPartsOnly(bool partsOnly);
 // "auto" (GPU, CPU fallback), "gpu" or "cpu"; applies at the next model load.
 // Cloud LLM (an OpenAI-compatible endpoint chosen by the user). Off by default.
 // The API key is not here: it lives in the system keychain (CloudKeyStore).
