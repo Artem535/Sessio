@@ -337,28 +337,6 @@ QByteArray withReasoning(QByteArray schema) {
 }
 
 namespace {
-void scaleByteLimits(QJsonObject &object) {
-  for (auto it = object.begin(); it != object.end(); ++it) {
-    if (it.key() == QLatin1String("maxLength") && it.value().isDouble()) {
-      it.value() = it.value().toInt() * 3;
-    } else if (it.value().isObject()) {
-      auto child = it.value().toObject();
-      scaleByteLimits(child);
-      it.value() = child;
-    } else if (it.value().isArray()) {
-      auto array = it.value().toArray();
-      for (qsizetype i = 0; i < array.size(); ++i) {
-        if (array[i].isObject()) {
-          auto child = array[i].toObject();
-          scaleByteLimits(child);
-          array[i] = child;
-        }
-      }
-      it.value() = array;
-    }
-  }
-}
-
 // Under constrained decoding the model prefixes every string value with ':'
 // (a forced-tokenization artifact); strip it so replies stay usable.
 QJsonValue stripLeadingColons(const QJsonValue &value) {
@@ -384,11 +362,21 @@ QJsonValue stripLeadingColons(const QJsonValue &value) {
 } // namespace
 
 QByteArray scaleSchemaByteLimits(const QByteArray &schema) {
-  const auto doc = QJsonDocument::fromJson(schema);
-  if (!doc.isObject()) return schema;
-  auto object = doc.object();
-  scaleByteLimits(object);
-  return QJsonDocument(object).toJson(QJsonDocument::Compact);
+  // Rewrite in place: re-serializing through QJsonDocument sorts object keys
+  // and would destroy the reasoning-first property order the model relies on.
+  static const QRegularExpression maxLength(QStringLiteral(R"("maxLength":(\d+))"));
+  const auto text = QString::fromUtf8(schema);
+  QString out;
+  qsizetype last = 0;
+  auto it = maxLength.globalMatch(text);
+  while (it.hasNext()) {
+    const auto match = it.next();
+    out += text.mid(last, match.capturedStart() - last);
+    out += QStringLiteral("\"maxLength\":") + QString::number(match.captured(1).toInt() * 3);
+    last = match.capturedEnd();
+  }
+  out += text.mid(last);
+  return out.toUtf8();
 }
 
 QJsonValue parseModelReply(const QString &raw) {

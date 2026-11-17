@@ -6,7 +6,8 @@ All notable changes to this project will be documented in this file.
 
 - Fixed local-model meeting notes being cut mid-word: the constrained-decoding
   engine counts string limits in UTF-8 bytes, so Cyrillic texts now get a full
-  character budget in the generated schema.
+  character budget in the generated schema. The scaling keeps the schema's
+  property order, so the model still reasons before answering.
 - Removed the stray leading colon the local model prepended to every note,
   key point, task and overview text under constrained decoding.
 - Opt-in prompter request logs no longer embed the JSON schema, keeping the

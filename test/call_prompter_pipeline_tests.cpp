@@ -297,11 +297,19 @@ TEST(PrompterSchemaTest, MaxLengthTripledForByteCountingConstraintEngine) {
   const QByteArray input =
       R"({"type":"object","properties":{"text":{"type":"string","maxLength":120,"minLength":1},)"
       R"("arr":{"type":"array","items":{"type":"string","maxLength":160}}}})";
-  const auto out = QJsonDocument::fromJson(scaleSchemaByteLimits(input)).object();
+  const auto scaled = scaleSchemaByteLimits(input);
+  const auto out = QJsonDocument::fromJson(scaled).object();
   const auto text = out["properties"].toObject()["text"].toObject();
   EXPECT_EQ(text["maxLength"].toInt(), 360);
   EXPECT_EQ(text["minLength"].toInt(), 1);
   EXPECT_EQ(out["properties"].toObject()["arr"].toObject()["items"].toObject()["maxLength"].toInt(), 480);
+  // Key order must survive: constrained decoding generates properties in
+  // schema order, and reasoning has to stay first.
+  const QByteArray ordered =
+      R"({"properties":{"reasoning":{"type":"string"},"note":{"type":"string","maxLength":2400}}})";
+  const auto kept = scaleSchemaByteLimits(ordered);
+  EXPECT_LT(kept.indexOf("reasoning"), kept.indexOf("note"));
+  EXPECT_TRUE(kept.contains(R"("maxLength":7200)"));
 }
 
 TEST(PipelineFormatTest, RecognizesQwenChatTemplateInLitertMetadata) {
