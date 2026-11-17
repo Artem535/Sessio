@@ -108,8 +108,16 @@ TEST(LivePointsPipeline, LaterChunksKnowPointsFoundEarlierInTheSameRun) {
   EXPECT_EQ(out["key_points"].toArray().size(), 1);
 }
 
-TEST(LivePointsPipeline, CitingKnownOrForeignIdRejectsThatChunk) {
-  for (const auto &ids : {QJsonArray{"old"}, QJsonArray{}, QJsonArray{"u1", "u1"}}) {
+TEST(LivePointsPipeline, RepeatedKnownEvidenceIdsAreDeduplicated) {
+  const auto out = processLivePoints({source("u1")}, {}, [](const QString &, const QByteArray &, const QByteArray &) {
+    return QJsonValue(points({point(QStringLiteral("Факт"), {"u1", "u1", "u1"})}));
+  });
+  EXPECT_EQ(out["key_points"].toArray(), (QJsonArray{point(QStringLiteral("Факт"), {"u1"})}));
+}
+
+TEST(LivePointsPipeline, CitingUnknownOrEmptyEvidenceRejectsThatChunk) {
+  for (const auto &ids : {QJsonArray{"old"}, QJsonArray{}, QJsonArray{"u1", "u1", "foreign"},
+                          QJsonArray{"u1", 1}, QJsonArray{"u1", "u1", "u1", "u1", "u1", "u1", "u1", "u1", "u1"}}) {
     EXPECT_THROW(processLivePoints({source("u1")}, {QStringLiteral("old")},
                                    [&](const QString &, const QByteArray &, const QByteArray &) {
                                      return QJsonValue(points({point(QStringLiteral("Факт"), ids)}));

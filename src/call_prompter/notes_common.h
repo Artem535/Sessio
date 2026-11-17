@@ -24,7 +24,8 @@ QString pointKey(const QString &text);
 // A prompt from the :/call-prompter resources. Throws PipelineError if missing.
 QString prompt(const char *name);
 // One {text, evidence_ids} reply item: text <= limit, 1-8 unique IDs from
-// `allowed` (none for an empty text when allowEmpty). Returns it trimmed;
+// `allowed` (none for an empty text when allowEmpty). Repeated IDs are collapsed
+// in first-occurrence order, retaining the eight-entry input budget. Returns it trimmed;
 // throws PipelineError("invalid notes ...") otherwise.
 QJsonObject checkedItem(const QJsonValue &value, qsizetype limit, bool allowEmpty, const QSet<QString> &allowed);
 // Validates every source (1024 sources, id <=80 / speaker <=200 / text <=6000

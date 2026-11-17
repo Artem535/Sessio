@@ -120,6 +120,27 @@ TEST(SummaryPipeline, ShortCallGivesOneLeafAndAnOverview) {
   EXPECT_EQ(texts(out["open_questions"].toArray()), QStringList{"Вопрос u1"});
 }
 
+TEST(SummaryPipeline, RepeatedKnownEvidenceIdsAreDeduplicated) {
+  Model model;
+  model.leaf = [](const QJsonObject &input) {
+    auto reply = leafReply(input);
+    const auto id = firstId(input);
+    reply["note"] = item("Часть " + id, {id, id, id});
+    reply["key_points"] = QJsonArray{item("Пункт", {"u2", id, "u2", id})};
+    reply["tasks"] = QJsonArray{task("Задача", {id, id})};
+    reply["open_questions"] = QJsonArray{item("Вопрос", {id, id})};
+    return reply;
+  };
+  model.overview = [](const QJsonObject &) {
+    return QJsonValue(QJsonObject{{"overview", item("Обзор", {"u1", "u1"})}});
+  };
+  const auto out = processSummary({source("u1"), source("u2")}, ctx(), model.generate());
+  EXPECT_EQ(out["overview"].toObject()["evidence_ids"].toArray(), (QJsonArray{"u1"}));
+  EXPECT_EQ(out["key_points"][0].toObject()["evidence_ids"].toArray(), (QJsonArray{"u2", "u1"}));
+  EXPECT_EQ(out["tasks"][0].toObject()["evidence_ids"].toArray(), (QJsonArray{"u1"}));
+  EXPECT_EQ(out["open_questions"][0].toObject()["evidence_ids"].toArray(), (QJsonArray{"u1"}));
+}
+
 TEST(SummaryPipeline, EveryCallHasNonEmptySchemaWithLocalEvidenceEnum) {
   Model model;
   processSummary(longCall(3), ctx(), model.generate());
@@ -276,7 +297,7 @@ TEST(SummaryPipeline, LeafRepliesOverLimitsAreRejected) {
     }
     return false;
   };
-  EXPECT_TRUE(rejects([](QJsonObject &r) { r["note"] = item(QString(801, QChar(u'я')), {"u1"}); }));
+  EXPECT_TRUE(rejects([](QJsonObject &r) { r["note"] = item(QString(2401, QChar(u'я')), {"u1"}); }));
   EXPECT_TRUE(rejects([](QJsonObject &r) {
     QJsonArray many;
     for (int i = 0; i < 4; ++i) many.append(item(QStringLiteral("П%1").arg(i), {"u1"}));

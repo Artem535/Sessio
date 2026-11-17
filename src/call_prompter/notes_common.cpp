@@ -81,12 +81,15 @@ QJsonObject checkedItem(const QJsonValue &value, qsizetype limit, bool allowEmpt
     throw PipelineError("invalid notes evidence count");
   }
   QSet<QString> seen;
+  QJsonArray uniqueIds;
   for (const auto &id : ids) {
-    if (!id.isString() || !allowed.contains(id.toString()) || seen.contains(id.toString()))
-      throw PipelineError("invalid notes evidence source");
+    if (!id.isString() || !allowed.contains(id.toString())) throw PipelineError("invalid notes evidence source");
+    if (seen.contains(id.toString())) continue;
     seen.insert(id.toString());
+    uniqueIds.append(id);
   }
   item["text"] = text;
+  item["evidence_ids"] = uniqueIds;
   return item;
 }
 
