@@ -4885,6 +4885,22 @@ They appear here after a call with transcription turned on.</translation>
         <translation>Acceleration</translation>
     </message>
     <message>
+        <source>Maximum length of one chunk note in the call notes. A longer note is rejected and the chunk is retried.</source>
+        <translation>Maximum length of one chunk note in the call notes. A longer note is rejected and the chunk is retried.</translation>
+    </message>
+    <message>
+        <source>Note length, characters</source>
+        <translation>Note length, characters</translation>
+    </message>
+    <message>
+        <source>Maximum length of the overall call summary.</source>
+        <translation>Maximum length of the overall call summary.</translation>
+    </message>
+    <message>
+        <source>Summary length, characters</source>
+        <translation>Summary length, characters</translation>
+    </message>
+    <message>
         <source>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</source>
         <translation>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</translation>
     </message>

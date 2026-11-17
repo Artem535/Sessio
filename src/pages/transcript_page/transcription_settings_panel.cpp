@@ -1,4 +1,5 @@
 #include "transcription_settings_panel.h"
+#include "summary_limits.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -58,6 +59,20 @@ TranscriptionSettingsPanel::TranscriptionSettingsPanel(QWidget *parent) : QWidge
   connect(mPrompterAcceleration, &QComboBox::currentIndexChanged, this, [this] {
     emit prompterAccelerationChanged(mPrompterAcceleration->currentData().toString());
   });
+  mSummaryLeaf = new QSpinBox(runtime); mSummaryLeaf->setObjectName("summaryLeafLimit");
+  mSummaryLeaf->setRange(100, pcm::prompter::SummaryLimits::kLeafMax);
+  mSummaryLeaf->setSingleStep(100);
+  mSummaryLeaf->setToolTip(tr("Maximum length of one chunk note in the call notes. A longer note is rejected and the chunk is retried."));
+  runtimeForm->addRow(tr("Note length, characters"), mSummaryLeaf);
+  mSummaryOverview = new QSpinBox(runtime); mSummaryOverview->setObjectName("summaryOverviewLimit");
+  mSummaryOverview->setRange(500, pcm::prompter::SummaryLimits::kOverviewMax);
+  mSummaryOverview->setSingleStep(100);
+  mSummaryOverview->setToolTip(tr("Maximum length of the overall call summary."));
+  runtimeForm->addRow(tr("Summary length, characters"), mSummaryOverview);
+  const auto emitSummaryLimits = [this] { emit summaryLimitsChanged(mSummaryLeaf->value(), mSummaryOverview->value()); };
+  connect(mSummaryLeaf, &QSpinBox::valueChanged, this, emitSummaryLimits);
+  connect(mSummaryOverview, &QSpinBox::valueChanged, this, emitSummaryLimits);
+  setSummaryLimits(pcm::prompter::SummaryLimits{}.leaf, pcm::prompter::SummaryLimits{}.overview);
   auto *runtimeNote = new QLabel(tr("Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review."), runtime);
   runtimeNote->setWordWrap(true);
   runtimeForm->addRow(runtimeNote);
@@ -160,6 +175,11 @@ void TranscriptionSettingsPanel::setAutoStartState(bool transcription, bool prom
   mPrompterAutoStart->setChecked(prompter && transcription);
 }
 void TranscriptionSettingsPanel::setPrompterModel(const QString &model) { mPrompterModel->setText(model); }
+void TranscriptionSettingsPanel::setSummaryLimits(int leaf, int overview) {
+  const QSignalBlocker a(mSummaryLeaf), b(mSummaryOverview);
+  mSummaryLeaf->setValue(qBound(100, leaf, pcm::prompter::SummaryLimits::kLeafMax));
+  mSummaryOverview->setValue(qBound(500, overview, pcm::prompter::SummaryLimits::kOverviewMax));
+}
 void TranscriptionSettingsPanel::setPrompterAcceleration(const QString &mode) {
   const QSignalBlocker blocker(mPrompterAcceleration);
   mPrompterAcceleration->setCurrentIndex(std::max(0, mPrompterAcceleration->findData(mode)));

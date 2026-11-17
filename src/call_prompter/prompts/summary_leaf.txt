@@ -9,7 +9,7 @@ User JSON: call_date, calendar (dates with weekdays), agreements (recorded agree
 </input_format>
 <rules>
 <content>
-- note: a detailed account of this part with important explanations and conclusions, <=800 characters.
+- note: a detailed account of this part with important explanations and conclusions, <=2400 characters.
 - key_points: 0-3 facts <=120.
 - tasks: 0-2 explicitly accepted future actions (who, what, by when) <=160; each once in its fullest wording; do not build from a cut-off phrase or when the subject is unclear.
 - meeting=true only for a planned meeting/call.

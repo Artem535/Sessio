@@ -22,7 +22,7 @@ namespace {
 using namespace notes;
 constexpr qsizetype kOverviewLength = 6000;
 constexpr qsizetype kGroupNoteLength = 800;
-constexpr qsizetype kLeafNoteLength = 800;
+constexpr qsizetype kLeafNoteLength = 2400;
 constexpr qsizetype kPointLength = 120;
 constexpr qsizetype kTaskLength = 160;
 constexpr qsizetype kQuestionLength = 160;
@@ -161,15 +161,15 @@ struct Leaf {
 };
 
 // Validates a leaf reply against its chunk's sources.
-Leaf checkedLeaf(const QJsonValue &value, const QSet<QString> &allowed, const QSet<QString> &dates,
-                 const QSet<QString> &sourceNumbers) {
+Leaf checkedLeaf(const QJsonValue &value, qsizetype noteLimit, const QSet<QString> &allowed,
+                 const QSet<QString> &dates, const QSet<QString> &sourceNumbers) {
   const auto object = value.toObject();
   if (!value.isObject() || object.size() != 4 || !object["key_points"].isArray() || !object["tasks"].isArray() ||
       !object["open_questions"].isArray() || object["key_points"].toArray().size() > kLeafPoints ||
       object["tasks"].toArray().size() > kLeafTasks || object["open_questions"].toArray().size() > kLeafQuestions)
     throw PipelineError("invalid notes output schema/budget");
   Leaf leaf;
-  leaf.note = checkedItem(object["note"], kLeafNoteLength, true, allowed);
+  leaf.note = checkedItem(object["note"], noteLimit, true, allowed);
   if (!leaf.note["text"].toString().isEmpty()) {
     if (const auto note = cleanedItem(leaf.note, allowed, sourceNumbers)) leaf.note = *note;
     else leaf.note = QJsonObject{{"text", ""}, {"evidence_ids", QJsonArray{}}};
@@ -276,7 +276,12 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
     auto matches = number.globalMatch(utterance.toObject()["text"].toString());
     while (matches.hasNext()) sourceNumbers.insert(matches.next().captured());
   }
-  const auto leafPrompt = prompt("summary_leaf.txt");
+  // User-configurable limits (QSettings via SummaryLimits) capped by the schema ceilings.
+  const auto leafLimit = qBound(qsizetype(100), qsizetype(ctx.limits.leaf), kLeafNoteLength);
+  const auto overviewLimit = qBound(qsizetype(500), qsizetype(ctx.limits.overview), kOverviewLength);
+  static const QRegularExpression noteChars(QStringLiteral("<=\\d+ characters"));
+  const auto leafPrompt =
+      prompt("summary_leaf.txt").replace(noteChars, "<=" + QString::number(leafLimit) + " characters");
   const auto overviewPrompt = prompt("summary_overview.txt");
 
   const auto callDate = ctx.callDate.isValid() ? ctx.callDate : QDate::currentDate();
@@ -352,8 +357,8 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
       const auto defs = root["$defs"].toObject();
       const auto leafDef = defs[root["$ref"].toString().section('/', -1)].toObject();
       const auto noteDef = leafDef["properties"]["note"]["$ref"].toString().section('/', -1);
-      return checkedLeaf(call(leafPrompt, payload, requireNonemptyItems(schema, noteDef)), allowed,
-                         dateSet, sourceNumbers);
+      return checkedLeaf(call(leafPrompt, payload, requireNonemptyItems(schema, noteDef)), leafLimit,
+                         allowed, dateSet, sourceNumbers);
     } catch (const PipelineError &error) {
       if (!usable(error)) throw;
       qCWarning(prompterDiagnostics) << "Leaf validation failed:" << error.what();
@@ -416,14 +421,14 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
 
   // Overview: reduce the chunk notes in groups that fit one call until a
   // single group is left, then write the final overview from it.
-  const auto overviewCall = [&](const QJsonArray &group, qsizetype limit) {
+  const auto overviewCall = [&](const QJsonArray &group, qsizetype limit, qsizetype schemaLimit) {
     QSet<QString> allowed;
     for (const auto &id : evidenceUnion(group)) allowed.insert(id.toString());
     for (const auto &note : group)
       for (const auto &id : note.toObject()["evidence_ids"].toArray()) allowed.insert(id.toString());
     const auto schema = restrictStrings(
-        closeObjects(QByteArray::fromStdString(limit == kOverviewLength ? rfl::json::to_schema<OverviewSchema<kOverviewLength>>()
-                                                                        : rfl::json::to_schema<OverviewSchema<kGroupNoteLength>>())),
+        closeObjects(QByteArray::fromStdString(schemaLimit == kOverviewLength ? rfl::json::to_schema<OverviewSchema<kOverviewLength>>()
+                                                                              : rfl::json::to_schema<OverviewSchema<kGroupNoteLength>>())),
         "evidence_ids", sorted(allowed));
     try {
       const auto reply = call(overviewPrompt, serialize({{"notes", group}}), requireNonemptyItems(schema)).toObject();
@@ -441,18 +446,18 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
   const auto fits = [overviewBudget](const QJsonArray &group) { return serialize({{"notes", group}}).size() <= overviewBudget; };
   QJsonObject overview{{"text", ""}, {"evidence_ids", QJsonArray{}}};
   while (!notes.isEmpty()) {
-    if (fits(notes)) { overview = overviewCall(notes, kOverviewLength); break; }
+    if (fits(notes)) { overview = overviewCall(notes, overviewLimit, kOverviewLength); break; }
     QJsonArray next, group;
     for (const auto &note : notes) {
       auto candidate = group;
       candidate.append(note);
       if (!group.isEmpty() && !fits(candidate)) {
-        next.append(overviewCall(group, kGroupNoteLength));
+        next.append(overviewCall(group, kGroupNoteLength, kGroupNoteLength));
         group = {};
       }
       group.append(note);
     }
-    if (!group.isEmpty()) next.append(group.size() == 1 ? group.first().toObject() : overviewCall(group, kGroupNoteLength));
+    if (!group.isEmpty()) next.append(group.size() == 1 ? group.first().toObject() : overviewCall(group, kGroupNoteLength, kGroupNoteLength));
     // Every pass must shrink the list; a note too long to pair is not reducible.
     if (next.size() >= notes.size()) throw PipelineError("notes generation budget exceeded");
     notes = next;
@@ -460,9 +465,9 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
 
   auto out = emptySummary();
   out["overview"] = overview;
-  out["key_points"] = mergedList(points, kMaxPoints);
-  out["tasks"] = mergedList(tasks, kMaxTasks, ctx.agreements);
-  out["open_questions"] = mergedList(questions, kMaxQuestions);
+  out["key_points"] = mergedList(points, qBound(qsizetype(2), qsizetype(ctx.limits.points), kMaxPoints));
+  out["tasks"] = mergedList(tasks, qBound(qsizetype(2), qsizetype(ctx.limits.tasks), kMaxTasks), ctx.agreements);
+  out["open_questions"] = mergedList(questions, qBound(qsizetype(2), qsizetype(ctx.limits.questions), kMaxQuestions));
   return out;
 }
 

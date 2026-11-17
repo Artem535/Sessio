@@ -4900,6 +4900,22 @@ They appear here after a call with transcription turned on.</source>
         <translation>Ускорение</translation>
     </message>
     <message>
+        <source>Maximum length of one chunk note in the call notes. A longer note is rejected and the chunk is retried.</source>
+        <translation>Максимальная длина заметки одной части в заметках по звонку. Более длинная заметка отклоняется, и часть обрабатывается повторно.</translation>
+    </message>
+    <message>
+        <source>Note length, characters</source>
+        <translation>Длина заметки, символов</translation>
+    </message>
+    <message>
+        <source>Maximum length of the overall call summary.</source>
+        <translation>Максимальная длина итогового саммари звонка.</translation>
+    </message>
+    <message>
+        <source>Summary length, characters</source>
+        <translation>Длина саммари, символов</translation>
+    </message>
+    <message>
         <source>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</source>
         <translation>Выберите скачанную модель Gemma. Модель работает на этом компьютере, ничего не скачивается автоматически. Подсказки суфлёра требуют вашей проверки.</translation>
     </message>

@@ -16,6 +16,12 @@ bool prompterAutoStart();
 void setPrompterAutoStart(bool enabled);
 QString prompterModel();
 void setPrompterModel(const QString &model);
+// Call-notes length limits in characters; defaults and ceilings mirror
+// pcm::prompter::SummaryLimits ("summary/leaf", "summary/overview").
+int summaryLeafLimit();
+void setSummaryLeafLimit(int limit);
+int summaryOverviewLimit();
+void setSummaryOverviewLimit(int limit);
 // "auto" (GPU, CPU fallback), "gpu" or "cpu"; applies at the next model load.
 // Cloud LLM (an OpenAI-compatible endpoint chosen by the user). Off by default.
 // The API key is not here: it lives in the system keychain (CloudKeyStore).

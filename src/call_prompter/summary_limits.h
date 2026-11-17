@@ -6,8 +6,10 @@
 
 namespace pcm::prompter {
 struct SummaryLimits {
-  int overview = 6000;
-  int leaf = 800;
+  static constexpr int kOverviewMax = 6000;
+  static constexpr int kLeafMax = 2400;
+  int overview = kOverviewMax;
+  int leaf = kLeafMax;
   int points = 20;
   int tasks = 12;
   int questions = 10;
@@ -17,8 +19,8 @@ struct SummaryLimits {
   }
   static SummaryLimits fromJson(const QJsonObject &obj) {
     SummaryLimits d;
-    d.overview = qBound(500, obj["overview"].toInt(d.overview), 6000);
-    d.leaf = qBound(100, obj["leaf"].toInt(d.leaf), 800);
+    d.overview = qBound(500, obj["overview"].toInt(d.overview), kOverviewMax);
+    d.leaf = qBound(100, obj["leaf"].toInt(d.leaf), kLeafMax);
     d.points = qBound(2, obj["points"].toInt(d.points), 50);
     d.tasks = qBound(2, obj["tasks"].toInt(d.tasks), 30);
     d.questions = qBound(2, obj["questions"].toInt(d.questions), 30);

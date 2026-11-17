@@ -147,6 +147,16 @@ QString prompterAcceleration() {
   return mode == "gpu" || mode == "cpu" ? mode : QStringLiteral("auto");
 }
 void setPrompterAcceleration(const QString &mode) { QSettings().setValue("prompter/acceleration", mode); }
+int summaryLeafLimit() {
+  // Keep the default in sync with pcm::prompter::SummaryLimits.
+  return QSettings().value("summary/leaf", 2400).toInt();
+}
+void setSummaryLeafLimit(const int limit) { QSettings().setValue("summary/leaf", limit); }
+int summaryOverviewLimit() {
+  // Keep the default in sync with pcm::prompter::SummaryLimits.
+  return QSettings().value("summary/overview", 6000).toInt();
+}
+void setSummaryOverviewLimit(const int limit) { QSettings().setValue("summary/overview", limit); }
 
 namespace {
 QString normalisedUrl(const QString &url) {
