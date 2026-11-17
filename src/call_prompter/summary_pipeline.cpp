@@ -30,6 +30,9 @@ constexpr qsizetype kTaskLength = 160;
 constexpr qsizetype kQuestionLength = 160;
 constexpr qsizetype kMaxPoints = 20, kMaxTasks = 12, kMaxQuestions = 10;
 constexpr qsizetype kLeafPoints = 3, kLeafTasks = 2, kLeafQuestions = 2;
+// Chunks stay near the SFT training distribution (whole dialogs of ~30 lines):
+// larger inputs degenerate into empty replies and drop whole parts of a call.
+constexpr qsizetype kSummaryChunkBytes = 10000;
 // Leaf payloads list two weeks of dates; the schema accepts two months.
 constexpr int kPromptCalendarDays = 14;
 constexpr int kSchemaCalendarDays = 60;
@@ -308,7 +311,8 @@ QJsonObject processSummary(const QJsonArray &utterances, const SummaryContext &c
   const QJsonObject reference{{"call_date", promptDays.first()}, {"calendar", QJsonArray::fromStringList(promptDays)},
                               {"agreements", agreements}};
   const auto referenceBytes = serialize(reference).size();
-  const auto leafBudget = std::min(kPayloadBytes, kContextInputBytes - leafPrompt.toUtf8().size()) - referenceBytes;
+  const auto leafBudget =
+      std::min(kSummaryChunkBytes, kContextInputBytes - leafPrompt.toUtf8().size()) - referenceBytes;
   if (leafBudget <= 0) throw PipelineError("notes generation budget exceeded");
   const auto inputs = chunks(utterances, leafBudget);
   if (!generate) throw PipelineError("notes generator missing");

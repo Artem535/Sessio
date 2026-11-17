@@ -13,6 +13,9 @@ All notable changes to this project will be documented in this file.
   meeting input readable.
 - Over-long model texts are trimmed at word boundaries instead of rejecting
   the whole transcript chunk, which could leave the final summary empty.
+- Meeting summaries split the transcript into smaller chunks close to the
+  local model's training size, so long calls keep their later parts instead
+  of dropping them when a big chunk fails.
 
 ## [0.2.47] - 2026-11-16
 

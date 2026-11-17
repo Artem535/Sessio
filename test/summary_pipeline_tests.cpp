@@ -54,9 +54,9 @@ QJsonObject task(const QString &text, const QJsonArray &ids, bool meeting = fals
 QJsonObject parsed(const QByteArray &bytes) { return QJsonDocument::fromJson(bytes).object(); }
 QJsonArray longCall(int count) {
   QJsonArray out;
-  // 6000 Cyrillic characters: each source fits, while a pair exceeds the
-  // 24000-byte payload fallback even with the larger model context.
-  for (int i = 0; i < count; ++i) out.append(source("u" + QString::number(i), QString(6000, QChar(u'ж'))));
+  // 4000 Cyrillic characters: each source fits the summary chunk budget,
+  // while a pair exceeds it, so every source becomes its own chunk.
+  for (int i = 0; i < count; ++i) out.append(source("u" + QString::number(i), QString(4000, QChar(u'ж'))));
   return out;
 }
 QString firstId(const QJsonObject &input) { return input["utterances"][0].toObject()["id"].toString(); }
@@ -410,8 +410,8 @@ TEST(SummaryPipeline, FailedLeafIsRetriedAsHalvesThenSkipped) {
     if (allIds(input).contains("u0")) return QStringLiteral("not json");
     return leafReply(input);
   };
-  QJsonArray call{source("u0", QString(5500, QChar(u'ж'))), source("u1", QString(5500, QChar(u'ж'))),
-                  source("u2", QString(2000, QChar(u'ж')))};
+  QJsonArray call{source("u0", QString(2200, QChar(u'ж'))), source("u1", QString(2200, QChar(u'ж'))),
+                  source("u2", QString(1500, QChar(u'ж')))};
   const auto out = processSummary(call, ctx(), model.generate());
   EXPECT_EQ(leafCalls, 4); // chunk 1, its two halves, chunk 2
   EXPECT_EQ(texts(out["key_points"].toArray()), (QStringList{"Пункт u1", "Пункт u2"}));
