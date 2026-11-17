@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
   key point, task and overview text under constrained decoding.
 - Opt-in prompter request logs no longer embed the JSON schema, keeping the
   meeting input readable.
+- Over-long model texts are trimmed at word boundaries instead of rejecting
+  the whole transcript chunk, which could leave the final summary empty.
 
 ## [0.2.47] - 2026-11-16
 

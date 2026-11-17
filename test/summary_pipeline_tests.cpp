@@ -1,4 +1,5 @@
 #include "summary_pipeline.h"
+#include "notes_common.h"
 
 #include <QJsonDocument>
 #include <QLoggingCategory>
@@ -351,7 +352,7 @@ TEST(SummaryPipeline, MeetingTaskKeepsDateFromCalendarOnly) {
   EXPECT_EQ(tasks[1], task(QStringLiteral("Созвон"), {"u1"}, true));
 }
 
-TEST(SummaryPipeline, LeafRepliesOverLimitsAreRejected) {
+TEST(SummaryPipeline, LeafRepliesWithInvalidItemsAreRejected) {
   const auto rejects = [](const std::function<void(QJsonObject &)> &spoil) {
     Model model;
     model.leaf = [&spoil](const QJsonObject &input) {
@@ -366,15 +367,38 @@ TEST(SummaryPipeline, LeafRepliesOverLimitsAreRejected) {
     }
     return false;
   };
-  EXPECT_TRUE(rejects([](QJsonObject &r) { r["note"] = item(QString(2401, QChar(u'я')), {"u1"}); }));
   EXPECT_TRUE(rejects([](QJsonObject &r) {
     QJsonArray many;
     for (int i = 0; i < 4; ++i) many.append(item(QStringLiteral("П%1").arg(i), {"u1"}));
     r["key_points"] = many;
   }));
-  EXPECT_TRUE(rejects([](QJsonObject &r) { r["key_points"] = QJsonArray{item(QString(121, QChar(u'я')), {"u1"})}; }));
   EXPECT_TRUE(rejects([](QJsonObject &r) { r["open_questions"] = QJsonArray{item(QStringLiteral("В"), {"foreign"})}; }));
   EXPECT_FALSE(rejects([](QJsonObject &) {}));
+}
+
+TEST(SummaryPipeline, OverLimitLeafTextsAreTrimmedNotRejected) {
+  const auto trimmed = notes::checkedItem(
+      QJsonObject{{"text", QStringLiteral("слово ").repeated(40)}, {"evidence_ids", QJsonArray{"u1"}}}, 120, false,
+      QSet<QString>{"u1"});
+  const auto text = trimmed["text"].toString();
+  EXPECT_LE(text.size(), 120);
+  EXPECT_TRUE(text.endsWith(QStringLiteral("слово")));
+  EXPECT_FALSE(text.endsWith(QLatin1Char(' ')));
+  const auto noSpaces = notes::checkedItem(
+      QJsonObject{{"text", QString(121, QChar(u'я'))}, {"evidence_ids", QJsonArray{"u1"}}}, 120, false,
+      QSet<QString>{"u1"});
+  EXPECT_EQ(noSpaces["text"].toString().size(), 120);
+
+  Model model;
+  model.leaf = [](const QJsonObject &input) {
+    auto reply = leafReply(input);
+    reply["note"] = item(QString(2401, QChar(u'я')), {"u1"});
+    reply["key_points"] = QJsonArray{item(QString(121, QChar(u'я')), {"u1"})};
+    return reply;
+  };
+  const auto out = processSummary({source("u1")}, ctx(), model.generate());
+  EXPECT_EQ(out["key_points"].toArray().first().toObject()["text"].toString().size(), 120);
+  EXPECT_FALSE(out["overview"].toObject()["text"].toString().isEmpty());
 }
 
 TEST(SummaryPipeline, FailedLeafIsRetriedAsHalvesThenSkipped) {

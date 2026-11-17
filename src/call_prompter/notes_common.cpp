@@ -70,10 +70,19 @@ QJsonObject checkedItem(const QJsonValue &value, qsizetype limit, bool allowEmpt
                         const QSet<QString> &allowed) {
   if (!value.isObject()) throw PipelineError("invalid notes item");
   auto item = value.toObject();
-  if (item.size() != 2 || !item["text"].isString() || !item["evidence_ids"].isArray() ||
-      item["text"].toString().size() > limit)
+  if (item.size() != 2 || !item["text"].isString() || !item["evidence_ids"].isArray())
     throw PipelineError("invalid notes item schema/length");
-  const QString text = item["text"].toString().trimmed();
+  // The constraint engine counts limits in bytes, so its schema budget is
+  // scaled and the model can overshoot the character limit; trim at a word
+  // boundary instead of rejecting the whole leaf and retrying it as halves.
+  QString text = item["text"].toString();
+  if (text.size() > limit) {
+    text.truncate(limit);
+    const auto space = text.lastIndexOf(QLatin1Char(' '));
+    if (space > limit / 2) text.truncate(space);
+    if (!text.isEmpty() && text.back().isHighSurrogate()) text.chop(1);
+  }
+  text = text.trimmed();
   const auto ids = item["evidence_ids"].toArray();
   if (text.isEmpty()) {
     if (!allowEmpty || !ids.isEmpty()) throw PipelineError("invalid empty notes item");

@@ -135,7 +135,10 @@ TEST(LivePointsPipeline, AtMostThreePointsPerChunkAndEightyChars) {
   QJsonArray four;
   for (int i = 0; i < 4; ++i) four.append(point(QStringLiteral("Факт %1").arg(i), {"u1"}));
   EXPECT_THROW(run(four), PipelineError);
-  EXPECT_THROW(run({point(QString(81, QChar(u'я')), {"u1"})}), PipelineError);
+  // Over-limit points are trimmed at the character budget, not rejected.
+  const auto trimmed = run({point(QString(81, QChar(u'я')), {"u1"})})["key_points"].toArray();
+  ASSERT_EQ(trimmed.size(), 1);
+  EXPECT_EQ(trimmed.first().toObject()["text"].toString().size(), 80);
   EXPECT_EQ(run({point(QString(80, QChar(u'я')), {"u1"})})["key_points"].toArray().size(), 1);
 }
 
