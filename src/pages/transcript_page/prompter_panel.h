@@ -49,6 +49,7 @@ private:
   QPushButton *mStart;
   QPushButton *mPause;
   QVBoxLayout *mCards;
+  QWidget *mRagBox = nullptr;
   QHash<QString, QWidget *> mCardWidgets;
   QString mDismissedHint;
   std::function<bool(const QString &, const QString &)> mCallNoteSaver;

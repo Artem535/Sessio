@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Суфлёр v2 — две полосы (проект)",
+    "subtitle": "один multi-task LLM-запрос на батч + детерминированный retrieval без LLM · предложение к обсуждению",
+    "output": "suffler-v2.html",
+    "viewBox": [1240, 900]
+  },
+  "components": [
+    { "id": "asr", "type": "frontend", "label": "ASR-транскрипт", "sublabel": "реплики звонка", "pos": [40, 80], "size": [130, 60] },
+    { "id": "batch", "type": "backend", "label": "Батч-контроллер", "sublabel": "≤6 фраз · 1.5 с", "pos": [230, 80], "size": [150, 60] },
+    { "id": "ctx", "type": "database", "label": "Контекст запроса", "sublabel": "календарь · records · known_points", "pos": [450, 90], "size": [200, 56] },
+    { "id": "strip", "type": "frontend", "label": "Участники", "sublabel": "полоска сверху", "pos": [980, 80], "size": [160, 60] },
+    { "id": "llm", "type": "backend", "label": "Один multi-task запрос", "sublabel": "events+points+deadline+context_requests", "pos": [430, 220], "size": [240, 64], "tag": "local LiteRT / cloud · обезличено" },
+    { "id": "parse", "type": "backend", "label": "Парсинг + валидация", "sublabel": "schema · evidence · даты", "pos": [730, 220], "size": [160, 64], "tag": "распределение по панелям" },
+    { "id": "ner", "type": "backend", "label": "NER-коррекция", "sublabel": "correctUtterance · fuzzy", "pos": [230, 440], "size": [150, 64], "tag": "без LLM · миллисекунды" },
+    { "id": "embed", "type": "backend", "label": "Embedder · batch", "sublabel": "gemma-2-270m int8", "pos": [430, 440], "size": [150, 64] },
+    { "id": "search", "type": "backend", "label": "Резолвер + FAQ/RRF", "sublabel": "описания → паспорта · FAQ/RRF", "pos": [630, 440], "size": [200, 64], "tag": "cutoff · primary-буст" },
+    { "id": "cards", "type": "frontend", "label": "Договорённости", "sublabel": "карточки · тезисы · срок", "pos": [980, 220], "size": [160, 64] },
+    { "id": "panel", "type": "frontend", "label": "Панель контекста", "sublabel": "компактные ссылки", "pos": [980, 440], "size": [160, 64], "tag": "проекты · FAQ" },
+    { "id": "detail", "type": "frontend", "label": "Вложенная панель", "sublabel": "полный ответ по клику", "pos": [980, 560], "size": [160, 64] },
+    { "id": "outline", "type": "external", "label": "Outline wiki", "sublabel": "read-only · allowlist", "pos": [230, 720], "size": [130, 60] },
+    { "id": "chunker", "type": "backend", "label": "Чанкер + embed", "sublabel": "GPU-индексация · Buran", "pos": [430, 720], "size": [160, 60] },
+    { "id": "index", "type": "database", "label": "LadybugDB v2", "sublabel": "Doc/Chunk/Entity/Faq/Passport", "pos": [650, 720], "size": [180, 60], "tag": "doc_type · primary · векторы" },
+    { "id": "gen", "type": "cloud", "label": "Генерация lfm3", "sublabel": "паспорта · NER · FAQ · GPU", "pos": [890, 720], "size": [160, 60], "tag": "vLLM :11438 · Buran" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "ПОЛОСА A · LLM · PrompterWorker QThread · 1 вызов на батч", "wraps": ["llm", "parse"] },
+    { "kind": "region", "label": "ПОЛОСА B · retrieval без LLM · RagWorker QThread · стартует сразу", "wraps": ["ner", "embed", "search"] },
+    { "kind": "region", "label": "UI · референс", "wraps": ["strip", "cards", "panel", "detail"] },
+    { "kind": "region", "label": "BACKGROUND · индексация и обогащение", "wraps": ["outline", "chunker", "index", "gen"] }
+  ],
+  "connections": [
+    { "from": "asr", "to": "batch", "variant": "emphasis" },
+    { "from": "batch", "to": "llm", "variant": "emphasis", "fromSide": "right", "toSide": "left", "route": "orthogonal-h" },
+    { "from": "ctx", "to": "llm", "fromSide": "bottom", "toSide": "top", "route": "straight" },
+    { "from": "batch", "to": "ner", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "route": "straight", "label": "параллельно, без LLM", "labelAt": [305, 375] },
+    { "from": "llm", "to": "parse", "variant": "emphasis" },
+    { "from": "parse", "to": "cards", "variant": "emphasis" },
+    { "from": "parse", "to": "search", "label": "context_requests", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v", "labelAt": [765, 352] },
+    { "from": "ner", "to": "embed", "variant": "emphasis" },
+    { "from": "embed", "to": "search", "variant": "emphasis" },
+    { "from": "search", "to": "panel", "variant": "emphasis", "label": "ссылки" },
+    { "from": "panel", "to": "detail", "label": "клик", "fromSide": "bottom", "toSide": "top", "route": "straight", "labelAt": [1060, 532] },
+    { "from": "cards", "to": "panel", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "route": "straight" },
+    { "from": "outline", "to": "chunker", "variant": "dashed" },
+    { "from": "chunker", "to": "index", "variant": "dashed" },
+    { "from": "gen", "to": "index", "variant": "dashed", "label": "Entity/Faq" },
+    { "from": "index", "to": "search", "label": "FTS + HNSW", "fromSide": "top", "toSide": "bottom", "route": "orthogonal-v" },
+    { "from": "index", "to": "ner", "label": "словарь", "variant": "dashed", "fromSide": "bottom", "toSide": "left", "via": [[735, 810], [180, 810], [180, 472]], "labelAt": [135, 640] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Один запрос вместо 3–5", "items": ["Контракт: events (с target_id) + key_points + missing_deadline + context_requests [{kind: project|question, text, category, evidence_ids}]", "Вход модели: окно реплик + календарь/date_hints + records (для match) + known_points; match встроен, точное совпадение текста — fast-path в C++", "context_requests заменяет per-phrase rewrite: модель выделяет описания проектов и вопросы даже из утверждений без «?» («надо уточнять»)", "Один проход модели по окну реплик вместо extract + match×N + deadline + live_points + rewrite×M"] },
+    { "dot": "emerald", "title": "Полоса B — детерминированная", "items": ["Имена: NER correctUtterance (кодпоинт-Левенштейн) → канон. имя → primary-документы сущности → страницы проектов сразу", "Описания без имён: «производитель удобрений» → cosine по векторам ключей паспортов (отрасль+тип+что делали); порог 0.25, top-2 при delta ≤0.05 (гейт 19.11)", "Вопросы: FAQ fast-path при cosine-дистанции ≤0.35, иначе multi-variant RRF k=60 с primary-бустом, категорией и cutoff 0.02", "Батч-эмбеддинг всех вариантов одним вызовом embed(); оригинал реплики остаётся вариантом поиска"] },
+    { "dot": "violet", "title": "UI по референсу клиента", "items": ["Панель контекста: компактные ссылки на страницы проектов и FAQ-вопросы, новые сверху, старые уезжают вниз", "Клик → вложенный сайдбар (ступенька влево) или модальное окно с полным ответом без пролистывания", "Сразу видно все тейки модели: что заметила и на что сформировала ответ", "Участники — полоской сверху/сбоку; основное окно отдано подсказкам и расшифровке", "Кейс клиента: реплика без имён и без «?» → 3 страницы проектов (резолвер описаний) + 2 вопроса (сквозной FAQ)"] },
+    { "dot": "slate", "title": "BACKGROUND v2 · обогащение", "items": ["Коллекция паспортов проектов: одна запись на проект — имя/алиасы, отрасль, что делали, он-прем/облако, модели; пропуски помечаются, не выдумываются", "Один GPU-проход lfm3 (vLLM :11438): паспорта + роли сущностей primary/mention + doc_type + сквозные FAQ по наборам статей", "Индекс v2: Passport-таблица (109 проектов с отраслью) с вектором ключа для резолвера; замена при закрытом приложении (exclusive lock)", "Словарь Entity → correctUtterance полосы B; Faq-таблица → fast-path ответа; ссылка паспорта → primary-страница проекта"] },
+    { "dot": "amber", "title": "Порядок внедрения и риски", "items": ["Cloud-first: объединённый контракт проверяем на облачной модели против текущих раздельных промптов на одних записях", "Локальная v11 обучена per-task → регенерация multi-task датасета + retrain ДО мержа (урок v12)", "Фиксированный DAG, не агентская система: два QThread уже параллельны, отмена по generation", "Сложная вложенная схема на 1.7B + constrained decoding — риск просадки качества, меряем на P1-прогоне"] }
+  ]
+}

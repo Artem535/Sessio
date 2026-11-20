@@ -3,8 +3,22 @@
 #include "failure_text.h"
 #include "call_prompter_controller.h"
 #include <QCoreApplication>
+#include <QDebug>
+#include <QDir>
+#include <QFileInfo>
+#include <QDateTime>
 #include <QJsonDocument>
+#include <algorithm>
+#include <vector>
 #include <QUuid>
+#ifdef SESSIO_RAG_ENABLED
+#include "rag_worker.h"
+#include "index_store.h"
+#include "sessio_litert.h"
+#include "cloud_engine.h"
+#include "pseudonymizer.h"
+#include <QStandardPaths>
+#endif
 
 namespace {
 bool validIds(const QJsonValue &value, const QSet<QString> &allowed) {
@@ -73,6 +87,7 @@ void CallPrompterController::beginTranscript(qint64 transcriptId) {
     for (const auto &p : mDb->get_transcript_phrases(transcriptId)) addPhrase(p);
     setStatus(tr("Prompter is paused"));
   } catch (...) { mTranscriptId = 0; setStatus(tr("Could not open prompter data")); }
+  startRag();
   emit cardsChanged();
 }
 void CallPrompterController::addPhrase(const DuckTranscriptPhrase &p) {
@@ -80,6 +95,16 @@ void CallPrompterController::addPhrase(const DuckTranscriptPhrase &p) {
   QJsonObject source{{"id", QString::number(p.id)}, {"speaker", speakerOf(p)},
       {"text", QString::fromStdString(p.text)}, {"start_ms", static_cast<qint64>(p.start_ms)}, {"end_ms", static_cast<qint64>(p.end_ms)}};
   mSources.insert(QString::number(p.id), source);
+#ifdef SESSIO_RAG_ENABLED
+  // Every phrase feeds the router: solo/mic-test calls label all speech as
+  // practitioner, and the specialist's own questions are worth searching too.
+  if (mRagWorker) {
+    const auto text = QString::fromStdString(p.text);
+    qWarning() << "RAG: phrase gen" << (mRagGeneration + 1) << "chars" << text.size();
+    mRagWorker->search(static_cast<int>(++mRagGeneration), text, mRagContext);
+    mRagContext = text;
+  }
+#endif
   if (p.id > mLastProcessed) mPending.append(source);
   else { mLookback.append(source); while (mLookback.size() > 2) mLookback.removeFirst(); }
   if (mRunning && !mInFlight) mBatchTimer.start();
@@ -145,7 +170,234 @@ void CallPrompterController::pause() {
   mInFlight = false; mInFlightPhrases = {}; mRequest = {};
   setStatus(tr("Prompter is paused"));
 }
-void CallPrompterController::endCall() { pause(); mPending = {}; }
+void CallPrompterController::endCall() { pause(); stopRag(); mPending = {}; }
+
+void CallPrompterController::startRag() {
+#ifdef SESSIO_RAG_ENABLED
+  if (!pcm::app_settings::ragEnabled() || mRagWorker) return;
+  namespace rag = sessio::rag;
+  rag::RagDeps deps;
+  deps.makeEmbedder = [] {
+    auto model = pcm::app_settings::ragEmbedModel();
+    if (model.isEmpty() || !QFileInfo::exists(model)) {
+      // Out-of-the-box discovery: bundled next to the binary, then the dev
+      // cache location, so enabling the checkbox is enough.
+      const QStringList candidates = {
+          QCoreApplication::applicationDirPath() + QStringLiteral("/models/embeddinggemma-2-text-270m.litertlm"),
+          QDir::homePath() + QStringLiteral("/.cache/sessio-rag/models/embeddinggemma-2-text-270m.litertlm")};
+      for (const auto &candidate : candidates)
+        if (QFileInfo::exists(candidate)) { model = candidate; break; }
+    }
+    if (model.isEmpty()) return std::unique_ptr<sessio::litert::Embedder>();
+    sessio::litert::EmbedderOptions options;
+    options.threads = 4;
+    options.cacheDir = (QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                        + QStringLiteral("/rag/cache")).toStdString();
+    return sessio::litert::loadEmbedder(model.toStdString(), options, nullptr);
+  };
+  deps.makeIndex = [] {
+    const auto dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/rag");
+    QDir().mkpath(dir);
+    return std::make_unique<rag::IndexStore>((dir + QStringLiteral("/index.lbug")).toStdString(),
+                                             SESSIO_RAG_EXTENSION_DIR, nullptr);
+  };
+  deps.outline.baseUrl = QUrl(pcm::app_settings::ragOutlineUrl());
+  deps.outline.apiToken = pcm::app_settings::ragOutlineToken();
+  deps.outline.collectionAllowlist = pcm::app_settings::ragAllowlist();
+  deps.searchAllPhrases = pcm::app_settings::ragSearchAllPhrases();
+  deps.useTrainedRouter = pcm::app_settings::ragUseTrainedRouter();
+  const auto rewriteMode = pcm::app_settings::ragRewriteMode();
+  if (rewriteMode != "rules") {
+    // Subjects snapshot on the GUI thread; the rewrite itself runs on the
+    // worker thread. Cloud payloads are pseudonymized and restored locally.
+    const auto subjects = pcm::transcriptionui::cloudSubjects(*mDb, {mTranscriptId}, mEventId);
+    const bool pseudonymize = pcm::app_settings::cloudPseudonymize();
+    deps.rewrite = [rewriteMode, subjects, pseudonymize](const std::string &utterance,
+                                                         const std::string &context)
+        -> sessio::rag::RewriteResult {
+      static const QString kSystem = QStringLiteral(
+          "You repair Russian sales-call utterances corrupted by speech recognition and rewrite them as "
+          "standalone search queries for a company wiki. Use the dialogue context to fix misheard words and "
+          "resolve references. Preserve company, product and person names exactly as given in the context. "
+          "Also classify the question category: cases, status, navigation, pricing, integration or other. "
+          "Also fill \"projects\": a list of short Russian noun phrases, copied verbatim from the utterance, "
+          "describing each mentioned project by what the client does (industry and client type, like "
+          "\"производитель удобрений\" or \"строительный ретейл\"). Whenever the speaker mentions any project, "
+          "client or past experience, this list MUST NOT be empty: one phrase per mentioned project, even "
+          "when no project name is said and the utterance is a statement, not a question. "
+          "First fill \"reasoning\": 1-3 sentences in Russian naming which client businesses or projects "
+          "the utterance mentions and how you know; then the answer. "
+          "Answer with JSON {\"reasoning\": \"...\", \"query\": \"...\", \"category\": \"...\", "
+          "\"projects\": [\"...\"]} in Russian. "
+          "If the utterance is not a question or request, return it unchanged.");
+      // Chain-of-thought lives in the reply, not in native thinking: VSellm
+      // thinking tokens consume max_tokens and can leave the content empty.
+      static const QByteArray kSchema = QByteArrayLiteral(
+          "{\"type\":\"object\",\"properties\":{\"reasoning\":{\"type\":\"string\"},"
+          "\"query\":{\"type\":\"string\"},"
+          "\"category\":{\"type\":\"string\",\"enum\":[\"cases\",\"status\",\"navigation\",\"pricing\","
+          "\"integration\",\"other\"]},\"projects\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},"
+          "\"required\":[\"reasoning\",\"query\",\"category\",\"projects\"]}");
+      // The local SFT model was not trained on reasoning/projects fields.
+      static const QByteArray kSchemaLocal = QByteArrayLiteral(
+          "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\"},"
+          "\"category\":{\"type\":\"string\",\"enum\":[\"cases\",\"status\",\"navigation\",\"pricing\","
+          "\"integration\",\"other\"]},\"projects\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},"
+          "\"required\":[\"query\",\"category\",\"projects\"]}");
+      const auto utt = QString::fromStdString(utterance);
+      const auto ctx = QString::fromStdString(context);
+      std::unique_ptr<pcm::prompter::Pseudonymizer> pseud;
+      if (rewriteMode == "cloud" && pseudonymize) {
+        pcm::prompter::PseudonymSubjects s;
+        const auto list = [&subjects](const char *key) {
+          QStringList out;
+          for (const auto &v : subjects[key].toArray()) out << v.toString();
+          return out;
+        };
+        s.clientNames = list("client");
+        s.specialistNames = list("specialist");
+        s.phones = list("phones");
+        s.emails = list("emails");
+        pseud = std::make_unique<pcm::prompter::Pseudonymizer>(s);
+      }
+      const auto clean = [&pseud](const QString &t) { return pseud ? pseud->apply(t) : t; };
+      QString reply;
+      if (rewriteMode == "cloud") {
+        pcm::prompter::CloudConfig config;
+        config.baseUrl = pcm::app_settings::cloudBaseUrl();
+        config.model = pcm::app_settings::cloudModel();
+        config.apiKey = pcm::app_settings::cloudApiKeyCached();
+        config.maxOutputTokens = 1024;
+        config.thinkingDisabled = true;
+        auto engine = pcm::prompter::createCloudEngine(config);
+        if (!engine) return {};
+        const QJsonObject payload{{"context", clean(ctx)}, {"utterance", clean(utt)}};
+        try {
+          const auto value =
+              engine->generate(kSystem, QJsonDocument(payload).toJson(QJsonDocument::Compact), kSchema);
+          reply = QJsonDocument(value.toObject()).toJson(QJsonDocument::Compact);
+        } catch (...) { return {}; }
+        if (pseud) reply = pseud->restoreText(reply);
+      } else {
+        // One model per worker thread, loaded lazily on first rewrite.
+        static thread_local std::unique_ptr<sessio::litert::Model> model;
+        if (!model) {
+          const auto path = pcm::app_settings::prompterModel();
+          if (path.isEmpty()) return {};
+          sessio::litert::ModelOptions options;
+          options.threads = 4;
+          options.backend = sessio::litert::Backend::CPU;
+          options.cacheDir = (QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                              + QStringLiteral("/rag/rewrite-cache")).toStdString();
+          model = sessio::litert::loadModel(path.toStdString(), options, nullptr);
+          if (!model) return {};
+        }
+        sessio::litert::GenerateOptions options;
+        options.maxOutputTokens = 192;
+        options.applyPromptTemplate = true;
+        options.reusePrefix = false;
+        options.jsonSchema = kSchemaLocal.toStdString();
+        const auto user = QStringLiteral("Dialogue context (recent phrases):\n%1\nUtterance:\n%2")
+                              .arg(ctx.isEmpty() ? QStringLiteral("(none)") : ctx, utt);
+        std::string out;
+        if (model->generate(kSystem.toStdString(), user.toStdString(), options, &out)
+            != sessio::litert::Status::Ok)
+          return {};
+        reply = QString::fromStdString(out);
+      }
+      const auto doc = QJsonDocument::fromJson(reply.toUtf8());
+      const auto object = doc.object();
+      sessio::rag::RewriteResult result;
+      result.query = object.value("query").toString().toStdString();
+      if (result.query.size() > 240) result.query = result.query.substr(0, 240);
+      result.category = object.value("category").toString().toStdString();
+      const auto projects = object.value("projects").toArray();
+      qWarning() << "RAG: rewrite reply chars" << reply.size() << "projectsRaw" << projects.size();
+      for (const auto &value : projects) {
+        QString phrase;
+        if (value.isString()) phrase = value.toString();
+        else if (value.isObject()) {
+          const auto o = value.toObject();
+          for (const auto &v : o)
+            if (v.isString() && !v.toString().isEmpty()) {
+              phrase = v.toString();
+              break;
+            }
+        }
+        if (!phrase.isEmpty()) result.projects.push_back(phrase.toStdString());
+      }
+      return result;
+    };
+  }
+  auto *worker = new rag::RagWorker(this);
+  connect(worker, &rag::RagWorker::failed, this,
+          [](const QString &reason) { qWarning() << "RAG worker:" << reason; });
+  connect(worker, &rag::RagWorker::resultReady, this,
+          [this](int generation, const QVector<rag::RagCard> &cards) {
+    qWarning() << "RAG: cards" << cards.size() << "gen" << generation << "current" << mRagGeneration;
+    if (generation != mRagGeneration) return;
+    const auto keyOf = [](const QJsonObject &card) {
+      const auto url = card.value("url").toString();
+      return url.isEmpty() ? card.value("title").toString() : url;
+    };
+    const auto contains = [&](const QJsonArray &array, const QString &key) {
+      return std::any_of(array.begin(), array.end(),
+                         [&](const QJsonValue &value) { return keyOf(value.toObject()) == key; });
+    };
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    QJsonArray array;
+    for (const auto &card : cards) {
+      const auto key = card.url.isEmpty() ? card.title : card.url;
+      if (contains(array, key)) continue;
+      array.append(QJsonObject{{"title", card.title}, {"url", card.url},
+                               {"snippet", card.snippet}, {"score", card.score},
+                               {"fullText", card.fullText}, {"kind", card.kind}, {"ts", now}});
+    }
+    // Newest context on top; older cards stay below instead of vanishing.
+    for (const auto &old : mRagCards) {
+      if (array.size() >= 12) break;
+      if (!contains(array, keyOf(old.toObject()))) array.append(old);
+    }
+    // Strict newest-first: a freshly added hint always becomes the top card.
+    std::vector<QJsonObject> merged;
+    merged.reserve(array.size());
+    for (const auto &value : array) merged.push_back(value.toObject());
+    std::stable_sort(merged.begin(), merged.end(), [](const QJsonObject &a, const QJsonObject &b) {
+      return a.value("ts").toInteger() > b.value("ts").toInteger();
+    });
+    QJsonArray sorted;
+    for (const auto &card : merged) sorted.append(card);
+    mRagCards = sorted;
+    emit ragCardsChanged();
+  });
+  mRagGeneration = 0;
+  mRagContext.clear();
+  mRagCards = QJsonArray{};
+  emit ragCardsChanged();
+  if (worker->start(deps)) {
+    mRagWorker = worker;
+    qWarning() << "RAG: worker started";
+  } else {
+    worker->deleteLater();
+    qWarning() << "RAG: worker start refused";
+  }
+#endif
+}
+
+void CallPrompterController::stopRag() {
+#ifdef SESSIO_RAG_ENABLED
+  if (mRagWorker) {
+    mRagWorker->stop();
+    mRagWorker->deleteLater();
+    mRagWorker = nullptr;
+  }
+  mRagContext.clear();
+  if (!mRagCards.isEmpty()) {
+    mRagCards = {};
+    emit ragCardsChanged();
+  }
+#endif
+}
 bool CallPrompterController::refreshFromStorage() {
   if (!mTranscriptId) return false;
   try {
@@ -390,6 +642,11 @@ bool CallPrompterController::rejectCard(const QString &id) {
   const auto old = state(); card["decision"] = "rejected"; mCards[index] = card;
   if (!persist()) { restore(old); emit cardsChanged(); return false; }
   emit cardsChanged(); return true;
+}
+void CallPrompterController::removeRagCard(int index) {
+  if (index < 0 || index >= mRagCards.size()) return;
+  mRagCards.removeAt(index);
+  emit ragCardsChanged();
 }
 std::vector<int64_t> CallPrompterController::clientIds() const {
   return mTranscriptId ? mDb->get_transcript_client_ids(mTranscriptId) : std::vector<int64_t>{};

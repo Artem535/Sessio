@@ -1349,3 +1349,69 @@ target_link_libraries(Sessio_web_call_provider_tests PRIVATE
 gtest_discover_tests(Sessio_web_call_provider_tests
     PROPERTIES LABELS webengine TIMEOUT 120
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# RAG structural Markdown chunker
+add_executable(Sessio_rag_chunker_tests rag_chunker_tests.cpp)
+target_link_libraries(Sessio_rag_chunker_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_rag)
+gtest_discover_tests(Sessio_rag_chunker_tests)
+
+# RAG rules router
+add_executable(Sessio_rag_router_tests rag_router_tests.cpp)
+target_link_libraries(Sessio_rag_router_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_rag)
+target_compile_definitions(Sessio_rag_router_tests PRIVATE SESSIO_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+gtest_discover_tests(Sessio_rag_router_tests)
+
+# RAG query rewrite v1
+add_executable(Sessio_rag_rewrite_tests rag_rewrite_tests.cpp)
+target_link_libraries(Sessio_rag_rewrite_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_rag)
+gtest_discover_tests(Sessio_rag_rewrite_tests)
+
+# RAG router v2 head
+add_executable(Sessio_rag_router_head_tests rag_router_head_tests.cpp)
+target_link_libraries(Sessio_rag_router_head_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_rag)
+gtest_discover_tests(Sessio_rag_router_head_tests)
+
+# RAG entity fuzzy matching
+add_executable(Sessio_rag_entities_tests rag_entities_tests.cpp)
+target_link_libraries(Sessio_rag_entities_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_rag)
+gtest_discover_tests(Sessio_rag_entities_tests)
+
+# RAG Outline connector (mock HTTP server)
+find_package(Qt6 REQUIRED COMPONENTS Test)
+add_executable(Sessio_rag_outline_tests rag_outline_connector_tests.cpp)
+target_link_libraries(Sessio_rag_outline_tests PRIVATE
+    GTest::gtest GTest::gtest_main Sessio_rag_outline Qt6::Test)
+gtest_discover_tests(Sessio_rag_outline_tests)
+
+# RAG LadybugDB index store (skipped when SESSIO_LADYBUG_DIR is not configured)
+if(SESSIO_LADYBUG_FOUND)
+  add_executable(Sessio_rag_index_tests rag_index_store_tests.cpp)
+  target_link_libraries(Sessio_rag_index_tests PRIVATE
+      GTest::gtest GTest::gtest_main Sessio_rag_index)
+  target_compile_definitions(Sessio_rag_index_tests PRIVATE
+      SESSIO_LADYBUG_EXTENSION_DIR="${SESSIO_LADYBUG_DIR}/extension")
+  gtest_discover_tests(Sessio_rag_index_tests)
+
+  add_executable(Sessio_rag_search_tests rag_search_tests.cpp)
+  target_link_libraries(Sessio_rag_search_tests PRIVATE
+      GTest::gtest GTest::gtest_main Sessio_rag_index)
+  target_compile_definitions(Sessio_rag_search_tests PRIVATE
+      SESSIO_LADYBUG_EXTENSION_DIR="${SESSIO_LADYBUG_DIR}/extension")
+  gtest_discover_tests(Sessio_rag_search_tests)
+
+  # The fake embedder subclasses sessio::litert::Embedder, whose vtable lives
+  # in the runtime library; the worker itself stays runtime-free via factories.
+  if(SESSIO_LITERTLM_FOUND)
+    add_executable(Sessio_rag_worker_tests rag_worker_tests.cpp)
+    target_link_libraries(Sessio_rag_worker_tests PRIVATE
+        GTest::gtest GTest::gtest_main Sessio_rag_worker sessio::litert_lm Qt6::Test)
+    target_compile_definitions(Sessio_rag_worker_tests PRIVATE
+        SESSIO_LADYBUG_EXTENSION_DIR="${SESSIO_LADYBUG_DIR}/extension")
+    gtest_discover_tests(Sessio_rag_worker_tests)
+  endif()
+endif()

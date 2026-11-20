@@ -21,6 +21,17 @@ Rectangle {
                                          || (info.openQuestions || []).length > 0
                                          || ["error", "running", "queued", "stale", "cancelled", "interrupted", "unavailable"].includes(info.summaryState))
     readonly property var phrasesModel: workspaceBridge ? workspaceBridge.phrases : []
+    property double ragNow: Date.now()
+    Timer { interval: 10000; running: true; repeat: true; onTriggered: root.ragNow = Date.now() }
+    function ragAge(ts) {
+        if (!ts) return ""
+        const s = Math.max(0, Math.round((ragNow - ts) / 1000))
+        if (s < 5) return qsTr("just now")
+        if (s < 60) return qsTr("%1 s").arg(s)
+        const m = Math.round(s / 60)
+        if (m < 60) return qsTr("%1 min").arg(m)
+        return qsTr("%1 h").arg(Math.round(m / 60))
+    }
     SystemPalette { id: theme; colorGroup: SystemPalette.Active }
     readonly property color paper: theme.base
     readonly property color ink: theme.text
@@ -73,6 +84,7 @@ Rectangle {
         wrapMode: Text.Wrap
         lineHeight: 1.5
         textFormat: Text.PlainText
+        verticalAlignment: Text.AlignVCenter
     }
     component AgreementRow: GridLayout {
         required property var modelData
@@ -405,6 +417,118 @@ Rectangle {
                                             }
                                             Copy { text: root.info.prompterHint || ""; font.pixelSize: 14; Layout.fillWidth: true }
                                         }
+                                    }
+                                    ColumnLayout {
+                                        id: ragContextSection
+                                        objectName: "qmlRagContextList"
+                                        Layout.fillWidth: true
+                                        spacing: 8
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            Copy { text: qsTr("Wiki hints · context"); font.pixelSize: 13; font.weight: Font.DemiBold; color: root.accent; Layout.fillWidth: true }
+                                            Rectangle {
+                                                radius: 10; color: root.paper; border.color: root.line
+                                                implicitHeight: 22; implicitWidth: ragCount.implicitWidth + 16
+                                                Copy { id: ragCount; anchors.centerIn: parent; text: String((root.info.ragCards || []).length); font.pixelSize: 11; color: root.muted }
+                                            }
+                                        }
+                                        Repeater {
+                                            model: root.info.ragCards || []
+                                            delegate: Rectangle {
+                                                id: ragRow
+                                                required property var modelData
+                                                required property int index
+                                                objectName: "qmlRagContextRow" + index
+                                                property bool open: false
+                                                Layout.fillWidth: true
+                                                radius: 8
+                                                color: root.paper
+                                                border.color: root.line
+                                                implicitHeight: ragRowColumn.implicitHeight
+                                                ColumnLayout {
+                                                    id: ragRowColumn
+                                                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                                                    spacing: 0
+                                                    Item {
+                                                        Layout.fillWidth: true
+                                                        implicitHeight: ragHead.implicitHeight + 20
+                                                        MouseArea {
+                                                            anchors.fill: parent
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: ragRow.open = !ragRow.open
+                                                        }
+                                                        RowLayout {
+                                                            id: ragHead
+                                                            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                                                            anchors.margins: 10
+                                                            spacing: 10
+                                                            Rectangle {
+                                                                Layout.alignment: Qt.AlignVCenter
+                                                                radius: 5; border.color: root.line; color: root.soft
+                                                                implicitHeight: 20; implicitWidth: ragTag.implicitWidth + 12
+                                                                Copy {
+                                                                    id: ragTag
+                                                                    anchors.centerIn: parent
+                                                                    font.pixelSize: 10; font.weight: Font.DemiBold
+                                                                    color: ragRow.modelData.kind === "wiki" ? root.muted : root.accent
+                                                                    text: ragRow.modelData.kind === "project" ? qsTr("Project")
+                                                                        : ragRow.modelData.kind === "faq" ? qsTr("Question") : qsTr("Wiki")
+                                                                }
+                                                            }
+                                                            ColumnLayout {
+                                                                Layout.fillWidth: true
+                                                                Layout.alignment: Qt.AlignVCenter
+                                                                spacing: 2
+                                                                Copy { text: ragRow.modelData.title || ""; font.pixelSize: 13; font.weight: Font.DemiBold; Layout.fillWidth: true; maximumLineCount: 2; elide: Text.ElideRight; wrapMode: Text.Wrap }
+                                                                Copy { visible: !ragRow.open && (ragRow.modelData.snippet || "").length > 0; text: ragRow.modelData.snippet || ""; font.pixelSize: 12; color: root.muted; Layout.fillWidth: true; maximumLineCount: 2; elide: Text.ElideRight; wrapMode: Text.Wrap }
+                                                            }
+                                                            Copy { Layout.alignment: Qt.AlignVCenter; text: root.ragAge(ragRow.modelData.ts); font.pixelSize: 10; color: root.muted }
+                                                            Action {
+                                                                Layout.alignment: Qt.AlignVCenter
+                                                                objectName: "qmlRagRemove" + ragRow.index
+                                                                text: "×"
+                                                                quiet: true
+                                                                font.pixelSize: 12
+                                                                padding: 4
+                                                                horizontalPadding: 6
+                                                                implicitHeight: 24
+                                                                ToolTip.visible: hovered
+                                                                ToolTip.text: qsTr("Remove")
+                                                                onClicked: if (workspaceBridge) workspaceBridge.removeRagCard(ragRow.index)
+                                                            }
+                                                            Copy { Layout.alignment: Qt.AlignVCenter; text: ragRow.open ? "▴" : "▾"; color: root.muted; font.pixelSize: 12 }
+                                                        }
+                                                    }
+                                                    ColumnLayout {
+                                                        visible: ragRow.open
+                                                        Layout.fillWidth: true
+                                                        spacing: 8
+                                                        Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: root.line }
+                                                        Text {
+                                                            objectName: "qmlRagFull" + ragRow.index
+                                                            text: ragRow.modelData.fullText || ragRow.modelData.snippet || ""
+                                                            textFormat: Text.MarkdownText
+                                                            color: root.ink
+                                                            font.pixelSize: 14
+                                                            wrapMode: Text.Wrap
+                                                            lineHeight: 1.4
+                                                            Layout.fillWidth: true
+                                                            Layout.leftMargin: 12; Layout.rightMargin: 12
+                                                            onLinkActivated: function(link) {
+                                                                Qt.openUrlExternally(link.startsWith("/") ? (root.info.prompterRagBase || "") + link : link)
+                                                            }
+                                                        }
+                                                        RowLayout {
+                                                            Layout.fillWidth: true
+                                                            Layout.leftMargin: 12; Layout.rightMargin: 12; Layout.bottomMargin: 10
+                                                            Action { text: qsTr("Open page"); quiet: true; onClicked: Qt.openUrlExternally(ragRow.modelData.url || "") }
+                                                            Copy { text: qsTr("Source: wiki page"); font.pixelSize: 11; color: root.muted; Layout.fillWidth: true }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Copy { visible: (root.info.ragCards || []).length === 0; text: qsTr("No context yet"); font.pixelSize: 12; color: root.muted; Layout.fillWidth: true }
                                     }
                                     Repeater {
                                         model: root.info.prompterCards || []

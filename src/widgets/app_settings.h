@@ -16,6 +16,30 @@ bool prompterAutoStart();
 void setPrompterAutoStart(bool enabled);
 QString prompterModel();
 void setPrompterModel(const QString &model);
+// RAG wiki hints (rag-core): off by default; needs an embedding model path
+// and a read-only Outline token. Allowlist holds Outline collection ids.
+bool ragEnabled();
+void setRagEnabled(bool enabled);
+QString ragOutlineUrl();
+void setRagOutlineUrl(const QString &url);
+QString ragOutlineToken();
+void setRagOutlineToken(const QString &token);
+QStringList ragAllowlist();
+void setRagAllowlist(const QStringList &ids);
+QString ragEmbedModel();
+void setRagEmbedModel(const QString &path);
+// Bypass the question router: search every phrase, including declarative
+// fragments ("последний проект по ритейл"). Noisier, but catches ASR
+// transcripts without question words or punctuation.
+bool ragSearchAllPhrases();
+void setRagSearchAllPhrases(bool enabled);
+// Router v2: trained embedding head instead of the deterministic rules.
+bool ragUseTrainedRouter();
+void setRagUseTrainedRouter(bool enabled);
+// Query rewrite backend: "rules", "local" (prompter model) or "cloud"
+// (pseudonymized when cloudPseudonymize is on).
+QString ragRewriteMode();
+void setRagRewriteMode(const QString &mode);
 // Call-notes length limits in characters; defaults and ceilings mirror
 // pcm::prompter::SummaryLimits ("summary/leaf", "summary/overview").
 int summaryLeafLimit();

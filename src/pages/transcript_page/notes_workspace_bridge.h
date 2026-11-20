@@ -83,6 +83,7 @@ public:
   Q_INVOKABLE void pausePrompter();
   Q_INVOKABLE void dismissPrompterHint();
   Q_INVOKABLE void prompterCardAction(const QString &cardId, const QString &action);
+  Q_INVOKABLE void removeRagCard(int index);
   Q_INVOKABLE void showPrompterSource(const QString &id);
 signals:
   void stateChanged();

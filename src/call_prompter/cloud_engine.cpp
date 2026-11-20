@@ -61,6 +61,7 @@ private:
                                               QJsonObject{{"role", "user"}, {"content", QString::fromUtf8(payload)}}}},
                      {"temperature", 0},
                      {"max_tokens", mConfig.maxOutputTokens}};
+    if (mConfig.thinkingDisabled) root.insert("thinking", QJsonObject{{"type", "disabled"}});
     auto text = QJsonDocument(root).toJson(QJsonDocument::Compact);
     if (schema.isEmpty()) return text;
     if (!QJsonDocument::fromJson(schema).isObject()) throw PipelineError("cloud request");

@@ -1,4 +1,5 @@
 #include "notes_workspace_bridge.h"
+#include "app_settings.h"
 #include "call_notes_controller.h"
 #include "call_notes_page.h"
 #include "meeting_history.h"
@@ -202,6 +203,7 @@ void NotesWorkspaceBridge::setPrompterPanel(PrompterPanel *panel) {
   if (auto *ctrl = panel->controller()) {
     connect(ctrl, &CallPrompterController::cardsChanged, this, &NotesWorkspaceBridge::stateChanged);
     connect(ctrl, &CallPrompterController::statusChanged, this, &NotesWorkspaceBridge::stateChanged);
+    connect(ctrl, &CallPrompterController::ragCardsChanged, this, &NotesWorkspaceBridge::stateChanged);
   }
   emit stateChanged();
 }
@@ -275,13 +277,20 @@ QVariantMap NotesWorkspaceBridge::state() const {
         {"canSaveToNotes", (editable || decision == "accepted") && sourceValid && !savedToNotes}
       });
     }
-    result["prompterVisible"] = controls || !cards.isEmpty() || !hint.isEmpty();
+    const auto rag = ctrl->ragCards();
+    result["prompterVisible"] = controls || !cards.isEmpty() || !hint.isEmpty() || !rag.isEmpty();
     result["prompterControls"] = controls;
     result["prompterRunning"] = ctrl->running();
     result["prompterStatus"] = ctrl->status();
     result["prompterBadge"] = pending > 0 ? CallNotesPage::tr("%n new", nullptr, pending) : QString{};
     result["prompterHint"] = hint;
     result["prompterCards"] = cards;
+    const auto ragTop = rag.isEmpty() ? QJsonObject{} : rag.first().toObject();
+    result["prompterRagTitle"] = ragTop["title"].toString();
+    result["prompterRagUrl"] = ragTop["url"].toString();
+    result["prompterRagSnippet"] = ragTop["snippet"].toString();
+    result["prompterRagBase"] = pcm::app_settings::ragOutlineUrl();
+    result["ragCards"] = rag;
   } else {
     result["prompterVisible"] = false;
     result["prompterControls"] = false;
@@ -290,6 +299,11 @@ QVariantMap NotesWorkspaceBridge::state() const {
     result["prompterBadge"] = QString{};
     result["prompterHint"] = QString{};
     result["prompterCards"] = QVariantList{};
+    result["prompterRagTitle"] = QString{};
+    result["prompterRagUrl"] = QString{};
+    result["prompterRagSnippet"] = QString{};
+    result["prompterRagBase"] = QString{};
+    result["ragCards"] = QVariantList{};
   }
   if (!item || !item->storage) return result;
   auto *storage = item->storage.data();
@@ -591,6 +605,10 @@ void NotesWorkspaceBridge::dismissPrompterHint() {
 }
 void NotesWorkspaceBridge::prompterCardAction(const QString &cardId, const QString &action) {
   if (mPrompter) mPrompter->triggerCardAction(cardId, action);
+}
+void NotesWorkspaceBridge::removeRagCard(int index) {
+  if (mPrompter)
+    if (auto *ctrl = mPrompter->controller()) ctrl->removeRagCard(index);
 }
 void NotesWorkspaceBridge::showPrompterSource(const QString &id) {
   bool ok = false; const auto phrase = id.toLongLong(&ok);

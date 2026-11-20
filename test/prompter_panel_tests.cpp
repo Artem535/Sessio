@@ -93,6 +93,34 @@ TEST(PrompterPanelTest, RealPanelKeepsReviewActionsAndSourceLinksAtNarrowWidth) 
     ASSERT_TRUE(side.grab().save(QDir(screenshots).filePath("prompter-dark.png")));
   }
 }
+TEST(PrompterPanelTest, DismissActionRejectsQuestionCard) {
+  QTemporaryDir dir;
+  pcm::config::Config conf{.db_conf = pcm::config::DatabaseConfig{.db_pth = Poco::Path(dir.path().toStdString())}};
+  auto db = std::make_shared<pcm::database::Database>(conf);
+  const auto id = db->add_transcript(std::nullopt, "live_local_v1");
+  CallPrompterController controller(db); controller.beginTranscript(id); controller.resume();
+  QSignalSpy request(&controller, &CallPrompterController::requestReady);
+  DuckTranscriptPhrase phrase;
+  phrase.transcript_id = id; phrase.track_role = "participant"; phrase.speaker_name = "Анна";
+  phrase.start_ms = 1000; phrase.end_ms = 2000; phrase.text = "Я отправлю документы.";
+  phrase.id = db->add_transcript_phrase(phrase);
+  controller.addPhrase(phrase); controller.flush();
+  ASSERT_GE(request.count(), 1);
+  auto reply = request[0][0].toJsonObject();
+  reply["events"] = QJsonArray{QJsonObject{{"kind", "accept"}, {"action", "Анна отправит документы"},
+      {"participants", QJsonArray{"Анна"}}, {"evidence_ids", QJsonArray{QString::number(phrase.id)}},
+      {"target_id", ""}, {"unresolved", false}}};
+  reply["suggestions"] = QJsonArray{};
+  reply["rejected"] = QJsonArray{};
+  controller.handleResult(reply);
+  ASSERT_EQ(controller.cards().size(), 1);
+  PrompterPanel panel(&controller, db);
+  const auto cardId = controller.cards().first().toObject()["id"].toString();
+  // The QML Dismiss button sends "dismiss"; the panel's button is named "reject".
+  panel.triggerCardAction(cardId, "dismiss");
+  ASSERT_EQ(controller.cards().size(), 1);
+  EXPECT_EQ(controller.cards().first().toObject()["decision"].toString(), "rejected");
+}
 int main(int argc, char **argv) {
   QApplication app(argc, argv);
   // QApplication owns and deletes the style; the static marks that it is not leaked.

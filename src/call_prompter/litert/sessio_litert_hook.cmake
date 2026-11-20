@@ -56,7 +56,49 @@ function(_sessio_litert_add_library)
   # Only the command-line tool needs Python; the runtime does not.
   list(REMOVE_ITEM _libraries Python3::Python)
   target_include_directories(sessio_litert PRIVATE ${_includes} "${SESSIO_LITERT_SOURCE_DIR}")
-  target_link_libraries(sessio_litert PRIVATE ${_libraries})
+  # v0.19's package aggregates carry their archive payload as one
+  # space-separated string in INTERFACE_LINK_LIBRARIES. litert_lm_main
+  # survives it because the shell splits its unquoted link line, but make's
+  # prerequisite tracking for sessio_litert sees one nonexistent giant path.
+  # Normalize every aggregate interface into a proper CMake list.
+  foreach(_agg IN ITEMS
+      LiteRTLM::Aggregate
+      LiteRTLM::absl::absl
+      LiteRTLM::flatbuffers::flatbuffers
+      LiteRTLM::litert::litert
+      LiteRTLM::protobuf::libprotobuf
+      LiteRTLM::re2::re2
+      LiteRTLM::sentencepiece::sentencepiece
+      LiteRTLM::tflite::tflite
+      LiteRTLM::tokenizers::tokenizers)
+    if(TARGET ${_agg})
+      get_target_property(_payload ${_agg} INTERFACE_LINK_LIBRARIES)
+      if(_payload)
+        string(REPLACE " " ";" _payload_list "${_payload}")
+        set_target_properties(${_agg} PROPERTIES INTERFACE_LINK_LIBRARIES "${_payload_list}")
+      endif()
+    endif()
+  endforeach()
+  set(_expanded_libs "")
+  foreach(_lib IN LISTS _libraries)
+    string(REPLACE " " ";" _lib_parts "${_lib}")
+    list(APPEND _expanded_libs ${_lib_parts})
+  endforeach()
+  target_link_libraries(sessio_litert PRIVATE ${_expanded_libs})
+  # The embedding engine (rag-core) is not on litert_lm_main's link line.
+  if(NOT TARGET LiteRTLM::Runtime::Core::EmbeddingEngineImpl)
+    message(FATAL_ERROR "[Sessio] LiteRT-LM embedding engine targets are missing")
+  endif()
+  # v0.19's CMake port forgot this header-only Bazel target; the embedding
+  # executor pulls it in transitively and the link fails with -l<name>.
+  if(NOT TARGET runtime_util_litert_status_util)
+    add_library(runtime_util_litert_status_util INTERFACE IMPORTED GLOBAL)
+    set_target_properties(runtime_util_litert_status_util PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${LITERTLM_PROJECT_ROOT}")
+  endif()
+  target_link_libraries(sessio_litert PRIVATE
+    LiteRTLM::Runtime::Core::EmbeddingEngineImpl
+    LiteRTLM::Runtime::Engine::EmbeddingEngineSettings)
   target_compile_definitions(sessio_litert PRIVATE SESSIO_LITERT_BUILD)
   set_target_properties(sessio_litert PROPERTIES
     CXX_VISIBILITY_PRESET hidden

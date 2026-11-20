@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.49] - 2026-11-20
+
+- Added the local RAG retrieval service and the Wiki hints panel: Outline wiki
+  sync, structural Markdown chunking, local embeddings and a hybrid dense+FTS
+  search with query rewrite, entity/category boosts and noise gates.
+- Wiki hints keep the newest cards on top, can be removed individually, and
+  show cleaner snippets; open questions are asked in Russian.
+- Retrieval downranks boilerplate questionnaires and generic case decks,
+  prefers navigation over case questions, and returns up to three close FAQs.
+- A broken UTF-8 byte in a speech-recognition or rewrite query no longer
+  aborts the background worker.
 ## [0.2.48] - 2026-11-17
 
 - Fixed local-model meeting notes being cut mid-word: the constrained-decoding
