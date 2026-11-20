@@ -129,6 +129,9 @@ cc_import(
 
 DEPS = [
     "//runtime/components:prompt_template",
+    "//runtime/core:embedding_engine_impl",
+    "//runtime/engine:embedding_engine",
+    "//runtime/engine:embedding_engine_settings",
     "//runtime/components/constrained_decoding:constraint",
     "//runtime/components/constrained_decoding:constraint_provider",
     "//runtime/components/constrained_decoding:constraint_provider_config",
