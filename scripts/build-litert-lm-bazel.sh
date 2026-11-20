@@ -128,6 +128,7 @@ cc_import(
 )
 
 DEPS = [
+    "//runtime/components:prompt_template",
     "//runtime/components/constrained_decoding:constraint",
     "//runtime/components/constrained_decoding:constraint_provider",
     "//runtime/components/constrained_decoding:constraint_provider_config",
@@ -144,6 +145,7 @@ DEPS = [
     "//runtime/executor:llm_executor_settings",
     "//runtime/proto:sampler_params_cc_proto",
     "//runtime/util:logging",
+    "//runtime/util:model_type_utils",
     "@com_google_absl//absl/time",
 ]
 
