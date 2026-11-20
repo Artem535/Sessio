@@ -1,0 +1,75 @@
+{
+  "traces": [
+    {
+      "stage": "extract",
+      "payload": {
+        "new_utterances": "[1] Анна: Я отправлю вам документы.\n[2] Борис: Хорошо, жду ваши документы."
+      },
+      "result": {
+        "events": [
+          {
+            "kind": "accept",
+            "participants": [
+              "Анна",
+              "Борис"
+            ],
+            "action": "Анна отправит документы Борису",
+            "evidence_ids": [
+              "1",
+              "2"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "stage": "hint",
+      "payload": {
+        "new_utterances": "[1] Анна: Я отправлю вам документы.\n[2] Борис: Хорошо, жду ваши документы.",
+        "accepted_events": [
+          {
+            "kind": "accept",
+            "participants": [
+              "Анна",
+              "Борис"
+            ],
+            "action": "Анна отправит документы Борису",
+            "evidence_ids": [
+              "1",
+              "2"
+            ],
+            "target_id": "",
+            "unresolved": false
+          }
+        ]
+      },
+      "result": {
+        "suggestions": []
+      }
+    }
+  ],
+  "response": {
+    "protocol_version": 1,
+    "request_id": 1,
+    "session_generation": 1,
+    "ledger_revision": 0,
+    "events": [
+      {
+        "kind": "accept",
+        "participants": [
+          "Анна",
+          "Борис"
+        ],
+        "action": "Анна отправит документы Борису",
+        "evidence_ids": [
+          "1",
+          "2"
+        ],
+        "target_id": "",
+        "unresolved": false
+      }
+    ],
+    "suggestions": [],
+    "rejected": []
+  }
+}

@@ -1,0 +1,1783 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sessio — Прототип интерфейса заметок и звонков</title>
+  <style>
+    :root {
+      --bg-workspace: #17181c;
+      --bg-surface-1: #1f2127;
+      --bg-surface-2: #282b33;
+      --bg-surface-3: #333848;
+      --border-color: #383e4e;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --primary: #a78bfa;
+      --primary-hover: #b9a2fb;
+      --primary-fg: #1b1730;
+      --text-main: #f3f4f6;
+      --text-muted: #8b93ab;
+      --text-dim: #606880;
+      --success: #2bb5a0;
+      --success-bg: rgba(43, 181, 160, 0.15);
+      --warning: #fbc064;
+      --warning-bg: rgba(251, 192, 100, 0.15);
+      --speaker-artem: #a78bfa;
+      --speaker-anna: #2bb5a0;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg-workspace);
+      color: var(--text-main);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* Left App Sidebar (Sessio) */
+    .app-sidebar {
+      width: 210px;
+      background: #131418;
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .app-brand {
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-logo {
+      width: 26px;
+      height: 26px;
+      background: linear-gradient(135deg, #a78bfa, #8b6ef5);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #17181c;
+      font-size: 14px;
+    }
+
+    .nav-list {
+      list-style: none;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: 1;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13.5px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .nav-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+    }
+
+    .nav-item.active {
+      background: rgba(167, 139, 250, 0.15);
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .nav-item svg {
+      width: 16px;
+      height: 16px;
+      opacity: 0.8;
+    }
+
+    .nav-bottom {
+      padding: 12px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    /* Screen Selector Switcher at bottom of sidebar */
+    .prototype-screen-switcher {
+      background: rgba(167, 139, 250, 0.08);
+      border: 1px solid rgba(167, 139, 250, 0.2);
+      border-radius: var(--radius-md);
+      padding: 8px;
+      margin: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .prototype-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .screen-tab-btn {
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      padding: 6px 8px;
+      font-size: 11.5px;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+
+    .screen-tab-btn:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+    }
+
+    .screen-tab-btn.active {
+      background: var(--primary);
+      color: var(--primary-fg);
+      font-weight: 600;
+      border-color: var(--primary);
+    }
+
+    /* Main Area Container */
+    .main-workspace {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    /* View containers */
+    .view-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* Top App Bar */
+    .top-bar {
+      height: 52px;
+      background: var(--bg-surface-1);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .top-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .btn-back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      color: var(--text-main);
+      padding: 5px 10px;
+      font-size: 12.5px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .btn-back:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .call-meta-title {
+      font-size: 14.5px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .call-meta-details {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-left: 8px;
+    }
+
+    .top-bar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-action {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      color: var(--text-main);
+      padding: 5px 10px;
+      font-size: 12.5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-action:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-action.toggle-panel {
+      background: rgba(167, 139, 250, 0.15);
+      border-color: rgba(167, 139, 250, 0.35);
+      color: var(--primary);
+      font-weight: 500;
+    }
+
+    .btn-action.toggle-panel.active {
+      background: var(--primary);
+      color: var(--primary-fg);
+      border-color: var(--primary);
+    }
+
+    /* ============================================================== */
+    /* SCREEN 1: SPLIT VIEW (TRANSCRIPT + NOTES)                      */
+    /* ============================================================== */
+
+    .split-container {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .transcript-pane {
+      flex: 1;
+      min-width: 380px;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-workspace);
+      border-right: 1px solid var(--border-subtle);
+      overflow: hidden;
+    }
+
+    .transcript-header {
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      background: rgba(31, 33, 39, 0.5);
+    }
+
+    .search-input {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 6px 12px;
+      color: #fff;
+      font-size: 12.5px;
+      width: 240px;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .transcript-feed {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .phrase-card {
+      background: var(--bg-surface-1);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .phrase-card:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+      background: #23262e;
+    }
+
+    .phrase-card.highlighted {
+      border-color: var(--primary);
+      background: rgba(167, 139, 250, 0.12);
+      box-shadow: 0 0 14px rgba(167, 139, 250, 0.25);
+    }
+
+    .phrase-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+
+    .speaker-tag {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+    }
+
+    .speaker-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .speaker-dot.artem { background: var(--speaker-artem); }
+    .speaker-dot.anna { background: var(--speaker-anna); }
+
+    .phrase-time {
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+      font-size: 11.5px;
+    }
+
+    .phrase-body {
+      font-size: 13.5px;
+      line-height: 1.45;
+      color: var(--text-main);
+    }
+
+    .resizer {
+      width: 4px;
+      cursor: col-resize;
+      background: transparent;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+
+    .resizer:hover, .resizer.dragging {
+      background: var(--primary);
+    }
+
+    .notes-pane {
+      width: 440px;
+      min-width: 340px;
+      max-width: 600px;
+      background: var(--bg-surface-1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .notes-pane.collapsed {
+      display: none;
+    }
+
+    .notes-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      background: #1a1b21;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .segmented-control {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+      display: flex;
+      gap: 2px;
+    }
+
+    .segmented-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+
+    .segmented-btn:hover {
+      color: #fff;
+    }
+
+    .segmented-btn.active {
+      background: var(--bg-surface-2);
+      color: #fff;
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .notes-scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .note-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      transition: border-color 0.15s ease;
+    }
+
+    .note-card:hover {
+      border-color: rgba(255, 255, 255, 0.13);
+    }
+
+    .card-header {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      user-select: none;
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-chip {
+      font-size: 10.5px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+
+    .card-chip.ready {
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(43, 181, 160, 0.3);
+    }
+
+    .card-chip.neutral {
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text-muted);
+    }
+
+    .card-body {
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .accordion-toggle {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .accordion-toggle:hover .card-title {
+      color: #fff;
+    }
+
+    .accordion-content {
+      display: none;
+      padding-top: 6px;
+      border-top: 1px dashed var(--border-subtle);
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .accordion-content.expanded {
+      display: block;
+    }
+
+    .composer-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 4px;
+    }
+
+    .formatting-tools {
+      display: flex;
+      gap: 4px;
+    }
+
+    .tool-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .tool-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+
+    .save-indicator {
+      font-size: 11px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .save-indicator.saved {
+      color: var(--success);
+    }
+
+    .composer-textarea {
+      width: 100%;
+      min-height: 140px;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 13.5px;
+      line-height: 1.55;
+      resize: vertical;
+    }
+
+    .composer-textarea::placeholder {
+      color: var(--text-dim);
+    }
+
+    .composer-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 11.5px;
+      color: var(--text-dim);
+    }
+
+    .btn-attach {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 6px;
+      border-radius: 4px;
+    }
+
+    .btn-attach:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+    }
+
+    .ai-summary-text {
+      font-size: 13px;
+      line-height: 1.5;
+      color: #e5e7eb;
+    }
+
+    .card-action-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .btn-sm-action {
+      background: rgba(167, 139, 250, 0.12);
+      border: 1px solid rgba(167, 139, 250, 0.25);
+      border-radius: var(--radius-sm);
+      color: var(--primary);
+      padding: 4px 10px;
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-sm-action:hover {
+      background: rgba(167, 139, 250, 0.22);
+      color: #fff;
+    }
+
+    .btn-sm-ghost {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 4px 8px;
+      font-size: 11.5px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+
+    .btn-sm-ghost:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+    }
+
+    .agreement-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 12.5px;
+      line-height: 1.4;
+      padding: 4px 0;
+    }
+
+    .agreement-check {
+      margin-top: 2px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .timestamp-link {
+      font-size: 11px;
+      color: var(--primary);
+      background: rgba(167, 139, 250, 0.1);
+      padding: 1px 5px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-left: auto;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .timestamp-link:hover {
+      background: var(--primary);
+      color: var(--primary-fg);
+    }
+
+    .keypoint-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 12.5px;
+      color: var(--text-main);
+    }
+
+    .keypoint-bullet {
+      color: var(--primary);
+      font-weight: bold;
+    }
+
+    /* ============================================================== */
+    /* SCREEN 2: STANDALONE CLIENT NOTES PAGE (ЭКРАН ЗАМЕТОК КЛИЕНТА) */
+    /* ============================================================== */
+
+    .client-notes-layout {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      background: var(--bg-workspace);
+    }
+
+    /* Client Header Surface */
+    .client-profile-header {
+      padding: 16px 24px;
+      background: var(--bg-surface-1);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .client-name-block h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .client-status-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(43, 181, 160, 0.3);
+    }
+
+    .client-quick-stats {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      display: flex;
+      gap: 14px;
+    }
+
+    .client-quick-stats span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Filter Bar on Notes Page */
+    .notes-filter-bar {
+      padding: 10px 24px;
+      background: #191b22;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Two-pane Journal View */
+    .journal-sidebar {
+      width: 320px;
+      border-right: 1px solid var(--border-subtle);
+      background: #17181d;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .journal-sidebar-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .journal-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .journal-entry-item {
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .journal-entry-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-subtle);
+    }
+
+    .journal-entry-item.active {
+      background: rgba(167, 139, 250, 0.12);
+      border-color: rgba(167, 139, 250, 0.35);
+    }
+
+    .journal-entry-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11.5px;
+      color: var(--text-dim);
+    }
+
+    .journal-entry-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .journal-entry-snippet {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .journal-entry-badges {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .badge-pill {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text-muted);
+    }
+
+    .badge-pill.ai {
+      background: rgba(167, 139, 250, 0.15);
+      color: var(--primary);
+    }
+
+    /* Journal Main Document Content Area */
+    .journal-main-doc {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 32px;
+      background: var(--bg-workspace);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      max-width: 900px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .doc-header-card {
+      background: var(--bg-surface-1);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .doc-title-section h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .doc-meta-info {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .doc-card {
+      background: var(--bg-surface-1);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .doc-card-header {
+      padding: 12px 18px;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .doc-card-body {
+      padding: 16px 20px;
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: #e5e7eb;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--bg-surface-3);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: var(--radius-md);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+      border: 1px solid var(--border-color);
+      font-size: 12.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+      transition: all 0.25s ease;
+      z-index: 9999;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Left Global Sidebar (Sessio) -->
+  <aside class="app-sidebar">
+    <div class="app-brand">
+      <div class="brand-logo">S</div>
+      <span>Sessio</span>
+    </div>
+
+    <ul class="nav-list">
+      <li class="nav-item" onclick="showToast('Календарь')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 002 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10z"/></svg>
+        Календарь
+      </li>
+      <li class="nav-item active" id="navClients" onclick="switchMainScreen('screen-client-notes')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+        Клиенты
+      </li>
+      <li class="nav-item" onclick="showToast('Аналитика')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+        Аналитика
+      </li>
+      <li class="nav-item" onclick="showToast('Звонки')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+        Звонки
+      </li>
+      <li class="nav-item" id="navMaterials" onclick="switchMainScreen('screen-call-split')">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+        Материалы звонков
+      </li>
+    </ul>
+
+    <!-- Prototype Screen Switcher for Testing -->
+    <div class="prototype-screen-switcher">
+      <span class="prototype-label">Сравнение экранов:</span>
+      <button class="screen-tab-btn" id="btnTabScreenSplit" onclick="switchMainScreen('screen-call-split')">
+        <span>🎧 1. Звонок (Split View)</span>
+      </button>
+      <button class="screen-tab-btn active" id="btnTabScreenNotes" onclick="switchMainScreen('screen-client-notes')">
+        <span>📝 2. Заметки клиента</span>
+      </button>
+    </div>
+
+    <div class="nav-bottom">
+      <div class="nav-item" style="padding: 6px 8px;">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        Настройки
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content Workspace -->
+  <main class="main-workspace">
+
+    <!-- ============================================================== -->
+    <!-- VIEW 1: CALL MATERIALS & TRANSCRIPT (SPLIT VIEW)              -->
+    <!-- ============================================================== -->
+    <div class="view-container" id="screen-call-split" style="display: none;">
+
+      <!-- Top Navigation Bar -->
+      <header class="top-bar">
+        <div class="top-bar-left">
+          <button class="btn-back" onclick="switchMainScreen('screen-client-notes')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+            К заметкам клиента
+          </button>
+          <span class="call-meta-title">Консультация: Мария Петрова</span>
+          <span class="call-meta-details">26.10.2026 14:04 · 46 реплик · Завершено</span>
+        </div>
+
+        <div class="top-bar-actions">
+          <button class="btn-action" onclick="showToast('Экспорт транскрипта и заметок...')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            Экспорт
+          </button>
+
+          <button id="togglePanelBtn" class="btn-action toggle-panel active" onclick="toggleNotesPanel()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h18v18H3V3zm16 16V5H5v14h14zM14 5h5v14h-5V5z"/></svg>
+            <span id="panelToggleText">Панель заметок (вкл)</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Split Content View -->
+      <div class="split-container">
+
+        <!-- Left: Transcript Page -->
+        <section class="transcript-pane" id="transcriptPane">
+          <div class="transcript-header">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-muted);">
+              СТЕНОГРАММА ВСТРЕЧИ
+            </div>
+            <input type="text" class="search-input" placeholder="Поиск по фразам..." id="searchInput" oninput="filterPhrases(this.value)">
+          </div>
+
+          <div class="transcript-feed" id="transcriptFeed">
+            <div class="phrase-card" id="phrase-1" onclick="highlightPhrase('phrase-1')">
+              <div class="phrase-header">
+                <span class="speaker-tag"><span class="speaker-dot artem"></span> Artem</span>
+                <span class="phrase-time">01:19 – 01:22</span>
+              </div>
+              <div class="phrase-body">так давай попробуем</div>
+            </div>
+
+            <div class="phrase-card" id="phrase-2" onclick="highlightPhrase('phrase-2')">
+              <div class="phrase-header">
+                <span class="speaker-tag"><span class="speaker-dot artem"></span> Artem</span>
+                <span class="phrase-time">03:10 – 03:14</span>
+              </div>
+              <div class="phrase-body">не хочу</div>
+            </div>
+
+            <div class="phrase-card" id="phrase-3" onclick="highlightPhrase('phrase-3')">
+              <div class="phrase-header">
+                <span class="speaker-tag"><span class="speaker-dot artem"></span> Artem</span>
+                <span class="phrase-time">03:17 – 03:22</span>
+              </div>
+              <div class="phrase-body">ты видишь какая стремная какой</div>
+            </div>
+
+            <div class="phrase-card" id="phrase-4" onclick="highlightPhrase('phrase-4')">
+              <div class="phrase-header">
+                <span class="speaker-tag"><span class="speaker-dot artem"></span> Artem</span>
+                <span class="phrase-time">03:23 – 03:25</span>
+              </div>
+              <div class="phrase-body">а можно я себя</div>
+            </div>
+
+            <div class="phrase-card" id="phrase-5" onclick="highlightPhrase('phrase-5')">
+              <div class="phrase-header">
+                <span class="speaker-tag"><span class="speaker-dot artem"></span> Artem</span>
+                <span class="phrase-time">04:30 – 04:35</span>
+              </div>
+              <div class="phrase-body">что я тебя вижу вот в этом проблема была</div>
+            </div>
+
+            <div class="phrase-card" id="phrase-6" onclick="highlightPhrase('phrase-6')">
+              <div class="phrase-header">
+                <span class="speaker-tag"><span class="speaker-dot artem"></span> Artem</span>
+                <span class="phrase-time">05:21 – 05:24</span>
+              </div>
+              <div class="phrase-body">сейчас че нибудь решим</div>
+            </div>
+
+            <div class="phrase-card" id="phrase-7" onclick="highlightPhrase('phrase-7')">
+              <div class="phrase-header">
+                <span class="speaker-tag"><span class="speaker-dot artem"></span> Artem</span>
+                <span class="phrase-time">05:25 – 05:28</span>
+              </div>
+              <div class="phrase-body">стремное</div>
+            </div>
+
+            <div class="phrase-card" id="phrase-8" onclick="highlightPhrase('phrase-8')">
+              <div class="phrase-header">
+                <span class="speaker-tag"><span class="speaker-dot anna"></span> Анна</span>
+                <span class="phrase-time">05:46 – 05:48</span>
+              </div>
+              <div class="phrase-body">о привет</div>
+            </div>
+
+            <div class="phrase-card" id="phrase-9" onclick="highlightPhrase('phrase-9')">
+              <div class="phrase-header">
+                <span class="speaker-tag"><span class="speaker-dot artem"></span> Artem</span>
+                <span class="phrase-time">05:51 – 05:59</span>
+              </div>
+              <div class="phrase-body">так будет супер, теперь видеосвязь стабильна</div>
+            </div>
+
+            <div class="phrase-card" id="phrase-10" onclick="highlightPhrase('phrase-10')">
+              <div class="phrase-header">
+                <span class="speaker-tag"><span class="speaker-dot anna"></span> Анна</span>
+                <span class="phrase-time">06:05 – 06:18</span>
+              </div>
+              <div class="phrase-body">Давай начнем с того, как прошла неделя после нашего прошлого разговора про тревогу при собеседованиях.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Divider -->
+        <div class="resizer" id="dragResizer"></div>
+
+        <!-- Right: Notes & Materials -->
+        <section class="notes-pane" id="notesPane">
+          <div class="notes-header">
+            <div class="segmented-control">
+              <button class="segmented-btn active" id="modeCurrent" onclick="switchMode('current')">Эта встреча</button>
+              <button class="segmented-btn" id="modeHistory" onclick="switchMode('history')">История клиента</button>
+            </div>
+            <button class="btn-sm-ghost" title="Свернуть панель" onclick="toggleNotesPanel()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
+
+          <div class="notes-scroll-area" id="notesScrollArea">
+            <div id="currentMeetingContent" style="display: flex; flex-direction: column; gap: 12px;">
+              <!-- Accordion -->
+              <div class="note-card">
+                <div class="card-header accordion-toggle" onclick="toggleAccordion('lastTimeContent', 'lastTimeArrow')">
+                  <span class="card-title">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+                    В прошлый раз (21.10.2026)
+                  </span>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="card-chip neutral">60 мин</span>
+                    <span id="lastTimeArrow" style="font-size: 10px; color: var(--text-dim); transition: transform 0.2s;">▼</span>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div style="font-size: 13px; font-weight: 500;">Тема: Барьер перед видеоинтервью и синдром самозванца</div>
+                  <div id="lastTimeContent" class="accordion-content">
+                    <div style="margin-top: 6px; font-size: 12.5px;">
+                      <strong>Договорённости с прошлой встречи:</strong>
+                      <ul style="padding-left: 18px; margin-top: 4px;">
+                        <li>Написать список из 5 ключевых профессиональных достижений</li>
+                        <li>Попробовать записать пробный 2-минутный ответ на камеру</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Notes Editor -->
+              <div class="note-card" style="background: rgba(255, 255, 255, 0.04); border-color: rgba(167, 139, 250, 0.25);">
+                <div class="card-header">
+                  <span class="card-title" style="color: var(--primary);">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                    Заметки сессии (Протокол)
+                  </span>
+                  <span class="save-indicator saved" id="autosaveStatus">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                    Сохранено
+                  </span>
+                </div>
+                <div class="card-body">
+                  <div class="composer-toolbar">
+                    <div class="formatting-tools">
+                      <button class="tool-btn" title="Жирный" onclick="insertFormat('**', '**')">B</button>
+                      <button class="tool-btn" title="Курсив" onclick="insertFormat('*', '*')">I</button>
+                      <button class="tool-btn" title="Список" onclick="insertFormat('\n- ', '')">•</button>
+                      <button class="tool-btn" title="Нумерация" onclick="insertFormat('\n1. ', '')">1.</button>
+                      <button class="tool-btn" title="Цитата" onclick="insertFormat('\n> ', '')">”</button>
+                    </div>
+                    <button class="btn-sm-ghost" style="font-size: 11px;" id="previewBtn" onclick="toggleMarkdownPreview()">Превью</button>
+                  </div>
+
+                  <textarea class="composer-textarea" id="notesComposer" placeholder="Ведите конспект встречи здесь...">Запрос: трудности с самопрезентацией при включённой видеокамере.
+
+Наблюдения:
+- При начале звонка заметна скованность взгляда, избегание прямого зрительного контакта.
+- Клиент признаёт, что «видеть собственное лицо» отвлекает и вызывает волну критических мыслей.</textarea>
+
+                  <div class="composer-footer">
+                    <button class="btn-attach" onclick="showToast('Выбор файлов для прикрепления к сессии...')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
+                      Прикрепить файл
+                    </button>
+                    <span>Markdown поддерживается</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- AI Summary Card -->
+              <div class="note-card" id="aiSummaryCard">
+                <div class="card-header">
+                  <span class="card-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5z"/></svg>
+                    Итог встречи (ИИ)
+                  </span>
+                  <span class="card-chip ready">Готов · вся встреча</span>
+                </div>
+                <div class="card-body">
+                  <p class="ai-summary-text" id="aiSummaryText">
+                    Клиент исследовал корень тревоги во время дистанционных сессий. Обнаружили, что саморефлексия через монитор запускает гиперконтроль мимики. Применили технику отключения собственного видео («hide self view»), что привело к снижению напряжения.
+                  </p>
+
+                  <div class="card-action-bar">
+                    <button class="btn-sm-action" onclick="insertSummaryToNotes()">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                      Вставить в заметки
+                    </button>
+                    <button class="btn-sm-ghost" onclick="showToast('Режим редактирования итога ИИ')">Изменить</button>
+                    <button class="btn-sm-ghost" onclick="showToast('Повторный запуск генерации по модели Gemma...')">⋯</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Agreements Card -->
+              <div class="note-card">
+                <div class="card-header">
+                  <span class="card-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                    Договорённости и ДЗ
+                  </span>
+                  <span class="card-chip ready">2 принято</span>
+                </div>
+                <div class="card-body">
+                  <div class="agreement-item">
+                    <input type="checkbox" class="agreement-check" checked id="agr-1">
+                    <label for="agr-1">Отключить окно собственного видео в Zoom на 3 дня рабочих созвонов</label>
+                    <a class="timestamp-link" onclick="scrollToPhrase('phrase-5')">04:30</a>
+                  </div>
+
+                  <div class="agreement-item">
+                    <input type="checkbox" class="agreement-check" checked id="agr-2">
+                    <label for="agr-2">Фиксировать уровень тревоги по шкале 1–10 до и после каждого звонка</label>
+                    <a class="timestamp-link" onclick="scrollToPhrase('phrase-6')">05:21</a>
+                  </div>
+
+                  <div class="card-action-bar">
+                    <button class="btn-sm-action" onclick="insertAgreementsToNotes()">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                      Вставить в заметки
+                    </button>
+                    <button class="btn-sm-ghost" onclick="showToast('Добавление новой договорённости...')">+ Добавить пункт</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Key Points -->
+              <div class="note-card">
+                <div class="card-header">
+                  <span class="card-title">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+                    Ключевые моменты
+                  </span>
+                  <span class="card-chip neutral">3 тезиса</span>
+                </div>
+                <div class="card-body">
+                  <div class="keypoint-item">
+                    <span class="keypoint-bullet">•</span>
+                    <span>Трудности восприятия собственного изображения</span>
+                    <a class="timestamp-link" onclick="scrollToPhrase('phrase-3')">03:17</a>
+                  </div>
+                  <div class="keypoint-item">
+                    <span class="keypoint-bullet">•</span>
+                    <span>Осознание триггера: «видеть себя»</span>
+                    <a class="timestamp-link" onclick="scrollToPhrase('phrase-5')">04:30</a>
+                  </div>
+                  <div class="keypoint-item">
+                    <span class="keypoint-bullet">•</span>
+                    <span>Переход к рабочей фазе сессии</span>
+                    <a class="timestamp-link" onclick="scrollToPhrase('phrase-9')">05:51</a>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Client History View -->
+            <div id="historyContent" style="display: none; flex-direction: column; gap: 12px;">
+              <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">
+                Хронология встреч с клиентом: Мария Петрова
+              </div>
+              <div class="note-card">
+                <div class="card-header">
+                  <span class="card-title">21.10.2026 14:00</span>
+                  <span class="card-chip neutral">60 мин · Итог ИИ</span>
+                </div>
+                <div class="card-body">
+                  <p style="font-size: 13px; color: var(--text-muted); line-height: 1.45;">
+                    Обсуждение темы самозванца. Первичная диагностика глубины тревожности перед сменой работы.
+                  </p>
+                  <div class="card-action-bar">
+                    <button class="btn-sm-ghost" onclick="showToast('Открытие протокола от 21.10.2026...')">Просмотреть протокол</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+
+    <!-- ============================================================== -->
+    <!-- VIEW 2: STANDALONE CLIENT NOTES JOURNAL (ЭКРАН ЗАМЕТОК)         -->
+    <!-- ============================================================== -->
+    <div class="view-container" id="screen-client-notes">
+
+      <!-- Client Profile Top Header -->
+      <div class="client-profile-header">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <button class="btn-back" onclick="showToast('К общему списку клиентов...')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+            Все клиенты
+          </button>
+
+          <div class="client-name-block">
+            <h1>
+              Мария Петрова
+              <span class="client-status-badge">Клиент активен</span>
+            </h1>
+            <div class="client-quick-stats">
+              <span>📅 Всего сессий: <strong>8</strong></span>
+              <span>⏰ Следующая: <strong>28.10 в 14:00</strong></span>
+              <span>💰 Стоимость: <strong>4 000 ₽ / 60 мин</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-action" onclick="showToast('Открытие личной карточки клиента...')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            Карточка клиента
+          </button>
+          <button class="btn-action" style="background: var(--primary); color: var(--primary-fg); font-weight: 600;" onclick="showToast('Создание новой свободной заметки...')">
+            + Новая заметка
+          </button>
+        </div>
+      </div>
+
+      <!-- Filter Controls Bar -->
+      <div class="notes-filter-bar">
+        <div class="segmented-control">
+          <button class="segmented-btn active" id="filterAll" onclick="filterJournal('all')">Все материалы (8)</button>
+          <button class="segmented-btn" id="filterSessions" onclick="filterJournal('sessions')">Сессии и протоколы (6)</button>
+          <button class="segmented-btn" id="filterNotes" onclick="filterJournal('notes')">Свободные заметки (2)</button>
+          <button class="segmented-btn" id="filterAgreements" onclick="filterJournal('agreements')">Договорённости (4)</button>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="text" class="search-input" placeholder="Поиск по заметкам и итогам..." style="width: 220px;" oninput="searchJournal(this.value)">
+          <button class="btn-action" title="Экспорт всего журнала" onclick="showToast('Экспорт всех протоколов клиента в PDF/Markdown...')">
+            Экспорт
+          </button>
+        </div>
+      </div>
+
+      <!-- Two-pane Journal View (Master - Detail) -->
+      <div class="client-notes-layout">
+
+        <!-- Left: Timeline of Sessions & Notes -->
+        <aside class="journal-sidebar">
+          <div class="journal-sidebar-header">
+            <span style="font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">История встреч</span>
+            <span style="font-size: 11px; color: var(--text-dim);">8 записей</span>
+          </div>
+
+          <div class="journal-list">
+
+            <!-- Entry 1 (Active) -->
+            <div class="journal-entry-item active" id="entry-item-1" onclick="selectJournalEntry(1)">
+              <div class="journal-entry-header">
+                <span>26.10.2026 · 14:04</span>
+                <span style="color: var(--success);">Сессия №8</span>
+              </div>
+              <div class="journal-entry-title">Барьер перед видеосвязью</div>
+              <div class="journal-entry-snippet">Клиент исследовал корень тревоги при дистанционных сессиях. Обсудили отключение окна собственного видео...</div>
+              <div class="journal-entry-badges">
+                <span class="badge-pill ai">Итог ИИ</span>
+                <span class="badge-pill">2 ДЗ</span>
+                <span class="badge-pill">Стенограмма</span>
+              </div>
+            </div>
+
+            <!-- Entry 2 -->
+            <div class="journal-entry-item" id="entry-item-2" onclick="selectJournalEntry(2)">
+              <div class="journal-entry-header">
+                <span>24.10.2026 · 18:20</span>
+                <span style="color: var(--primary);">Заметка терапевта</span>
+              </div>
+              <div class="journal-entry-title">Мысли после супервизии</div>
+              <div class="journal-entry-snippet">Обратить внимание на перенос в теме карьерных ожиданий и давления со стороны семьи...</div>
+              <div class="journal-entry-badges">
+                <span class="badge-pill">Супервизия</span>
+              </div>
+            </div>
+
+            <!-- Entry 3 -->
+            <div class="journal-entry-item" id="entry-item-3" onclick="selectJournalEntry(3)">
+              <div class="journal-entry-header">
+                <span>21.10.2026 · 14:00</span>
+                <span style="color: var(--success);">Сессия №7</span>
+              </div>
+              <div class="journal-entry-title">Синдром самозванца</div>
+              <div class="journal-entry-snippet">Исследование глубинного страха несоответствия должности тимлида. Техника разделения фактов и мыслей...</div>
+              <div class="journal-entry-badges">
+                <span class="badge-pill ai">Итог ИИ</span>
+                <span class="badge-pill">1 ДЗ</span>
+              </div>
+            </div>
+
+            <!-- Entry 4 -->
+            <div class="journal-entry-item" id="entry-item-4" onclick="selectJournalEntry(4)">
+              <div class="journal-entry-header">
+                <span>14.10.2026 · 14:00</span>
+                <span style="color: var(--success);">Сессия №6</span>
+              </div>
+              <div class="journal-entry-title">Профессиональное выгорание</div>
+              <div class="journal-entry-snippet">Анализ баланса работы и восстановления. Анализ хронометража недели и границ с коллегами...</div>
+              <div class="journal-entry-badges">
+                <span class="badge-pill ai">Итог ИИ</span>
+              </div>
+            </div>
+
+          </div>
+        </aside>
+
+        <!-- Right: Focused Session Workspace & Clinical Protocol -->
+        <section class="journal-main-doc" id="journalDocView">
+
+          <!-- Selected Session Header Card -->
+          <div class="doc-header-card">
+            <div class="doc-title-section">
+              <h2>Сессия №8: Барьер перед видеоинтервью</h2>
+              <div class="doc-meta-info">
+                26 октября 2026 · 14:04 – 15:04 (60 минут) · Онлайн-звонок Sessio
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+              <!-- Quick jump to the Call Review Screen -->
+              <button class="btn-action" style="background: rgba(167, 139, 250, 0.15); border-color: rgba(167, 139, 250, 0.3); color: var(--primary);" onclick="switchMainScreen('screen-call-split')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                Открыть в стенограмме
+              </button>
+              <button class="btn-action" onclick="showToast('Печать протокола сессии...')">
+                Печать
+              </button>
+            </div>
+          </div>
+
+          <!-- Card 1: Specialist Clinical Protocol -->
+          <div class="doc-card">
+            <div class="doc-card-header">
+              <span class="card-title" style="color: var(--primary);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                Протокол консультации (Заметки специалиста)
+              </span>
+              <span class="save-indicator saved">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                Сохранено в базу данных
+              </span>
+            </div>
+            <div class="doc-card-body">
+              <textarea class="composer-textarea" style="min-height: 120px;" placeholder="Редактировать протокол...">**Запрос:** Обострение тревоги перед этапом технических собеседований с камерой.
+
+**Наблюдения и процесс:**
+- В первые 10 минут выраженная тревожность, клиентка избегает взгляда в объектив, жалуется на дискомфорт от своего лица в углу экрана.
+- Провели эксперимент: клиентка скрыла окно «Self View». Физиологически дыхание выровнялось, голос стал увереннее.
+- Проговорили катастрофические фантазии («подумают, что я некомпетентна из-за волнения»).</textarea>
+            </div>
+          </div>
+
+          <!-- Card 2: AI Summary of the Call -->
+          <div class="doc-card">
+            <div class="doc-card-header">
+              <span class="card-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12l-5.5-2.5z"/></svg>
+                Итог встречи от ИИ-ассистента
+              </span>
+              <span class="card-chip ready">Автоматически собрано из 46 реплик</span>
+            </div>
+            <div class="doc-card-body">
+              <p style="margin-bottom: 8px;">
+                Клиент исследовал корень тревоги во время дистанционных встреч. Обнаружили, что изображение собственного лица запускает фоновый внутренний критический монолог. Применили технику скрытия окна своего видео, что сняло напряжение и позволило глубже перейти к обсуждению компетенций.
+              </p>
+              <div style="font-size: 12px; color: var(--text-dim);">
+                Сгенерировано локальной моделью Gemma 4 E4B · Источник: стенограмма звонка
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Agreements & Homework -->
+          <div class="doc-card">
+            <div class="doc-card-header">
+              <span class="card-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                Домашние задания и договорённости
+              </span>
+              <span class="card-chip ready">2 пункта на следующую встречу</span>
+            </div>
+            <div class="doc-card-body" style="display: flex; flex-direction: column; gap: 10px;">
+              <div class="agreement-item" style="font-size: 13.5px;">
+                <input type="checkbox" class="agreement-check" checked id="doc-agr-1">
+                <label for="doc-agr-1">Отключить окно собственного видео в Zoom на 3 дня рабочих созвонов</label>
+              </div>
+
+              <div class="agreement-item" style="font-size: 13.5px;">
+                <input type="checkbox" class="agreement-check" id="doc-agr-2">
+                <label for="doc-agr-2">Фиксировать уровень тревоги по шкале 1–10 до и после каждого звонка</label>
+              </div>
+            </div>
+          </div>
+
+        </section>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Toast -->
+  <div class="toast" id="toast">
+    <span id="toastText">Уведомление</span>
+  </div>
+
+  <script>
+    // Main Screen Switcher
+    function switchMainScreen(screenId) {
+      document.getElementById('screen-call-split').style.display = (screenId === 'screen-call-split') ? 'flex' : 'none';
+      document.getElementById('screen-client-notes').style.display = (screenId === 'screen-client-notes') ? 'flex' : 'none';
+
+      document.getElementById('btnTabScreenSplit').classList.toggle('active', screenId === 'screen-call-split');
+      document.getElementById('btnTabScreenNotes').classList.toggle('active', screenId === 'screen-client-notes');
+
+      document.getElementById('navClients').classList.toggle('active', screenId === 'screen-client-notes');
+      document.getElementById('navMaterials').classList.toggle('active', screenId === 'screen-call-split');
+
+      showToast(screenId === 'screen-call-split' ? 'Режим: Просмотр звонка и стенограммы (Split View)' : 'Режим: Экран заметок и протоколов клиента');
+    }
+
+    // Select Journal Item on Screen 2
+    function selectJournalEntry(id) {
+      document.querySelectorAll('.journal-entry-item').forEach(item => item.classList.remove('active'));
+      const el = document.getElementById('entry-item-' + id);
+      if (el) el.classList.add('active');
+      showToast('Загружен протокол записи №' + id);
+    }
+
+    // Journal Filters
+    function filterJournal(type) {
+      document.querySelectorAll('.notes-filter-bar .segmented-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      showToast('Применён фильтр: ' + event.target.innerText);
+    }
+
+    function searchJournal(query) {
+      const q = query.toLowerCase();
+      document.querySelectorAll('.journal-entry-item').forEach(card => {
+        card.style.display = card.innerText.toLowerCase().includes(q) ? 'flex' : 'none';
+      });
+    }
+
+    // Screen 1: Toggle Split View Panel
+    function toggleNotesPanel() {
+      const pane = document.getElementById('notesPane');
+      const btn = document.getElementById('togglePanelBtn');
+      const text = document.getElementById('panelToggleText');
+      const resizer = document.getElementById('dragResizer');
+
+      const isCollapsed = pane.classList.toggle('collapsed');
+      if (isCollapsed) {
+        btn.classList.remove('active');
+        text.innerText = 'Панель заметок (выкл)';
+        resizer.style.display = 'none';
+        showToast('Панель заметок скрыта — транскрипция на весь экран');
+      } else {
+        btn.classList.add('active');
+        text.innerText = 'Панель заметок (вкл)';
+        resizer.style.display = 'block';
+        showToast('Панель заметок открыта');
+      }
+    }
+
+    // Screen 1: Switch between Current Meeting and Client History
+    function switchMode(mode) {
+      const current = document.getElementById('currentMeetingContent');
+      const history = document.getElementById('historyContent');
+      const btnCurrent = document.getElementById('modeCurrent');
+      const btnHistory = document.getElementById('modeHistory');
+
+      if (mode === 'current') {
+        current.style.display = 'flex';
+        history.style.display = 'none';
+        btnCurrent.classList.add('active');
+        btnHistory.classList.remove('active');
+      } else {
+        current.style.display = 'none';
+        history.style.display = 'flex';
+        btnCurrent.classList.remove('active');
+        btnHistory.classList.add('active');
+      }
+    }
+
+    // Screen 1: Accordion
+    function toggleAccordion(contentId, arrowId) {
+      const content = document.getElementById(contentId);
+      const arrow = document.getElementById(arrowId);
+      const isExpanded = content.classList.toggle('expanded');
+      arrow.style.transform = isExpanded ? 'rotate(180deg)' : 'rotate(0deg)';
+    }
+
+    // Screen 1: Transcript highlighting
+    function scrollToPhrase(phraseId) {
+      const el = document.getElementById(phraseId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        highlightPhrase(phraseId);
+        showToast('Переход к фразе в транскрипции');
+      }
+    }
+
+    function highlightPhrase(phraseId) {
+      document.querySelectorAll('.phrase-card').forEach(c => c.classList.remove('highlighted'));
+      const card = document.getElementById(phraseId);
+      if (card) {
+        card.classList.add('highlighted');
+        setTimeout(() => card.classList.remove('highlighted'), 2500);
+      }
+    }
+
+    function filterPhrases(query) {
+      const q = query.toLowerCase();
+      document.querySelectorAll('.phrase-card').forEach(card => {
+        card.style.display = card.innerText.toLowerCase().includes(q) ? 'block' : 'none';
+      });
+    }
+
+    // Screen 1: Quick Insert
+    function insertSummaryToNotes() {
+      const summaryText = document.getElementById('aiSummaryText').innerText.trim();
+      const textarea = document.getElementById('notesComposer');
+      textarea.value += "\n\n### Итог встречи (ИИ):\n" + summaryText;
+      triggerAutosave();
+      textarea.focus();
+      showToast('Итог ИИ вставлен в протокол заметок!');
+    }
+
+    function insertAgreementsToNotes() {
+      const textarea = document.getElementById('notesComposer');
+      textarea.value += "\n\n### Договорённости:\n- Отключить окно собственного видео в Zoom на 3 дня рабочих созвонов\n- Фиксировать уровень тревоги по шкале 1–10 до и после каждого звонка";
+      triggerAutosave();
+      textarea.focus();
+      showToast('Договорённости вставлены в протокол заметок!');
+    }
+
+    function insertFormat(start, end) {
+      const textarea = document.getElementById('notesComposer');
+      const sStart = textarea.selectionStart;
+      const sEnd = textarea.selectionEnd;
+      const text = textarea.value;
+      const selected = text.substring(sStart, sEnd);
+      textarea.value = text.substring(0, sStart) + start + selected + end + text.substring(sEnd);
+      textarea.selectionStart = sStart + start.length;
+      textarea.selectionEnd = sStart + start.length + selected.length;
+      textarea.focus();
+      triggerAutosave();
+    }
+
+    // Autosave
+    const composer = document.getElementById('notesComposer');
+    const status = document.getElementById('autosaveStatus');
+    let saveTimeout = null;
+
+    if (composer) {
+      composer.addEventListener('input', () => {
+        triggerAutosave();
+      });
+    }
+
+    function triggerAutosave() {
+      if (!status) return;
+      status.className = 'save-indicator';
+      status.innerHTML = '● Сохранение...';
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        status.className = 'save-indicator saved';
+        status.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Сохранено`;
+      }, 600);
+    }
+
+    function showToast(text) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastText').innerText = text;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2400);
+    }
+
+    // Resizer
+    const resizer = document.getElementById('dragResizer');
+    const notesPane = document.getElementById('notesPane');
+    let isResizing = false;
+
+    if (resizer) {
+      resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        resizer.classList.add('dragging');
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'col-resize';
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const newWidth = window.innerWidth - e.clientX;
+        if (newWidth >= 320 && newWidth <= 640) {
+          notesPane.style.width = newWidth + 'px';
+        }
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isResizing) {
+          isResizing = false;
+          resizer.classList.remove('dragging');
+          document.body.style.userSelect = '';
+          document.body.style.cursor = '';
+        }
+      });
+    }
+  </script>
+</body>
+</html>

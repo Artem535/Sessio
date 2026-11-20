@@ -1,0 +1,15 @@
+site:
+  title: Sessio
+  start_page: sessio::index.adoc
+content:
+  sources:
+    - url: .
+      branches: HEAD
+      start_path: docs/antora
+      worktrees: true
+ui:
+  bundle:
+    url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/master/raw/build/ui-bundle.zip?job=bundle-stable
+    snapshot: true
+output:
+  dir: ./build-antora

@@ -9,7 +9,6 @@ namespace pcm::widgets::constants {
     constexpr auto kCardCornerRadius = 14;
     constexpr auto kCircleDiameter = 10;
     constexpr auto kCircleMargin = kCircleDiameter / 2;
-    constexpr auto kCircleColor = QColor(0, 120, 215);
     constexpr auto kNotesHeaderHorizontalPadding = 16;
     constexpr auto kNotesHeaderVerticalPadding = 14;
     constexpr auto kNotesFeedItemSpacing = 12;
@@ -25,6 +24,4 @@ namespace pcm::widgets::constants {
     inline const QColor kSurfaceBackgroundColor = QColor(255, 255, 255, 5);
     inline const QColor kCalendarCardBorderColor = QColor(255, 255, 255, 0);
     inline const QColor kCalendarCardBackgroundColor = QColor(255, 255, 255, 8);
-    inline const QColor kCalendarCurrentDayUnderlineColor = QColor(0x9f, 0xc0, 0xff);
-    inline const QColor kCalendarCurrentDayForegroundColor = QColor(0xd9, 0xe6, 0xff);
 } // namespace pcm::widgets::constants

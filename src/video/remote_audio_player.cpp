@@ -2,6 +2,7 @@
 
 #include <QAudioFormat>
 #include <QMetaObject>
+#include <vector>
 
 namespace pcm::video {
 
@@ -20,6 +21,7 @@ void RemoteAudioPlayer::attachTrack(const std::shared_ptr<livekit::Track> &track
   }
 
   livekit::AudioStream::Options options;
+  options.capacity = 2;
   mStream = livekit::AudioStream::fromTrack(track, options);
   if (!mStream) {
     return;
@@ -27,10 +29,11 @@ void RemoteAudioPlayer::attachTrack(const std::shared_ptr<livekit::Track> &track
 
   mOutputDevice = outputDevice;
   mRunning.store(true);
-  mReaderThread = std::thread(&RemoteAudioPlayer::readerLoop, this);
+  mReaderThread = std::thread(&RemoteAudioPlayer::readerLoop, this, mGeneration);
 }
 
 void RemoteAudioPlayer::detach() {
+  ++mGeneration;
   mRunning.store(false);
   if (mStream) {
     mStream->close();
@@ -43,7 +46,7 @@ void RemoteAudioPlayer::detach() {
   mStream.reset();
 }
 
-void RemoteAudioPlayer::readerLoop() {
+void RemoteAudioPlayer::readerLoop(uint64_t generation) {
   livekit::AudioFrameEvent event;
   while (mRunning.load()) {
     if (!mStream->read(event)) {
@@ -61,18 +64,24 @@ void RemoteAudioPlayer::readerLoop() {
     const int sampleRate = frame.sampleRate();
     const int numChannels = frame.numChannels();
 
+    if (numChannels > 0 && mTap.active()) {
+      const auto channels = static_cast<std::size_t>(numChannels);
+      downmixToMono(samples.data(), samples.size() / channels, numChannels, mMonoScratch);
+      mTap.push(mMonoScratch.data(), mMonoScratch.size(), sampleRate);
+    }
+
     QMetaObject::invokeMethod(
         this,
-        [this, bytes = std::move(bytes), sampleRate, numChannels]() mutable {
-          deliverAudioOnGuiThread(std::move(bytes), sampleRate, numChannels);
+        [this, bytes = std::move(bytes), sampleRate, numChannels, generation]() mutable {
+          deliverAudioOnGuiThread(std::move(bytes), sampleRate, numChannels, generation);
         },
         Qt::QueuedConnection);
   }
 }
 
 void RemoteAudioPlayer::deliverAudioOnGuiThread(QByteArray pcmBytes, const int sampleRate,
-                                                const int numChannels) {
-  if (!mRunning.load()) {
+                                                const int numChannels, uint64_t generation) {
+  if (!mRunning.load() || generation != mGeneration) {
     return;
   }
 
@@ -80,13 +89,16 @@ void RemoteAudioPlayer::deliverAudioOnGuiThread(QByteArray pcmBytes, const int s
     QAudioFormat format;
     format.setSampleRate(sampleRate);
     format.setChannelCount(numChannels);
+    // Without an explicit config Qt's PipeWire backend tags the channels as
+    // AUX0..n, and PipeWire routes AUX0 to the left speaker only.
+    format.setChannelConfig(QAudioFormat::defaultChannelConfigForChannelCount(numChannels));
     format.setSampleFormat(QAudioFormat::Int16);
 
     mSink = std::make_unique<QAudioSink>(mOutputDevice, format, this);
     mSinkDevice = mSink->start();
   }
 
-  if (mSinkDevice) {
+  if (mSinkDevice && mSinkDevice->isWritable()) {
     mSinkDevice->write(pcmBytes);
   }
 }

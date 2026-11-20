@@ -1,0 +1,2 @@
+// Canonical source lives in Antora; keep the previous include path working.
+include::../antora/modules/ROOT/pages/reference/16-recurring-calls-staging-smoke.adoc[leveloffset=+1]

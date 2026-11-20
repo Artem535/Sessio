@@ -60,11 +60,11 @@ QString changeLogLineText(const DuckEventChangeLog &entry) {
   case 3: {
     const auto oldAt = entry.old_start_date.has_value()
                             ? QDateTime::fromMSecsSinceEpoch(*entry.old_start_date,
-                                                             QTimeZone::systemTimeZone())
+                                                             QTimeZone(QTimeZone::LocalTime))
                             : QDateTime{};
     const auto newAt = entry.new_start_date.has_value()
                             ? QDateTime::fromMSecsSinceEpoch(*entry.new_start_date,
-                                                             QTimeZone::systemTimeZone())
+                                                             QTimeZone(QTimeZone::LocalTime))
                             : QDateTime{};
     return ClientNotesPage::tr("Rescheduled from %1 to %2")
                .arg(oldAt.isValid() ? oldAt.toString("dd.MM.yyyy HH:mm")

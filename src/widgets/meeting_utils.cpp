@@ -10,6 +10,7 @@
 #include <QObject>
 #include <QTimeZone>
 #include <QUrl>
+#include <QUrlQuery>
 
 namespace pcm::meeting {
 
@@ -23,6 +24,21 @@ bool isValidMeetingUrl(const QString &url) {
   return parsedUrl.isValid() &&
          (parsedUrl.scheme() == QStringLiteral("http") ||
           parsedUrl.scheme() == QStringLiteral("https"));
+}
+
+bool isValidInvitationUrl(const QString &url) {
+  if (isValidMeetingUrl(url)) {
+    return true;
+  }
+
+  const QUrl parsedUrl(url.trimmed());
+  if (!parsedUrl.isValid() || parsedUrl.scheme() != QStringLiteral("sessio") ||
+      parsedUrl.host() != QStringLiteral("join")) {
+    return false;
+  }
+  const QUrlQuery query(parsedUrl);
+  return !query.queryItemValue(QStringLiteral("code")).isEmpty() &&
+         !query.queryItemValue(QStringLiteral("passcode")).isEmpty();
 }
 
 void openMeetingUrl(const QString &url, QWidget *parent) {

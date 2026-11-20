@@ -5,6 +5,10 @@
 
 This documentation describes the current implementation of `Sessio`.
 
+Документация суфлёра и все отчёты исследования локальных LLM перенесены в Antora:
+link:../antora/modules/ROOT/pages/call-prompter.adoc[Суфлёр звонка].
+Для сборки сайта выполните `bash scripts/build-antora.sh` из корня репозитория.
+
 include::01-overview.adoc[]
 include::02-build-run.adoc[]
 include::03-architecture.adoc[]
@@ -17,6 +21,8 @@ include::09-recurring-events.adoc[]
 include::10-encrypted-backup-adr.adoc[]
 include::11-token-backend-account-model-adr.adoc[]
 include::12-invitation-security-model-adr.adoc[]
+include::15-calls-setup.adoc[leveloffset=+1]
+include::16-recurring-calls-staging-smoke.adoc[]
 
 == Roadmap
 
