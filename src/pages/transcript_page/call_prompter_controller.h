@@ -4,9 +4,12 @@
 #include <QJsonObject>
 #include <QDate>
 #include <QObject>
+#include <QPointer>
 #include <QTimer>
 #include <QHash>
 #include <memory>
+
+namespace sessio::rag { class RagWorker; }
 
 class CallPrompterController final : public QObject {
   Q_OBJECT
@@ -40,6 +43,10 @@ public:
   bool resolveCard(const QString &id, const QString &targetId);
   bool saveNote(const QString &id, qint64 clientId);
   QJsonArray cards() const { return mCards; }
+  // Ephemeral wiki hint cards (rag-core); empty when RAG is off or unavailable.
+  QJsonArray ragCards() const { return mRagCards; }
+  // Removes one wiki hint the practitioner no longer wants to see.
+  void removeRagCard(int index);
   QJsonArray records() const { return mRecords; }
   QJsonArray suggestions() const { return mSuggestions; }
   qint64 transcriptId() const { return mTranscriptId; }
@@ -50,9 +57,12 @@ public:
 signals:
   void requestReady(QJsonObject request);
   void cardsChanged();
+  void ragCardsChanged();
   void statusChanged(QString status);
 private:
   bool persist();
+  void startRag();
+  void stopRag();
   void batchFailed();
   void setStatus(const QString &status);
   QJsonObject state() const;
@@ -70,4 +80,8 @@ private:
   QString mStatus, mEngine;
   qint64 mEventId = 0;
   QDate mCallDate;
+  QPointer<sessio::rag::RagWorker> mRagWorker;
+  qint64 mRagGeneration = 0;
+  QString mRagContext;
+  QJsonArray mRagCards;
 };

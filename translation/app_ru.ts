@@ -2217,6 +2217,22 @@
 <context>
     <name>NotesWorkspace</name>
     <message>
+        <source>just now</source>
+        <translation>только что</translation>
+    </message>
+    <message>
+        <source>%1 s</source>
+        <translation>%1 с</translation>
+    </message>
+    <message>
+        <source>%1 min</source>
+        <translation>%1 мин</translation>
+    </message>
+    <message>
+        <source>%1 h</source>
+        <translation>%1 ч</translation>
+    </message>
+    <message>
         <source>Add to calendar</source>
         <translation>Добавить в календарь</translation>
     </message>
@@ -2343,6 +2359,38 @@
     <message>
         <source>Hide</source>
         <translation>Скрыть</translation>
+    </message>
+    <message>
+        <source>Wiki hints · context</source>
+        <translation>Wiki-подсказки · контекст</translation>
+    </message>
+    <message>
+        <source>Project</source>
+        <translation>Проект</translation>
+    </message>
+    <message>
+        <source>Question</source>
+        <translation>Вопрос</translation>
+    </message>
+    <message>
+        <source>Wiki</source>
+        <translation>Wiki</translation>
+    </message>
+    <message>
+        <source>Open page</source>
+        <translation>Открыть страницу</translation>
+    </message>
+    <message>
+        <source>Source: wiki page</source>
+        <translation>Источник: страница вики</translation>
+    </message>
+    <message>
+        <source>No context yet</source>
+        <translation>Пока нет контекста</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Удалить</translation>
     </message>
     <message>
         <source>Needs source check</source>
@@ -2563,6 +2611,14 @@
     <message>
         <source>Source · %1:%2</source>
         <translation>Источник · %1:%2</translation>
+    </message>
+    <message>
+        <source>Wiki hint</source>
+        <translation>Подсказка из вики</translation>
+    </message>
+    <message>
+        <source>Open page</source>
+        <translation>Открыть страницу</translation>
     </message>
     <message>
         <source>Accept</source>
@@ -4934,6 +4990,66 @@ They appear here after a call with transcription turned on.</source>
     <message>
         <source>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</source>
         <translation>Выберите скачанную модель Gemma. Модель работает на этом компьютере, ничего не скачивается автоматически. Подсказки суфлёра требуют вашей проверки.</translation>
+    </message>
+    <message>
+        <source>Wiki hints (RAG, experimental)</source>
+        <translation>Подсказки из вики (RAG, экспериментально)</translation>
+    </message>
+    <message>
+        <source>Search the wiki during calls</source>
+        <translation>Искать в вики во время звонков</translation>
+    </message>
+    <message>
+        <source>Search every phrase, even without question words</source>
+        <translation>Искать по каждой реплике, даже без вопросительных слов</translation>
+    </message>
+    <message>
+        <source>Use the trained router head (experimental)</source>
+        <translation>Использовать обученную голову роутера (экспериментально)</translation>
+    </message>
+    <message>
+        <source>Rules</source>
+        <translation>Правила</translation>
+    </message>
+    <message>
+        <source>Local model</source>
+        <translation>Локальная модель</translation>
+    </message>
+    <message>
+        <source>Cloud model</source>
+        <translation>Облачная модель</translation>
+    </message>
+    <message>
+        <source>Query rewrite</source>
+        <translation>Переписывание запроса</translation>
+    </message>
+    <message>
+        <source>Outline URL</source>
+        <translation>URL Outline</translation>
+    </message>
+    <message>
+        <source>Outline token (read-only)</source>
+        <translation>Токен Outline (только чтение)</translation>
+    </message>
+    <message>
+        <source>Collection ids (empty = all)</source>
+        <translation>Id коллекций (пусто = все)</translation>
+    </message>
+    <message>
+        <source>Embedding model</source>
+        <translation>Модель эмбеддингов</translation>
+    </message>
+    <message>
+        <source>LiteRT models (*.litertlm)</source>
+        <translation>Модели LiteRT (*.litertlm)</translation>
+    </message>
+    <message>
+        <source>Embedding model (.litertlm)</source>
+        <translation>Модель эмбеддингов (.litertlm)</translation>
+    </message>
+    <message>
+        <source>Hints are computed on this computer from the indexed wiki. The first indexing runs in the background and can take about an hour on CPU.</source>
+        <translation>Подсказки вычисляются на этом компьютере по проиндексированной вики. Первая индексация идёт фоном и может занять около часа на CPU.</translation>
     </message>
     <message>
         <source>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</source>

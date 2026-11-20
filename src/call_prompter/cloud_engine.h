@@ -13,6 +13,9 @@ struct CloudConfig {
   int timeoutMs = 120000;  // per attempt
   int retryDelayMs = 700;  // before the single retry
   int maxOutputTokens = 2048;
+  // Some routers (VSellm) think by default and thinking tokens consume
+  // maxOutputTokens, leaving the content empty; opt in to disabling it.
+  bool thinkingDisabled = false;
 };
 
 // generate() blocks the calling thread (it runs a private event loop, so any

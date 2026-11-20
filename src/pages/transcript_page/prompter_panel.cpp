@@ -1,10 +1,13 @@
 #include "prompter_panel.h"
+#include "app_settings.h"
 #include "phrase_card_paint.h"
+#include <QDesktopServices>
 #include <QGroupBox>
 #include <QInputDialog>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -63,6 +66,7 @@ PrompterPanel::PrompterPanel(CallPrompterController *controller, std::shared_ptr
   scroll->setWidget(content); layout->addWidget(scroll, 1);
   auto *notice = plainLabel(tr("Private suggestions. Check the source before saving."), this); layout->addWidget(notice);
   connect(controller, &CallPrompterController::cardsChanged, this, &PrompterPanel::refresh);
+  connect(controller, &CallPrompterController::ragCardsChanged, this, &PrompterPanel::refresh);
   connect(controller, &CallPrompterController::statusChanged, this, [this](const QString &status) {
     mStatus->setText(status); mPause->setEnabled(mController && mController->running());
     mStart->setEnabled(mController && !mController->running());
@@ -90,8 +94,12 @@ void PrompterPanel::triggerPause() {
   else if (mController && mController->running()) emit pauseRequested();
 }
 void PrompterPanel::triggerCardAction(const QString &cardId, const QString &action) {
+  // QML uses intent names; the buttons are named after their widget role.
+  const QString buttonName = action == QLatin1String("dismiss") ? QStringLiteral("reject")
+                           : action == QLatin1String("save_note") ? QStringLiteral("save")
+                           : action;
   if (auto *widget = mCardWidgets.value(cardId))
-    if (auto *button = widget->findChild<QPushButton *>(action); button && button->isEnabled())
+    if (auto *button = widget->findChild<QPushButton *>(buttonName); button && button->isEnabled())
       button->click();
 }
 void PrompterPanel::setEmbedded(bool embedded) {
@@ -112,6 +120,34 @@ void PrompterPanel::refresh() {
   QString hint;
   if (!mController->suggestions().isEmpty()) hint = mController->suggestions().first().toObject()["text"].toString();
   mHintText->setText(hint); mHint->setVisible(!hint.isEmpty() && hint != mDismissedHint);
+  const auto ragCards = mController->ragCards();
+  if (ragCards.isEmpty()) {
+    if (mRagBox) { mCards->removeWidget(mRagBox); mRagBox->deleteLater(); mRagBox = nullptr; }
+  } else {
+    const auto top = ragCards.first().toObject();
+    if (!mRagBox) {
+      auto *box = new QGroupBox(tr("Wiki hint"), this);
+      auto *lay = new QVBoxLayout(box);
+      auto *snippet = plainLabel({}, box); snippet->setObjectName("ragSnippet");
+      snippet->setTextFormat(Qt::MarkdownText);
+      snippet->setOpenExternalLinks(false);
+      connect(snippet, &QLabel::linkActivated, this, [this](const QString &link) {
+        const auto base = mController ? pcm::app_settings::ragOutlineUrl() : QString();
+        QDesktopServices::openUrl(QUrl(link.startsWith('/') ? base + link : link));
+      });
+      lay->addWidget(snippet);
+      auto *title = plainLabel({}, box); title->setObjectName("ragTitle"); lay->addWidget(title);
+      auto *open = new QPushButton(tr("Open page"), box); lay->addWidget(open);
+      connect(open, &QPushButton::clicked, this, [this] {
+        if (mController && !mController->ragCards().isEmpty())
+          QDesktopServices::openUrl(QUrl(mController->ragCards().first().toObject()["url"].toString()));
+      });
+      mRagBox = box;
+      mCards->insertWidget(0, box);
+    }
+    mRagBox->findChild<QLabel *>("ragSnippet")->setText(top["snippet"].toString());
+    mRagBox->findChild<QLabel *>("ragTitle")->setText(top["title"].toString());
+  }
   int pending = 0;
   QSet<QString> present;
   for (const auto &value : mController->cards()) {

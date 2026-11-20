@@ -25,6 +25,9 @@
 #include "runtime/components/constrained_decoding/constraint_provider_factory.h"
 #include "runtime/components/constrained_decoding/llg_constraint_config.h"
 #include "runtime/components/prompt_template.h"
+#include "runtime/core/embedding_engine_impl.h"
+#include "runtime/engine/embedding_engine.h"
+#include "runtime/engine/embedding_engine_settings.h"
 #include "runtime/engine/engine.h"
 #include "runtime/engine/engine_factory.h"
 #include "runtime/engine/engine_settings.h"
@@ -374,6 +377,33 @@ private:
   std::vector<Prefix> mPrefixes;
 };
 
+class LiteRtEmbedder final : public Embedder {
+public:
+  explicit LiteRtEmbedder(std::unique_ptr<::litert::lm::EmbeddingEngine> engine) : mEngine(std::move(engine)) {}
+
+  Status embed(const std::vector<std::string> &texts, std::vector<std::vector<float>> *vectors) override {
+    vectors->clear();
+    if (texts.empty()) return Status::Ok;
+    std::vector<std::vector<::litert::lm::InputData>> batch;
+    batch.reserve(texts.size());
+    for (const auto &text : texts) {
+      std::vector<::litert::lm::InputData> inputs;
+      inputs.emplace_back(::litert::lm::InputText(text));
+      batch.push_back(std::move(inputs));
+    }
+    ::litert::lm::EmbeddingOptions options; // normalize and special tokens stay at defaults
+    options.input_overflow_strategy = ::litert::lm::InputOverflowStrategy::kChunkAndAverage;
+    auto responses = mEngine->ComputeEmbeddingBatch(batch, options);
+    if (!responses.ok() || responses->size() != texts.size()) return Status::Failed;
+    vectors->reserve(responses->size());
+    for (auto &response : *responses) vectors->push_back(std::move(response.embedding));
+    return Status::Ok;
+  }
+
+private:
+  std::unique_ptr<::litert::lm::EmbeddingEngine> mEngine;
+};
+
 } // namespace
 
 Model::~Model() = default;
@@ -434,6 +464,32 @@ std::unique_ptr<Model> loadModel(const std::string &path, const ModelOptions &op
   }
   if (error) *error = reason;
   return nullptr;
+}
+
+Embedder::~Embedder() = default;
+
+std::unique_ptr<Embedder> loadEmbedder(const std::string &path, const EmbedderOptions &options, std::string *error) {
+  ::litert::lm::SetMinLogSeverity(::litert::lm::LogSeverity::kError);
+  if (error) error->clear();
+  const auto fail = [&](const char *text) -> std::unique_ptr<Embedder> {
+    if (error) *error = text;
+    return nullptr;
+  };
+  auto assets = ::litert::lm::ModelAssets::Create(path);
+  if (!assets.ok()) return fail("model file cannot be opened");
+  auto settings = ::litert::lm::EmbeddingEngineSettings::CreateDefault(std::move(*assets), ::litert::lm::Backend::CPU);
+  if (!settings.ok()) return fail("model settings are invalid");
+  settings->GetMutableMainExecutorSettings().SetNumThreads(options.threads);
+  if (!options.cacheDir.empty()) {
+    std::error_code ignored;
+    const auto cache = std::filesystem::path(options.cacheDir) / "embedding";
+    std::filesystem::create_directories(cache, ignored);
+    if (ignored) return fail("runtime cache directory unavailable");
+    settings->GetMutableMainExecutorSettings().SetCacheDir(cache.string());
+  }
+  auto engine = ::litert::lm::EmbeddingEngineImpl::Create(std::move(*settings));
+  if (!engine.ok()) return fail("CPU embedding engine initialization failed");
+  return std::make_unique<LiteRtEmbedder>(std::move(*engine));
 }
 
 } // namespace sessio::litert

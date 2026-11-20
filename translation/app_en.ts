@@ -2206,6 +2206,22 @@
 <context>
     <name>NotesWorkspace</name>
     <message>
+        <source>just now</source>
+        <translation>just now</translation>
+    </message>
+    <message>
+        <source>%1 s</source>
+        <translation>%1 s</translation>
+    </message>
+    <message>
+        <source>%1 min</source>
+        <translation>%1 min</translation>
+    </message>
+    <message>
+        <source>%1 h</source>
+        <translation>%1 h</translation>
+    </message>
+    <message>
         <source>Add to calendar</source>
         <translation>Add to calendar</translation>
     </message>
@@ -2332,6 +2348,38 @@
     <message>
         <source>Hide</source>
         <translation>Hide</translation>
+    </message>
+    <message>
+        <source>Wiki hints · context</source>
+        <translation>Wiki hints · context</translation>
+    </message>
+    <message>
+        <source>Project</source>
+        <translation>Project</translation>
+    </message>
+    <message>
+        <source>Question</source>
+        <translation>Question</translation>
+    </message>
+    <message>
+        <source>Wiki</source>
+        <translation>Wiki</translation>
+    </message>
+    <message>
+        <source>Open page</source>
+        <translation>Open page</translation>
+    </message>
+    <message>
+        <source>Source: wiki page</source>
+        <translation>Source: wiki page</translation>
+    </message>
+    <message>
+        <source>No context yet</source>
+        <translation>No context yet</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Remove</translation>
     </message>
     <message>
         <source>Needs source check</source>
@@ -2552,6 +2600,14 @@
     <message>
         <source>Source · %1:%2</source>
         <translation>Source · %1:%2</translation>
+    </message>
+    <message>
+        <source>Wiki hint</source>
+        <translation>Wiki hint</translation>
+    </message>
+    <message>
+        <source>Open page</source>
+        <translation>Open page</translation>
     </message>
     <message>
         <source>Accept</source>
@@ -4919,6 +4975,66 @@ They appear here after a call with transcription turned on.</translation>
     <message>
         <source>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</source>
         <translation>Choose a downloaded Gemma model. The model runs on this computer, and nothing is downloaded automatically. Prompter suggestions require your review.</translation>
+    </message>
+    <message>
+        <source>Wiki hints (RAG, experimental)</source>
+        <translation>Wiki hints (RAG, experimental)</translation>
+    </message>
+    <message>
+        <source>Search the wiki during calls</source>
+        <translation>Search the wiki during calls</translation>
+    </message>
+    <message>
+        <source>Search every phrase, even without question words</source>
+        <translation>Search every phrase, even without question words</translation>
+    </message>
+    <message>
+        <source>Use the trained router head (experimental)</source>
+        <translation>Use the trained router head (experimental)</translation>
+    </message>
+    <message>
+        <source>Rules</source>
+        <translation>Rules</translation>
+    </message>
+    <message>
+        <source>Local model</source>
+        <translation>Local model</translation>
+    </message>
+    <message>
+        <source>Cloud model</source>
+        <translation>Cloud model</translation>
+    </message>
+    <message>
+        <source>Query rewrite</source>
+        <translation>Query rewrite</translation>
+    </message>
+    <message>
+        <source>Outline URL</source>
+        <translation>Outline URL</translation>
+    </message>
+    <message>
+        <source>Outline token (read-only)</source>
+        <translation>Outline token (read-only)</translation>
+    </message>
+    <message>
+        <source>Collection ids (empty = all)</source>
+        <translation>Collection ids (empty = all)</translation>
+    </message>
+    <message>
+        <source>Embedding model</source>
+        <translation>Embedding model</translation>
+    </message>
+    <message>
+        <source>LiteRT models (*.litertlm)</source>
+        <translation>LiteRT models (*.litertlm)</translation>
+    </message>
+    <message>
+        <source>Embedding model (.litertlm)</source>
+        <translation>Embedding model (.litertlm)</translation>
+    </message>
+    <message>
+        <source>Hints are computed on this computer from the indexed wiki. The first indexing runs in the background and can take about an hour on CPU.</source>
+        <translation>Hints are computed on this computer from the indexed wiki. The first indexing runs in the background and can take about an hour on CPU.</translation>
     </message>
     <message>
         <source>Transcription runs on this computer. Audio is never stored. Text is saved in the local database next to your other data and included in backups.</source>

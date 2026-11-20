@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "RAG-суфлёр Sessio — полная схема",
+    "subtitle": "live-подсказки во время звонка + фоновая индексация Outline-wiki + NER-словарь; всё локально",
+    "output": "rag-pipeline.html"
+  },
+  "components": [
+    { "id": "asr", "type": "frontend", "label": "ASR-транскрипт", "sublabel": "реплики звонка (обе роли)", "pos": [40, 110], "size": [130, 60] },
+    { "id": "router", "type": "backend", "label": "Router", "sublabel": "правила v1 / голова v2", "pos": [220, 110], "size": [130, 60], "tag": "0 мс / ~130 мс" },
+    { "id": "rewrite", "type": "backend", "label": "Query rewrite", "sublabel": "rules / local LLM / cloud", "pos": [400, 110], "size": [130, 60], "tag": "cloud: обезличивание" },
+    { "id": "search", "type": "backend", "label": "Hybrid search", "sublabel": "multi-variant RRF k=60", "pos": [760, 110], "size": [140, 60], "tag": "doc-dedup" },
+    { "id": "card", "type": "frontend", "label": "Wiki hint карточка", "sublabel": "markdown ≤600 зн. + ссылка", "pos": [960, 110], "size": [130, 60] },
+    { "id": "embedder", "type": "backend", "label": "Embedder", "sublabel": "gemma-2-270m int8, CPU", "pos": [400, 330], "size": [150, 64], "tag": "один энкодер на всё" },
+    { "id": "ner", "type": "backend", "label": "NER fuzzy-match", "sublabel": "кодпоинт-Левенштейн", "pos": [580, 330], "size": [150, 64], "tag": "канон. имена + буст" },
+    { "id": "index", "type": "database", "label": "LadybugDB", "sublabel": "Document/Chunk/Entity", "pos": [760, 330], "size": [140, 64], "tag": "FTS ru + HNSW cosine" },
+    { "id": "outline", "type": "external", "label": "Outline wiki", "sublabel": "read-only токен, allowlist", "pos": [40, 540], "size": [130, 60] },
+    { "id": "connector", "type": "backend", "label": "Connector", "sublabel": "ревизии, 429-retry", "pos": [220, 540], "size": [130, 60] },
+    { "id": "chunker", "type": "backend", "label": "Чанкер", "sublabel": "структурный, 1800 зн.", "pos": [400, 540], "size": [130, 60], "tag": "таблицы целы" },
+    { "id": "nerx", "type": "cloud", "label": "NER-экстракция", "sublabel": "lfm3 1.7B, GPU-контейнер", "pos": [760, 540], "size": [140, 60], "tag": "ollama-rag :11436" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "LIVE · во время звонка · ~150 мс + rewrite 1–3 с", "wraps": ["asr", "router", "rewrite", "search", "card"] },
+    { "kind": "region", "label": "BACKGROUND · индексация · RagWorker QThread", "wraps": ["outline", "connector", "chunker"] }
+  ],
+  "connections": [
+    { "from": "asr", "to": "router", "variant": "emphasis" },
+    { "from": "router", "to": "rewrite", "variant": "emphasis" },
+    { "from": "rewrite", "to": "search", "label": "варианты запроса", "variant": "emphasis" },
+    { "from": "search", "to": "card", "variant": "emphasis" },
+    { "from": "rewrite", "to": "embedder", "label": "query prefix", "fromSide": "bottom", "toSide": "top", "route": "orthogonal-v" },
+    { "from": "embedder", "to": "search", "label": "вектор ~130 мс", "fromSide": "top", "toSide": "bottom", "route": "orthogonal-v" },
+    { "from": "ner", "to": "search", "label": "канон. имена + буст", "fromSide": "top", "toSide": "bottom", "route": "orthogonal-v" },
+    { "from": "search", "to": "index", "label": "dense+FTS top-50", "fromSide": "bottom", "toSide": "top", "labelDy": 55 },
+    { "from": "index", "to": "ner", "label": "словарь", "fromSide": "left", "toSide": "right", "labelDy": -26 },
+    { "from": "chunker", "to": "embedder", "label": "doc prefix ~550 мс/чанк", "fromSide": "top", "toSide": "bottom", "route": "orthogonal-v" },
+    { "from": "embedder", "to": "index", "label": "upsert", "fromSide": "bottom", "toSide": "bottom", "route": "orthogonal-v", "labelDy": 24 },
+    { "from": "nerx", "to": "index", "label": "Entity-таблица", "fromSide": "top", "toSide": "bottom", "route": "orthogonal-v" },
+    { "from": "outline", "to": "connector", "variant": "dashed" },
+    { "from": "connector", "to": "chunker", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Live-путь", "items": ["Router: правила («?», вопросительные слова, глаголы-просьбы) или обученная голова поверх эмбеддинга (opt-in)", "Rewrite: правила / локальная модель суфлёра (отдельный экземпляр) / облако с обезличиванием Pseudonymizer", "NER fuzzy-match чинит исковерканные STT имена; канонические варианты + буст документов с сущностью", "Multi-variant RRF (k=60) по нескольким формулировкам, doc-dedup, markdown-карточка ≤600 знаков + ссылка"] },
+    { "dot": "emerald", "title": "Фоновая индексация", "items": ["Connector: пагинация 100, 429-retry, allowlist коллекций, синк по ревизиям", "Чанкер: путь заголовков, таблицы целы, 1800 кодпоинтов", "Первичка ~70 мин CPU / ~15 мин GPU (Buran); дальше инкремент по ревизиям", "RagWorker — отдельный QThread, отмена по generation, деградация без RAG"] },
+    { "dot": "amber", "title": "NER-словарь", "items": ["lfm3 1.7B Q8_0 в собственном GPU-контейнере ollama-rag :11436 (shared :11435 без GPU)", "1351 сущность → 1180 уникальных имён: проекты / клиенты / продукты", "Матч: нормализация (ё/регистр) + Левенштейн по кодпоинтам с порогом по длине токена", "Загрузчик load_entities льёт entities.json в Entity-таблицу индекса"] },
+    { "dot": "rose", "title": "Принципы", "items": ["Офлайн-first: без сервера и MCP; облако только для rewrite и только обезличенно", "Один энкодер на поиск и голову роутера; префиксы рецепта — в rag-core", "Выключенный RAG / нет рантайма / нет индекса — суфлёр работает как раньше", "Версия 0.2.49, ветка feat/185-rag-core, issue #185"] }
+  ]
+}

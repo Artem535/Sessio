@@ -5,6 +5,9 @@
       "typeinfo for sessio::litert::Model";
       "typeinfo name for sessio::litert::Model";
       "vtable for sessio::litert::Model";
+      "typeinfo for sessio::litert::Embedder";
+      "typeinfo name for sessio::litert::Embedder";
+      "vtable for sessio::litert::Embedder";
     };
   local: *;
 };

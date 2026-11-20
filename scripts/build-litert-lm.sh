@@ -24,6 +24,10 @@ prefix="$(realpath -m "${1:-$HOME/.cache/sessio-litert-lm}")"
 jobs="${JOBS:-2}"
 cc="$(command -v "${CC:-gcc}")"
 cxx="$(command -v "${CXX:-g++}")"
+# GCC 15 rejects absl's direct <bmi2intrin.h> include; pre-include the umbrella
+# header on x86 so the runtime super-build keeps working on the CI image.
+cxx_extra=""
+if [[ "$(uname -m)" == x86_64 ]]; then cxx_extra="-include x86gprintrin.h"; fi
 hook_dir="$(cd "$(dirname "$0")/../src/call_prompter/litert" && pwd)"
 
 mkdir -p "$prefix"
@@ -40,10 +44,11 @@ python3 "$(dirname "$0")/patch-litert-lm-gpu-mask.py" "$prefix/src"
 # both phases explicitly.
 cmake -S "$prefix/src" -B "$prefix/build" -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release \
   "-DCMAKE_BUILD_PARALLEL_LEVEL=$jobs" \
+  "-DCMAKE_CXX_FLAGS=$cxx_extra" \
   "-DLITERTLM_CC=$cc" "-DLITERTLM_CXX=$cxx" \
   "-DLITERTLM_HOST_CC_COMPILER=$cc" "-DLITERTLM_HOST_CXX_COMPILER=$cxx" \
   "-DLITERTLM_TARGET_CC_COMPILER=$cc" "-DLITERTLM_TARGET_CXX_COMPILER=$cxx" \
-  "-DLITERTLM_TOOLCHAIN_ARGS=-DCMAKE_POSITION_INDEPENDENT_CODE=ON;-DCMAKE_PROJECT_LiteRT-LM_INCLUDE=$hook_dir/sessio_litert_hook.cmake;-DCMAKE_PROJECT_LiteRT_INCLUDE=$hook_dir/sessio_litert_cpu.cmake;-DSESSIO_LITERT_SOURCE_DIR=$hook_dir;-DLITERTLM_TFLITE_TAG=$tflite_tag;-DLITERTLM_LITERT_TAG=$litert_tag;-DLITERTLM_RE2_TAG=$re2_tag"
+  "-DLITERTLM_TOOLCHAIN_ARGS=-DCMAKE_POSITION_INDEPENDENT_CODE=ON;-DCMAKE_CXX_FLAGS=$cxx_extra;-DCMAKE_PROJECT_LiteRT-LM_INCLUDE=$hook_dir/sessio_litert_hook.cmake;-DCMAKE_PROJECT_LiteRT_INCLUDE=$hook_dir/sessio_litert_cpu.cmake;-DSESSIO_LITERT_SOURCE_DIR=$hook_dir;-DLITERTLM_TFLITE_TAG=$tflite_tag;-DLITERTLM_LITERT_TAG=$litert_tag;-DLITERTLM_RE2_TAG=$re2_tag"
 mkdir -p "$prefix/build/litert_lm/build"
 CMAKE_BUILD_PARALLEL_LEVEL="$jobs" cmake --build "$prefix/build"
 

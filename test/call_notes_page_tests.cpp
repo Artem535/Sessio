@@ -629,6 +629,25 @@ TEST_F(CallNotesPageTest, FourSectionsAndLivePointsRender) {
   EXPECT_NE(root->findChild<QQuickItem *>("qmlLivePoints"), nullptr);
 }
 
+TEST_F(CallNotesPageTest, ContextListReplacesSingleWikiCardAndTranscriptToggles) {
+  generate();
+  CallNotesPage page(db, &controller); page.resize(1200, 900); page.show(); QApplication::processEvents();
+  auto *bridge = page.findChild<NotesWorkspaceBridge *>();
+  EXPECT_TRUE(bridge->state().contains("ragCards"));
+  auto *root = page.findChild<QQuickWidget *>("notesQuickWorkspace")->rootObject();
+  auto *list = root->findChild<QQuickItem *>("qmlRagContextList");
+  ASSERT_NE(list, nullptr);
+  // No rag cards and no prompter activity in this fixture: no rows rendered.
+  EXPECT_EQ(root->findChild<QQuickItem *>("qmlRagContextRow0"), nullptr);
+  // Transcript hidden post-call until opened from the header.
+  auto *tx = root->findChild<QQuickItem *>("qmlPhraseSearch");
+  ASSERT_NE(tx, nullptr);
+  EXPECT_FALSE(tx->isVisible());
+  root->setProperty("sourceOpen", true);
+  QApplication::processEvents();
+  EXPECT_TRUE(tx->isVisible());
+}
+
 TEST_F(CallNotesPageTest, SummaryCaptionNamesTheEngineThatWroteIt) {
   engine = "cloud:m1";
   generate();

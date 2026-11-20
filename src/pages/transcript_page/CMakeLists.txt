@@ -43,3 +43,11 @@ target_link_libraries(${TARGET_NAME} PUBLIC Qt6::Widgets Qt6::Quick Qt6::QuickWi
     ${PROJECT_NAME}_database ${PROJECT_NAME}_widgets ${PROJECT_NAME}_call_transcription
     ${PROJECT_NAME}_client_notes_page
     ${PROJECT_NAME}_call_prompter_engine)
+
+# RAG wiki hints: only when both the LadybugDB index and the LiteRT embedding
+# runtime are configured; otherwise the controller degrades to no RAG cards.
+if(SESSIO_LADYBUG_FOUND AND SESSIO_LITERTLM_FOUND)
+  target_link_libraries(${TARGET_NAME} PRIVATE ${PROJECT_NAME}_rag_worker sessio::litert_lm)
+  target_compile_definitions(${TARGET_NAME} PRIVATE
+      SESSIO_RAG_ENABLED SESSIO_RAG_EXTENSION_DIR="${SESSIO_LADYBUG_DIR}/extension")
+endif()

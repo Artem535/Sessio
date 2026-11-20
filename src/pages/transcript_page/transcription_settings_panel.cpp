@@ -1,10 +1,12 @@
 #include "transcription_settings_panel.h"
+#include "app_settings.h"
 #include "summary_limits.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QSpinBox>
 #include <QLabel>
 #include <QPushButton>
@@ -85,6 +87,64 @@ TranscriptionSettingsPanel::TranscriptionSettingsPanel(QWidget *parent) : QWidge
   runtimeNote->setWordWrap(true);
   runtimeForm->addRow(runtimeNote);
   layout->addWidget(runtime);
+  auto *rag = new QGroupBox(tr("Wiki hints (RAG, experimental)"), this);
+  auto *ragForm = new QFormLayout(rag);
+  auto *ragEnabled = new QCheckBox(tr("Search the wiki during calls"), rag);
+  ragEnabled->setObjectName("ragEnabled");
+  ragEnabled->setChecked(pcm::app_settings::ragEnabled());
+  connect(ragEnabled, &QCheckBox::toggled, this, [](bool on) { pcm::app_settings::setRagEnabled(on); });
+  ragForm->addRow(ragEnabled);
+  auto *ragAll = new QCheckBox(tr("Search every phrase, even without question words"), rag);
+  ragAll->setObjectName("ragSearchAllPhrases");
+  ragAll->setChecked(pcm::app_settings::ragSearchAllPhrases());
+  connect(ragAll, &QCheckBox::toggled, this, [](bool on) { pcm::app_settings::setRagSearchAllPhrases(on); });
+  ragForm->addRow(ragAll);
+  auto *ragHead = new QCheckBox(tr("Use the trained router head (experimental)"), rag);
+  ragHead->setObjectName("ragUseTrainedRouter");
+  ragHead->setChecked(pcm::app_settings::ragUseTrainedRouter());
+  connect(ragHead, &QCheckBox::toggled, this, [](bool on) { pcm::app_settings::setRagUseTrainedRouter(on); });
+  ragForm->addRow(ragHead);
+  auto *ragRewrite = new QComboBox(rag);
+  ragRewrite->setObjectName("ragRewriteMode");
+  ragRewrite->addItem(tr("Rules"), QStringLiteral("rules"));
+  ragRewrite->addItem(tr("Local model"), QStringLiteral("local"));
+  ragRewrite->addItem(tr("Cloud model"), QStringLiteral("cloud"));
+  ragRewrite->setCurrentIndex(qMax(0, ragRewrite->findData(pcm::app_settings::ragRewriteMode())));
+  connect(ragRewrite, &QComboBox::currentIndexChanged, this,
+          [ragRewrite](int) { pcm::app_settings::setRagRewriteMode(ragRewrite->currentData().toString()); });
+  ragForm->addRow(tr("Query rewrite"), ragRewrite);
+  auto *ragUrl = new QLineEdit(pcm::app_settings::ragOutlineUrl(), rag);
+  ragUrl->setObjectName("ragOutlineUrl");
+  connect(ragUrl, &QLineEdit::editingFinished, this, [ragUrl] { pcm::app_settings::setRagOutlineUrl(ragUrl->text()); });
+  ragForm->addRow(tr("Outline URL"), ragUrl);
+  auto *ragToken = new QLineEdit(pcm::app_settings::ragOutlineToken(), rag);
+  ragToken->setObjectName("ragOutlineToken");
+  ragToken->setEchoMode(QLineEdit::Password);
+  connect(ragToken, &QLineEdit::editingFinished, this, [ragToken] { pcm::app_settings::setRagOutlineToken(ragToken->text()); });
+  ragForm->addRow(tr("Outline token (read-only)"), ragToken);
+  auto *ragAllow = new QLineEdit(pcm::app_settings::ragAllowlist().join(','), rag);
+  ragAllow->setObjectName("ragAllowlist");
+  connect(ragAllow, &QLineEdit::editingFinished, this,
+          [ragAllow] { pcm::app_settings::setRagAllowlist(ragAllow->text().split(',', Qt::SkipEmptyParts)); });
+  ragForm->addRow(tr("Collection ids (empty = all)"), ragAllow);
+  auto *ragModelRow = new QWidget(rag);
+  auto *ragModelLayout = new QHBoxLayout(ragModelRow);
+  ragModelLayout->setContentsMargins(0, 0, 0, 0);
+  auto *ragModel = new QLineEdit(pcm::app_settings::ragEmbedModel(), ragModelRow);
+  ragModel->setObjectName("ragEmbedModel");
+  auto *ragBrowse = new QPushButton(tr("Browse…"), ragModelRow);
+  ragModelLayout->addWidget(ragModel);
+  ragModelLayout->addWidget(ragBrowse);
+  connect(ragModel, &QLineEdit::editingFinished, this, [ragModel] { pcm::app_settings::setRagEmbedModel(ragModel->text()); });
+  connect(ragBrowse, &QPushButton::clicked, this, [this, ragModel] {
+    const auto path = QFileDialog::getOpenFileName(this, tr("Embedding model"), {}, tr("LiteRT models (*.litertlm)"));
+    if (!path.isEmpty()) { ragModel->setText(path); pcm::app_settings::setRagEmbedModel(path); }
+  });
+  ragForm->addRow(tr("Embedding model (.litertlm)"), ragModelRow);
+  auto *ragNote = new QLabel(tr("Hints are computed on this computer from the indexed wiki. The first indexing runs in the background and can take about an hour on CPU."), rag);
+  ragNote->setWordWrap(true);
+  ragForm->addRow(ragNote);
+  layout->addWidget(rag);
   mModel = new QLabel(this);
   mModel->setObjectName("transcriptionModelInfo");
   mModel->setTextFormat(Qt::PlainText);

@@ -13,7 +13,7 @@ User JSON: call_date, calendar (dates with weekdays), agreements (recorded agree
 - key_points: 0-3 facts <=120.
 - tasks: 0-2 explicitly accepted future actions (who, what, by when) <=160; each once in its fullest wording; do not build from a cut-off phrase or when the subject is unclear.
 - meeting=true only for a planned meeting/call.
-- open_questions: 0-2 unclear questions <=160.
+- open_questions: 0-2 unclear questions <=160, формулируй вопросы по-русски.
 - Verify live_points against the lines; keep important facts even without a hint.
 - Keep negations and final corrections. No advice, diagnoses, mental-state judgments, inferred intentions or invented commitments.
 </content>

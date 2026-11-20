@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #if defined(_WIN32)
 #  if defined(SESSIO_LITERT_BUILD)
@@ -88,5 +89,25 @@ public:
 // Null on failure; error is a short diagnostic without paths or prompt text.
 SESSIO_LITERT_API std::unique_ptr<Model> loadModel(const std::string &path, const ModelOptions &options,
                                                    std::string *error);
+
+struct EmbedderOptions {
+  int threads = 4;
+  std::string cacheDir; // disk cache root; empty uses upstream's model-adjacent cache
+};
+
+// One loaded embedding model, CPU-only. embed() is called from one thread at
+// a time. Recipe prefixes (e.g. "task: search result | query: ") belong to the
+// caller: the same encoder serves both retrieval and utterance classification.
+class SESSIO_LITERT_API Embedder {
+public:
+  virtual ~Embedder();
+  // One L2-normalized vector per text, in input order. Inputs longer than the
+  // model's signature are split into sub-chunks whose embeddings are averaged.
+  virtual Status embed(const std::vector<std::string> &texts, std::vector<std::vector<float>> *vectors) = 0;
+};
+
+// Null on failure; error is a short diagnostic without paths or input text.
+SESSIO_LITERT_API std::unique_ptr<Embedder> loadEmbedder(const std::string &path, const EmbedderOptions &options,
+                                                         std::string *error);
 
 } // namespace sessio::litert

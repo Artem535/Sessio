@@ -135,6 +135,22 @@ void setPrompterAutoStart(bool enabled) {
   QSettings().setValue("prompter/autoStart", enabled);
 }
 QString prompterModel() { return QSettings().value("prompter/model").toString(); }
+bool ragEnabled() { return QSettings().value("rag/enabled", true).toBool(); }
+void setRagEnabled(bool enabled) { QSettings().setValue("rag/enabled", enabled); }
+QString ragOutlineUrl() { return QSettings().value("rag/outlineUrl", QString{}).toString(); }
+void setRagOutlineUrl(const QString &url) { QSettings().setValue("rag/outlineUrl", url); }
+QString ragOutlineToken() { return QSettings().value("rag/outlineToken").toString(); }
+void setRagOutlineToken(const QString &token) { QSettings().setValue("rag/outlineToken", token); }
+QStringList ragAllowlist() { return QSettings().value("rag/allowlist").toString().split(',', Qt::SkipEmptyParts); }
+void setRagAllowlist(const QStringList &ids) { QSettings().setValue("rag/allowlist", ids.join(',')); }
+QString ragEmbedModel() { return QSettings().value("rag/embedModel").toString(); }
+void setRagEmbedModel(const QString &path) { QSettings().setValue("rag/embedModel", path); }
+bool ragSearchAllPhrases() { return QSettings().value("rag/searchAllPhrases", false).toBool(); }
+void setRagSearchAllPhrases(bool enabled) { QSettings().setValue("rag/searchAllPhrases", enabled); }
+bool ragUseTrainedRouter() { return QSettings().value("rag/useTrainedRouter", false).toBool(); }
+void setRagUseTrainedRouter(bool enabled) { QSettings().setValue("rag/useTrainedRouter", enabled); }
+QString ragRewriteMode() { return QSettings().value("rag/rewriteMode", QStringLiteral("local")).toString(); }
+void setRagRewriteMode(const QString &mode) { QSettings().setValue("rag/rewriteMode", mode); }
 void setPrompterModel(const QString &model) {
   QSettings settings;
   settings.setValue("prompter/model", model);
